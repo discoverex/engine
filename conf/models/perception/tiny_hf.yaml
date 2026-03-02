@@ -1,0 +1,7 @@
+# @package models.perception
+_target_: discoverex.adapters.outbound.models.tiny_hf_perception.TinyHFPerceptionModel
+model_id: tiny-hf-perception
+device: ${runtime.model_runtime.device}
+dtype: ${runtime.model_runtime.dtype}
+seed: ${runtime.model_runtime.seed}
+strict_runtime: true

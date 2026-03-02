@@ -1,0 +1,6 @@
+# @package models.fx
+_target_: discoverex.adapters.outbound.models.tiny_torch_fx.TinyTorchFxModel
+model_id: tiny-torch-fx
+device: ${runtime.model_runtime.device}
+dtype: ${runtime.model_runtime.dtype}
+strict_runtime: true
