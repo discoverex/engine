@@ -1,0 +1,14 @@
+{
+  "name": "discoverex-core-gpu",
+  "image": "nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04",
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {}
+  },
+  "postCreateCommand": "bash .devcontainer/scripts/post-create-gpu.sh",
+  "runArgs": [
+    "--gpus",
+    "all"
+  ]
+}
