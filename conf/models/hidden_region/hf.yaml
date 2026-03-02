@@ -1,0 +1,10 @@
+# @package models.hidden_region
+_target_: discoverex.adapters.outbound.models.hf_hidden_region.HFHiddenRegionModel
+model_id: facebook/detr-resnet-50
+revision: main
+device: ${runtime.model_runtime.device}
+dtype: ${runtime.model_runtime.dtype}
+precision: ${runtime.model_runtime.precision}
+batch_size: ${runtime.model_runtime.batch_size}
+seed: ${runtime.model_runtime.seed}
+strict_runtime: false

@@ -1,0 +1,2 @@
+# @package models.fx
+_target_: discoverex.adapters.outbound.models.dummy.DummyFxModel

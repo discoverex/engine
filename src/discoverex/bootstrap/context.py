@@ -1,0 +1,33 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from discoverex.application.ports.io import SceneIOPort
+from discoverex.application.ports.models import (
+    FxPort,
+    HiddenRegionPort,
+    InpaintPort,
+    PerceptionPort,
+)
+from discoverex.application.ports.reporting import ReportWriterPort
+from discoverex.application.ports.storage import ArtifactStorePort, MetadataStorePort
+from discoverex.application.ports.tracking import TrackerPort
+from discoverex.config import ModelVersionsConfig, RuntimeConfig, ThresholdsConfig
+
+
+@dataclass
+class AppContext:
+    hidden_region_model: HiddenRegionPort
+    inpaint_model: InpaintPort
+    perception_model: PerceptionPort
+    fx_model: FxPort
+    artifact_store: ArtifactStorePort
+    metadata_store: MetadataStorePort
+    tracker: TrackerPort
+    scene_io: SceneIOPort
+    report_writer: ReportWriterPort
+    artifacts_root: Path
+    runtime: RuntimeConfig
+    thresholds: ThresholdsConfig
+    model_versions: ModelVersionsConfig

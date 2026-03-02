@@ -1,0 +1,2 @@
+# @package adapters.metadata_store
+_target_: discoverex.adapters.outbound.storage.metadata.LocalMetadataStoreAdapter
