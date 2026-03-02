@@ -56,7 +56,7 @@ index-url = "https://pypi.org/simple"
 minversion = "8.0"
 addopts = "-q"
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 
 [tool.ruff]
 line-length = 88
