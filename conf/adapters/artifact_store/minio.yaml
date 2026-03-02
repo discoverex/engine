@@ -1,0 +1,2 @@
+# @package adapters.artifact_store
+_target_: discoverex.adapters.outbound.storage.artifact.MinioArtifactStoreAdapter

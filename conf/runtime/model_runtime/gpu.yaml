@@ -1,0 +1,6 @@
+# @package runtime.model_runtime
+device: cuda
+dtype: float16
+precision: fp16
+batch_size: 1
+seed: null
