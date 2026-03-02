@@ -1,0 +1,32 @@
+name: quality
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    env:
+      UV_CACHE_DIR: ${{ github.workspace }}/.cache/uv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Prepare uv cache dir
+        run: mkdir -p "$UV_CACHE_DIR"
+      - name: Install deps
+        run: uv sync --extra dev
+      - name: Ruff
+        run: uv run --extra dev ruff check .
+      - name: MyPy
+        run: uv run --extra dev mypy src tests
+      - name: Pytest
+        run: uv run --extra dev pytest -q
+      - name: Lock Check
+        run: uv lock --check
