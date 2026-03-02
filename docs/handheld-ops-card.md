@@ -70,6 +70,14 @@ make run ARGS='discoverex replay-eval --scene-jsons artifacts/scenes/<scene_id>/
 주의:
 - 새로운 파이프라인 타입 추가는 use case/CLI 코드 추가가 필요합니다.
 
+## 숨은그림찾기 전달 규칙
+- 엔진 결과 `scene.json`을 delivery 번들로 변환해 서버에 전달합니다.
+- 변환 패키지: `delivery/spot_the_hidden` (메인 패키지 외부)
+- 번들 파일: `artifacts/scenes/<scene_id>/<version_id>/delivery/spot_hidden_bundle.json`
+- 번들 내부에는 `playable` + `answer_key`가 같이 들어갑니다.
+- 프런트 응답에는 `answer_key`를 제거하고 `playable`만 전달합니다.
+- 이미지는 바이너리 인라인이 아닌 `image_ref` 참조 방식으로 전달합니다.
+
 ## 빠른 트러블슈팅
 - Hydra target import 에러:
   - `conf/models/*`, `conf/adapters/*`의 `_target_` 경로 확인

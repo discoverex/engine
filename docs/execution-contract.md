@@ -38,6 +38,7 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking
 - 워커는 무상태(stateless) 실행만 담당합니다.
 - 작업 1건은 프로세스 1회 실행에 매핑합니다.
 - override는 전달 순서를 유지해 `-o` 인자로 전달합니다.
+- 엔진 실행 후 delivery 후처리 단계를 별도로 호출합니다.
 
 예시:
 ```bash
@@ -56,6 +57,21 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
 CLI 출력 키:
 - `gen-verify`, `verify-only`: `scene_json` 포함 JSON
 - `replay-eval`: `report` 포함 JSON
+
+## delivery 후처리 계약 (숨은그림찾기)
+엔진 산출 `scene.json`을 delivery 변환기로 변환해 번들을 만듭니다.
+
+```bash
+python -m delivery.spot_the_hidden.cli --scene-json <scene_json_path>
+```
+
+출력 파일:
+- `<scene_dir>/delivery/spot_hidden_bundle.json`
+
+번들 정책:
+- 단일 JSON 안에 `playable` + `answer_key`를 함께 포함
+- 프런트 응답에서는 `answer_key`를 제거한 payload만 노출
+- 이미지 데이터는 인라인이 아니라 `playable.image_ref` 참조로 전달
 
 ## 호환성 정책
 - 명령 이름은 안정적으로 유지합니다.

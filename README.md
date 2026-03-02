@@ -19,6 +19,7 @@ Hydra 기반 어댑터 조립으로 `gen-verify`, `verify-only`, `replay-eval` �
 - `src/discoverex/bootstrap`: Hydra config 기반 조립(Composition Root)
 - `conf/models`, `conf/adapters`, `conf/*.yaml`: Hydra 설정 그룹
 - `orchestrator/`: 외부 스케줄러 연동 래퍼(Prefect)
+- `delivery/spot_the_hidden`: 숨은그림찾기 배포 번들 스키마/변환(메인 패키지 외부)
 
 ## 최초 설치 (로컬/Devcontainer 공통)
 `uv` 실행은 항상 프로젝트 내부 캐시를 사용합니다.
@@ -107,6 +108,25 @@ _target_: discoverex.adapters.outbound.tracking.my_adapter.MyTrackerAdapter
 4. 설정 선택
 - `conf/gen_verify.yaml`, `conf/verify_only.yaml`, `conf/replay_eval.yaml` 기본값에 추가하거나
 - 실행 시 `-o` override로 선택
+
+## 프런트 배포 번들 변환
+엔진 산출물 `scene.json` 전체를 프런트로 그대로 보내지 않고, 별도 delivery 변환기로 경량 번들을 생성합니다.
+
+- 입력: `artifacts/scenes/<scene_id>/<version_id>/scene.json`
+- 출력: `artifacts/scenes/<scene_id>/<version_id>/delivery/spot_hidden_bundle.json`
+- 번들 구조: `playable` + `answer_key`를 단일 JSON에 포함
+- 프런트 응답 시에는 `answer_key`를 제거한 payload만 노출
+
+변환 예시:
+
+```bash
+python -m delivery.spot_the_hidden.cli \
+  --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json
+```
+
+이미지 전달 정책:
+- 번들에는 이미지 바이너리 대신 `image_ref`만 포함
+- 백엔드가 `image_ref`를 읽어 후처리 후 최종 이미지를 다시 참조로 관리
 
 ## MLflow 필수 정책
 모든 파이프라인은 tracker를 통해 실행 기록을 남깁니다.
