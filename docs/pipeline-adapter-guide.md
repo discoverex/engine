@@ -124,3 +124,28 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex ab-test --config-name ab_test
 
 산출물 위치 예:
 - `artifacts/scenes/{scene_id}/{version_id}/scene.json`
+
+## 8) 숨은그림찾기 전달 번들 변환
+풀스택 서버 전달용으로는 `scene.json` 전체 대신 delivery 번들을 생성해 사용합니다.
+
+변환 패키지:
+- `delivery/spot_the_hidden` (메인 패키지 `discoverex` 외부)
+
+변환 실행:
+
+```bash
+python -m delivery.spot_the_hidden.cli \
+  --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json
+```
+
+출력:
+- `artifacts/scenes/<scene_id>/<version_id>/delivery/spot_hidden_bundle.json`
+
+번들 구성:
+- `playable`: 프런트 게임 렌더링 최소 데이터
+- `answer_key`: 서버 판정용 데이터
+- `delivery_meta`: 이미지 참조/해시/크기 등 전달 메타
+
+이미지 전달 원칙:
+- 바이너리 인라인 전달 금지
+- `playable.image_ref`로 백엔드가 이미지를 조회/후처리
