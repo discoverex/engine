@@ -1,0 +1,28 @@
+# Python bytecode / build
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+wheels/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual env / local runtime
+.venv/
+.cache/
+.python-version
+.env
+.env.*
+
+# Discoverex runtime outputs
+artifacts/
+mlruns/
+mlflow.db
+
+# Tooling / editor
+.DS_Store
+.idea/
+.vscode/
