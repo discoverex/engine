@@ -27,7 +27,14 @@ class LocalArtifactStoreAdapter:
         )
         (base / "verification.json").write_text(
             json.dumps(
-                scene.verification.model_dump(mode="json", by_alias=True),
+                {
+                    "scene_id": scene.meta.scene_id,
+                    "version_id": scene.meta.version_id,
+                    "status": scene.meta.status.value,
+                    "verification": scene.verification.model_dump(
+                        mode="json", by_alias=True
+                    ),
+                },
                 ensure_ascii=False,
                 indent=2,
             ),
