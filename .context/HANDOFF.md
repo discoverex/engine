@@ -2,93 +2,83 @@
 
 ## 1) Current Snapshot
 - Repository root: `/home/esillileu/discoverex/engine`
-- Architecture is now hard-cut hexagonal shape (legacy compatibility layers removed).
-- Working tree is dirty and includes unrelated pre-existing edits; confirm commit scope carefully.
+- Active architecture: hexagonal (`domain` / `application` / `adapters` / `bootstrap`)
+- Canonical spec source: `.context/canon.md`
+- Current default branch in local workspace: `dev`
 
-## 2) What Is Updated To Latest
+## 2) Latest State Applied
 
-### A. Hexagonal hard-cut applied
-- Removed legacy layers/directories:
-  - `src/discoverex/pipelines`
-  - `src/discoverex/cli`
-  - `src/discoverex/generation`
-  - `src/discoverex/verification`
-  - `src/discoverex/ux`
-  - `src/discoverex/storage`
-  - `src/discoverex/tracking`
-- CLI entrypoint moved to inbound adapter:
-  - `src/discoverex/adapters/inbound/cli/main.py`
-- Script entrypoint updated:
-  - `pyproject.toml` → `discoverex = "discoverex.adapters.inbound.cli.main:app"`
+### A. Boundary hardening
+- `application` use-cases no longer depend directly on `bootstrap`.
+- Added application-level context contract:
+  - `src/discoverex/application/context.py` (`AppContextLike`)
+- Added architecture guard:
+  - `tests/test_architecture_constraints.py` now checks `application` does not import `discoverex.bootstrap`.
 
-### B. Domain service consolidation
-- Added domain services package:
-  - `src/discoverex/domain/services/__init__.py`
-  - `src/discoverex/domain/services/verification.py`
-  - `src/discoverex/domain/services/judgement.py`
-- Use-cases now consume domain service functions instead of removed `verification/ux` modules:
-  - `src/discoverex/application/use_cases/gen_verify/verification_pipeline.py`
-  - `src/discoverex/application/use_cases/verify_only.py`
+### B. Dataclass -> Pydantic migration (completed for current dataclass set)
+- Migrated:
+  - `src/discoverex/models/types.py`
+  - `src/discoverex/application/use_cases/gen_verify/types.py`
+  - `src/discoverex/bootstrap/context.py`
+  - `src/discoverex/adapters/outbound/models/runtime.py`
+- Runtime note:
+  - `bootstrap/AppContext` uses `BaseModel` with `arbitrary_types_allowed`.
+  - Port-holder fields are typed as `Any` to avoid Protocol runtime schema issues.
 
-### C. Inbound/outbound wiring updates
-- `main.py` now imports CLI app from inbound adapter path.
-- `orchestrator/prefect_flows.py` now calls `application/use_cases` + `build_context`, no pipelines wrapper dependency.
+### C. Artifact consistency + MinIO verification hardening
+- Added FX artifact generator:
+  - `src/discoverex/adapters/outbound/models/fx_artifact.py`
+- Wired FX adapters to ensure output image file exists.
+- Fixed verification payload consistency between local saved bundle and report overwrite:
+  - `src/discoverex/adapters/outbound/storage/artifact.py`
+- Added regression tests:
+  - `tests/test_artifact_verification_consistency.py`
+  - `tests/test_fx_output_artifact.py`
+- Added MinIO E2E verification script:
+  - `scripts/check_minio_scene_bundle.py`
 
-### D. Architecture tests updated
-- `tests/test_architecture_constraints.py` now asserts:
-  - no imports from removed legacy packages
-  - removed legacy directories do not exist
-  - existing boundary checks remain active
-- `tests/test_hexagonal_boundaries.py` target paths updated to current use-case modules.
+### D. Runtime mode documentation (local vs worker)
+- Added:
+  - `docs/runtime-mode-guide.md`
+- Linked/updated:
+  - `README.md`
+  - `docs/execution-contract.md`
+  - `docs/handheld-ops-card.md`
 
-### E. Runtime/ops docs updated
-- `README.md` rewritten for current state:
-  - first-time setup
-  - make/uv execution
-  - pipeline extension flow (port → adapter → Hydra config)
-  - MLflow mandatory policy
-- `docs/handheld-ops-card.md` CLI entry path corrected.
+## 3) Operational Model (as of now)
+- Local mode (default):
+  - `adapters/artifact_store=local`
+  - `adapters/metadata_store=local_json`
+  - `adapters/tracker=mlflow_file`
+- Worker mode (recommended):
+  - `adapters/artifact_store=minio`
+  - `adapters/tracker=mlflow_server`
+  - optional `adapters/metadata_store=postgres`
 
-### F. Build command policy aligned with MLflow mandatory
-- `Makefile` updated:
-  - `make init` installs `--extra tracking --extra dev`
-  - `make sync` installs `--extra tracking`
+## 4) Model Implementation Reality Check
+- `perception=hf` path is the main real HF inference route.
+- `hidden_region/inpaint/fx` HF adapters still include placeholder behavior.
+- Infra/ops flow can run now, but full “all stages real-model quality” requires follow-up adapter implementations.
 
-## 3) Validation Results (latest in this session)
-- `make lint` passed.
-- `make typecheck` passed.
-- `make test` passed.
-- Pipeline execution smoke passed after installing tracking extra:
-  - `discoverex gen-verify --background-asset-ref bg://dummy`
-  - `discoverex verify-only --scene-json <generated_scene_json>`
-  - `discoverex replay-eval --scene-jsons <generated_scene_json>`
-- MLflow artifact store was created (`mlruns/` present).
+## 5) Validation Status (recent)
+- Architecture/type/test checks passed on updated boundaries and DTO migration.
+- Pipeline smoke (`gen-verify`) passed in CPU/tiny mode.
+- MinIO registration + retrieval + hash consistency verified via:
+  - `scripts/check_minio_scene_bundle.py`
 
-## 4) Critical Operational Notes
-1. MLflow is required for all pipeline runs in current policy.
-   - Ensure dependencies include tracking extra.
-2. Use project-local uv cache always:
-   - `UV_CACHE_DIR="$PWD/.cache/uv"`
-3. Prefer make wrappers to avoid command drift:
-   - `make init`, `make sync`, `make lint`, `make typecheck`, `make test`.
+## 6) Important Commands
+- Full dev dependencies for current flows:
+  - `UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra dev --extra tracking --extra ml-cpu --extra storage`
+- Core checks:
+  - `UV_CACHE_DIR="$PWD/.cache/uv" uv run --extra dev ruff check .`
+  - `UV_CACHE_DIR="$PWD/.cache/uv" uv run --extra dev pytest -q`
+- MinIO bundle check:
+  - `UV_CACHE_DIR="$PWD/.cache/uv" uv run python scripts/check_minio_scene_bundle.py --scene-id <scene_id> --version-id <version_id>`
 
-## 5) Risks / Re-check Items
-1. Because legacy modules were hard-removed, any external code importing old paths will break.
-2. Dirty worktree includes broad historical changes; do not assume this handoff-only delta is isolated.
-3. Devcontainer CLI `exec` behavior can differ by host permissions; if needed, use `docker exec` directly into the running container.
+## 7) Remaining Gaps / Recommended Next Steps
+1. Implement non-placeholder HF inference for `hidden_region/inpaint/fx`.
+2. Add CI smoke for local mode and worker-mode override set.
+3. Add fail-fast worker preflight (required env + adapter override validation).
 
-## 6) Recommended Next Steps
-1. If external consumers exist, publish a migration note mapping old imports to new paths.
-2. Add a small regression test that runs CLI commands end-to-end in CI (with tracking extra).
-3. Consider adding import-linter rules for inbound/application/domain boundary enforcement.
-
-## 7) Useful Commands
-- Status: `git status --short`
-- Full quality gate:
-  - `make lint`
-  - `make typecheck`
-  - `make test`
-- Pipeline smoke:
-  - `make run ARGS='discoverex gen-verify --background-asset-ref bg://dummy'`
-  - `make run ARGS='discoverex verify-only --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json'`
-  - `make run ARGS='discoverex replay-eval --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json'`
+## 8) Git Convention Reference
+- Use `.context/git-conventions.md` (branch naming, empty intro commit, prefix rules, no-ff merge).

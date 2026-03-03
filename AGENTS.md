@@ -2,8 +2,11 @@
 
 ## Project Structure & Module Organization
 This is a Python engine repository with a hexagonal layout and canonical scene contract.
+- Documentation navigation entrypoint is `.context/overview.md` (index only).
+- Canonical spec source is `.context/canon.md`.
 - `src/discoverex/domain`: canonical DTO/contracts, invariants, domain services
 - `src/discoverex/application/ports`: use-case dependencies (model/storage/tracker/io/reporting ports)
+- `src/discoverex/application/context.py`: application-layer context contract (`AppContextLike`)
 - `src/discoverex/application/use_cases`: orchestration logic (`gen_verify`, `verify_only`, `replay_eval`)
 - `src/discoverex/adapters/inbound/cli`: Typer entrypoint (`discoverex`)
 - `src/discoverex/adapters/outbound`: concrete adapters (dummy/HF models, storage, MLflow tracking, scene I/O, report writer)
@@ -21,6 +24,11 @@ Removed legacy layers (hard-cut):
 - `src/discoverex/storage`
 - `src/discoverex/tracking`
 
+Documentation navigation rule:
+- Start from `.context/overview.md` to locate relevant docs.
+- For architecture/contract decisions, treat `.context/canon.md` as source of truth.
+- For current implementation/verification status, use `.context/HANDOFF.md`.
+
 ## Build, Test, and Development Commands
 - Prefer devcontainer runtime first (`.devcontainer/devcontainer.json`, GPU: `.devcontainer/gpu/devcontainer.json`).
 - Devcontainer policy: `remoteUser: vscode`, `updateRemoteUserUID: true`.
@@ -31,6 +39,9 @@ Initial setup:
 - `mkdir -p .cache/uv`
 - `UV_CACHE_DIR="$PWD/.cache/uv" uv venv .venv`
 - `UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking --extra dev`
+
+When using MinIO/Postgres adapters:
+- `UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra storage`
 
 Recommended wrappers:
 - `make init`
@@ -76,11 +87,12 @@ Direct run examples:
   - Use `oc.env` for environment-derived values, not dotenv loading.
   - Resolve tracking URI via `runtime.env.tracking_uri`.
 - Hexagonal boundaries:
-  - Use cases depend on ports/domain/bootstrap only.
+  - Use cases depend on application/domain contracts only (no direct bootstrap import).
   - Adapters are the only concrete integration boundary.
 - Runtime integration:
   - Transformers/PyTorch logic lives in outbound model adapters (`hf_*`).
   - Keep dummy adapters for local/offline/testing.
+  - Current real HF inference path is strongest in `perception`; other HF adapters include placeholder behavior.
 - Engine scope:
   - This repo stays execution-engine only.
   - Scheduler/queue/worker orchestration remains external.
@@ -88,3 +100,12 @@ Direct run examples:
 - Dependency policy:
   - Use `uv` as canonical workflow (`uv add`, `uv lock`, `uv sync`).
   - Keep dependencies current and avoid deprecated APIs/packages.
+
+## Runtime Modes
+- Local mode: local artifact/meta + `mlflow_file` tracker
+- Worker mode: minio/artifact + `mlflow_server` tracker (+ optional postgres metadata)
+- See `docs/runtime-mode-guide.md` and `docs/execution-contract.md`.
+
+## Validation Scripts
+- MinIO scene bundle verification:
+  - `UV_CACHE_DIR="$PWD/.cache/uv" uv run python scripts/check_minio_scene_bundle.py --scene-id <scene_id> --version-id <version_id>`

@@ -2,6 +2,7 @@
 
 Discoverex Core 엔진 레포입니다. Scene Canonical(Region-first, bbox) 계약을 중심으로,
 Hydra 기반 어댑터 조립으로 `gen-verify`, `verify-only`, `replay-eval` 파이프라인을 실행합니다.
+캐논 원문 기준은 `.context/canon.md`입니다.
 
 ## 핵심 원칙
 
@@ -150,6 +151,21 @@ python -m delivery.spot_the_hidden.cli \
 
 모든 파이프라인은 tracker를 통해 실행 기록을 남깁니다.
 기본 tracker는 `adapters/tracker=mlflow_file`이며, 실행 전 `--extra tracking` 설치가 필요합니다.
+
+## 모델 구현 상태 메모
+
+- `perception=hf`는 실제 HF 모델 추론 경로를 사용합니다.
+- `hidden_region/inpaint/fx`의 `hf` 어댑터는 현재 placeholder 성격이 포함되어 있어, 품질/실추론 강화는 후속 구현 대상입니다.
+
+## MinIO 등록 검증 스크립트
+
+MinIO 저장 경로와 로컬 산출물 일치(해시) 및 Scene 역직렬화까지 한 번에 확인합니다.
+
+```bash
+UV_CACHE_DIR="$PWD/.cache/uv" uv run python scripts/check_minio_scene_bundle.py \
+  --scene-id <scene_id> \
+  --version-id <version_id>
+```
 
 ## 참고 문서
 
