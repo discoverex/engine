@@ -114,7 +114,7 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex ab-test --config-name ab_test
 - `docs/execution-contract.md` 계약에 따라 `command`, `args`, `overrides`를 전달
 
 ## 7) Scene Canonical 기준
-캐논 계약 원문은 `canon.md`이며, 런타임 DTO/검증은 `src/discoverex/domain/*`가 담당합니다.
+캐논 계약 원문은 `.context/canon.md`이며, 런타임 DTO/검증은 `src/discoverex/domain/*`가 담당합니다.
 
 필수 가드레일:
 - `regions[].geometry.bbox`는 `{x,y,w,h}` 객체
