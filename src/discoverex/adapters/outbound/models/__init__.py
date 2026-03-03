@@ -4,6 +4,7 @@ from .dummy import (
     DummyInpaintModel,
     DummyPerceptionModel,
 )
+from .fx_tiny_sd import TinySDFxModel
 from .hf_fx import HFFxModel
 from .hf_hidden_region import HFHiddenRegionModel
 from .hf_inpaint import HFInpaintModel
@@ -22,6 +23,7 @@ __all__ = [
     "DummyHiddenRegionModel",
     "DummyInpaintModel",
     "DummyPerceptionModel",
+    "TinySDFxModel",
     "HFFxModel",
     "HFHiddenRegionModel",
     "HFInpaintModel",

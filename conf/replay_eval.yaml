@@ -11,6 +11,7 @@ defaults:
   - runtime/model_runtime: gpu
   - runtime/env: default
   - _self_
+  - profile: default
 
 runtime:
   config_version: config-v1

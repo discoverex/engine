@@ -11,9 +11,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-orchestration = [
-    "prefect>=3.6.20",
-]
 tracking = [
     "mlflow>=3.10.0",
 ]
@@ -23,11 +20,17 @@ storage = [
     "sqlalchemy>=2.0.47",
 ]
 ml-cpu = [
+    "diffusers>=0.35.2",
+    "pillow>=11.3.0",
+    "safetensors>=0.6.2",
     "torch>=2.10.0",
     "transformers>=5.2.0",
 ]
 ml-gpu = [
     "accelerate>=1.12.0",
+    "diffusers>=0.35.2",
+    "pillow>=11.3.0",
+    "safetensors>=0.6.2",
     "torch>=2.10.0",
     "transformers>=5.2.0",
 ]

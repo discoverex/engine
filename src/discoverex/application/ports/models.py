@@ -6,6 +6,7 @@ from discoverex.models.types import (
     FxPrediction,
     FxRequest,
     HiddenRegionRequest,
+    InpaintPrediction,
     InpaintRequest,
     ModelHandle,
     PerceptionRequest,
@@ -25,7 +26,7 @@ class InpaintPort(Protocol):
 
     def predict(
         self, handle: ModelHandle, request: InpaintRequest
-    ) -> dict[str, float | str]: ...
+    ) -> InpaintPrediction: ...
 
 
 class PerceptionPort(Protocol):

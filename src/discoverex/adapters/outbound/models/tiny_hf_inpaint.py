@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from discoverex.models.types import InpaintRequest, ModelHandle
+from discoverex.models.types import InpaintPrediction, InpaintRequest, ModelHandle
 
 
 class TinyHFInpaintModel:
@@ -54,7 +54,7 @@ class TinyHFInpaintModel:
             dtype=self.dtype,
         )
 
-    def predict(self, handle: ModelHandle, request: InpaintRequest) -> dict[str, float | str]:
+    def predict(self, handle: ModelHandle, request: InpaintRequest) -> InpaintPrediction:
         import torch  # type: ignore
 
         _ = handle
@@ -65,4 +65,5 @@ class TinyHFInpaintModel:
             "region_id": request.region_id,
             "quality_score": round(quality, 4),
             "model_id": self.model_id,
+            "inpaint_mode": "tiny_hf",
         }
