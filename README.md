@@ -70,6 +70,12 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex verify-only --scene-json artifac
 UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex replay-eval --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json
 ```
 
+### 운영 모드 분리 (로컬/워커)
+
+- 로컬 개발은 기본 설정(`local` artifact/meta + `mlflow_file`)을 사용합니다.
+- 외부 워커는 실행 시 override로 `minio`/`mlflow_server`/`postgres` 조합을 강제합니다.
+- 상세 운영 가이드는 `docs/runtime-mode-guide.md`를 참고하세요.
+
 ## 품질 검증
 
 ```bash

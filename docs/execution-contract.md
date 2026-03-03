@@ -39,6 +39,7 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking
 - 작업 1건은 프로세스 1회 실행에 매핑합니다.
 - override는 전달 순서를 유지해 `-o` 인자로 전달합니다.
 - 엔진 실행 후 delivery 후처리 단계를 별도로 호출합니다.
+- 워커에서는 로컬 저장소 사용을 피하고 adapter override를 명시적으로 강제합니다.
 
 예시:
 ```bash
@@ -48,6 +49,13 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
   -o models/perception=hf \
   -o runtime.model_runtime.device=cuda:0
 ```
+
+권장 워커 override 최소 세트:
+- `adapters/artifact_store=minio`
+- `adapters/tracker=mlflow_server`
+- 필요 시 `adapters/metadata_store=postgres`
+
+세부 운영 방식은 `docs/runtime-mode-guide.md`를 기준으로 합니다.
 
 ## 워커 출력 계약
 - `exit_code`: 프로세스 종료 코드

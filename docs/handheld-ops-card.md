@@ -53,6 +53,12 @@ mkdir -p .cache/uv
 UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking
 ```
 
+## 운영 모드 (로컬/워커)
+- 로컬 모드(기본): `artifact_store=local`, `metadata_store=local_json`, `tracker=mlflow_file`
+- 워커 모드(권장): `artifact_store=minio`, `tracker=mlflow_server`, 필요 시 `metadata_store=postgres`
+- 워커 필수 env: `MLFLOW_TRACKING_URI`, `MLFLOW_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (및 `METADATA_DB_URL`)
+- 상세 절차: `docs/runtime-mode-guide.md`
+
 ## 최소 실행 절차
 
 ```bash
