@@ -105,7 +105,6 @@ class HFPerceptionModel:
                     model=self.model_id,
                     revision=self.revision,
                     device=device_arg,
-                    local_files_only=True,
                 )
             image = Image.open(image_path).convert("RGB")
             pipeline = self._pipeline

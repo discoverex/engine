@@ -11,7 +11,7 @@ Discoverex는 캐논 중심 퍼즐 엔진이며 헥사고널 아키텍처로 구
 - `adapters/outbound`: 외부 연동 구현체
 - `bootstrap`: 설정 기반 의존성 조립 (`build_context`)
 
-캐논 원문은 `canon.md`, 런타임 모델은 `src/discoverex/domain/*`가 담당합니다.
+캐논 원문은 `.context/canon.md`, 런타임 모델은 `src/discoverex/domain/*`가 담당합니다.
 
 ## 파이프라인 I/O
 
@@ -93,5 +93,5 @@ make run ARGS='discoverex replay-eval --scene-jsons artifacts/scenes/<scene_id>/
 - Bootstrap: `src/discoverex/bootstrap/factory.py`
 - Use cases: `src/discoverex/application/use_cases/`
 - Ports: `src/discoverex/application/ports/`
-- 캐논: `canon.md`, `src/discoverex/domain/`
+- 캐논: `.context/canon.md`, `src/discoverex/domain/`
 - 설정: `conf/models/`, `conf/adapters/`, `conf/*.yaml`

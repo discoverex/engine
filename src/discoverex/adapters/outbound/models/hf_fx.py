@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from discoverex.models.types import FxPrediction, FxRequest, ModelHandle
 
+from .fx_artifact import ensure_output_image
 from .runtime import (
     apply_seed,
     build_runtime_extra,
@@ -68,5 +69,6 @@ class HFFxModel:
         prediction: FxPrediction = {"fx": request.mode or "default"}
         output_path = request.params.get("output_path")
         if isinstance(output_path, str) and output_path:
+            ensure_output_image(output_path)
             prediction["output_path"] = output_path
         return prediction

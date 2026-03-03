@@ -9,6 +9,8 @@ from discoverex.models.types import (
     PerceptionRequest,
 )
 
+from .fx_artifact import ensure_output_image
+
 
 class DummyHiddenRegionModel:
     def load(self, model_ref_or_version: str) -> ModelHandle:
@@ -102,5 +104,6 @@ class DummyFxModel:
         prediction: FxPrediction = {"fx": req.mode or "none"}
         output_path = req.params.get("output_path")
         if isinstance(output_path, str) and output_path:
+            ensure_output_image(output_path)
             prediction["output_path"] = output_path
         return prediction

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from discoverex.bootstrap import AppContext
+from discoverex.application.context import AppContextLike
 from discoverex.domain.scene import Scene
 
 from .composite_pipeline import compose_scene
@@ -13,7 +13,7 @@ from .scene_builder import build_background, build_scene, generate_run_ids
 from .verification_pipeline import verify_scene
 
 
-def run(background_asset_ref: str, context: AppContext) -> Scene:
+def run(background_asset_ref: str, context: AppContextLike) -> Scene:
     runtime_cfg = context.runtime
     model_versions = context.model_versions
     run_ids = generate_run_ids()

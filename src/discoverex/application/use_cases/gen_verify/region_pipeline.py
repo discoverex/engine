@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from discoverex.bootstrap import AppContext
+from discoverex.application.context import AppContextLike
 from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
 from discoverex.domain.scene import Background
 from discoverex.models.types import HiddenRegionRequest, InpaintRequest, ModelHandle
@@ -31,7 +31,7 @@ def build_candidate_regions(
 
 
 def generate_regions(
-    context: AppContext,
+    context: AppContextLike,
     background: Background,
     hidden_handle: ModelHandle,
     inpaint_handle: ModelHandle,

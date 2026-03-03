@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from discoverex.bootstrap import AppContext
+from discoverex.application.context import AppContextLike
 from discoverex.domain import (
     integrate_verification,
     judge_scene,
@@ -24,7 +24,7 @@ def _run_perception_verification(
     )
 
 
-def run_verify_only(scene: Scene, context: AppContext) -> Scene:
+def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
     perception_version = scene.meta.model_versions.get(
         "perception", context.model_versions.perception
     )

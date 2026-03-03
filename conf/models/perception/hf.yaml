@@ -1,6 +1,6 @@
 # @package models.perception
 _target_: discoverex.adapters.outbound.models.hf_perception.HFPerceptionModel
-model_id: openai/clip-vit-base-patch32
+model_id: google/vit-base-patch16-224
 revision: main
 device: ${runtime.model_runtime.device}
 dtype: ${runtime.model_runtime.dtype}

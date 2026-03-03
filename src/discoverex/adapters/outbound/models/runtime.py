@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict
 
-@dataclass(slots=True)
-class RuntimeResolution:
+
+class RuntimeResolution(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     available: bool
     torch: Any | None = None
     transformers: Any | None = None

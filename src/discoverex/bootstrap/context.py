@@ -1,32 +1,25 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from discoverex.application.ports.io import SceneIOPort
-from discoverex.application.ports.models import (
-    FxPort,
-    HiddenRegionPort,
-    InpaintPort,
-    PerceptionPort,
-)
-from discoverex.application.ports.reporting import ReportWriterPort
-from discoverex.application.ports.storage import ArtifactStorePort, MetadataStorePort
-from discoverex.application.ports.tracking import TrackerPort
+from pydantic import BaseModel, ConfigDict
+
 from discoverex.config import ModelVersionsConfig, RuntimeConfig, ThresholdsConfig
 
 
-@dataclass
-class AppContext:
-    hidden_region_model: HiddenRegionPort
-    inpaint_model: InpaintPort
-    perception_model: PerceptionPort
-    fx_model: FxPort
-    artifact_store: ArtifactStorePort
-    metadata_store: MetadataStorePort
-    tracker: TrackerPort
-    scene_io: SceneIOPort
-    report_writer: ReportWriterPort
+class AppContext(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    hidden_region_model: Any
+    inpaint_model: Any
+    perception_model: Any
+    fx_model: Any
+    artifact_store: Any
+    metadata_store: Any
+    tracker: Any
+    scene_io: Any
+    report_writer: Any
     artifacts_root: Path
     runtime: RuntimeConfig
     thresholds: ThresholdsConfig
