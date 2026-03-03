@@ -34,6 +34,7 @@ def build_candidate_regions(
 def generate_regions(
     context: AppContextLike,
     background: Background,
+    scene_dir: Path,
     hidden_handle: ModelHandle,
     inpaint_handle: ModelHandle,
 ) -> list[Region]:
@@ -50,8 +51,8 @@ def generate_regions(
     inpainted_regions: list[Region] = []
     for region in regions:
         output_path = (
-            Path(context.artifacts_root)
-            / "_tmp"
+            scene_dir
+            / "layers"
             / "inpaint"
             / f"{region.region_id}-{uuid4().hex[:8]}.png"
         )

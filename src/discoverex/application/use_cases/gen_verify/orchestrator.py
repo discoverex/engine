@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,11 +23,14 @@ def run(background_asset_ref: str, context: AppContextLike) -> Scene:
     inpaint_handle = context.inpaint_model.load(model_versions.inpaint)
     perception_handle = context.perception_model.load(model_versions.perception)
     fx_handle = context.fx_model.load(model_versions.fx)
+    scene_dir = Path(context.artifacts_root) / "scenes" / run_ids.scene_id / run_ids.version_id
 
     background = build_background(background_asset_ref, runtime_cfg)
+    _materialize_background_asset(background=background, scene_dir=scene_dir)
     regions = generate_regions(
         context=context,
         background=background,
+        scene_dir=scene_dir,
         hidden_handle=hidden_handle,
         inpaint_handle=inpaint_handle,
     )
@@ -38,7 +42,6 @@ def run(background_asset_ref: str, context: AppContextLike) -> Scene:
         run_ids=run_ids,
     )
 
-    scene_dir = Path(context.artifacts_root) / "scenes" / run_ids.scene_id / run_ids.version_id
     fx_input_ref = background.asset_ref
     inpaint_ref = background.metadata.get("inpaint_composited_ref")
     if isinstance(inpaint_ref, str) and inpaint_ref:
@@ -64,6 +67,18 @@ def run(background_asset_ref: str, context: AppContextLike) -> Scene:
         composite_artifact=composite.artifact_path,
     )
     return scene
+
+
+def _materialize_background_asset(background, scene_dir: Path) -> None:  # type: ignore[no-untyped-def]
+    source = Path(background.asset_ref)
+    if not source.exists() or not source.is_file():
+        return
+    base_dir = scene_dir / "layers" / "base"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    target = base_dir / source.name
+    shutil.copy2(source, target)
+    background.metadata["source_background_ref"] = background.asset_ref
+    background.asset_ref = str(target)
 
 
 def _finalize_layers(scene: Scene, background, fx_input_ref: str) -> None:  # type: ignore[no-untyped-def]
