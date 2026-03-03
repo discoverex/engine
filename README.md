@@ -71,6 +71,33 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex verify-only --scene-json artifac
 UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex replay-eval --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json
 ```
 
+CPU 320x240 실생성(FX tiny SD) 예시:
+
+```bash
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
+  --background-asset-ref bg://dummy \
+  -o models/fx=tiny_sd_cpu \
+  -o runtime/model_runtime=cpu \
+  -o runtime.width=320 \
+  -o runtime.height=240
+```
+
+CPU fast 공통 프리셋(`profile=cpu_fast`) 예시:
+
+```bash
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
+  --background-asset-ref bg://dummy \
+  -o profile=cpu_fast
+
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex verify-only \
+  --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json \
+  -o profile=cpu_fast
+
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex replay-eval \
+  --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json \
+  -o profile=cpu_fast
+```
+
 ### 운영 모드 분리 (로컬/워커)
 
 - 로컬 개발은 기본 설정(`local` artifact/meta + `mlflow_file`)을 사용합니다.
@@ -146,6 +173,7 @@ python -m delivery.spot_the_hidden.cli \
 
 - 번들에는 이미지 바이너리 대신 `image_ref`만 포함
 - 백엔드가 `image_ref`를 읽어 후처리 후 최종 이미지를 다시 참조로 관리
+- `spot_hidden_v2` 번들은 `playable.layers`를 포함하며, `base/inpaint_patch/composite/fx_overlay` 레이어를 SSOT로 사용합니다.
 
 ## MLflow 필수 정책
 
