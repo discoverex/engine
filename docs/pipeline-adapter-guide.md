@@ -84,6 +84,32 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex verify-only --scene-json artifac
 UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex replay-eval --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json
 ```
 
+CPU 320x240 실생성(FX tiny SD) 실행 예:
+
+```bash
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
+  --background-asset-ref bg://dummy \
+  -o models/fx=tiny_sd_cpu \
+  -o runtime/model_runtime=cpu \
+  -o runtime.width=320 \
+  -o runtime.height=240
+```
+
+CPU fast 공통 프리셋 예:
+
+```bash
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
+  --background-asset-ref bg://dummy \
+  -o profile=cpu_fast
+```
+
+`profile=cpu_fast`는 아래를 한 번에 적용합니다.
+- `models/hidden_region=hf_cpu_fast` (`hustvl/yolos-tiny`)
+- `models/inpaint=hf_cpu_fast` (fast patch inpaint + `mobilenet_v2` 품질 추정)
+- `models/perception=hf_cpu_fast` (`mobilenet_v2`)
+- `models/fx=tiny_sd_cpu`
+- `runtime/model_runtime=cpu`, `runtime.width=320`, `runtime.height=240`
+
 ## 6) 실험용 파이프라인 만들고 실행하는 방법
 새 실험 파이프라인(예: `ab-test`)은 아래 절차로 추가합니다.
 
@@ -145,6 +171,7 @@ python -m delivery.spot_the_hidden.cli \
 - `playable`: 프런트 게임 렌더링 최소 데이터
 - `answer_key`: 서버 판정용 데이터
 - `delivery_meta`: 이미지 참조/해시/크기 등 전달 메타
+- `playable.layers`: 레이어 SSOT(`base/inpaint_patch/composite/fx_overlay`)와 좌표/bbox/z-order
 
 이미지 전달 원칙:
 - 바이너리 인라인 전달 금지

@@ -4,6 +4,7 @@ from discoverex.models.types import (
     FxPrediction,
     FxRequest,
     HiddenRegionRequest,
+    InpaintPrediction,
     InpaintRequest,
     ModelHandle,
     PerceptionRequest,
@@ -53,12 +54,16 @@ class DummyInpaintModel:
         handle: ModelHandle,
         request: InpaintRequest | None = None,
         region_id: str | None = None,
-    ) -> dict[str, float | str]:
+    ) -> InpaintPrediction:
         _ = handle
         req = request or InpaintRequest(region_id=region_id or "")
         if region_id is not None:
             req.region_id = region_id
-        return {"region_id": req.region_id, "quality_score": 0.82}
+        return {
+            "region_id": req.region_id,
+            "quality_score": 0.82,
+            "inpaint_mode": "dummy",
+        }
 
 
 class DummyPerceptionModel:

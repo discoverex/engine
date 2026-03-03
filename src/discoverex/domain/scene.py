@@ -47,7 +47,34 @@ class ObjectGroup(BaseModel):
 
 class Composite(BaseModel):
     final_image_ref: str
-    render_meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class LayerType(str, Enum):
+    BASE = "base"
+    INPAINT_PATCH = "inpaint_patch"
+    COMPOSITE = "composite"
+    FX_OVERLAY = "fx_overlay"
+
+
+class LayerBBox(BaseModel):
+    x: float
+    y: float
+    w: float
+    h: float
+
+
+class LayerItem(BaseModel):
+    layer_id: str
+    type: LayerType
+    image_ref: str
+    bbox: LayerBBox | None = None
+    z_index: int = 0
+    order: int = 0
+    source_region_id: str | None = None
+
+
+class LayerStack(BaseModel):
+    items: list[LayerItem] = Field(default_factory=list)
 
 
 class Answer(BaseModel):
@@ -67,6 +94,7 @@ class Scene(BaseModel):
     regions: list[Region]
     objects: list[ObjectGroup] = Field(default_factory=list)
     composite: Composite
+    layers: LayerStack
     goal: Goal
     answer: Answer
     verification: VerificationBundle
@@ -84,4 +112,13 @@ class Scene(BaseModel):
             raise ValueError(
                 f"answer.answer_region_ids must exist in regions: {missing}"
             )
+        layers = self.layers.items
+        if not layers:
+            raise ValueError("layers.items must not be empty")
+        base_count = sum(1 for layer in layers if layer.type == LayerType.BASE)
+        if base_count != 1:
+            raise ValueError("layers must contain exactly one base layer")
+        orders = [layer.order for layer in layers]
+        if len(orders) != len(set(orders)):
+            raise ValueError("layer order values must be unique")
         return self

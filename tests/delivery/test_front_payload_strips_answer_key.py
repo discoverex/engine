@@ -6,6 +6,7 @@ from delivery.spot_the_hidden.converter import build_front_payload
 from delivery.spot_the_hidden.schema import (
     AnswerKey,
     AnswerRegion,
+    DeliveryLayer,
     DeliveryMeta,
     GameBundle,
     PlayableScene,
@@ -18,7 +19,20 @@ from delivery.spot_the_hidden.schema import (
 def test_build_front_payload_does_not_expose_answer_key() -> None:
     bundle = GameBundle(
         scene_ref=SceneRef(scene_id="s", version_id="v", source_scene_json="scene.json"),
-        playable=PlayableScene(image_ref="img.png", width=10, height=10),
+        playable=PlayableScene(
+            image_ref="img.png",
+            width=10,
+            height=10,
+            layers=[
+                DeliveryLayer(
+                    layer_id="layer-base",
+                    type="base",
+                    image_ref="img.png",
+                    z_index=0,
+                    order=0,
+                )
+            ],
+        ),
         answer_key=AnswerKey(
             answer_region_ids=["r1"],
             regions=[
@@ -47,3 +61,4 @@ def test_build_front_payload_does_not_expose_answer_key() -> None:
     playable_dict = playable
     assert "answer_key" not in payload
     assert playable_dict["image_ref"] == "img.png"
+    assert len(playable_dict["layers"]) == 1

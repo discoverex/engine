@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from delivery.spot_the_hidden.schema import (
     AnswerKey,
     AnswerRegion,
+    DeliveryLayer,
     DeliveryMeta,
     GameBundle,
     PlayableScene,
@@ -17,7 +18,20 @@ from delivery.spot_the_hidden.schema import (
 def test_game_bundle_pydantic_validation_roundtrip() -> None:
     bundle = GameBundle(
         scene_ref=SceneRef(scene_id="scene-1", version_id="v-1", source_scene_json="x"),
-        playable=PlayableScene(image_ref="a.png", width=10, height=20),
+        playable=PlayableScene(
+            image_ref="a.png",
+            width=10,
+            height=20,
+            layers=[
+                DeliveryLayer(
+                    layer_id="layer-base",
+                    type="base",
+                    image_ref="a.png",
+                    z_index=0,
+                    order=0,
+                )
+            ],
+        ),
         answer_key=AnswerKey(
             answer_region_ids=["r1"],
             regions=[
@@ -42,5 +56,6 @@ def test_game_bundle_pydantic_validation_roundtrip() -> None:
 
     dumped = bundle.model_dump(mode="json")
     loaded = GameBundle.model_validate(dumped)
+    assert loaded.bundle_version == "spot_hidden_v2"
     assert loaded.scene_ref.scene_id == "scene-1"
     assert loaded.answer_key.regions[0].bbox.w == 3

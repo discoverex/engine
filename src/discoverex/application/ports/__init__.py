@@ -2,6 +2,7 @@ from discoverex.models.types import (
     FxPrediction,
     FxRequest,
     HiddenRegionRequest,
+    InpaintPrediction,
     InpaintRequest,
     PerceptionRequest,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "HiddenRegionPort",
     "HiddenRegionRequest",
     "InpaintPort",
+    "InpaintPrediction",
     "InpaintRequest",
     "MetadataStorePort",
     "PerceptionPort",

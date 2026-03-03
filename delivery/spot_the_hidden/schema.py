@@ -19,6 +19,16 @@ class RegionBBox(BaseModel):
     h: float
 
 
+class DeliveryLayer(BaseModel):
+    layer_id: str
+    type: str
+    image_ref: str
+    bbox: RegionBBox | None = None
+    z_index: int = 0
+    order: int = 0
+    source_region_id: str | None = None
+
+
 class HintItem(BaseModel):
     key: str
     value: str
@@ -33,6 +43,7 @@ class PlayableScene(BaseModel):
     image_ref: str
     width: int
     height: int
+    layers: list[DeliveryLayer]
     goal_text: str | None = None
     hints: list[HintItem] = Field(default_factory=list)
     ui_flags: UiFlags = Field(default_factory=UiFlags)
@@ -67,7 +78,7 @@ class DeliveryMeta(BaseModel):
 
 
 class GameBundle(BaseModel):
-    bundle_version: str = "spot_hidden_v1"
+    bundle_version: str = "spot_hidden_v2"
     scene_ref: SceneRef
     playable: PlayableScene
     answer_key: AnswerKey

@@ -11,6 +11,9 @@ from discoverex.domain.scene import (
     Background,
     Composite,
     Difficulty,
+    LayerItem,
+    LayerStack,
+    LayerType,
     Scene,
     SceneMeta,
     SceneStatus,
@@ -64,6 +67,17 @@ def build_scene(
         background=background,
         regions=regions,
         composite=Composite(final_image_ref=""),
+        layers=LayerStack(
+            items=[
+                LayerItem(
+                    layer_id=f"layer-base-{run_ids.scene_id}",
+                    type=LayerType.BASE,
+                    image_ref=background.asset_ref,
+                    z_index=0,
+                    order=0,
+                )
+            ]
+        ),
         goal=Goal(
             goal_type=GoalType.RELATION,
             constraint_struct={

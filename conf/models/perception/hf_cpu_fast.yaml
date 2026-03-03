@@ -1,6 +1,6 @@
-# @package models.inpaint
-_target_: discoverex.adapters.outbound.models.hf_inpaint.HFInpaintModel
-model_id: stabilityai/stable-diffusion-2-inpainting
+# @package models.perception
+_target_: discoverex.adapters.outbound.models.hf_perception.HFPerceptionModel
+model_id: google/mobilenet_v2_1.0_224
 revision: main
 device: ${runtime.model_runtime.device}
 dtype: ${runtime.model_runtime.dtype}
@@ -8,4 +8,3 @@ precision: ${runtime.model_runtime.precision}
 batch_size: ${runtime.model_runtime.batch_size}
 seed: ${runtime.model_runtime.seed}
 strict_runtime: false
-quality_model_id: google/vit-base-patch16-224

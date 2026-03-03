@@ -27,6 +27,7 @@ def _run_pipeline_roundtrip(tmp_path: Path, model_group: str) -> None:
         "models/inpaint=" + model_group,
         "models/perception=" + model_group,
         "models/fx=" + model_group,
+        "runtime/model_runtime=cpu",
         f"runtime.artifacts_root={run_dir / 'artifacts'}",
         f"runtime.env.tracking_uri={tracking_uri}",
     ]

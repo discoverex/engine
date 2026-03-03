@@ -40,7 +40,14 @@ def compose_scene(
         FxRequest(
             image_ref=background_asset_ref,
             mode="default",
-            params={"output_path": str(scene_dir / "composite.png")},
+            params={
+                "output_path": str(scene_dir / "composite.png"),
+                "width": int(context.runtime.width),
+                "height": int(context.runtime.height),
+                "prompt": "hidden object puzzle scene",
+                "negative_prompt": "blurry, low quality, artifact",
+                "seed": context.runtime.model_runtime.seed,
+            },
         ),
     )
     return resolve_composite_image_ref(

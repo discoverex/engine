@@ -41,6 +41,12 @@ class InpaintRequest(BaseModel):
     region_mask_ref: str | Path | None = None
     prompt: str = ""
     negative_prompt: str = ""
+    output_path: str | Path | None = None
+    composite_base_ref: str | Path | None = None
+    generation_prompt: str = ""
+    generation_strength: float = 0.45
+    generation_steps: int = 6
+    generation_guidance_scale: float = 2.5
 
 
 class PerceptionRequest(BaseModel):
@@ -62,3 +68,12 @@ class FxPrediction(TypedDict, total=False):
     image_ref: str
     composite_image_ref: str
     artifact_path: str
+
+
+class InpaintPrediction(TypedDict, total=False):
+    region_id: str
+    quality_score: float
+    model_id: str
+    patch_image_ref: str
+    composited_image_ref: str
+    inpaint_mode: str
