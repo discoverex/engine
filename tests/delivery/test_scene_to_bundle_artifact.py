@@ -15,6 +15,9 @@ from discoverex.domain.scene import (
     Background,
     Composite,
     Difficulty,
+    LayerItem,
+    LayerStack,
+    LayerType,
     Scene,
     SceneMeta,
     SceneStatus,
@@ -53,6 +56,24 @@ def _scene_json(tmp_path: Path) -> Path:
             )
         ],
         composite=Composite(final_image_ref=str(image)),
+        layers=LayerStack(
+            items=[
+                LayerItem(
+                    layer_id="layer-base",
+                    type=LayerType.BASE,
+                    image_ref="bg://sample",
+                    z_index=0,
+                    order=0,
+                ),
+                LayerItem(
+                    layer_id="layer-fx",
+                    type=LayerType.FX_OVERLAY,
+                    image_ref=str(image),
+                    z_index=100,
+                    order=1,
+                ),
+            ]
+        ),
         goal=Goal(
             goal_type=GoalType.RELATION,
             constraint_struct={},
