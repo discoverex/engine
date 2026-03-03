@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from discoverex.bootstrap import AppContext
+from discoverex.application.context import AppContextLike
 from discoverex.models.types import FxPrediction, FxRequest, ModelHandle
 
 from .types import CompositeResolution
@@ -30,7 +30,7 @@ def resolve_composite_image_ref(
 
 def compose_scene(
     *,
-    context: AppContext,
+    context: AppContextLike,
     background_asset_ref: str,
     scene_dir: Path,
     fx_handle: ModelHandle,

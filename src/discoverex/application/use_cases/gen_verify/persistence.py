@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from discoverex.bootstrap import AppContext
+from discoverex.application.context import AppContextLike
 from discoverex.domain.scene import Scene
 
 
-def save_scene(context: AppContext, scene: Scene) -> Path:
+def save_scene(context: AppContextLike, scene: Scene) -> Path:
     saved_dir = context.artifact_store.save_scene_bundle(scene)
     context.metadata_store.upsert_scene_metadata(scene)
     return saved_dir
 
 
 def write_verification_report(
-    context: AppContext,
+    context: AppContextLike,
     saved_dir: Path,
     scene: Scene,
 ) -> Path:
@@ -22,7 +22,7 @@ def write_verification_report(
 
 def track_run(
     *,
-    context: AppContext,
+    context: AppContextLike,
     scene: Scene,
     saved_dir: Path,
     composite_artifact: Path | None,

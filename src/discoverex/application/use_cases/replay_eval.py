@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+from discoverex.application.context import AppContextLike
 from discoverex.application.use_cases.verify_only import run_verify_only
-from discoverex.bootstrap import AppContext
 
 
-def run_replay_eval(scene_json_paths: list[Path | str], context: AppContext) -> Path:
+def run_replay_eval(scene_json_paths: list[Path | str], context: AppContextLike) -> Path:
     report_dir = context.artifacts_root / "reports"
 
     summary: list[dict[str, object]] = []

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from discoverex.bootstrap import AppContext
+from discoverex.application.context import AppContextLike
 from discoverex.domain import (
     integrate_verification,
     judge_scene,
@@ -29,7 +29,7 @@ def run_perception_verification(
 
 def verify_scene(
     scene: Scene,
-    context: AppContext,
+    context: AppContextLike,
     perception_handle: ModelHandle,
 ) -> None:
     logical = run_logical_verification(

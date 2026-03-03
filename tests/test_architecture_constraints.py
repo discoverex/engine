@@ -63,6 +63,16 @@ def test_application_layer_does_not_import_infra_packages() -> None:
     assert offenders == []
 
 
+def test_application_layer_does_not_import_bootstrap_package() -> None:
+    offenders: list[str] = []
+    blocked = ("from discoverex.bootstrap", "import discoverex.bootstrap")
+    for path in Path("src/discoverex/application").rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        if any(pattern in text for pattern in blocked):
+            offenders.append(str(path))
+    assert offenders == []
+
+
 def test_use_cases_do_not_write_files_directly() -> None:
     offenders: list[str] = []
     for path in Path("src/discoverex/application/use_cases").rglob("*.py"):

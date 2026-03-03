@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TypedDict
 
+from pydantic import BaseModel, Field
 
-@dataclass(slots=True)
-class ModelRuntimeContext:
+
+class ModelRuntimeContext(BaseModel):
     device: str = "cuda"
     dtype: str = "float16"
     batch_size: int = 1
@@ -14,8 +14,7 @@ class ModelRuntimeContext:
     seed: int | None = None
 
 
-@dataclass(slots=True)
-class ModelHandle:
+class ModelHandle(BaseModel):
     name: str
     version: str
     runtime: str
@@ -24,20 +23,18 @@ class ModelHandle:
     tokenizer_id: str | None = None
     device: str = "cuda"
     dtype: str = "float16"
-    extra: dict[str, Any] = field(default_factory=dict)
+    extra: dict[str, Any] = Field(default_factory=dict)
 
 
-@dataclass(slots=True)
-class HiddenRegionRequest:
+class HiddenRegionRequest(BaseModel):
     image_ref: str | Path | None = None
     image_bytes: bytes | None = None
     width: int = 0
     height: int = 0
-    thresholds: dict[str, float] = field(default_factory=dict)
+    thresholds: dict[str, float] = Field(default_factory=dict)
 
 
-@dataclass(slots=True)
-class InpaintRequest:
+class InpaintRequest(BaseModel):
     image_ref: str | Path | None = None
     region_id: str = ""
     bbox: tuple[float, float, float, float] | None = None
@@ -46,19 +43,17 @@ class InpaintRequest:
     negative_prompt: str = ""
 
 
-@dataclass(slots=True)
-class PerceptionRequest:
+class PerceptionRequest(BaseModel):
     image_ref: str | Path | None = None
     region_count: int = 0
-    regions: list[dict[str, Any]] = field(default_factory=list)
+    regions: list[dict[str, Any]] = Field(default_factory=list)
     question_context: str = ""
 
 
-@dataclass(slots=True)
-class FxRequest:
+class FxRequest(BaseModel):
     image_ref: str | Path | None = None
     mode: str = "default"
-    params: dict[str, Any] = field(default_factory=dict)
+    params: dict[str, Any] = Field(default_factory=dict)
 
 
 class FxPrediction(TypedDict, total=False):
