@@ -8,6 +8,10 @@ from .schema import (
     RuntimeEnvConfig,
     RuntimeModelConfig,
     ThresholdsConfig,
+    ValidatorModelsConfig,
+    ValidatorPipelineConfig,
+    ValidatorThresholdsConfig,
+    ValidatorWeightsConfig,
 )
 
 __all__ = [
@@ -20,4 +24,8 @@ __all__ = [
     "RuntimeEnvConfig",
     "RuntimeModelConfig",
     "ThresholdsConfig",
+    "ValidatorModelsConfig",
+    "ValidatorPipelineConfig",
+    "ValidatorThresholdsConfig",
+    "ValidatorWeightsConfig",
 ]

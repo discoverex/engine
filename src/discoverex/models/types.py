@@ -77,3 +77,38 @@ class InpaintPrediction(TypedDict, total=False):
     patch_image_ref: str
     composited_image_ref: str
     inpaint_mode: str
+
+
+# ---------------------------------------------------------------------------
+# Validator pipeline types (Phase 1–4 inter-phase data contracts)
+# ---------------------------------------------------------------------------
+
+class PhysicalMetadata(BaseModel):
+    """Phase 1 output: MobileSAM segmentation + geometric analysis."""
+    regions: list[dict[str, Any]] = Field(default_factory=list)
+    occlusion_map: dict[str, float] = Field(default_factory=dict)
+    z_index_map: dict[str, int] = Field(default_factory=dict)
+    z_depth_hop_map: dict[str, int] = Field(default_factory=dict)
+    cluster_density_map: dict[str, int] = Field(default_factory=dict)
+    euclidean_distance_map: dict[str, list[float]] = Field(default_factory=dict)
+
+
+class LogicalStructure(BaseModel):
+    """Phase 2 output: Moondream2 scene graph + NetworkX graph metrics."""
+    relations: list[dict[str, Any]] = Field(default_factory=list)
+    degree_map: dict[str, int] = Field(default_factory=dict)
+    hop_map: dict[str, int] = Field(default_factory=dict)
+    diameter: float = 1.0
+
+
+class VisualVerification(BaseModel):
+    """Phase 3 output: YOLO sigma threshold + CLIP detail retention rate."""
+    sigma_threshold_map: dict[str, float] = Field(default_factory=dict)
+    detail_retention_rate_map: dict[str, float] = Field(default_factory=dict)
+
+
+class ValidatorInput(BaseModel):
+    """Aggregated input for Phase 4 pure computation."""
+    physical: PhysicalMetadata
+    logical: LogicalStructure
+    visual: VisualVerification
