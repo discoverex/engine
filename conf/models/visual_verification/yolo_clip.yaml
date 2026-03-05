@@ -1,0 +1,8 @@
+_target_: discoverex.adapters.outbound.models.hf_yolo_clip.YoloCLIPAdapter
+yolo_model_id: "THU-MIG/yolov10-n"
+clip_model_id: "openai/clip-vit-base-patch32"
+# frozen hyperparams: step functions → not differentiable, excluded from WeightFitter
+sigma_levels: [1.0, 2.0, 4.0, 8.0, 16.0]   # discrete blur grid
+iou_match_threshold: 0.3                      # IoU cutoff for object-disappeared detection
+device: cuda
+max_vram_gb: 4.0

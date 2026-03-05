@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from discoverex.models.types import (
     FxPrediction,
     FxRequest,
     HiddenRegionRequest,
     InpaintPrediction,
     InpaintRequest,
+    LogicalStructure,
     ModelHandle,
     PerceptionRequest,
+    PhysicalMetadata,
+    VisualVerification,
 )
 
 from .fx_artifact import ensure_output_image
@@ -112,3 +117,71 @@ class DummyFxModel:
             ensure_output_image(output_path)
             prediction["output_path"] = output_path
         return prediction
+
+
+# ---------------------------------------------------------------------------
+# Validator pipeline dummy adapters (load/extract|verify/unload pattern)
+# ---------------------------------------------------------------------------
+
+class DummyPhysicalExtraction:
+    """Dummy Phase 1: returns fixed physical metadata for two objects."""
+
+    def load(self, handle: ModelHandle) -> None:  # noqa: ARG002
+        pass
+
+    def extract(
+        self, composite_image: Path, object_layers: list[Path]  # noqa: ARG002
+    ) -> PhysicalMetadata:
+        obj_ids = [f"obj_{i}" for i in range(len(object_layers))] or ["obj_0", "obj_1"]
+        return PhysicalMetadata(
+            regions=[{"obj_id": oid, "bbox": [0.1, 0.1, 0.2, 0.2]} for oid in obj_ids],
+            occlusion_map={oid: 0.45 for oid in obj_ids},
+            z_index_map={oid: i for i, oid in enumerate(obj_ids)},
+            z_depth_hop_map={oid: 2 for oid in obj_ids},
+            cluster_density_map={oid: 3 for oid in obj_ids},
+            euclidean_distance_map={oid: [50.0, 80.0] for oid in obj_ids},
+        )
+
+    def unload(self) -> None:
+        pass
+
+
+class DummyLogicalExtraction:
+    """Dummy Phase 2: returns fixed scene graph metrics."""
+
+    def load(self, handle: ModelHandle) -> None:  # noqa: ARG002
+        pass
+
+    def extract(
+        self, composite_image: Path, physical: PhysicalMetadata  # noqa: ARG002
+    ) -> LogicalStructure:
+        obj_ids = list(physical.occlusion_map.keys()) or ["obj_0", "obj_1"]
+        return LogicalStructure(
+            relations=[{"subject": obj_ids[0], "predicate": "near", "object": obj_ids[-1]}],
+            degree_map={oid: 3 for oid in obj_ids},
+            hop_map={oid: 2 for oid in obj_ids},
+            diameter=4.0,
+        )
+
+    def unload(self) -> None:
+        pass
+
+
+class DummyVisualVerification:
+    """Dummy Phase 3: returns fixed sigma threshold and DRR values."""
+
+    def load(self, handle: ModelHandle) -> None:  # noqa: ARG002
+        pass
+
+    def verify(
+        self, composite_image: Path, sigma_levels: list[float]  # noqa: ARG002
+    ) -> VisualVerification:
+        # Use deterministic obj IDs — orchestrator unifies by intersection of maps
+        obj_ids = ["obj_0", "obj_1"]
+        return VisualVerification(
+            sigma_threshold_map={oid: 4.0 for oid in obj_ids},
+            detail_retention_rate_map={oid: 0.55 for oid in obj_ids},
+        )
+
+    def unload(self) -> None:
+        pass

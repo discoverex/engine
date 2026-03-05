@@ -10,9 +10,9 @@ from discoverex.application.use_cases import (
     run_replay_eval,
     run_verify_only,
 )
-from discoverex.bootstrap import build_context
+from discoverex.bootstrap import build_context, build_validator_context
 from discoverex.config import PipelineConfig
-from discoverex.config_loader import load_pipeline_config
+from discoverex.config_loader import load_pipeline_config, load_validator_config
 from discoverex.domain.scene import Scene
 
 app = typer.Typer(no_args_is_help=True)
@@ -97,6 +97,42 @@ def replay_eval_command(
     context = build_context(config=config)
     report_path = run_replay_eval(scene_json_paths=scene_jsons, context=context)
     typer.echo(json.dumps({"report": str(report_path)}, ensure_ascii=False))
+
+
+@app.command("validate")
+def validate_command(
+    composite_image: Path = typer.Argument(..., help="Path to the composite scene image"),
+    object_layer: list[Path] = typer.Option(
+        ..., "--object-layer", help="Object layer PNG (repeat per object)"
+    ),
+    config_name: str = typer.Option("validator", "--config-name"),
+    config_dir: str = typer.Option("conf", "--config-dir"),
+    override: list[str] = typer.Option([], "--override", "-o"),
+) -> None:
+    """Run the 4-phase Validator pipeline on a composite image.
+
+    Output JSON: {"status", "pass", "total_score", "perception_score",
+                  "logical_score", "answer_obj_count", "failure_reason"}
+    """
+    config = load_validator_config(
+        config_name=config_name,
+        config_dir=config_dir,
+        overrides=override,
+    )
+    orchestrator = build_validator_context(config=config)
+    bundle = orchestrator.run(
+        composite_image=composite_image, object_layers=object_layer
+    )
+    payload = {
+        "status": "pass" if bundle.final.pass_ else "fail",
+        "pass": bundle.final.pass_,
+        "total_score": round(bundle.final.total_score, 4),
+        "perception_score": round(bundle.perception.score, 4),
+        "logical_score": round(bundle.logical.score, 4),
+        "answer_obj_count": bundle.logical.signals.get("answer_obj_count", 0),
+        "failure_reason": bundle.final.failure_reason,
+    }
+    typer.echo(json.dumps(payload, ensure_ascii=False))
 
 
 if __name__ == "__main__":

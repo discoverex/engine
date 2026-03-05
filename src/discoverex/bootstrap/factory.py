@@ -5,7 +5,11 @@ from typing import Any
 
 from hydra.utils import instantiate
 
-from discoverex.config import PipelineConfig
+from discoverex.adapters.outbound.bundle_store import LocalJsonBundleStore
+from discoverex.application.use_cases.validator import ValidatorOrchestrator
+from discoverex.config import PipelineConfig, ValidatorPipelineConfig
+from discoverex.domain.services.verification import ScoringWeights
+from discoverex.models.types import ModelHandle
 
 from .config_defaults import resolve_config
 from .context import AppContext
@@ -57,4 +61,68 @@ def build_context(config: PipelineConfig | dict[str, Any] | None = None) -> AppC
         runtime=cfg.runtime,
         thresholds=cfg.thresholds,
         model_versions=cfg.model_versions,
+    )
+
+
+def _make_handle(name: str, cfg_dict: dict[str, Any]) -> ModelHandle:
+    return ModelHandle(
+        name=name,
+        version="v0",
+        runtime="hf",
+        model_id=str(cfg_dict.get("model_id", "")),
+        device=str(cfg_dict.get("device", "cuda")),
+        dtype=str(cfg_dict.get("dtype", "float16")),
+    )
+
+
+def _build_scoring_weights(cfg: ValidatorPipelineConfig) -> ScoringWeights:
+    """weights_path 가 지정되면 JSON 파일에서 로드, 아니면 cfg.weights 에서 빌드."""
+    if cfg.weights_path is not None:
+        weights_file = Path(cfg.weights_path)
+        return ScoringWeights.model_validate_json(
+            weights_file.read_text(encoding="utf-8")
+        )
+    return ScoringWeights(**cfg.weights.model_dump())
+
+
+def build_validator_context(
+    config: ValidatorPipelineConfig | dict[str, Any] | None = None,
+) -> ValidatorOrchestrator:
+    cfg: ValidatorPipelineConfig
+    if isinstance(config, ValidatorPipelineConfig):
+        cfg = config
+    elif isinstance(config, dict):
+        cfg = ValidatorPipelineConfig.model_validate(config)
+    else:
+        raise ValueError("config must be a ValidatorPipelineConfig or dict")
+
+    physical_port = instantiate(cfg.models.physical_extraction.as_kwargs())
+    logical_port = instantiate(cfg.models.logical_extraction.as_kwargs())
+    visual_port = instantiate(cfg.models.visual_verification.as_kwargs())
+
+    physical_handle = _make_handle(
+        "physical_extraction", cfg.models.physical_extraction.model_dump()
+    )
+    logical_handle = _make_handle(
+        "logical_extraction", cfg.models.logical_extraction.model_dump()
+    )
+    visual_handle = _make_handle(
+        "visual_verification", cfg.models.visual_verification.model_dump()
+    )
+
+    scoring_weights = _build_scoring_weights(cfg)
+    bundle_store = (
+        LocalJsonBundleStore(Path(cfg.bundle_store_dir)) if cfg.bundle_store_dir else None
+    )
+
+    return ValidatorOrchestrator(
+        physical_port=physical_port,
+        logical_port=logical_port,
+        visual_port=visual_port,
+        physical_handle=physical_handle,
+        logical_handle=logical_handle,
+        visual_handle=visual_handle,
+        pass_threshold=cfg.thresholds.pass_threshold,
+        scoring_weights=scoring_weights,
+        bundle_store=bundle_store,
     )

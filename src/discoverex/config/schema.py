@@ -89,6 +89,58 @@ class ModelVersionsConfig(BaseModel):
     fx: str = "fx-v0"
 
 
+class ValidatorModelsConfig(BaseModel):
+    physical_extraction: HydraComponentConfig
+    logical_extraction: HydraComponentConfig
+    visual_verification: HydraComponentConfig
+
+
+class ValidatorThresholdsConfig(BaseModel):
+    is_hidden_min_conditions: int = 2
+    pass_threshold: float = 0.35
+
+    @field_validator("pass_threshold")
+    @classmethod
+    def validate_positive(cls, value: float) -> float:
+        if value < 0.0:
+            raise ValueError("value must be >= 0.0")
+        return value
+
+
+class ValidatorWeightsConfig(BaseModel):
+    """ScoringWeights 의 config 레이어 쌍.
+
+    YAML weights: 섹션 값을 파싱하며, 미지정 필드는 코드 기본값을 사용한다.
+    factory.py 에서 ScoringWeights(**cfg.weights.model_dump()) 로 변환된다.
+    """
+
+    perception_sigma: float = Field(0.50, ge=0.0)
+    perception_drr: float = Field(0.50, ge=0.0)
+    logical_hop: float = Field(0.55, ge=0.0)
+    logical_degree: float = Field(0.45, ge=0.0)
+    total_perception: float = Field(0.45, ge=0.0)
+    total_logical: float = Field(0.55, ge=0.0)
+    difficulty_occlusion: float = Field(0.25, ge=0.0)
+    difficulty_sigma: float = Field(0.20, ge=0.0)
+    difficulty_hop: float = Field(0.20, ge=0.0)
+    difficulty_degree: float = Field(0.15, ge=0.0)
+    difficulty_drr: float = Field(0.20, ge=0.0)
+    difficulty_interaction: float = Field(0.10, ge=0.0)
+
+
+class ValidatorPipelineConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    models: ValidatorModelsConfig
+    adapters: AdaptersConfig
+    runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    thresholds: ValidatorThresholdsConfig = Field(default_factory=ValidatorThresholdsConfig)
+    weights: ValidatorWeightsConfig = Field(default_factory=ValidatorWeightsConfig)
+    weights_path: str | None = None  # 지정 시 JSON 파일에서 로드 → weights 필드 무시
+    bundle_store_dir: str | None = None  # VerificationBundle 저장 디렉터리 (null 이면 미저장)
+    model_versions: ModelVersionsConfig = Field(default_factory=ModelVersionsConfig)
+
+
 class PipelineConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
