@@ -1,0 +1,6 @@
+_target_: discoverex.adapters.outbound.models.hf_mobilesam.MobileSAMAdapter
+model_id: "ChaoningZhang/MobileSAM"
+device: cuda
+dtype: float16
+# frozen hyperparam: step function → not differentiable, excluded from WeightFitter
+cluster_radius_factor: 0.5   # cluster_radius = mean_dist * factor
