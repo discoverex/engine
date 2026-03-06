@@ -101,7 +101,9 @@ def replay_eval_command(
 
 @app.command("validate")
 def validate_command(
-    composite_image: Path = typer.Argument(..., help="Path to the composite scene image"),
+    composite_image: Path = typer.Argument(
+        ..., help="Path to the composite scene image"
+    ),
     object_layer: list[Path] = typer.Option(
         ..., "--object-layer", help="Object layer PNG (repeat per object)"
     ),

@@ -15,4 +15,7 @@ def test_cpu_fast_profile_overrides_models_and_runtime() -> None:
     assert cfg.models.inpaint.target.endswith("HFInpaintModel")
     assert cfg.models.perception.target.endswith("HFPerceptionModel")
     assert cfg.models.fx.target.endswith("TinySDFxModel")
-    assert cfg.models.hidden_region.model_dump(mode="python")["model_id"] == "hustvl/yolos-tiny"
+    assert (
+        cfg.models.hidden_region.model_dump(mode="python")["model_id"]
+        == "hustvl/yolos-tiny"
+    )

@@ -23,7 +23,9 @@ def run(background_asset_ref: str, context: AppContextLike) -> Scene:
     inpaint_handle = context.inpaint_model.load(model_versions.inpaint)
     perception_handle = context.perception_model.load(model_versions.perception)
     fx_handle = context.fx_model.load(model_versions.fx)
-    scene_dir = Path(context.artifacts_root) / "scenes" / run_ids.scene_id / run_ids.version_id
+    scene_dir = (
+        Path(context.artifacts_root) / "scenes" / run_ids.scene_id / run_ids.version_id
+    )
 
     background = build_background(background_asset_ref, runtime_cfg)
     _materialize_background_asset(background=background, scene_dir=scene_dir)

@@ -98,6 +98,26 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex replay-eval \
   -o profile=cpu_fast
 ```
 
+### 오케스트레이터 워커 엔트리포인트
+
+오케스트레이터 JobSpec의 `entrypoint`는 아래 런처를 권장합니다.
+
+```bash
+python -m discoverex.orchestrator_contract.launcher
+```
+
+런처는 `ORCH_JOB_INPUTS_JSON`을 `OrchestratorInputsV1`으로 검증한 뒤
+`discoverex gen-verify|verify-only|replay-eval`을 실행합니다.
+
+실제 잡 등록은 아래 스크립트를 사용합니다.
+
+```bash
+python scripts/register_orchestrator_job.py --dry-run --command gen-verify \
+  --repo-url https://github.com/<org>/discoverex-engine.git \
+  --ref main \
+  --background-asset-ref bg://dummy
+```
+
 ### 운영 모드 분리 (로컬/워커)
 
 - 로컬 개발은 기본 설정(`local` artifact/meta + `mlflow_file`)을 사용합니다.

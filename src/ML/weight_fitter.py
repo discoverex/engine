@@ -50,6 +50,7 @@ scipy.optimize.minimize — Nelder-Mead (gradient-free, GPU 불필요)
     python engine/src/ML/weight_fitter.py
     또는 engine/src/ML/fit_weights.py 스크립트 참조
 """
+
 from __future__ import annotations
 
 import sys
@@ -65,7 +66,10 @@ _ENGINE_SRC = Path(__file__).resolve().parent.parent
 if str(_ENGINE_SRC) not in sys.path:
     sys.path.insert(0, str(_ENGINE_SRC))
 
-from discoverex.domain.services.verification import ScoringWeights, integrate_verification_v2  # noqa: E402
+from discoverex.domain.services.verification import (  # noqa: E402
+    ScoringWeights,
+    integrate_verification_v2,
+)
 
 # 최적화할 가중치 키 순서 (x 벡터 인덱스와 1:1 대응)
 _SCORED_KEYS: list[str] = [

@@ -3,10 +3,10 @@
 이 저장소는 실행 엔진 패키지입니다. 스케줄러/큐/워커 오케스트레이션은 외부 저장소에서 담당합니다.
 
 ## 계약 범위
-- 스케줄러는 직렬화 가능한 Hydra override 문자열 목록을 전달합니다.
+- 스케줄러는 오케스트레이터 JobSpec의 `inputs`로 실행 payload를 전달합니다.
 - 워커는 작업 1건당 CLI 프로세스 1개를 실행합니다.
 - 워커는 내부 설정 스키마를 알 필요가 없습니다.
-- 워커 환경에는 MLflow tracker 의존성(`--extra tracking`)이 포함되어야 합니다.
+- 워커는 엔진 런처(`discoverex-orch-launcher`)를 통해 payload를 검증한 뒤 실행합니다.
 
 ## 안정 인터페이스
 - 엔트리포인트: `discoverex`
@@ -15,10 +15,40 @@
 ## 워커 초기화 요구사항
 ```bash
 mkdir -p .cache/uv
-UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking
+UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking --extra storage
 ```
 
-## 작업 페이로드 예시
+`uv`가 없으면 런처가 `python -m venv` + `pip install -e .[tracking,storage]`로 자동 폴백합니다.
+
+## 오케스트레이터 JobSpec 매핑
+오케스트레이터가 전달하는 `job_spec_json`에서 엔진 실행에 사용하는 필드는 `inputs`입니다.
+
+- `job_spec.engine`: 오케스트레이터 라우팅용 식별자(엔진 내부 실행 파라미터로는 사용하지 않음)
+- `job_spec.entrypoint`: 워커가 실행할 런처 엔트리포인트
+- `job_spec.inputs`: 엔진 실행 payload SSOT (`OrchestratorInputsV1`)
+
+권장 `entrypoint`:
+
+```json
+["/bin/sh", "-lc", "python -m discoverex.orchestrator_contract.launcher"]
+```
+
+실제 잡 등록 스크립트(엔진 레포):
+
+```bash
+python scripts/register_orchestrator_job.py \
+  --prefect-api-url https://prefect-api.example.com/api \
+  --deployment engine-run \
+  --command gen-verify \
+  --repo-url https://github.com/<org>/discoverex-engine.git \
+  --ref main \
+  --background-asset-ref bg://dummy \
+  -o adapters/artifact_store=minio \
+  -o adapters/tracker=mlflow_server \
+  --runtime-env MLFLOW_TRACKING_URI=https://mlflow.example.com
+```
+
+## inputs(OrchestratorInputsV1) 페이로드 예시
 ```json
 {
   "contract_version": "v1",
@@ -30,7 +60,15 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking
     "runtime/model_runtime=gpu",
     "models/perception=hf",
     "runtime.model_runtime.device=cuda:0"
-  ]
+  ],
+  "runtime": {
+    "mode": "worker",
+    "bootstrap_mode": "auto",
+    "extras": ["tracking", "storage"],
+    "extra_env": {
+      "MLFLOW_TRACKING_URI": "https://mlflow.example.com"
+    }
+  }
 }
 ```
 
@@ -38,6 +76,7 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking
 - 워커는 무상태(stateless) 실행만 담당합니다.
 - 작업 1건은 프로세스 1회 실행에 매핑합니다.
 - override는 전달 순서를 유지해 `-o` 인자로 전달합니다.
+- `ORCH_JOB_INPUTS_JSON`은 Pydantic(`OrchestratorInputsV1`)으로 강검증합니다.
 - 엔진 실행 후 delivery 후처리 단계를 별도로 호출합니다.
 - 워커에서는 로컬 저장소 사용을 피하고 adapter override를 명시적으로 강제합니다.
 

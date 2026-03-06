@@ -134,10 +134,14 @@ class ValidatorPipelineConfig(BaseModel):
     models: ValidatorModelsConfig
     adapters: AdaptersConfig
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
-    thresholds: ValidatorThresholdsConfig = Field(default_factory=ValidatorThresholdsConfig)
+    thresholds: ValidatorThresholdsConfig = Field(
+        default_factory=ValidatorThresholdsConfig
+    )
     weights: ValidatorWeightsConfig = Field(default_factory=ValidatorWeightsConfig)
     weights_path: str | None = None  # 지정 시 JSON 파일에서 로드 → weights 필드 무시
-    bundle_store_dir: str | None = None  # VerificationBundle 저장 디렉터리 (null 이면 미저장)
+    bundle_store_dir: str | None = (
+        None  # VerificationBundle 저장 디렉터리 (null 이면 미저장)
+    )
     model_versions: ModelVersionsConfig = Field(default_factory=ModelVersionsConfig)
 
 

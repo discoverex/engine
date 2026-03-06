@@ -36,5 +36,9 @@ def convert_scene_json_to_bundle(
     scene_path = Path(scene_json_path)
     scene = load_scene(scene_path)
     bundle = build_game_bundle(scene=scene, source_scene_json=str(scene_path))
-    target = Path(output_path) if output_path is not None else default_bundle_path(scene_path)
+    target = (
+        Path(output_path)
+        if output_path is not None
+        else default_bundle_path(scene_path)
+    )
     return write_bundle(bundle, target)

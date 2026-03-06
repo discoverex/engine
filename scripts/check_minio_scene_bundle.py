@@ -54,11 +54,9 @@ def main() -> int:
         print(json.dumps({"missing_keys": missing}, ensure_ascii=False))
         return 1
 
-    local_root = Path(args.artifacts_root) / "scenes" / \
-        args.scene_id / args.version_id
+    local_root = Path(args.artifacts_root) / "scenes" / args.scene_id / args.version_id
     if not local_root.exists():
-        print(json.dumps(
-            {"error": f"local scene dir not found: {local_root}"}))
+        print(json.dumps({"error": f"local scene dir not found: {local_root}"}))
         return 1
 
     mismatch: list[str] = []
@@ -69,8 +67,7 @@ def main() -> int:
             print(json.dumps({"error": f"empty object: {remote_key}"}))
             return 1
 
-        remote_bytes = s3.get_object(Bucket=args.bucket, Key=remote_key)[
-            "Body"].read()
+        remote_bytes = s3.get_object(Bucket=args.bucket, Key=remote_key)["Body"].read()
         local_bytes = (local_root / name).read_bytes()
         if _sha256(remote_bytes) != _sha256(local_bytes):
             mismatch.append(name)
@@ -79,8 +76,9 @@ def main() -> int:
         print(json.dumps({"hash_mismatch": mismatch}, ensure_ascii=False))
         return 1
 
-    scene_json = s3.get_object(
-        Bucket=args.bucket, Key=prefix + "scene.json")["Body"].read()
+    scene_json = s3.get_object(Bucket=args.bucket, Key=prefix + "scene.json")[
+        "Body"
+    ].read()
     scene = Scene.model_validate_json(scene_json.decode("utf-8"))
     print(
         json.dumps(

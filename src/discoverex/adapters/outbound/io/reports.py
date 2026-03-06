@@ -46,4 +46,3 @@ class JsonReportWriterAdapter:
             encoding="utf-8",
         )
         return report_path
-

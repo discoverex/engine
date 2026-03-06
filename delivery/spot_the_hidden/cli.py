@@ -8,7 +8,9 @@ from .io import convert_scene_json_to_bundle, load_scene
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Spot-the-hidden delivery bundle builder")
+    parser = argparse.ArgumentParser(
+        description="Spot-the-hidden delivery bundle builder"
+    )
     parser.add_argument("--scene-json", required=True, help="Path to source scene.json")
     parser.add_argument("--output", default=None, help="Output bundle path")
     parser.add_argument(
@@ -27,7 +29,9 @@ def main() -> None:
     if args.validate_only:
         print(bundle.model_dump_json(indent=2))
         return
-    output = convert_scene_json_to_bundle(scene_json_path=scene_path, output_path=args.output)
+    output = convert_scene_json_to_bundle(
+        scene_json_path=scene_path, output_path=args.output
+    )
     print(str(output))
 
 

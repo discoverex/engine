@@ -17,6 +17,7 @@ WeightFitter 학습 데이터로 활용할 수 있다.
       "bundle": { "perception": {...}, "logical": {...}, "final": {...} }
     }
 """
+
 from __future__ import annotations
 
 import json

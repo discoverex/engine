@@ -37,10 +37,14 @@ class TinyTorchPerceptionModel:
             dtype=self.dtype,
         )
 
-    def predict(self, handle: ModelHandle, request: PerceptionRequest) -> dict[str, float]:
+    def predict(
+        self, handle: ModelHandle, request: PerceptionRequest
+    ) -> dict[str, float]:
         import torch  # type: ignore
 
         _ = handle
-        x = torch.tensor([float(request.region_count), float(bool(request.question_context))])
+        x = torch.tensor(
+            [float(request.region_count), float(bool(request.question_context))]
+        )
         score = torch.sigmoid(0.2 * x[0] + 0.6 * x[1] - 0.3)
         return {"confidence": float(score.item())}

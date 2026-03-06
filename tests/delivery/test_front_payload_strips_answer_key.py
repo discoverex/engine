@@ -18,7 +18,9 @@ from delivery.spot_the_hidden.schema import (
 
 def test_build_front_payload_does_not_expose_answer_key() -> None:
     bundle = GameBundle(
-        scene_ref=SceneRef(scene_id="s", version_id="v", source_scene_json="scene.json"),
+        scene_ref=SceneRef(
+            scene_id="s", version_id="v", source_scene_json="scene.json"
+        ),
         playable=PlayableScene(
             image_ref="img.png",
             width=10,

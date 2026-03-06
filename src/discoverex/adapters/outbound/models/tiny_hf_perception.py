@@ -45,7 +45,11 @@ class TinyHFPerceptionModel:
             vocab_size=100,
         )
         model = DistilBertModel(cfg).eval()
-        _ = model(input_ids=torch.ones((1, 8), dtype=torch.long)).last_hidden_state.mean().item()
+        _ = (
+            model(input_ids=torch.ones((1, 8), dtype=torch.long))
+            .last_hidden_state.mean()
+            .item()
+        )
         selected_device = self.device
         if self.device.startswith("cuda") and not torch.cuda.is_available():
             if self.strict_runtime:
@@ -60,7 +64,9 @@ class TinyHFPerceptionModel:
             dtype=self.dtype,
         )
 
-    def predict(self, handle: ModelHandle, request: PerceptionRequest) -> dict[str, float]:
+    def predict(
+        self, handle: ModelHandle, request: PerceptionRequest
+    ) -> dict[str, float]:
         import torch  # type: ignore
 
         _ = handle

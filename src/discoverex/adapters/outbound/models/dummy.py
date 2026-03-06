@@ -123,6 +123,7 @@ class DummyFxModel:
 # Validator pipeline dummy adapters (load/extract|verify/unload pattern)
 # ---------------------------------------------------------------------------
 
+
 class DummyPhysicalExtraction:
     """Dummy Phase 1: returns fixed physical metadata for two objects."""
 
@@ -130,7 +131,9 @@ class DummyPhysicalExtraction:
         pass
 
     def extract(
-        self, composite_image: Path, object_layers: list[Path]  # noqa: ARG002
+        self,
+        composite_image: Path,
+        object_layers: list[Path],  # noqa: ARG002
     ) -> PhysicalMetadata:
         obj_ids = [f"obj_{i}" for i in range(len(object_layers))] or ["obj_0", "obj_1"]
         return PhysicalMetadata(
@@ -153,11 +156,15 @@ class DummyLogicalExtraction:
         pass
 
     def extract(
-        self, composite_image: Path, physical: PhysicalMetadata  # noqa: ARG002
+        self,
+        composite_image: Path,
+        physical: PhysicalMetadata,  # noqa: ARG002
     ) -> LogicalStructure:
         obj_ids = list(physical.occlusion_map.keys()) or ["obj_0", "obj_1"]
         return LogicalStructure(
-            relations=[{"subject": obj_ids[0], "predicate": "near", "object": obj_ids[-1]}],
+            relations=[
+                {"subject": obj_ids[0], "predicate": "near", "object": obj_ids[-1]}
+            ],
             degree_map={oid: 3 for oid in obj_ids},
             hop_map={oid: 2 for oid in obj_ids},
             diameter=4.0,
@@ -174,7 +181,9 @@ class DummyVisualVerification:
         pass
 
     def verify(
-        self, composite_image: Path, sigma_levels: list[float]  # noqa: ARG002
+        self,
+        composite_image: Path,
+        sigma_levels: list[float],  # noqa: ARG002
     ) -> VisualVerification:
         # Use deterministic obj IDs — orchestrator unifies by intersection of maps
         obj_ids = ["obj_0", "obj_1"]

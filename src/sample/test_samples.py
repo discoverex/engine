@@ -17,6 +17,7 @@ occlusion 계산 (개선)
     python src/sample/test_samples.py
     python src/sample/test_samples.py --n-clusters 8 --dilation 15
 """
+
 from __future__ import annotations
 
 import argparse
@@ -43,6 +44,7 @@ from discoverex.models.types import (
 # ---------------------------------------------------------------------------
 # 알파채널(레이어) 생성
 # ---------------------------------------------------------------------------
+
 
 def make_alpha_layers(
     composite_path: Path,
@@ -74,7 +76,7 @@ def make_alpha_layers(
     kernel_size = dilation_px * 2 + 1  # MaxFilter는 홀수 크기
 
     for cluster_id in sorted(np.unique(indices)):
-        raw_mask = (indices == cluster_id)
+        raw_mask = indices == cluster_id
         if raw_mask.sum() < h * w * min_area_ratio:
             continue  # 너무 작은 영역 스킵
 
@@ -104,6 +106,7 @@ def make_alpha_layers(
 # ---------------------------------------------------------------------------
 # PHASE 1 — CPU-only 어댑터 (MobileSAM 없이)
 # ---------------------------------------------------------------------------
+
 
 class CpuPhysicalAdapter:
     """alpha overlap 기반 물리 메타데이터 실계산.
@@ -171,12 +174,14 @@ class CpuPhysicalAdapter:
 
             x1, y1 = int(xs.min()), int(ys.min())
             x2, y2 = int(xs.max()), int(ys.max())
-            regions.append({
-                "obj_id": obj_id,
-                "bbox": [x1 / w, y1 / h, (x2 - x1) / w, (y2 - y1) / h],
-                "center": [cx / w, cy / h],
-                "area": float(alpha_i.sum()) / (w * h),
-            })
+            regions.append(
+                {
+                    "obj_id": obj_id,
+                    "bbox": [x1 / w, y1 / h, (x2 - x1) / w, (y2 - y1) / h],
+                    "center": [cx / w, cy / h],
+                    "area": float(alpha_i.sum()) / (w * h),
+                }
+            )
 
         # Z-depth hop: overlap → directed edge (j is above i → j→i)
         g: nx.DiGraph = nx.DiGraph()
@@ -203,7 +208,8 @@ class CpuPhysicalAdapter:
         for obj_id, (cx, cy) in centers.items():
             dists = [
                 math.hypot(cx - centers[oid][0], cy - centers[oid][1])
-                for oid in obj_ids if oid != obj_id
+                for oid in obj_ids
+                if oid != obj_id
             ]
             euclidean_distance_map[obj_id] = dists
             mean_dist = sum(dists) / len(dists) if dists else float("inf")
@@ -229,6 +235,7 @@ class CpuPhysicalAdapter:
 # PHASE 2 — 스마트 더미
 # ---------------------------------------------------------------------------
 
+
 class SmartLogicalAdapter:
     def load(self, handle: ModelHandle) -> None:
         print("  [PHASE 2] SmartDummy — Moondream2 생략")
@@ -252,6 +259,7 @@ class SmartLogicalAdapter:
 # ---------------------------------------------------------------------------
 # PHASE 3 — 스마트 더미
 # ---------------------------------------------------------------------------
+
 
 class SmartVisualAdapter:
     """physical 결과의 obj_id 목록을 참조해 시각 지표 생성."""
@@ -280,6 +288,7 @@ class SmartVisualAdapter:
 # 출력
 # ---------------------------------------------------------------------------
 
+
 def _bar(c: str = "-", n: int = 64) -> str:
     return c * n
 
@@ -288,7 +297,9 @@ def _print_phase1(result: PhysicalMetadata) -> None:
     print(_bar())
     print("PHASE 1 실계산값")
     print(_bar())
-    print(f"  {'obj_id':<12} {'occlusion':>10} {'z_depth_hop':>12} {'neighbor_cnt':>13}")
+    print(
+        f"  {'obj_id':<12} {'occlusion':>10} {'z_depth_hop':>12} {'neighbor_cnt':>13}"
+    )
     print("  " + _bar("-", 50))
     for oid in sorted(result.occlusion_map):
         print(
@@ -299,7 +310,9 @@ def _print_phase1(result: PhysicalMetadata) -> None:
         )
 
 
-def _print_bundle(bundle) -> None:  # type: ignore[annotation-unchecked]
+def _print_bundle(bundle: object) -> None:
+    if not hasattr(bundle, "logical") or not hasattr(bundle, "perception"):
+        raise TypeError("bundle must expose logical/perception/final attributes")
     sigs = bundle.logical.signals
     psigs = bundle.perception.signals
     print(_bar("="))
@@ -319,6 +332,7 @@ def _print_bundle(bundle) -> None:  # type: ignore[annotation-unchecked]
 # ---------------------------------------------------------------------------
 # 이미지 1개 처리
 # ---------------------------------------------------------------------------
+
 
 def process_image(
     composite_path: Path,
@@ -364,12 +378,21 @@ def process_image(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="PNG 샘플 이미지 Validator 테스트")
-    parser.add_argument("--n-clusters", type=int, default=6,
-                        help="색상 군집 수 = 생성할 레이어 수 (기본 6)")
-    parser.add_argument("--dilation", type=int, default=10,
-                        help="마스크 팽창 픽셀 수 (기본 10, 클수록 overlap↑)")
+    parser.add_argument(
+        "--n-clusters",
+        type=int,
+        default=6,
+        help="색상 군집 수 = 생성할 레이어 수 (기본 6)",
+    )
+    parser.add_argument(
+        "--dilation",
+        type=int,
+        default=10,
+        help="마스크 팽창 픽셀 수 (기본 10, 클수록 overlap↑)",
+    )
     args = parser.parse_args()
 
     sample_dir = Path(__file__).parent
