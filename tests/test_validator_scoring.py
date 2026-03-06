@@ -10,16 +10,16 @@ from discoverex.domain.services.verification import (
     resolve_answer,
 )
 
-
 # ---------------------------------------------------------------------------
 # resolve_answer
 # ---------------------------------------------------------------------------
 
+
 class TestResolveAnswer:
     def test_two_conditions_returns_true(self) -> None:
         metrics = {
-            "occlusion_ratio": 0.5,   # > 0.3 ✓
-            "sigma_threshold": 2.0,   # <= 4 ✓
+            "occlusion_ratio": 0.5,  # > 0.3 ✓
+            "sigma_threshold": 2.0,  # <= 4 ✓
             "degree": 0,
             "z_depth_hop": 0,
             "neighbor_count": 0,
@@ -28,7 +28,7 @@ class TestResolveAnswer:
 
     def test_one_condition_returns_false(self) -> None:
         metrics = {
-            "occlusion_ratio": 0.5,   # > 0.3 ✓
+            "occlusion_ratio": 0.5,  # > 0.3 ✓
             "sigma_threshold": 16.0,  # not <= 4
             "degree": 0,
             "z_depth_hop": 0,
@@ -64,6 +64,7 @@ class TestResolveAnswer:
 # ---------------------------------------------------------------------------
 # compute_difficulty
 # ---------------------------------------------------------------------------
+
 
 class TestComputeDifficulty:
     def test_zero_metrics_returns_nonnegative(self) -> None:
@@ -117,22 +118,40 @@ class TestComputeDifficulty:
 # compute_scene_difficulty
 # ---------------------------------------------------------------------------
 
+
 class TestComputeSceneDifficulty:
     def test_empty_list_returns_zero(self) -> None:
         assert compute_scene_difficulty([]) == 0.0
 
     def test_single_object_equals_compute_difficulty(self) -> None:
-        obj = {"occlusion_ratio": 0.5, "sigma_threshold": 4.0,
-               "hop": 2, "diameter": 4.0, "degree_norm": 0.3,
-               "detail_retention_rate": 0.6}
+        obj = {
+            "occlusion_ratio": 0.5,
+            "sigma_threshold": 4.0,
+            "hop": 2,
+            "diameter": 4.0,
+            "degree_norm": 0.3,
+            "detail_retention_rate": 0.6,
+        }
         assert compute_scene_difficulty([obj]) == pytest.approx(compute_difficulty(obj))
 
     def test_multiple_objects_is_average(self) -> None:
         objs = [
-            {"occlusion_ratio": 0.4, "sigma_threshold": 4.0, "hop": 1,
-             "diameter": 3.0, "degree_norm": 0.2, "detail_retention_rate": 0.7},
-            {"occlusion_ratio": 0.8, "sigma_threshold": 2.0, "hop": 3,
-             "diameter": 3.0, "degree_norm": 0.7, "detail_retention_rate": 0.3},
+            {
+                "occlusion_ratio": 0.4,
+                "sigma_threshold": 4.0,
+                "hop": 1,
+                "diameter": 3.0,
+                "degree_norm": 0.2,
+                "detail_retention_rate": 0.7,
+            },
+            {
+                "occlusion_ratio": 0.8,
+                "sigma_threshold": 2.0,
+                "hop": 3,
+                "diameter": 3.0,
+                "degree_norm": 0.7,
+                "detail_retention_rate": 0.3,
+            },
         ]
         expected = sum(compute_difficulty(o) for o in objs) / 2
         assert compute_scene_difficulty(objs) == pytest.approx(expected)
@@ -141,6 +160,7 @@ class TestComputeSceneDifficulty:
 # ---------------------------------------------------------------------------
 # integrate_verification_v2
 # ---------------------------------------------------------------------------
+
 
 class TestIntegrateVerificationV2:
     def test_returns_three_floats(self) -> None:
@@ -160,7 +180,9 @@ class TestIntegrateVerificationV2:
             "diameter": 4.0,
             "degree_norm": 1.0,
         }
-        perception, logical, total = integrate_verification_v2(hard, pass_threshold=0.35)
+        perception, logical, total = integrate_verification_v2(
+            hard, pass_threshold=0.35
+        )
         assert total >= 0.35
 
     def test_easy_scene_below_threshold(self) -> None:
@@ -176,10 +198,10 @@ class TestIntegrateVerificationV2:
 
     def test_scores_are_nonnegative(self) -> None:
         for _ in range(5):
-            p, l, t = integrate_verification_v2({})
-            assert p >= 0.0
-            assert l >= 0.0
-            assert t >= 0.0
+            perception, logical, total = integrate_verification_v2({})
+            assert perception >= 0.0
+            assert logical >= 0.0
+            assert total >= 0.0
 
     def test_weighted_sum_formula(self) -> None:
         metrics = {
@@ -190,6 +212,6 @@ class TestIntegrateVerificationV2:
             "degree_norm": 0.5,
         }
         w = ScoringWeights()
-        p, l, total = integrate_verification_v2(metrics)
-        expected_total = p * w.total_perception + l * w.total_logical
+        perception, logical, total = integrate_verification_v2(metrics)
+        expected_total = perception * w.total_perception + logical * w.total_logical
         assert total == pytest.approx(expected_total, rel=1e-6)
