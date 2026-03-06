@@ -86,8 +86,7 @@ class Moondream2Adapter:
 
     def _build_prompt(self, physical: PhysicalMetadata) -> str:
         obj_desc = "; ".join(
-            f"{r['obj_id']} at bbox {r['bbox']}"
-            for r in physical.regions
+            f"{r['obj_id']} at bbox {r['bbox']}" for r in physical.regions
         )
         return (
             f"The scene contains these objects: {obj_desc}. "
@@ -103,7 +102,7 @@ class Moondream2Adapter:
             answer = self._model.answer_question(enc_image, prompt, self._tokenizer)
         return answer if isinstance(answer, str) else str(answer)
 
-    def _parse_relations(self, response: str) -> list[dict]:
+    def _parse_relations(self, response: str) -> list[dict[str, Any]]:
         # Extract JSON array from free-form model response
         match = re.search(r"\[.*\]", response, re.DOTALL)
         if not match:
@@ -115,7 +114,7 @@ class Moondream2Adapter:
             return []
 
     def _build_graph(
-        self, relations: list[dict], physical: PhysicalMetadata
+        self, relations: list[dict[str, Any]], physical: PhysicalMetadata
     ) -> LogicalStructure:
         import networkx as nx
 
@@ -132,7 +131,9 @@ class Moondream2Adapter:
         degree_map = {n: g.degree(n) for n in g.nodes}
 
         # Hop from root = longest shortest path from any source node (degree == 0)
-        root_candidates = [n for n in g.nodes if g.in_degree(n) == 0] or list(g.nodes)[:1]
+        root_candidates = [n for n in g.nodes if g.in_degree(n) == 0] or list(g.nodes)[
+            :1
+        ]
         hop_map: dict[str, int] = {}
         for node in g.nodes:
             hops = []
@@ -145,9 +146,15 @@ class Moondream2Adapter:
 
         ug = g.to_undirected()
         try:
-            diameter = float(nx.diameter(ug)) if len(ug) > 0 and nx.is_connected(ug) else float(len(ug))
+            diameter = (
+                float(nx.diameter(ug))
+                if len(ug) > 0 and nx.is_connected(ug)
+                else float(len(ug))
+            )
         except nx.NetworkXError:
-            diameter = float(max(len(c) for c in nx.connected_components(ug)) if ug else 1)
+            diameter = float(
+                max(len(c) for c in nx.connected_components(ug)) if ug else 1
+            )
 
         return LogicalStructure(
             relations=relations,
