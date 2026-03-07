@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from discoverex.domain.scene import Scene
@@ -74,24 +76,25 @@ def integrate_verification(
 # 모든 입력은 dict 로 받아 도메인 레이어가 모델 타입에 의존하지 않도록 한다.
 # ---------------------------------------------------------------------------
 
-def resolve_answer(obj_metrics: dict) -> bool:
+
+def resolve_answer(obj_metrics: dict[str, Any]) -> bool:
     """5개 은닉 조건 중 2개 이상 충족 시 True 반환.
 
     obj_metrics 키: occlusion_ratio, sigma_threshold, degree,
                     z_depth_hop, neighbor_count
     """
-    conditions = [
+    conditions: list[bool] = [
         obj_metrics.get("occlusion_ratio", 0.0) > 0.3,
         obj_metrics.get("sigma_threshold", 16.0) <= 4,
         obj_metrics.get("degree", 0) >= 3,
         obj_metrics.get("z_depth_hop", 0) >= 2,
         obj_metrics.get("neighbor_count", 0) >= 3,
     ]
-    return sum(conditions) >= 2
+    return sum(1 for cond in conditions if cond) >= 2
 
 
 def compute_difficulty(
-    obj_metrics: dict, weights: ScoringWeights | None = None
+    obj_metrics: dict[str, Any], weights: ScoringWeights | None = None
 ) -> float:
     """D(obj) 난이도 점수 계산.
 
@@ -106,34 +109,36 @@ def compute_difficulty(
                     degree_norm, detail_retention_rate
     """
     w = weights or ScoringWeights()
-    occlusion = obj_metrics.get("occlusion_ratio", 0.0)
-    sigma = max(obj_metrics.get("sigma_threshold", 1.0), 1e-6)
-    hop = obj_metrics.get("hop", 0)
-    diameter = max(obj_metrics.get("diameter", 1.0), 1e-6)
-    degree_n = obj_metrics.get("degree_norm", 0.0)
-    drr = obj_metrics.get("detail_retention_rate", 1.0)
+    occlusion = float(obj_metrics.get("occlusion_ratio", 0.0))
+    sigma = max(float(obj_metrics.get("sigma_threshold", 1.0)), 1e-6)
+    hop = float(obj_metrics.get("hop", 0))
+    diameter = max(float(obj_metrics.get("diameter", 1.0)), 1e-6)
+    degree_n = float(obj_metrics.get("degree_norm", 0.0))
+    drr = float(obj_metrics.get("detail_retention_rate", 1.0))
 
     return (
-        w.difficulty_occlusion * occlusion ** 2
+        w.difficulty_occlusion * occlusion**2
         + w.difficulty_sigma * (1.0 / sigma)
         + w.difficulty_hop * (hop / diameter)
-        + w.difficulty_degree * degree_n ** 2
+        + w.difficulty_degree * degree_n**2
         + w.difficulty_drr * (1.0 - drr)
         + w.difficulty_interaction * occlusion * (hop / diameter)
     )
 
 
 def compute_scene_difficulty(
-    answer_objs: list[dict], weights: ScoringWeights | None = None
+    answer_objs: list[dict[str, Any]], weights: ScoringWeights | None = None
 ) -> float:
     """Scene_Difficulty = (1 / |answer|) · Σ D(obj)  (obj ∈ answer)"""
     if not answer_objs:
         return 0.0
-    return sum(compute_difficulty(obj, weights) for obj in answer_objs) / len(answer_objs)
+    return sum(compute_difficulty(obj, weights) for obj in answer_objs) / len(
+        answer_objs
+    )
 
 
 def integrate_verification_v2(
-    obj_metrics: dict,
+    obj_metrics: dict[str, Any],
     pass_threshold: float = 0.35,
     weights: ScoringWeights | None = None,
 ) -> tuple[float, float, float]:
@@ -150,11 +155,11 @@ def integrate_verification_v2(
     반환: (perception_score, logical_score, total_score)
     """
     w = weights or ScoringWeights()
-    sigma = max(obj_metrics.get("sigma_threshold", 1.0), 1e-6)
-    drr = obj_metrics.get("detail_retention_rate", 1.0)
-    hop = obj_metrics.get("hop", 0)
-    diameter = max(obj_metrics.get("diameter", 1.0), 1e-6)
-    degree_n = obj_metrics.get("degree_norm", 0.0)
+    sigma = max(float(obj_metrics.get("sigma_threshold", 1.0)), 1e-6)
+    drr = float(obj_metrics.get("detail_retention_rate", 1.0))
+    hop = float(obj_metrics.get("hop", 0))
+    diameter = max(float(obj_metrics.get("diameter", 1.0)), 1e-6)
+    degree_n = float(obj_metrics.get("degree_norm", 0.0))
 
     p_denom = max(w.perception_sigma + w.perception_drr, 1e-9)
     perception = (
@@ -163,7 +168,7 @@ def integrate_verification_v2(
 
     l_denom = max(w.logical_hop + w.logical_degree, 1e-9)
     logical = (
-        w.logical_hop * (hop / diameter) + w.logical_degree * degree_n ** 2
+        w.logical_hop * (hop / diameter) + w.logical_degree * degree_n**2
     ) / l_denom
 
     total = perception * w.total_perception + logical * w.total_logical

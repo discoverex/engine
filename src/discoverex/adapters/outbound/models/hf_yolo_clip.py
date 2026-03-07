@@ -43,7 +43,9 @@ class YoloCLIPAdapter:
         self._yolo = YOLO(self._yolo_model_id)
         self._yolo.to(self._device)
 
-        self._clip_model = CLIPModel.from_pretrained(self._clip_model_id).to(self._device)
+        self._clip_model = CLIPModel.from_pretrained(self._clip_model_id).to(
+            self._device
+        )
         self._clip_processor = CLIPProcessor.from_pretrained(self._clip_model_id)
         self._clip_model.eval()
 
@@ -79,7 +81,11 @@ class YoloCLIPAdapter:
             blurred = original.filter(ImageFilter.GaussianBlur(radius=sigma))
             results = self._yolo(np.array(blurred), verbose=False)
             detected = results[0].boxes
-            detected_xyxy = detected.xyxy.cpu().numpy() if detected is not None and len(detected) > 0 else np.empty((0, 4))
+            detected_xyxy = (
+                detected.xyxy.cpu().numpy()
+                if detected is not None and len(detected) > 0
+                else np.empty((0, 4))
+            )
 
             for i, oid in enumerate(obj_ids):
                 if sigma_threshold_map[oid] != max_sigma:
@@ -108,7 +114,9 @@ class YoloCLIPAdapter:
             feat_orig = self._clip_image_features(crop_orig)
             feat_blur = self._clip_image_features(crop_blur)
             with torch.no_grad():
-                sim = torch.nn.functional.cosine_similarity(feat_orig, feat_blur, dim=-1).item()
+                sim = torch.nn.functional.cosine_similarity(
+                    feat_orig, feat_blur, dim=-1
+                ).item()
             detail_retention_rate_map[oid] = float(max(0.0, min(1.0, sim)))
 
         return VisualVerification(
@@ -136,13 +144,16 @@ class YoloCLIPAdapter:
     def _clip_image_features(self, image: Any) -> Any:
         import torch
 
-        inputs = self._clip_processor(images=image, return_tensors="pt").to(self._device)
+        inputs = self._clip_processor(images=image, return_tensors="pt").to(
+            self._device
+        )
         with torch.no_grad():
             features = self._clip_model.get_image_features(**inputs)
         return features
 
 
 # ------------------------------------------------------------------
+
 
 def _iou(box_a: Any, box_b: Any) -> float:
     """Intersection-over-Union for two [x1, y1, x2, y2] boxes."""

@@ -59,6 +59,7 @@ packages = ["src/discoverex"]
 
 [project.scripts]
 discoverex = "discoverex.adapters.inbound.cli.main:app"
+discoverex-orch-launcher = "discoverex.orchestrator_contract.launcher:main"
 
 [tool.uv]
 index-url = "https://pypi.org/simple"
@@ -89,7 +90,30 @@ indent-style = "space"
 
 [tool.mypy]
 python_version = "3.11"
+strict = true
 warn_unused_configs = true
-disallow_untyped_defs = false
+warn_unused_ignores = false
+plugins = ["pydantic.mypy"]
+mypy_path = ["src"]
+files = ["src", "scripts", "tests"]
+exclude = ["^src/sample/", "^src/ML/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "PIL",
+    "PIL.*",
+    "boto3",
+    "diffusers",
+    "mlflow",
+    "mobile_sam",
+    "networkx",
+    "numpy",
+    "scipy",
+    "scipy.*",
+    "sqlalchemy",
+    "sqlalchemy.*",
+    "torch",
+    "transformers",
+    "ultralytics",
+]
 ignore_missing_imports = true
-disable_error_code = ["arg-type", "call-arg", "misc", "return-value"]

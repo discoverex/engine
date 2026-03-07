@@ -41,7 +41,11 @@ class TinyHFFxModel:
             torch.manual_seed(self.seed)
         cfg = GPT2Config(n_embd=32, n_layer=1, n_head=2, vocab_size=100)
         model = GPT2Model(cfg).eval()
-        _ = model(input_ids=torch.ones((1, 8), dtype=torch.long)).last_hidden_state.mean().item()
+        _ = (
+            model(input_ids=torch.ones((1, 8), dtype=torch.long))
+            .last_hidden_state.mean()
+            .item()
+        )
         selected_device = self.device
         if self.device.startswith("cuda") and not torch.cuda.is_available():
             if self.strict_runtime:

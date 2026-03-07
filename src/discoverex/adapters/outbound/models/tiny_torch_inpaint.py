@@ -37,7 +37,9 @@ class TinyTorchInpaintModel:
             dtype=self.dtype,
         )
 
-    def predict(self, handle: ModelHandle, request: InpaintRequest) -> InpaintPrediction:
+    def predict(
+        self, handle: ModelHandle, request: InpaintRequest
+    ) -> InpaintPrediction:
         import torch  # type: ignore
 
         _ = handle

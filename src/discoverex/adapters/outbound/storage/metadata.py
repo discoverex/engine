@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from discoverex.domain.scene import Scene
 
@@ -20,7 +20,10 @@ class LocalMetadataStoreAdapter:
     def _load(self) -> list[dict[str, Any]]:
         if not self.index_path.exists():
             return []
-        return json.loads(self.index_path.read_text(encoding="utf-8"))
+        return cast(
+            list[dict[str, Any]],
+            json.loads(self.index_path.read_text(encoding="utf-8")),
+        )
 
     def _dump(self, rows: list[dict[str, Any]]) -> None:
         self.index_path.parent.mkdir(parents=True, exist_ok=True)

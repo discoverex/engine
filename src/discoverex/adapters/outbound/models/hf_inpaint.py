@@ -53,8 +53,8 @@ class HFInpaintModel:
         self.generation_strength = generation_strength
         self.generation_steps = generation_steps
         self.generation_guidance_scale = generation_guidance_scale
-        self._quality_classifier: object | None = None
-        self._img2img_pipe: object | None = None
+        self._quality_classifier: Any | None = None
+        self._img2img_pipe: Any | None = None
 
     def load(self, model_ref_or_version: str) -> ModelHandle:
         runtime = resolve_runtime()
@@ -87,7 +87,9 @@ class HFInpaintModel:
             ),
         )
 
-    def predict(self, handle: ModelHandle, request: InpaintRequest) -> InpaintPrediction:
+    def predict(
+        self, handle: ModelHandle, request: InpaintRequest
+    ) -> InpaintPrediction:
         result: InpaintPrediction = {
             "region_id": request.region_id,
             "model_id": self.model_id,
@@ -119,9 +121,13 @@ class HFInpaintModel:
             image = load_image_rgb(source)
             bbox = sanitize_bbox(request.bbox, image.width, image.height)
             patch = crop_bbox(image, bbox)
-            generated_patch = self._generate_patch_with_diffusers(handle, request, patch)
+            generated_patch = self._generate_patch_with_diffusers(
+                handle, request, patch
+            )
             composited = apply_patch(image, generated_patch, bbox)
-            patch_path = save_image(generated_patch, Path(output_path).with_suffix(".patch.png"))
+            patch_path = save_image(
+                generated_patch, Path(output_path).with_suffix(".patch.png")
+            )
             composited_path = save_image(composited, output_path)
             return {"patch": patch_path, "composited": composited_path}
         except Exception:
@@ -146,7 +152,9 @@ class HFInpaintModel:
                 requires_safety_checker=False,
             )
             self._img2img_pipe = pipe.to(handle.device)
-        prompt = request.generation_prompt or request.prompt or "repair hidden object area"
+        prompt = (
+            request.generation_prompt or request.prompt or "repair hidden object area"
+        )
         result = self._img2img_pipe(
             prompt=prompt,
             image=patch_image,
@@ -161,7 +169,9 @@ class HFInpaintModel:
             raise RuntimeError("img2img returned no images")
         return images[0]
 
-    def _predict_quality(self, handle: ModelHandle, request: InpaintRequest) -> float | None:
+    def _predict_quality(
+        self, handle: ModelHandle, request: InpaintRequest
+    ) -> float | None:
         if not bool(handle.extra.get("runtime_available")):
             return None
         image_ref = request.image_ref

@@ -178,7 +178,12 @@ class TinySDFxModel:
     def _as_positive_int(self, value: object, *, fallback: int) -> int:
         if value is None:
             return fallback
-        parsed = int(value)
+        if isinstance(value, bool):
+            parsed = int(value)
+        elif isinstance(value, (int, float, str)):
+            parsed = int(value)
+        else:
+            raise ValueError("expected int-compatible value")
         if parsed < 1:
             raise ValueError("expected positive integer")
         return parsed
@@ -186,12 +191,20 @@ class TinySDFxModel:
     def _as_int_or_none(self, value: object, *, fallback: int | None) -> int | None:
         if value is None:
             return fallback
-        return int(value)
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, (int, float, str)):
+            return int(value)
+        raise ValueError("expected int-compatible value")
 
     def _as_float(self, value: object, *, fallback: float) -> float:
         if value is None:
             return fallback
-        return float(value)
+        if isinstance(value, bool):
+            return float(value)
+        if isinstance(value, (int, float, str)):
+            return float(value)
+        raise ValueError("expected float-compatible value")
 
     def _as_str(self, value: object, *, fallback: str) -> str:
         if isinstance(value, str) and value.strip():

@@ -41,8 +41,12 @@ def build_context(config: PipelineConfig | dict[str, Any] | None = None) -> AppC
     perception_model = instantiate(cfg.models.perception.as_kwargs())
     fx_model = instantiate(cfg.models.fx.as_kwargs())
 
-    artifact_store = instantiate(cfg.adapters.artifact_store.as_kwargs(), **env_defaults)
-    metadata_store = instantiate(cfg.adapters.metadata_store.as_kwargs(), **env_defaults)
+    artifact_store = instantiate(
+        cfg.adapters.artifact_store.as_kwargs(), **env_defaults
+    )
+    metadata_store = instantiate(
+        cfg.adapters.metadata_store.as_kwargs(), **env_defaults
+    )
     tracker = instantiate(cfg.adapters.tracker.as_kwargs(), **env_defaults)
     scene_io = instantiate(cfg.adapters.scene_io.as_kwargs(), **env_defaults)
     report_writer = instantiate(cfg.adapters.report_writer.as_kwargs(), **env_defaults)
@@ -112,7 +116,9 @@ def build_validator_context(
 
     scoring_weights = _build_scoring_weights(cfg)
     bundle_store = (
-        LocalJsonBundleStore(Path(cfg.bundle_store_dir)) if cfg.bundle_store_dir else None
+        LocalJsonBundleStore(Path(cfg.bundle_store_dir))
+        if cfg.bundle_store_dir
+        else None
     )
 
     return ValidatorOrchestrator(

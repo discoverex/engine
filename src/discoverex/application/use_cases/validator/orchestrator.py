@@ -76,7 +76,9 @@ class ValidatorOrchestrator:
         physical = self._run_phase1(composite_image, object_layers)
         logical = self._run_phase2(composite_image, physical)
         visual = self._run_phase3(composite_image)
-        bundle = self._run_phase4(ValidatorInput(physical=physical, logical=logical, visual=visual))
+        bundle = self._run_phase4(
+            ValidatorInput(physical=physical, logical=logical, visual=visual)
+        )
         if self._bundle_store is not None:
             self._bundle_store.save(bundle, composite_image, object_layers)
         return bundle
@@ -123,15 +125,17 @@ class ValidatorOrchestrator:
         )
 
         # degree 정규화를 위한 최댓값
-        max_degree = max((logical.degree_map.get(oid, 0) for oid in all_obj_ids), default=1)
+        max_degree = max(
+            (logical.degree_map.get(oid, 0) for oid in all_obj_ids), default=1
+        )
         max_degree = max(max_degree, 1)
 
-        answer_obj_metrics: list[dict] = []
+        answer_obj_metrics: list[dict[str, float | int]] = []
         per_obj_perception: list[float] = []
         per_obj_logical: list[float] = []
 
         for obj_id in sorted(all_obj_ids):
-            metrics = {
+            metrics: dict[str, float | int] = {
                 "occlusion_ratio": physical.occlusion_map.get(obj_id, 0.0),
                 "sigma_threshold": visual.sigma_threshold_map.get(obj_id, 16.0),
                 "degree": logical.degree_map.get(obj_id, 0),
@@ -140,22 +144,30 @@ class ValidatorOrchestrator:
                 "neighbor_count": physical.cluster_density_map.get(obj_id, 0),
                 "hop": logical.hop_map.get(obj_id, 0),
                 "diameter": logical.diameter,
-                "detail_retention_rate": visual.detail_retention_rate_map.get(obj_id, 1.0),
+                "detail_retention_rate": visual.detail_retention_rate_map.get(
+                    obj_id, 1.0
+                ),
             }
             if resolve_answer(metrics):
                 answer_obj_metrics.append(metrics)
-            p_score, l_score, _ = integrate_verification_v2(metrics, self._pass_threshold, w)
+            p_score, l_score, _ = integrate_verification_v2(
+                metrics, self._pass_threshold, w
+            )
             per_obj_perception.append(p_score)
             per_obj_logical.append(l_score)
 
         # Scene 단위 집계
         avg_perception = (
-            sum(per_obj_perception) / len(per_obj_perception) if per_obj_perception else 0.0
+            sum(per_obj_perception) / len(per_obj_perception)
+            if per_obj_perception
+            else 0.0
         )
         avg_logical = (
             sum(per_obj_logical) / len(per_obj_logical) if per_obj_logical else 0.0
         )
-        total_score = avg_perception * w.total_perception + avg_logical * w.total_logical
+        total_score = (
+            avg_perception * w.total_perception + avg_logical * w.total_logical
+        )
         passed = total_score >= self._pass_threshold
 
         difficulty = compute_scene_difficulty(answer_obj_metrics, w)
@@ -191,6 +203,7 @@ class ValidatorOrchestrator:
 # ------------------------------------------------------------------
 # 편의 함수
 # ------------------------------------------------------------------
+
 
 def run_validator(
     composite_image: Path,

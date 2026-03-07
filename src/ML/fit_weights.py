@@ -21,6 +21,7 @@
                     weights_path 에 지정하면 추론 시 자동 로드)
     stdout        — {"weights_path": "...", "final_loss": 0.012, "n_samples": N}
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,15 +42,28 @@ from ML.weight_fitter import WeightFitter  # noqa: E402
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="ScoringWeights 학습 스크립트")
-    p.add_argument("--labeled-jsonl", required=True, type=Path,
-                   help="레이블 데이터 JSONL 파일 경로")
-    p.add_argument("--weights-out", required=True, type=Path,
-                   help="학습된 가중치를 저장할 JSON 경로")
-    p.add_argument("--weights-in", type=Path, default=None,
-                   help="초기 가중치 JSON (없으면 ScoringWeights 기본값 사용)")
+    p.add_argument(
+        "--labeled-jsonl",
+        required=True,
+        type=Path,
+        help="레이블 데이터 JSONL 파일 경로",
+    )
+    p.add_argument(
+        "--weights-out",
+        required=True,
+        type=Path,
+        help="학습된 가중치를 저장할 JSON 경로",
+    )
+    p.add_argument(
+        "--weights-in",
+        type=Path,
+        default=None,
+        help="초기 가중치 JSON (없으면 ScoringWeights 기본값 사용)",
+    )
     p.add_argument("--pass-threshold", type=float, default=0.35)
-    p.add_argument("--margin", type=float, default=0.05,
-                   help="hinge loss 마진 (기본 0.05)")
+    p.add_argument(
+        "--margin", type=float, default=0.05, help="hinge loss 마진 (기본 0.05)"
+    )
     p.add_argument("--max-iter", type=int, default=5000)
     return p.parse_args()
 

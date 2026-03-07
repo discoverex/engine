@@ -79,4 +79,8 @@ class TinyHFHiddenRegionModel:
         )
         scale = torch.tensor([width, height, width, height], dtype=torch.float32)
         boxes = base * scale
-        return [tuple(float(v) for v in row.tolist()) for row in boxes]
+        result: list[tuple[float, float, float, float]] = []
+        for row in boxes.tolist():
+            x, y, w, h = row
+            result.append((float(x), float(y), float(w), float(h)))
+        return result

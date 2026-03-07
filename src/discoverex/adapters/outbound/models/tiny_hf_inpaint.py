@@ -39,7 +39,11 @@ class TinyHFInpaintModel:
             torch.manual_seed(self.seed)
         cfg = BertConfig(hidden_size=32, num_hidden_layers=1, num_attention_heads=2)
         model = BertModel(cfg).eval()
-        _ = model(input_ids=torch.ones((1, 8), dtype=torch.long)).last_hidden_state.mean().item()
+        _ = (
+            model(input_ids=torch.ones((1, 8), dtype=torch.long))
+            .last_hidden_state.mean()
+            .item()
+        )
         selected_device = self.device
         if self.device.startswith("cuda") and not torch.cuda.is_available():
             if self.strict_runtime:
@@ -54,7 +58,9 @@ class TinyHFInpaintModel:
             dtype=self.dtype,
         )
 
-    def predict(self, handle: ModelHandle, request: InpaintRequest) -> InpaintPrediction:
+    def predict(
+        self, handle: ModelHandle, request: InpaintRequest
+    ) -> InpaintPrediction:
         import torch  # type: ignore
 
         _ = handle

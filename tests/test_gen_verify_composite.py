@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 from discoverex.application.use_cases.gen_verify.composite_pipeline import (
     compose_scene,
     resolve_composite_image_ref,
 )
+from discoverex.models.types import ModelHandle
 
 
 def test_resolve_composite_falls_back_to_background_when_fx_output_missing() -> None:
@@ -18,7 +20,7 @@ def test_resolve_composite_falls_back_to_background_when_fx_output_missing() -> 
     assert composite.artifact_path is None
 
 
-def test_resolve_composite_uses_existing_local_output_path(tmp_path) -> None:
+def test_resolve_composite_uses_existing_local_output_path(tmp_path: Path) -> None:
     composed = tmp_path / "composite.png"
     composed.write_bytes(b"real-image-bytes")
 
@@ -34,7 +36,7 @@ def test_compose_scene_passes_runtime_dimensions_to_fx(tmp_path: Path) -> None:
     captured: dict[str, object] = {}
 
     class _FxModel:
-        def predict(self, _handle, request):  # type: ignore[no-untyped-def]
+        def predict(self, _handle: Any, request: Any) -> dict[str, str]:
             captured.update(request.params)
             output = Path(request.params["output_path"])
             output.parent.mkdir(parents=True, exist_ok=True)
@@ -53,7 +55,7 @@ def test_compose_scene_passes_runtime_dimensions_to_fx(tmp_path: Path) -> None:
         context=context,
         background_asset_ref="bg://dummy",
         scene_dir=tmp_path,
-        fx_handle=SimpleNamespace(),
+        fx_handle=ModelHandle(name="fx", version="v1", runtime="dummy"),
     )
 
     assert captured["width"] == 320

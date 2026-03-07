@@ -7,6 +7,8 @@
 ## 핵심 개념
 - 실행 엔진은 동일: `discoverex gen-verify|verify-only|replay-eval`
 - 차이는 Hydra adapter 선택과 runtime env 주입입니다.
+- 오케스트레이터 워커에서는 `python -m discoverex.orchestrator_contract.launcher`를
+  `entrypoint`로 호출하고, 실제 CLI 인자는 `ORCH_JOB_INPUTS_JSON`으로 전달합니다.
 - 결과 전달 단위:
   - CLI stdout JSON (`scene_json` 또는 `report`)
   - artifacts 저장소

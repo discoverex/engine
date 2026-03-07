@@ -54,15 +54,15 @@ class MobileSAMAdapter:
         # ------------------------------------------------------------------
         # Pre-processing (pure CPU): occlusion, z_index, z_depth_hop
         # ------------------------------------------------------------------
-        layer_arrays = [
-            np.array(Image.open(p).convert("RGBA")) for p in object_layers
-        ]
+        layer_arrays = [np.array(Image.open(p).convert("RGBA")) for p in object_layers]
 
         occlusion_map: dict[str, float] = {}
         z_index_map: dict[str, int] = {}
         z_depth_hop_map: dict[str, int] = {}
 
-        for i, (layer, layer_path) in enumerate(zip(layer_arrays, object_layers)):
+        for i, (layer, layer_path) in enumerate(
+            zip(layer_arrays, object_layers, strict=False)
+        ):
             obj_id = layer_path.stem
             alpha = layer[:, :, 3] > 0
             total_pixels = int(alpha.sum())
@@ -114,12 +114,12 @@ class MobileSAMAdapter:
         comp_rgb = composite[:, :, :3]
         self._predictor.set_image(comp_rgb)
 
-        regions: list[dict] = []
+        regions: list[dict[str, Any]] = []
         euclidean_distance_map: dict[str, list[float]] = {}
         cluster_density_map: dict[str, int] = {}
         centers: dict[str, tuple[float, float]] = {}
 
-        for layer, layer_path in zip(layer_arrays, object_layers):
+        for layer, layer_path in zip(layer_arrays, object_layers, strict=False):
             obj_id = layer_path.stem
             alpha = layer[:, :, 3] > 0
             if not alpha.any():
@@ -131,26 +131,27 @@ class MobileSAMAdapter:
 
             x1, y1, x2, y2 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
             h, w = composite.shape[:2]
-            regions.append({
-                "obj_id": obj_id,
-                "bbox": [x1 / w, y1 / h, (x2 - x1) / w, (y2 - y1) / h],
-                "center": [cx / w, cy / h],
-                "area": float(alpha.sum()) / (w * h),
-            })
+            regions.append(
+                {
+                    "obj_id": obj_id,
+                    "bbox": [x1 / w, y1 / h, (x2 - x1) / w, (y2 - y1) / h],
+                    "center": [cx / w, cy / h],
+                    "area": float(alpha.sum()) / (w * h),
+                }
+            )
 
         # Euclidean distances between object centers
         obj_ids = list(centers.keys())
         for obj_id, (cx, cy) in centers.items():
             dists = [
                 math.hypot(cx - centers[oid][0], cy - centers[oid][1])
-                for oid in obj_ids if oid != obj_id
+                for oid in obj_ids
+                if oid != obj_id
             ]
             euclidean_distance_map[obj_id] = dists
             mean_dist = sum(dists) / len(dists) if dists else float("inf")
             cluster_radius = mean_dist * self._cluster_radius_factor
-            cluster_density_map[obj_id] = sum(
-                1 for d in dists if d <= cluster_radius
-            )
+            cluster_density_map[obj_id] = sum(1 for d in dists if d <= cluster_radius)
 
         return PhysicalMetadata(
             regions=regions,

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Protocol
-
 from pathlib import Path
+from typing import Protocol
 
 from discoverex.domain.verification import VerificationBundle
 from discoverex.models.types import (
@@ -53,6 +52,7 @@ class FxPort(Protocol):
 # Validator pipeline ports — load/extract(verify)/unload pattern
 # Each port is responsible for its own VRAM lifecycle.
 # ---------------------------------------------------------------------------
+
 
 class PhysicalExtractionPort(Protocol):
     """Phase 1: MobileSAM-based physical metadata extraction."""
