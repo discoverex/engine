@@ -8,42 +8,37 @@
 
 ## 2) Latest State Applied
 
-### A. Boundary hardening
-- `application` use-cases no longer depend directly on `bootstrap`.
-- Added application-level context contract:
-  - `src/discoverex/application/context.py` (`AppContextLike`)
-- Added architecture guard:
-  - `tests/test_architecture_constraints.py` now checks `application` does not import `discoverex.bootstrap`.
+### A. Prefect migration baseline (v2 + v1 shim)
+- Engine command baseline is now `generate | verify | animate`.
+- `v1` command shim remains supported:
+  - `gen-verify -> generate`
+  - `verify-only -> verify`
+  - `replay-eval -> animate`
+- Legacy shim calls emit deprecation warnings in CLI/launcher paths.
 
-### B. Dataclass -> Pydantic migration (completed for current dataclass set)
-- Migrated:
-  - `src/discoverex/models/types.py`
-  - `src/discoverex/application/use_cases/gen_verify/types.py`
-  - `src/discoverex/bootstrap/context.py`
-  - `src/discoverex/adapters/outbound/models/runtime.py`
-- Runtime note:
-  - `bootstrap/AppContext` uses `BaseModel` with `arbitrary_types_allowed`.
-  - Port-holder fields are typed as `Any` to avoid Protocol runtime schema issues.
+### B. Flow orchestration status
+- Entry flow dispatch is in `src/discoverex/flows/engine.py`.
+- `generate` and `verify` are now implemented as Prefect stage flows:
+  - `src/discoverex/flows/generate.py`
+  - `src/discoverex/flows/verify.py`
+- `animate` is intentionally kept as stub in this phase.
+- Subflow wiring lives in `src/discoverex/flows/subflows.py` and Hydra flow groups.
 
-### C. Artifact consistency + MinIO verification hardening
-- Added FX artifact generator:
-  - `src/discoverex/adapters/outbound/models/fx_artifact.py`
-- Wired FX adapters to ensure output image file exists.
-- Fixed verification payload consistency between local saved bundle and report overwrite:
-  - `src/discoverex/adapters/outbound/storage/artifact.py`
-- Added regression tests:
-  - `tests/test_artifact_verification_consistency.py`
-  - `tests/test_fx_output_artifact.py`
-- Added MinIO E2E verification script:
-  - `scripts/check_minio_scene_bundle.py`
+### C. Error payload normalization
+- Entry flow now catches exceptions and returns canonical failure payload:
+  - `status=failed`
+  - `failure_reason`
+  - `metadata.command`, `metadata.error_type`
+  - command-specific envelope keys (`scene_json` or `report`) preserved.
 
-### D. Runtime mode documentation (local vs worker)
-- Added:
-  - `docs/runtime-mode-guide.md`
-- Linked/updated:
+### D. Documentation sync (command model)
+- Updated docs to v2 baseline + legacy shim warning:
   - `README.md`
-  - `docs/execution-contract.md`
+  - `docs/runtime-mode-guide.md`
   - `docs/handheld-ops-card.md`
+  - `docs/pipeline-adapter-guide.md`
+  - `docs/Validator/DIR.md`
+  - `docs/execution-contract.md`
 
 ## 3) Operational Model (as of now)
 - Local mode (default):
@@ -56,29 +51,33 @@
   - optional `adapters/metadata_store=postgres`
 
 ## 4) Model Implementation Reality Check
-- `perception=hf` path is the main real HF inference route.
-- `hidden_region/inpaint/fx` HF adapters still include placeholder behavior.
-- Infra/ops flow can run now, but full “all stages real-model quality” requires follow-up adapter implementations.
+- `perception=hf` is the strongest real HF inference path.
+- `hidden_region/inpaint/fx` HF adapters still contain placeholder behavior.
+- Engine orchestration is now Prefect-centered, but model-quality hardening remains.
 
 ## 5) Validation Status (recent)
-- Architecture/type/test checks passed on updated boundaries and DTO migration.
-- Pipeline smoke (`gen-verify`) passed in CPU/tiny mode.
-- MinIO registration + retrieval + hash consistency verified via:
-  - `scripts/check_minio_scene_bundle.py`
+- Passed:
+  - `ruff check` on changed flow/contract/docs-adjacent tests
+  - `mypy` on flow/contract/CLI modules
+  - `pytest` for contract/launcher/register/flows/architecture boundary suites
+- Note:
+  - Prefect temporary server shutdown may emit a logging handler warning during tests; test results remain green.
 
 ## 6) Important Commands
-- Full dev dependencies for current flows:
+- Setup:
   - `UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra dev --extra tracking --extra ml-cpu --extra storage`
 - Core checks:
   - `UV_CACHE_DIR="$PWD/.cache/uv" uv run --extra dev ruff check .`
+  - `UV_CACHE_DIR="$PWD/.cache/uv" uv run --extra dev mypy src tests`
   - `UV_CACHE_DIR="$PWD/.cache/uv" uv run --extra dev pytest -q`
-- MinIO bundle check:
-  - `UV_CACHE_DIR="$PWD/.cache/uv" uv run python scripts/check_minio_scene_bundle.py --scene-id <scene_id> --version-id <version_id>`
 
-## 7) Remaining Gaps / Recommended Next Steps
-1. Implement non-placeholder HF inference for `hidden_region/inpaint/fx`.
-2. Add CI smoke for local mode and worker-mode override set.
-3. Add fail-fast worker preflight (required env + adapter override validation).
+## 7) Remaining Gaps / Next Steps
+1. Implement real `animate` use case (replace stub).
+2. Expand generate/verify subflow granularity only for high-value retry/parallel steps.
+3. Add real worker/deployment smoke checks against Prefect deployment target.
+4. Keep docs/contracts synced if shim sunset policy is introduced.
 
-## 8) Git Convention Reference
-- Use `.context/git-conventions.md` (branch naming, empty intro commit, prefix rules, no-ff merge).
+## 8) Immediate Follow-up Plan
+1. Land current branch into `dev` with split commits (`feat`/`test`/`docs`) per git convention.
+2. Add deployment-level smoke workflow for `discoverex generate` + `discoverex verify`.
+3. Define shim sunset policy draft (`v1` warning period, cutoff date, fail mode) in `docs/execution-contract.md`.

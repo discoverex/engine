@@ -1,29 +1,27 @@
 # Discoverex Context Index
 
-이 문서는 `.context` 내 탐색 시작점입니다. 상세 내용은 아래 단일 소스 문서로 이동하세요.
+이 문서는 `.context` 탐색 시작점입니다. 상세는 아래 문서를 우선 참고합니다.
 
 ## Primary Documents
-
 - Canonical spec and architecture baseline:
   - `./canon.md`
-- Current handoff and recent implementation status:
+- Current handoff and implementation status:
   - `./HANDOFF.md`
-- Git workflow/convention:
-  - `./git-conventions.md`
+- Prefect migration status and decision log:
+  - `./prefect-migration-assessment.md`
+  - `./prefect-migration-task-breakdown.md`
 
 ## Document Roles
-
-- `canon.md`: 제품/아키텍처의 기준 계약(단일 진실원)
-- `HANDOFF.md`: 현재 구현 상태, 검증 결과, 다음 작업 항목
-- `git-conventions.md`: 브랜치/커밋/머지 규칙
+- `canon.md`: 제품/아키텍처의 기준 계약(SSOT)
+- `HANDOFF.md`: 현재 구현 상태, 검증 결과, 후속 작업
+- `prefect-migration-assessment.md`: Prefect 전환 평가/리스크/운영 권고
+- `prefect-migration-task-breakdown.md`: 실행 단위 작업 분해와 완료 기준
 
 ## Usage Rule
-
-1. 아키텍처/계약 판단이 필요하면 `canon.md`를 우선 확인합니다.
-2. 현재 진행상태/검증 증거가 필요하면 `HANDOFF.md`를 확인합니다.
-3. 커밋/머지 전에 `git-conventions.md`를 확인합니다.
+1. 계약/아키텍처 판단은 `canon.md`를 우선 확인합니다.
+2. 현재 코드 기준 상태/검증 근거는 `HANDOFF.md`를 확인합니다.
+3. Prefect 전환 범위/잔여 작업은 `prefect-migration-*` 문서를 확인합니다.
 
 ## Scope
-
-- 이 파일에는 상세 운영 절차, 실행 로그, 긴 명령 예시를 유지하지 않습니다.
-- 상세 내용은 반드시 해당 원문 문서에만 기록합니다.
+- 이 파일에는 긴 실행 로그/상세 절차를 기록하지 않습니다.
+- 상세 내용은 각 원문 문서에만 유지합니다.

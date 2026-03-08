@@ -18,7 +18,8 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking --extra dev
 ```
 
 ## 2) 설정만으로 교체 가능한 범위
-기존 파이프라인(`gen-verify`, `verify-only`, `replay-eval`)은 코드 수정 없이 아래를 교체할 수 있습니다.
+기존 파이프라인(`generate`, `verify`, `animate`)은 코드 수정 없이 아래를 교체할 수 있습니다.
+레거시 명령(`gen-verify`, `verify-only`, `replay-eval`)은 shim으로 지원되지만 deprecation 경고가 출력됩니다.
 
 - 모델 구현체: `conf/models/*`
 - 저장소 구현체: `conf/adapters/artifact_store/*`, `conf/adapters/metadata_store/*`
@@ -73,21 +74,21 @@ defaults:
 
 ```bash
 make sync
-make run ARGS='discoverex gen-verify --background-asset-ref bg://dummy'
+make run ARGS='discoverex generate --background-asset-ref bg://dummy'
 ```
 
 직접 실행:
 
 ```bash
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify --background-asset-ref bg://dummy
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex verify-only --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex replay-eval --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex generate --background-asset-ref bg://dummy
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex verify --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex animate --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json
 ```
 
 CPU 320x240 실생성(FX tiny SD) 실행 예:
 
 ```bash
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex generate \
   --background-asset-ref bg://dummy \
   -o models/fx=tiny_sd_cpu \
   -o runtime/model_runtime=cpu \
@@ -98,7 +99,7 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
 CPU fast 공통 프리셋 예:
 
 ```bash
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex generate \
   --background-asset-ref bg://dummy \
   -o profile=cpu_fast
 ```

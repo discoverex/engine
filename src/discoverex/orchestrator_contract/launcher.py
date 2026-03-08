@@ -7,12 +7,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
-from discoverex.orchestrator_contract.runner import build_cli_tokens
+from discoverex.orchestrator_contract.runner import build_cli_tokens, is_legacy_command
 from discoverex.orchestrator_contract.schema import (
     BootstrapMode,
-    OrchestratorInputsV1,
+    OrchestratorInputs,
 )
 
 INPUTS_ENV = "ORCH_JOB_INPUTS_JSON"
@@ -27,7 +27,7 @@ def _run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> int:
     return int(proc.returncode)
 
 
-def _load_inputs_from_env() -> OrchestratorInputsV1:
+def _load_inputs_from_env() -> OrchestratorInputs:
     raw = os.getenv(INPUTS_ENV, "").strip()
     if not raw:
         raise LauncherError(f"missing required env: {INPUTS_ENV}")
@@ -38,7 +38,7 @@ def _load_inputs_from_env() -> OrchestratorInputsV1:
     if not isinstance(payload, dict):
         raise LauncherError(f"{INPUTS_ENV} must be a JSON object")
     try:
-        return OrchestratorInputsV1.model_validate(payload)
+        return TypeAdapter(OrchestratorInputs).validate_python(payload)
     except ValidationError as exc:
         raise LauncherError(f"invalid orchestrator inputs: {exc}") from exc
 
@@ -109,6 +109,12 @@ def _run_job_with_pip(*, cwd: Path, env: dict[str, str], cli_tokens: list[str]) 
 
 def run_orchestrator_job(cwd: Path | None = None) -> int:
     job = _load_inputs_from_env()
+    if is_legacy_command(job):
+        print(
+            "[discoverex-orch-launcher] deprecated command set (v1): "
+            "use contract_version=v2 with generate|verify|animate",
+            file=sys.stderr,
+        )
     run_cwd = cwd or Path.cwd()
     env = _prepare_env(run_cwd, job.runtime.extra_env)
     mode = _pick_mode(job.runtime.bootstrap_mode)

@@ -5,7 +5,7 @@
 - 로컬은 로컬 경로/로컬 추적을 사용하고, 워커는 워커 인프라(MinIO/MLflow/Postgres 등)를 사용합니다.
 
 ## 핵심 개념
-- 실행 엔진은 동일: `discoverex gen-verify|verify-only|replay-eval`
+- 실행 엔진은 동일: `discoverex generate|verify|animate`
 - 차이는 Hydra adapter 선택과 runtime env 주입입니다.
 - 오케스트레이터 워커에서는 `python -m discoverex.orchestrator_contract.launcher`를
   `entrypoint`로 호출하고, 실제 CLI 인자는 `ORCH_JOB_INPUTS_JSON`으로 전달합니다.
@@ -44,7 +44,7 @@
 
 ### 1) Local Mode
 ```bash
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex generate \
   --background-asset-ref bg://dummy \
   -o runtime/model_runtime=cpu \
   -o models/hidden_region=tiny_torch \
@@ -55,7 +55,7 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
 
 ### 2) Worker Mode
 ```bash
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex generate \
   --background-asset-ref bg://dummy \
   -o adapters/artifact_store=minio \
   -o adapters/tracker=mlflow_server \
@@ -64,7 +64,10 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
   -o models/perception=hf
 ```
 
-`verify-only`, `replay-eval`도 동일하게 adapter/runtime override 패턴을 적용합니다.
+`verify`, `animate`도 동일하게 adapter/runtime override 패턴을 적용합니다.
+
+레거시 명령(`gen-verify`, `verify-only`, `replay-eval`)은 현재 shim으로 동작하지만,
+실행 시 deprecation 경고가 출력됩니다.
 
 ## 운영 가드레일
 - 워커 payload 템플릿에 adapter override를 고정합니다.

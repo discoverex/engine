@@ -13,6 +13,9 @@ DEFAULT_ENTRYPOINT = [
     "python -m discoverex.orchestrator_contract.launcher",
 ]
 
+V1_COMMANDS = ("gen-verify", "verify-only", "replay-eval")
+V2_COMMANDS = ("generate", "verify", "animate")
+
 
 def _parse_kv_pairs(values: list[str]) -> dict[str, str]:
     out: dict[str, str] = {}
@@ -129,9 +132,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ref", default=os.getenv("ENGINE_REPO_REF", "main"))
     parser.add_argument("--job-name", default=None)
     parser.add_argument("--outputs-prefix", default=None)
-    parser.add_argument(
-        "--command", required=True, choices=("gen-verify", "verify-only", "replay-eval")
-    )
+    parser.add_argument("--contract-version", choices=("v1", "v2"), default="v2")
+    parser.add_argument("--command", required=True)
     parser.add_argument("--background-asset-ref", default=None)
     parser.add_argument("--scene-json", default=None)
     parser.add_argument("--scene-jsons", action="append", default=[])
@@ -150,33 +152,47 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _validate_command(args: argparse.Namespace) -> None:
+    allowed = V1_COMMANDS if args.contract_version == "v1" else V2_COMMANDS
+    if args.command not in allowed:
+        raise SystemExit(
+            f"--command={args.command} is invalid for contract_version={args.contract_version}"
+        )
+
+
 def _build_engine_args(args: argparse.Namespace) -> dict[str, Any]:
-    if args.command == "gen-verify":
+    if args.command in {"gen-verify", "generate"}:
         if not args.background_asset_ref:
             raise SystemExit(
-                "--background-asset-ref is required for command=gen-verify"
+                f"--background-asset-ref is required for command={args.command}"
             )
         return {"background_asset_ref": args.background_asset_ref}
-    if args.command == "verify-only":
+    if args.command in {"verify-only", "verify"}:
         if not args.scene_json:
-            raise SystemExit("--scene-json is required for command=verify-only")
+            raise SystemExit(f"--scene-json is required for command={args.command}")
         return {"scene_json": args.scene_json}
-    if not args.scene_jsons:
-        raise SystemExit(
-            "--scene-jsons is required at least once for command=replay-eval"
-        )
-    return {"scene_jsons": args.scene_jsons}
+    if args.command == "replay-eval":
+        if not args.scene_jsons:
+            raise SystemExit(
+                "--scene-jsons is required at least once for command=replay-eval"
+            )
+        return {"scene_jsons": args.scene_jsons}
+    if args.command == "animate":
+        return {"scene_jsons": args.scene_jsons} if args.scene_jsons else {}
+    raise SystemExit(f"unsupported command: {args.command}")
 
 
 def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
     if args.run_mode == "repo" and (not args.repo_url or not args.ref):
         raise SystemExit("--repo-url and --ref are required when --run-mode=repo")
+    _validate_command(args)
+
     runtime_extras = [item.strip() for item in args.runtime_extra if item.strip()]
     if not runtime_extras:
         runtime_extras = ["tracking", "storage"]
 
     inputs = {
-        "contract_version": "v1",
+        "contract_version": args.contract_version,
         "command": args.command,
         "args": _build_engine_args(args),
         "overrides": args.override,

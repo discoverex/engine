@@ -5,6 +5,10 @@ from typing import Any
 
 from discoverex.models.types import InpaintPrediction, InpaintRequest, ModelHandle
 
+from .hf_inpaint_inference import (
+    generate_patch_with_diffusers,
+    predict_quality_score,
+)
 from .image_patch_ops import (
     apply_patch,
     crop_bbox,
@@ -88,17 +92,23 @@ class HFInpaintModel:
         )
 
     def predict(
-        self, handle: ModelHandle, request: InpaintRequest
+        self,
+        handle: ModelHandle,
+        request: InpaintRequest,
     ) -> InpaintPrediction:
         result: InpaintPrediction = {
             "region_id": request.region_id,
             "model_id": self.model_id,
             "inpaint_mode": self.inpaint_mode,
         }
-        quality = self._predict_quality(handle, request)
-        if quality is None:
-            quality = 0.86 if request.prompt else 0.80
-        result["quality_score"] = quality
+        self._quality_classifier, quality = predict_quality_score(
+            classifier=self._quality_classifier,
+            quality_model_id=self.quality_model_id,
+            revision=self.revision,
+            handle=handle,
+            request=request,
+        )
+        result["quality_score"] = quality if quality is not None else 0.86 if request.prompt else 0.80
 
         composited_ref = self._predict_patch_and_composite(handle, request)
         if composited_ref is not None:
@@ -107,26 +117,27 @@ class HFInpaintModel:
         return result
 
     def _predict_patch_and_composite(
-        self, handle: ModelHandle, request: InpaintRequest
+        self,
+        handle: ModelHandle,
+        request: InpaintRequest,
     ) -> dict[str, Path] | None:
         if request.image_ref is None or request.bbox is None:
             return None
+
         source = Path(str(request.image_ref))
-        if not source.exists():
-            return None
         output_path = request.output_path
-        if output_path is None:
+        if not source.exists() or output_path is None:
             return None
+
         try:
             image = load_image_rgb(source)
             bbox = sanitize_bbox(request.bbox, image.width, image.height)
             patch = crop_bbox(image, bbox)
-            generated_patch = self._generate_patch_with_diffusers(
-                handle, request, patch
-            )
+            generated_patch = self._generate_patch_with_diffusers(handle, request, patch)
             composited = apply_patch(image, generated_patch, bbox)
             patch_path = save_image(
-                generated_patch, Path(output_path).with_suffix(".patch.png")
+                generated_patch,
+                Path(output_path).with_suffix(".patch.png"),
             )
             composited_path = save_image(composited, output_path)
             return {"patch": patch_path, "composited": composited_path}
@@ -134,74 +145,20 @@ class HFInpaintModel:
             return None
 
     def _generate_patch_with_diffusers(
-        self, handle: ModelHandle, request: InpaintRequest, patch_image: Any
+        self,
+        handle: ModelHandle,
+        request: InpaintRequest,
+        patch_image: Any,
     ) -> Any:
-        try:
-            import torch  # type: ignore
-            from diffusers import StableDiffusionImg2ImgPipeline  # type: ignore
-        except Exception as exc:
-            raise RuntimeError("diffusers runtime unavailable") from exc
-
-        if self._img2img_pipe is None:
-            pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
-                self.generation_model_id,
-                revision=self.revision,
-                torch_dtype=torch.float32 if "32" in handle.dtype else torch.float16,
-                safety_checker=None,
-                feature_extractor=None,
-                requires_safety_checker=False,
-            )
-            self._img2img_pipe = pipe.to(handle.device)
-        prompt = (
-            request.generation_prompt or request.prompt or "repair hidden object area"
+        self._img2img_pipe, generated = generate_patch_with_diffusers(
+            pipe=self._img2img_pipe,
+            generation_model_id=self.generation_model_id,
+            revision=self.revision,
+            handle=handle,
+            request=request,
+            patch_image=patch_image,
+            generation_strength=self.generation_strength,
+            generation_steps=self.generation_steps,
+            generation_guidance_scale=self.generation_guidance_scale,
         )
-        result = self._img2img_pipe(
-            prompt=prompt,
-            image=patch_image,
-            strength=float(request.generation_strength or self.generation_strength),
-            num_inference_steps=int(request.generation_steps or self.generation_steps),
-            guidance_scale=float(
-                request.generation_guidance_scale or self.generation_guidance_scale
-            ),
-        )
-        images = getattr(result, "images", None)
-        if not images:
-            raise RuntimeError("img2img returned no images")
-        return images[0]
-
-    def _predict_quality(
-        self, handle: ModelHandle, request: InpaintRequest
-    ) -> float | None:
-        if not bool(handle.extra.get("runtime_available")):
-            return None
-        image_ref = request.image_ref
-        if image_ref is None or request.bbox is None:
-            return None
-        image_path = Path(str(image_ref))
-        if not image_path.exists():
-            return None
-        runtime = resolve_runtime()
-        if not runtime.available or runtime.transformers is None:
-            return None
-        transformers = runtime.transformers
-        try:
-            if self._quality_classifier is None:
-                device_arg = 0 if handle.device.startswith("cuda") else -1
-                self._quality_classifier = transformers.pipeline(
-                    "image-classification",
-                    model=self.quality_model_id,
-                    revision=self.revision,
-                    device=device_arg,
-                )
-            image = load_image_rgb(image_path)
-            box = sanitize_bbox(request.bbox, image.width, image.height)
-            crop = crop_bbox(image, box)
-            preds = self._quality_classifier(crop, top_k=1)
-        except Exception:
-            return None
-        if not preds:
-            return None
-        score = preds[0].get("score")
-        if isinstance(score, float):
-            return max(0.0, min(1.0, score))
-        return None
+        return generated

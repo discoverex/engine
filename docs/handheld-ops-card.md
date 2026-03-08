@@ -14,8 +14,9 @@ Discoverex는 캐논 중심 퍼즐 엔진이며 헥사고널 아키텍처로 구
 캐논 원문은 `.context/canon.md`, 런타임 모델은 `src/discoverex/domain/*`가 담당합니다.
 
 ## 파이프라인 I/O
+레거시 명령(`gen-verify`, `verify-only`, `replay-eval`)은 shim으로 지원되지만 deprecation 경고가 출력됩니다.
 
-### 1) `gen-verify`
+### 1) `generate`
 입력:
 - `--background-asset-ref <asset_ref>`
 
@@ -27,14 +28,14 @@ Discoverex는 캐논 중심 퍼즐 엔진이며 헥사고널 아키텍처로 구
 - `{artifacts_root}/scenes/{scene_id}/{version_id}/verification.json`
 - `{artifacts_root}/scenes/{scene_id}/{version_id}/composite.png`
 
-### 2) `verify-only`
+### 2) `verify`
 입력:
 - `--scene-json <path_to_scene_json>`
 
 출력(stdout JSON):
 - `scene_id`, `version_id`, `status`, `scene_json`
 
-### 3) `replay-eval`
+### 3) `animate` (현재 stub)
 입력:
 - `--scene-jsons <scene1.json> --scene-jsons <scene2.json> ...`
 
@@ -63,9 +64,9 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking
 
 ```bash
 make sync
-make run ARGS='discoverex gen-verify --background-asset-ref bg://dummy'
-make run ARGS='discoverex verify-only --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json'
-make run ARGS='discoverex replay-eval --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json'
+make run ARGS='discoverex generate --background-asset-ref bg://dummy'
+make run ARGS='discoverex verify --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json'
+make run ARGS='discoverex animate --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json'
 ```
 
 ## 설정으로 바꿀 수 있는 항목
