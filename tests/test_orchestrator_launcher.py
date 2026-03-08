@@ -111,6 +111,40 @@ def test_run_orchestrator_job_supports_v1_command_shim(
     assert calls[2][0:4] == ["uv", "run", "discoverex", "verify"]
 
 
+def test_run_orchestrator_job_warns_for_legacy_v1(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(
+        "ORCH_JOB_INPUTS_JSON",
+        json.dumps(
+            {
+                "contract_version": "v1",
+                "command": "gen-verify",
+                "args": {"background_asset_ref": "bg://dummy"},
+            },
+            ensure_ascii=True,
+        ),
+    )
+    monkeypatch.setattr(
+        "discoverex.orchestrator_contract.launcher.shutil.which",
+        lambda _name: "/usr/bin/uv",
+    )
+
+    def fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> int:
+        if cmd[0:2] == ["uv", "venv"]:
+            (cwd / ".venv").mkdir(parents=True, exist_ok=True)
+        return 0
+
+    monkeypatch.setattr(launcher, "_run", fake_run)
+
+    code = launcher.run_orchestrator_job(cwd=tmp_path)
+    assert code == 0
+    err = capsys.readouterr().err
+    assert "deprecated command set (v1)" in err
+
+
 def test_run_orchestrator_job_fails_for_invalid_inputs_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
