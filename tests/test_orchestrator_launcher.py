@@ -10,8 +10,8 @@ import discoverex.orchestrator_contract.launcher as launcher
 
 def _job_payload(runtime: dict[str, object] | None = None) -> str:
     payload: dict[str, object] = {
-        "contract_version": "v1",
-        "command": "gen-verify",
+        "contract_version": "v2",
+        "command": "generate",
         "args": {"background_asset_ref": "bg://dummy"},
     }
     if runtime is not None:
@@ -43,7 +43,7 @@ def test_run_orchestrator_job_uses_uv_path_when_available(
     assert calls[0] == ["uv", "venv", ".venv"]
     assert calls[1] == ["uv", "sync", "--extra", "tracking", "--extra", "storage"]
     assert calls[2][0:3] == ["uv", "run", "discoverex"]
-    assert "gen-verify" in calls[2]
+    assert "generate" in calls[2]
 
 
 def test_run_orchestrator_job_falls_back_to_pip_when_uv_missing(
@@ -74,7 +74,41 @@ def test_run_orchestrator_job_falls_back_to_pip_when_uv_missing(
     assert calls[0][1:4] == ["-m", "venv", ".venv"]
     assert calls[1][1:3] == ["install", "-e"]
     assert calls[2][0].endswith("/.venv/bin/discoverex")
-    assert "gen-verify" in calls[2]
+    assert "generate" in calls[2]
+
+
+def test_run_orchestrator_job_supports_v1_command_shim(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[list[str]] = []
+
+    monkeypatch.setenv(
+        "ORCH_JOB_INPUTS_JSON",
+        json.dumps(
+            {
+                "contract_version": "v1",
+                "command": "verify-only",
+                "args": {"scene_json": "/tmp/scene.json"},
+            },
+            ensure_ascii=True,
+        ),
+    )
+    monkeypatch.setattr(
+        "discoverex.orchestrator_contract.launcher.shutil.which",
+        lambda _name: "/usr/bin/uv",
+    )
+
+    def fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> int:
+        calls.append(cmd)
+        if cmd[0:2] == ["uv", "venv"]:
+            (cwd / ".venv").mkdir(parents=True, exist_ok=True)
+        return 0
+
+    monkeypatch.setattr(launcher, "_run", fake_run)
+
+    code = launcher.run_orchestrator_job(cwd=tmp_path)
+    assert code == 0
+    assert calls[2][0:4] == ["uv", "run", "discoverex", "verify"]
 
 
 def test_run_orchestrator_job_fails_for_invalid_inputs_env(

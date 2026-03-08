@@ -4,6 +4,7 @@ import pytest
 
 from discoverex.orchestrator_contract import (
     EngineJobV1,
+    EngineJobV2,
     build_cli_tokens,
     build_worker_entrypoint,
 )
@@ -32,7 +33,7 @@ def test_build_cli_tokens_preserves_override_order() -> None:
 
     assert build_cli_tokens(job) == [
         "discoverex",
-        "verify-only",
+        "verify",
         "--scene-json",
         "/tmp/scene.json",
         "-o",
@@ -54,7 +55,7 @@ def test_build_worker_entrypoint_wraps_uv_run() -> None:
     entrypoint = build_worker_entrypoint(job)
     assert entrypoint[0:2] == ["/bin/sh", "-lc"]
     assert (
-        "uv run discoverex gen-verify --background-asset-ref bg://dummy"
+        "uv run discoverex generate --background-asset-ref bg://dummy"
         in entrypoint[2]
     )
 
@@ -69,3 +70,14 @@ def test_job_runtime_deduplicates_extras() -> None:
         }
     )
     assert job.runtime.extras == ["tracking", "storage"]
+
+
+def test_engine_job_v2_accepts_animate_without_required_args() -> None:
+    job = EngineJobV2.model_validate(
+        {
+            "contract_version": "v2",
+            "command": "animate",
+            "args": {},
+        }
+    )
+    assert build_cli_tokens(job) == ["discoverex", "animate"]

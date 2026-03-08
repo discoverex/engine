@@ -1,0 +1,3 @@
+defaults:
+  - gen_verify
+  - _self_

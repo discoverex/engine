@@ -1,0 +1,3 @@
+defaults:
+  - verify_only
+  - _self_

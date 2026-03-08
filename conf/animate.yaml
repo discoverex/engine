@@ -1,0 +1,4 @@
+defaults:
+  - replay_eval
+  - flows/animate: stub
+  - _self_

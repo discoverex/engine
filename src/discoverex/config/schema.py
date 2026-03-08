@@ -29,6 +29,12 @@ class AdaptersConfig(BaseModel):
     report_writer: HydraComponentConfig
 
 
+class FlowsConfig(BaseModel):
+    generate: HydraComponentConfig
+    verify: HydraComponentConfig
+    animate: HydraComponentConfig
+
+
 class RuntimeModelConfig(BaseModel):
     device: Literal["cpu", "cuda"] = "cuda"
     dtype: str = "float16"
@@ -150,6 +156,7 @@ class PipelineConfig(BaseModel):
 
     models: ModelsConfig
     adapters: AdaptersConfig
+    flows: FlowsConfig | None = None
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     thresholds: ThresholdsConfig = Field(default_factory=ThresholdsConfig)
     model_versions: ModelVersionsConfig = Field(default_factory=ModelVersionsConfig)
