@@ -10,6 +10,9 @@ defaults:
   - adapters/report_writer: local_json
   - runtime/model_runtime: gpu
   - runtime/env: default
+  - flows/generate: default
+  - flows/verify: default
+  - flows/animate: stub
   - _self_
   - profile: default
 

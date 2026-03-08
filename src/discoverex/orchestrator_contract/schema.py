@@ -4,7 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-EngineCommand = Literal["gen-verify", "verify-only", "replay-eval"]
+EngineCommandV1 = Literal["gen-verify", "verify-only", "replay-eval"]
+EngineCommandV2 = Literal["generate", "verify", "animate"]
 RuntimeMode = Literal["worker", "local_debug"]
 BootstrapMode = Literal["auto", "uv", "pip"]
 
@@ -28,7 +29,7 @@ class EngineJobV1(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     contract_version: Literal["v1"]
-    command: EngineCommand
+    command: EngineCommandV1
     args: dict[str, Any] = Field(default_factory=dict)
     overrides: list[str] = Field(default_factory=list)
     runtime: JobRuntime = Field(default_factory=JobRuntime)
@@ -50,5 +51,33 @@ class EngineJobV1(BaseModel):
         return self
 
 
-class OrchestratorInputsV1(EngineJobV1):
-    """Typed payload expected from ORCH_JOB_INPUTS_JSON."""
+class EngineJobV2(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    contract_version: Literal["v2"]
+    command: EngineCommandV2
+    args: dict[str, Any] = Field(default_factory=dict)
+    overrides: list[str] = Field(default_factory=list)
+    runtime: JobRuntime = Field(default_factory=JobRuntime)
+
+    @model_validator(mode="after")
+    def validate_required_args(self) -> "EngineJobV2":
+        required_by_command: dict[str, tuple[str, ...]] = {
+            "generate": ("background_asset_ref",),
+            "verify": ("scene_json",),
+            "animate": (),
+        }
+        required = required_by_command[self.command]
+        missing = [key for key in required if key not in self.args]
+        if missing:
+            missing_str = ", ".join(missing)
+            raise ValueError(
+                f"missing required args for command={self.command}: {missing_str}"
+            )
+        return self
+
+
+EngineJob = EngineJobV1 | EngineJobV2
+OrchestratorInputs = EngineJob
+OrchestratorInputsV1 = EngineJobV1
+OrchestratorInputsV2 = EngineJobV2

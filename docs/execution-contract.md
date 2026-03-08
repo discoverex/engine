@@ -10,7 +10,8 @@
 
 ## 안정 인터페이스
 - 엔트리포인트: `discoverex`
-- 명령: `gen-verify`, `verify-only`, `replay-eval`
+- v2 명령: `generate`, `verify`, `animate`
+- v1 shim 명령: `gen-verify`, `verify-only`, `replay-eval`
 
 ## 워커 초기화 요구사항
 ```bash
@@ -25,7 +26,7 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking --extra storage
 
 - `job_spec.engine`: 오케스트레이터 라우팅용 식별자(엔진 내부 실행 파라미터로는 사용하지 않음)
 - `job_spec.entrypoint`: 워커가 실행할 런처 엔트리포인트
-- `job_spec.inputs`: 엔진 실행 payload SSOT (`OrchestratorInputsV1`)
+- `job_spec.inputs`: 엔진 실행 payload SSOT (`OrchestratorInputs`: v1/v2)
 
 권장 `entrypoint`:
 
@@ -39,7 +40,7 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking --extra storage
 python scripts/register_orchestrator_job.py \
   --prefect-api-url https://prefect-api.example.com/api \
   --deployment engine-run \
-  --command gen-verify \
+  --command generate \
   --repo-url https://github.com/<org>/discoverex-engine.git \
   --ref main \
   --background-asset-ref bg://dummy \
@@ -48,11 +49,11 @@ python scripts/register_orchestrator_job.py \
   --runtime-env MLFLOW_TRACKING_URI=https://mlflow.example.com
 ```
 
-## inputs(OrchestratorInputsV1) 페이로드 예시
+## inputs(OrchestratorInputsV2) 페이로드 예시
 ```json
 {
-  "contract_version": "v1",
-  "command": "gen-verify",
+  "contract_version": "v2",
+  "command": "generate",
   "args": {
     "background_asset_ref": "bg://dummy"
   },
@@ -76,13 +77,13 @@ python scripts/register_orchestrator_job.py \
 - 워커는 무상태(stateless) 실행만 담당합니다.
 - 작업 1건은 프로세스 1회 실행에 매핑합니다.
 - override는 전달 순서를 유지해 `-o` 인자로 전달합니다.
-- `ORCH_JOB_INPUTS_JSON`은 Pydantic(`OrchestratorInputsV1`)으로 강검증합니다.
+- `ORCH_JOB_INPUTS_JSON`은 Pydantic(`OrchestratorInputs`)으로 강검증합니다.
 - 엔진 실행 후 delivery 후처리 단계를 별도로 호출합니다.
 - 워커에서는 로컬 저장소 사용을 피하고 adapter override를 명시적으로 강제합니다.
 
 예시:
 ```bash
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex generate \
   --background-asset-ref bg://dummy \
   -o runtime/model_runtime=gpu \
   -o models/perception=hf \
@@ -102,8 +103,8 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
 - `artifacts`: 명령 출력으로부터 파싱한 산출물 경로
 
 CLI 출력 키:
-- `gen-verify`, `verify-only`: `scene_json` 포함 JSON
-- `replay-eval`: `report` 포함 JSON
+- `generate`, `verify`: `scene_json` 포함 JSON
+- `animate`: 현재 stub 상태에서는 실패 payload(JSON), replay 모드 구성 시 `report` JSON
 
 ## delivery 후처리 계약 (숨은그림찾기)
 엔진 산출 `scene.json`을 delivery 변환기로 변환해 번들을 만듭니다.

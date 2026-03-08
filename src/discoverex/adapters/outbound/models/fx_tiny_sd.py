@@ -5,6 +5,7 @@ from typing import Any
 
 from discoverex.models.types import FxPrediction, FxRequest, ModelHandle
 
+from .fx_param_parsing import as_float, as_int_or_none, as_positive_int, as_str
 from .runtime import (
     apply_seed,
     build_runtime_extra,
@@ -80,21 +81,19 @@ class TinySDFxModel:
         if not isinstance(output_path, str) or not output_path:
             raise ValueError("FxRequest.params.output_path is required")
 
-        width = self._as_positive_int(request.params.get("width"), fallback=320)
-        height = self._as_positive_int(request.params.get("height"), fallback=240)
-        seed = self._as_int_or_none(request.params.get("seed"), fallback=self.seed)
-        prompt = self._as_str(
-            request.params.get("prompt"), fallback=self.default_prompt
-        )
-        negative_prompt = self._as_str(
+        width = as_positive_int(request.params.get("width"), fallback=320)
+        height = as_positive_int(request.params.get("height"), fallback=240)
+        seed = as_int_or_none(request.params.get("seed"), fallback=self.seed)
+        prompt = as_str(request.params.get("prompt"), fallback=self.default_prompt)
+        negative_prompt = as_str(
             request.params.get("negative_prompt"),
             fallback=self.default_negative_prompt,
         )
-        num_inference_steps = self._as_positive_int(
+        num_inference_steps = as_positive_int(
             request.params.get("num_inference_steps"),
             fallback=self.default_num_inference_steps,
         )
-        guidance_scale = self._as_float(
+        guidance_scale = as_float(
             request.params.get("guidance_scale"),
             fallback=self.default_guidance_scale,
         )
@@ -174,39 +173,3 @@ class TinySDFxModel:
         if not images:
             raise RuntimeError("stable diffusion pipeline returned no images")
         return images[0]
-
-    def _as_positive_int(self, value: object, *, fallback: int) -> int:
-        if value is None:
-            return fallback
-        if isinstance(value, bool):
-            parsed = int(value)
-        elif isinstance(value, (int, float, str)):
-            parsed = int(value)
-        else:
-            raise ValueError("expected int-compatible value")
-        if parsed < 1:
-            raise ValueError("expected positive integer")
-        return parsed
-
-    def _as_int_or_none(self, value: object, *, fallback: int | None) -> int | None:
-        if value is None:
-            return fallback
-        if isinstance(value, bool):
-            return int(value)
-        if isinstance(value, (int, float, str)):
-            return int(value)
-        raise ValueError("expected int-compatible value")
-
-    def _as_float(self, value: object, *, fallback: float) -> float:
-        if value is None:
-            return fallback
-        if isinstance(value, bool):
-            return float(value)
-        if isinstance(value, (int, float, str)):
-            return float(value)
-        raise ValueError("expected float-compatible value")
-
-    def _as_str(self, value: object, *, fallback: str) -> str:
-        if isinstance(value, str) and value.strip():
-            return value
-        return fallback
