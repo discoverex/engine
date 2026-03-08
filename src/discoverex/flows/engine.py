@@ -8,6 +8,7 @@ from prefect import flow
 
 from discoverex.config import PipelineConfig
 from discoverex.config_loader import load_pipeline_config
+from discoverex.flows.common import build_error_payload
 
 FlowCommand = Literal["generate", "verify", "animate"]
 SubflowHandler = Callable[..., dict[str, Any]]
@@ -35,7 +36,10 @@ def engine_entry_flow(
         overrides=overrides or [],
     )
     subflow = _resolve_subflow(cfg, command)
-    return subflow(args=args, config=cfg)
+    try:
+        return subflow(args=args, config=cfg)
+    except Exception as exc:
+        return build_error_payload(command=command, args=args, exc=exc)
 
 
 def run_engine_entry(

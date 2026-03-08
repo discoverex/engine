@@ -16,6 +16,13 @@ def _echo_json(payload: dict[str, object]) -> None:
     typer.echo(json.dumps(payload, ensure_ascii=False))
 
 
+def _warn_legacy_command(legacy: str, replacement: str) -> None:
+    typer.echo(
+        f"[discoverex-cli] '{legacy}' is deprecated; use '{replacement}'",
+        err=True,
+    )
+
+
 @app.command("generate")
 def generate_command(
     background_asset_ref: str = typer.Option(..., "--background-asset-ref"),
@@ -74,6 +81,7 @@ def gen_verify_legacy_command(
     config_dir: str = typer.Option("conf", "--config-dir"),
     override: list[str] = typer.Option([], "--override", "-o"),
 ) -> None:
+    _warn_legacy_command("gen-verify", "generate")
     payload = run_engine_entry(
         command="generate",
         args={"background_asset_ref": background_asset_ref},
@@ -91,6 +99,7 @@ def verify_only_legacy_command(
     config_dir: str = typer.Option("conf", "--config-dir"),
     override: list[str] = typer.Option([], "--override", "-o"),
 ) -> None:
+    _warn_legacy_command("verify-only", "verify")
     payload = run_engine_entry(
         command="verify",
         args={"scene_json": scene_json},
@@ -108,6 +117,7 @@ def replay_eval_legacy_command(
     config_dir: str = typer.Option("conf", "--config-dir"),
     override: list[str] = typer.Option([], "--override", "-o"),
 ) -> None:
+    _warn_legacy_command("replay-eval", "animate")
     payload = run_engine_entry(
         command="animate",
         args={"scene_jsons": scene_jsons},

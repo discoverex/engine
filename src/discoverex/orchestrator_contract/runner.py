@@ -6,6 +6,10 @@ from typing import Any
 from discoverex.orchestrator_contract.schema import EngineJob
 
 
+def is_legacy_command(job: EngineJob) -> bool:
+    return job.contract_version == "v1"
+
+
 def _to_flag(name: str) -> str:
     return f"--{name.replace('_', '-')}"
 
@@ -29,7 +33,7 @@ def _append_arg(tokens: list[str], key: str, value: Any) -> None:
 
 
 def _map_command_to_v2(job: EngineJob) -> str:
-    if job.contract_version == "v2":
+    if not is_legacy_command(job):
         return job.command
     legacy_map = {
         "gen-verify": "generate",

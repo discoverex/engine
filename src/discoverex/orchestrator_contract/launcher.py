@@ -9,7 +9,7 @@ from pathlib import Path
 
 from pydantic import TypeAdapter, ValidationError
 
-from discoverex.orchestrator_contract.runner import build_cli_tokens
+from discoverex.orchestrator_contract.runner import build_cli_tokens, is_legacy_command
 from discoverex.orchestrator_contract.schema import (
     BootstrapMode,
     OrchestratorInputs,
@@ -109,6 +109,12 @@ def _run_job_with_pip(*, cwd: Path, env: dict[str, str], cli_tokens: list[str]) 
 
 def run_orchestrator_job(cwd: Path | None = None) -> int:
     job = _load_inputs_from_env()
+    if is_legacy_command(job):
+        print(
+            "[discoverex-orch-launcher] deprecated command set (v1): "
+            "use contract_version=v2 with generate|verify|animate",
+            file=sys.stderr,
+        )
     run_cwd = cwd or Path.cwd()
     env = _prepare_env(run_cwd, job.runtime.extra_env)
     mode = _pick_mode(job.runtime.bootstrap_mode)
