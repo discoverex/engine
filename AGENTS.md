@@ -49,12 +49,14 @@ Recommended wrappers:
 - `make lint`
 - `make typecheck`
 - `make test`
-- `make run ARGS='discoverex gen-verify --background-asset-ref bg://dummy'`
+- `make run ARGS='discoverex generate --background-asset-ref bg://dummy'`
 
 Direct run examples:
-- `UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify --background-asset-ref <asset>`
-- `UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex verify-only --scene-json <path>`
-- `UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex replay-eval --scene-jsons <a> --scene-jsons <b>`
+- `UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex generate --background-asset-ref <asset>`
+- `UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex verify --scene-json <path>`
+- `UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex animate --scene-jsons <a> --scene-jsons <b>`
+
+Legacy command shim (`gen-verify`, `verify-only`, `replay-eval`) is still accepted, but emits deprecation warnings.
 
 ## Coding Style & Naming Conventions
 - Python: 4-space indentation, `snake_case` modules/functions, `PascalCase` classes.

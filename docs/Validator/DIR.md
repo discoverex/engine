@@ -74,10 +74,12 @@ engine/
 
 #### 인바운드 - `adapters/inbound/cli/`
 **main.py (Typer CLI):** 4개 명령어
-- `gen-verify --background-asset-ref` → 생성 + 검증 실행
-- `verify-only --scene-json` → 저장된 Scene 재검증
-- `replay-eval --scene-jsons` → 일괄 평가
+- `generate --background-asset-ref` → 생성 + 검증 실행
+- `verify --scene-json` → 저장된 Scene 재검증
+- `animate --scene-jsons` → 현재 stub (미구현)
 - **`validate --composite-image --object-layer` → Validator 파이프라인 실행 (JSON 결과 출력)**
+
+참고: 레거시 명령(`gen-verify`, `verify-only`, `replay-eval`)은 shim으로 동작하되 deprecation 경고를 출력한다.
 
 #### 아웃바운드 - `adapters/outbound/`
 
@@ -135,9 +137,12 @@ engine/
 
 ```
 conf/
-├── gen_verify.yaml          # gen-verify 파이프라인 기본 설정
-├── verify_only.yaml         # verify-only 기본 설정
-├── replay_eval.yaml         # replay-eval 기본 설정
+├── gen_verify.yaml          # generate 레거시 shim 기본 설정
+├── verify_only.yaml         # verify 레거시 shim 기본 설정
+├── replay_eval.yaml         # animate 레거시 shim 기본 설정
+├── generate.yaml            # generate 파이프라인 기본 설정
+├── verify.yaml              # verify 파이프라인 기본 설정
+├── animate.yaml             # animate(stub 기본) 파이프라인 기본 설정
 ├── validator.yaml           # [NEW] Validator 파이프라인 Hydra 진입점
 ├── models/
 │   ├── hidden_region/       # dummy, hf, tiny_hf, tiny_torch
@@ -201,7 +206,7 @@ conf/
 
 | 파일 | 설명 |
 |------|------|
-| `prefect_flows.py` | Prefect 플로우 래퍼: `gen_verify_flow()`(재시도 2회, 3초 딜레이), `verify_only_flow()`, `replay_eval_flow()` |
+| `prefect_flows.py` | Prefect 플로우 래퍼: `generate_flow()`(재시도 2회, 3초 딜레이), `verify_flow()`, `animate_flow()` |
 
 ---
 

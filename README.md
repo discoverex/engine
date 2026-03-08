@@ -1,7 +1,7 @@
 # discoverex-core
 
 Discoverex Core 엔진 레포입니다. Scene Canonical(Region-first, bbox) 계약을 중심으로,
-Hydra 기반 어댑터 조립으로 `gen-verify`, `verify-only`, `replay-eval` 파이프라인을 실행합니다.
+Hydra 기반 어댑터 조립으로 `generate`, `verify`, `animate` 파이프라인을 실행합니다.
 캐논 원문 기준은 `.context/canon.md`입니다.
 
 ## 핵심 원칙
@@ -58,23 +58,23 @@ devcontainer up --workspace-folder /home/esillileu/discoverex/engine --config /h
 
 ```bash
 make sync
-make run ARGS='discoverex gen-verify --background-asset-ref bg://dummy'
-make run ARGS='discoverex verify-only --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json'
-make run ARGS='discoverex replay-eval --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json'
+make run ARGS='discoverex generate --background-asset-ref bg://dummy'
+make run ARGS='discoverex verify --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json'
+make run ARGS='discoverex animate --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json'
 ```
 
 ### `uv` 직접 실행
 
 ```bash
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify --background-asset-ref bg://dummy
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex verify-only --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex replay-eval --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex generate --background-asset-ref bg://dummy
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex verify --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex animate --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json
 ```
 
 CPU 320x240 실생성(FX tiny SD) 예시:
 
 ```bash
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex generate \
   --background-asset-ref bg://dummy \
   -o models/fx=tiny_sd_cpu \
   -o runtime/model_runtime=cpu \
@@ -85,15 +85,15 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
 CPU fast 공통 프리셋(`profile=cpu_fast`) 예시:
 
 ```bash
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex gen-verify \
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex generate \
   --background-asset-ref bg://dummy \
   -o profile=cpu_fast
 
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex verify-only \
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex verify \
   --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json \
   -o profile=cpu_fast
 
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex replay-eval \
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex animate \
   --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json \
   -o profile=cpu_fast
 ```
@@ -106,13 +106,16 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex replay-eval \
 python -m discoverex.orchestrator_contract.launcher
 ```
 
-런처는 `ORCH_JOB_INPUTS_JSON`을 `OrchestratorInputsV1`으로 검증한 뒤
-`discoverex gen-verify|verify-only|replay-eval`을 실행합니다.
+런처는 `ORCH_JOB_INPUTS_JSON`을 `OrchestratorInputs`(v1/v2)으로 검증한 뒤
+`discoverex generate|verify|animate`을 실행합니다.
+
+레거시 명령(`gen-verify`, `verify-only`, `replay-eval`)은 shim으로 지원되지만
+실행 시 deprecation 경고가 출력됩니다.
 
 실제 잡 등록은 아래 스크립트를 사용합니다.
 
 ```bash
-python scripts/register_orchestrator_job.py --dry-run --command gen-verify \
+python scripts/register_orchestrator_job.py --dry-run --command generate \
   --repo-url https://github.com/<org>/discoverex-engine.git \
   --ref main \
   --background-asset-ref bg://dummy

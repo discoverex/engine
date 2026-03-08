@@ -1,26 +1,29 @@
-# Prefect Migration Assessment (v2 + v1 Shim)
+# Prefect Migration Assessment (Current)
 
 ## 결론
-- 이 레포는 Prefect 기반 DAG 실행 모델로 전환 가능하다.
-- 기존 hexagonal 경계(application/domain의 프레임워크 중립)와 충돌 없이 적용 가능하다.
-- 다만 외부 계약은 `v2(generate/verify/animate)`로 승격하고 `v1` shim을 동시에 유지해야 안전하다.
+- 엔진은 Prefect 기반 실행 모델로 전환되었고, 현재는 **부분 완성 상태**다.
+- `generate/verify`는 실동작 구현됨.
+- `animate`는 의도적으로 stub 유지.
 
-## 확인된 사실
-- 기존 외부 계약은 `v1 + gen-verify/verify-only/replay-eval` 중심이다.
-- Prefect flow는 있었지만(`orchestrator/prefect_flows.py`) 엔진 내부 SSOT가 아니라 래퍼였다.
-- Hydra는 이미 모델/어댑터 조립에 사용되고 있으며 flow 조립 확장이 가능하다.
-- `animate`는 실 구현이 없어 초기에는 stub로 노출하는 것이 현실적이다.
+## 현재 상태 요약
+- 외부 계약: `v2(generate/verify/animate)` 기준, `v1` shim 지원.
+- 엔트리 흐름: `engine_entry_flow`에서 command dispatch.
+- 내부 구성:
+  - `generate`: 핵심 단계를 Prefect flow/task로 조립.
+  - `verify`: scene load/context/use case 경로를 Prefect 단계화.
+  - `animate`: 실패 payload 반환 stub.
 
-## 적용 원칙
-- 외부 계약(canon envelope)은 안정 유지, 실행 모델만 Prefect로 전환.
-- flow는 orchestration 책임만 가지며 실제 로직은 application use case 호출 유지.
-- Prefect 메타데이터는 주 계약이 아니라 확장 metadata로만 취급.
+## 호환성
+- 레거시 명령은 동작 유지하되 deprecation 경고를 출력.
+- canonical result envelope는 유지.
+- entry flow에서 예외 발생 시 canonical failure payload 반환.
 
 ## 리스크
-- v2 전환 시 오케스트레이터/운영 스크립트의 command 명세 동기화 필요.
-- `animate`의 stub 상태를 명확히 공지하지 않으면 운영 혼선 위험.
-- Prefect 의존성 추가에 따른 런타임 이미지/락파일 동기화 필요.
+- `animate` 미구현으로 제품 완결성은 미충족.
+- 실제 운영 Prefect deployment 상에서 추가 smoke 검증 필요.
+- 일부 HF 어댑터 placeholder 성격은 품질 리스크로 남아 있음.
 
 ## 운영 권고
-- 배포 1차: `generate/verify` 실동작 + `animate` stub + v1 shim.
-- 배포 2차: animate 실제 use case 연결 및 subflow 세분화(재시도/병렬 가치 구간 우선).
+- 단기: `generate/verify`를 운영 기준선으로 사용.
+- 중기: `animate` 실구현 + worker/deployment E2E 검증.
+- 장기: shim sunset 정책(시점/공지/차단 기준) 수립.
