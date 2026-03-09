@@ -1,14 +1,15 @@
 # @package models.fx
-_target_: discoverex.adapters.outbound.models.fx_tiny_sd.TinySDFxModel
-model_id: runwayml/stable-diffusion-v1-5
+_target_: discoverex.adapters.outbound.models.sdxl_final_render.SdxlFinalRenderModel
+model_id: stabilityai/sdxl-turbo
 revision: main
 device: ${runtime.model_runtime.device}
 dtype: ${runtime.model_runtime.dtype}
 precision: ${runtime.model_runtime.precision}
 batch_size: ${runtime.model_runtime.batch_size}
 seed: ${runtime.model_runtime.seed}
-strict_runtime: false
-default_prompt: "hidden object puzzle scene"
+strict_runtime: true
+default_prompt: "polished hidden object puzzle final render"
 default_negative_prompt: "blurry, low quality, artifact"
 default_num_inference_steps: 20
-default_guidance_scale: 7.5
+default_guidance_scale: 4.0
+default_strength: 0.2

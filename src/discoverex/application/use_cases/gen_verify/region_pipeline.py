@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import perf_counter
 from uuid import uuid4
 
 from discoverex.application.context import AppContextLike
 from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
 from discoverex.domain.scene import Background
 from discoverex.models.types import HiddenRegionRequest, InpaintRequest, ModelHandle
+from discoverex.runtime_logging import format_seconds, get_logger
+
+from .types import RegionPromptRecord
+
+_DEFAULT_OBJECT_GENERATION_PROMPT = "repair hidden object region naturally"
+logger = get_logger("discoverex.generate.regions")
 
 
 def build_candidate_regions(
@@ -37,7 +44,16 @@ def generate_regions(
     scene_dir: Path,
     hidden_handle: ModelHandle,
     inpaint_handle: ModelHandle,
-) -> list[Region]:
+    object_prompt: str = "",
+    object_negative_prompt: str = "",
+) -> tuple[list[Region], list[RegionPromptRecord]]:
+    hidden_started = perf_counter()
+    logger.info(
+        "hidden region detection started image=%s size=%sx%s",
+        background.asset_ref,
+        background.width,
+        background.height,
+    )
     boxes = context.hidden_region_model.predict(
         hidden_handle,
         HiddenRegionRequest(
@@ -47,14 +63,33 @@ def generate_regions(
         ),
     )
     regions = build_candidate_regions(boxes)
+    logger.info(
+        "hidden region detection completed candidates=%d duration=%s",
+        len(regions),
+        format_seconds(hidden_started),
+    )
 
     inpainted_regions: list[Region] = []
-    for region in regions:
+    prompt_records: list[RegionPromptRecord] = []
+    total_regions = len(regions)
+    for index, region in enumerate(regions, start=1):
+        region_started = perf_counter()
         output_path = (
             scene_dir
             / "layers"
             / "inpaint"
             / f"{region.region_id}-{uuid4().hex[:8]}.png"
+        )
+        generation_prompt = object_prompt or _DEFAULT_OBJECT_GENERATION_PROMPT
+        logger.info(
+            "object inpaint started region=%s index=%d/%d bbox=(%.1f,%.1f,%.1f,%.1f)",
+            region.region_id,
+            index,
+            total_regions,
+            region.geometry.bbox.x,
+            region.geometry.bbox.y,
+            region.geometry.bbox.w,
+            region.geometry.bbox.h,
         )
         details = context.inpaint_model.predict(
             inpaint_handle,
@@ -69,7 +104,9 @@ def generate_regions(
                 ),
                 output_path=str(output_path),
                 composite_base_ref=background.asset_ref,
-                generation_prompt="repair hidden object region naturally",
+                prompt=object_prompt,
+                negative_prompt=object_negative_prompt,
+                generation_prompt=generation_prompt,
             ),
         )
         updated = region.model_copy(deep=True)
@@ -78,14 +115,20 @@ def generate_regions(
         composited_ref = details.get("composited_image_ref")
         if isinstance(composited_ref, str) and composited_ref:
             background.metadata["inpaint_composited_ref"] = composited_ref
+        object_ref = details.get("object_image_ref")
+        object_mask_ref = details.get("object_mask_ref")
         patch_ref = details.get("patch_image_ref")
-        if isinstance(patch_ref, str) and patch_ref:
+        layer_ref = object_ref if isinstance(object_ref, str) and object_ref else patch_ref
+        if isinstance(layer_ref, str) and layer_ref:
             candidates = background.metadata.setdefault("inpaint_layer_candidates", [])
             if isinstance(candidates, list):
                 candidates.append(
                     {
                         "region_id": region.region_id,
+                        "object_image_ref": object_ref,
+                        "object_mask_ref": object_mask_ref,
                         "patch_image_ref": patch_ref,
+                        "layer_image_ref": layer_ref,
                         "bbox": {
                             "x": region.geometry.bbox.x,
                             "y": region.geometry.bbox.y,
@@ -94,5 +137,31 @@ def generate_regions(
                         },
                     }
                 )
+        prompt_records.append(
+            RegionPromptRecord(
+                region_id=region.region_id,
+                prompt=object_prompt,
+                negative_prompt=object_negative_prompt,
+                generation_prompt=generation_prompt,
+                bbox=(
+                    region.geometry.bbox.x,
+                    region.geometry.bbox.y,
+                    region.geometry.bbox.w,
+                    region.geometry.bbox.h,
+                ),
+                patch_image_ref=details.get("patch_image_ref"),
+                object_image_ref=details.get("object_image_ref"),
+                object_mask_ref=details.get("object_mask_ref"),
+                composited_image_ref=details.get("composited_image_ref"),
+            )
+        )
+        logger.info(
+            "object inpaint completed region=%s patch=%s object=%s composited=%s duration=%s",
+            region.region_id,
+            details.get("patch_image_ref"),
+            details.get("object_image_ref"),
+            details.get("composited_image_ref"),
+            format_seconds(region_started),
+        )
         inpainted_regions.append(updated)
-    return inpainted_regions
+    return inpainted_regions, prompt_records

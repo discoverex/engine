@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from time import perf_counter
 
 import typer
 
 from discoverex.bootstrap import build_validator_context
 from discoverex.config_loader import load_validator_config
 from discoverex.flows import run_engine_entry
+from discoverex.runtime_logging import configure_logging, format_seconds, get_logger
 
 app = typer.Typer(no_args_is_help=True)
+logger = get_logger("discoverex.cli")
 
 
 def _echo_json(payload: dict[str, object]) -> None:
@@ -23,20 +26,66 @@ def _warn_legacy_command(legacy: str, replacement: str) -> None:
     )
 
 
+def _validate_generate_inputs(
+    background_asset_ref: str | None,
+    background_prompt: str | None,
+) -> None:
+    if (background_asset_ref or "").strip() or (background_prompt or "").strip():
+        return
+    raise typer.BadParameter(
+        "either --background-asset-ref or --background-prompt is required"
+    )
+
+
 @app.command("generate")
 def generate_command(
-    background_asset_ref: str = typer.Option(..., "--background-asset-ref"),
+    background_asset_ref: str | None = typer.Option(None, "--background-asset-ref"),
+    background_prompt: str | None = typer.Option(None, "--background-prompt"),
+    background_negative_prompt: str | None = typer.Option(
+        None, "--background-negative-prompt"
+    ),
+    object_prompt: str | None = typer.Option(None, "--object-prompt"),
+    object_negative_prompt: str | None = typer.Option(
+        None, "--object-negative-prompt"
+    ),
+    final_prompt: str | None = typer.Option(None, "--final-prompt"),
+    final_negative_prompt: str | None = typer.Option(
+        None, "--final-negative-prompt"
+    ),
     config_name: str = typer.Option("generate", "--config-name"),
     config_dir: str = typer.Option("conf", "--config-dir"),
     override: list[str] = typer.Option([], "--override", "-o"),
+    verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
+    _validate_generate_inputs(background_asset_ref, background_prompt)
+    configure_logging(verbose=verbose)
+    started = perf_counter()
+    logger.info(
+        "generate command started background_prompt=%s object_prompt=%s final_prompt=%s",
+        bool((background_prompt or "").strip()),
+        bool((object_prompt or "").strip()),
+        bool((final_prompt or "").strip()),
+    )
     payload = run_engine_entry(
         command="generate",
-        args={"background_asset_ref": background_asset_ref},
+        args={
+            key: value
+            for key, value in {
+                "background_asset_ref": background_asset_ref,
+                "background_prompt": background_prompt,
+                "background_negative_prompt": background_negative_prompt,
+                "object_prompt": object_prompt,
+                "object_negative_prompt": object_negative_prompt,
+                "final_prompt": final_prompt,
+                "final_negative_prompt": final_negative_prompt,
+            }.items()
+            if value is not None
+        },
         config_name=config_name,
         config_dir=config_dir,
         overrides=override,
     )
+    logger.info("generate command completed in %s", format_seconds(started))
     _echo_json(payload)
 
 
@@ -46,7 +95,9 @@ def verify_command(
     config_name: str = typer.Option("verify", "--config-name"),
     config_dir: str = typer.Option("conf", "--config-dir"),
     override: list[str] = typer.Option([], "--override", "-o"),
+    verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
+    configure_logging(verbose=verbose)
     payload = run_engine_entry(
         command="verify",
         args={"scene_json": scene_json},
@@ -63,7 +114,9 @@ def animate_command(
     config_name: str = typer.Option("animate", "--config-name"),
     config_dir: str = typer.Option("conf", "--config-dir"),
     override: list[str] = typer.Option([], "--override", "-o"),
+    verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
+    configure_logging(verbose=verbose)
     payload = run_engine_entry(
         command="animate",
         args={"scene_jsons": scene_jsons},
@@ -76,15 +129,42 @@ def animate_command(
 
 @app.command("gen-verify", hidden=True)
 def gen_verify_legacy_command(
-    background_asset_ref: str = typer.Option(..., "--background-asset-ref"),
+    background_asset_ref: str | None = typer.Option(None, "--background-asset-ref"),
+    background_prompt: str | None = typer.Option(None, "--background-prompt"),
+    background_negative_prompt: str | None = typer.Option(
+        None, "--background-negative-prompt"
+    ),
+    object_prompt: str | None = typer.Option(None, "--object-prompt"),
+    object_negative_prompt: str | None = typer.Option(
+        None, "--object-negative-prompt"
+    ),
+    final_prompt: str | None = typer.Option(None, "--final-prompt"),
+    final_negative_prompt: str | None = typer.Option(
+        None, "--final-negative-prompt"
+    ),
     config_name: str = typer.Option("gen_verify", "--config-name"),
     config_dir: str = typer.Option("conf", "--config-dir"),
     override: list[str] = typer.Option([], "--override", "-o"),
+    verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
     _warn_legacy_command("gen-verify", "generate")
+    _validate_generate_inputs(background_asset_ref, background_prompt)
+    configure_logging(verbose=verbose)
     payload = run_engine_entry(
         command="generate",
-        args={"background_asset_ref": background_asset_ref},
+        args={
+            key: value
+            for key, value in {
+                "background_asset_ref": background_asset_ref,
+                "background_prompt": background_prompt,
+                "background_negative_prompt": background_negative_prompt,
+                "object_prompt": object_prompt,
+                "object_negative_prompt": object_negative_prompt,
+                "final_prompt": final_prompt,
+                "final_negative_prompt": final_negative_prompt,
+            }.items()
+            if value is not None
+        },
         config_name=config_name,
         config_dir=config_dir,
         overrides=override,
@@ -98,8 +178,10 @@ def verify_only_legacy_command(
     config_name: str = typer.Option("verify_only", "--config-name"),
     config_dir: str = typer.Option("conf", "--config-dir"),
     override: list[str] = typer.Option([], "--override", "-o"),
+    verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
     _warn_legacy_command("verify-only", "verify")
+    configure_logging(verbose=verbose)
     payload = run_engine_entry(
         command="verify",
         args={"scene_json": scene_json},
@@ -116,8 +198,10 @@ def replay_eval_legacy_command(
     config_name: str = typer.Option("replay_eval", "--config-name"),
     config_dir: str = typer.Option("conf", "--config-dir"),
     override: list[str] = typer.Option([], "--override", "-o"),
+    verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
     _warn_legacy_command("replay-eval", "animate")
+    configure_logging(verbose=verbose)
     payload = run_engine_entry(
         command="animate",
         args={"scene_jsons": scene_jsons},
@@ -139,7 +223,9 @@ def validate_command(
     config_name: str = typer.Option("validator", "--config-name"),
     config_dir: str = typer.Option("conf", "--config-dir"),
     override: list[str] = typer.Option([], "--override", "-o"),
+    verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
+    configure_logging(verbose=verbose)
     config = load_validator_config(
         config_name=config_name,
         config_dir=config_dir,

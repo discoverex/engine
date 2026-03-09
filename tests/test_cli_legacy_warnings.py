@@ -45,3 +45,69 @@ def test_verify_only_legacy_emits_deprecation_warning(monkeypatch) -> None:  # t
     result = runner.invoke(app, ["verify-only", "--scene-json", "/tmp/s.json"])
     assert result.exit_code == 0
     assert "is deprecated; use 'verify'" in result.stderr
+
+
+def test_generate_accepts_background_prompt_and_object_prompt(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def _fake_run_engine_entry(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return {
+            "scene_id": "s1",
+            "version_id": "v1",
+            "status": "approved",
+            "scene_json": "artifacts/scenes/s1/v1/scene.json",
+        }
+
+    monkeypatch.setattr(
+        "discoverex.adapters.inbound.cli.main.run_engine_entry",
+        _fake_run_engine_entry,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--background-prompt",
+            "foggy alley",
+            "--object-prompt",
+            "hidden blue key",
+        ],
+    )
+    assert result.exit_code == 0
+    assert captured["args"] == {
+        "background_prompt": "foggy alley",
+        "object_prompt": "hidden blue key",
+    }
+
+
+def test_generate_accepts_final_prompt(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def _fake_run_engine_entry(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return {
+            "scene_id": "s1",
+            "version_id": "v1",
+            "status": "approved",
+            "scene_json": "artifacts/scenes/s1/v1/scene.json",
+        }
+
+    monkeypatch.setattr(
+        "discoverex.adapters.inbound.cli.main.run_engine_entry",
+        _fake_run_engine_entry,
+    )
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--background-prompt",
+            "foggy alley",
+            "--final-prompt",
+            "polished render",
+        ],
+    )
+    assert result.exit_code == 0
+    assert captured["args"]["final_prompt"] == "polished render"

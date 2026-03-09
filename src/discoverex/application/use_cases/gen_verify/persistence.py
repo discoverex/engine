@@ -1,14 +1,26 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import perf_counter
 
 from discoverex.application.context import AppContextLike
 from discoverex.domain.scene import Scene
+from discoverex.runtime_logging import format_seconds, get_logger
+
+logger = get_logger("discoverex.generate.persistence")
 
 
 def save_scene(context: AppContextLike, scene: Scene) -> Path:
+    started = perf_counter()
     saved_dir = context.artifact_store.save_scene_bundle(scene)
     context.metadata_store.upsert_scene_metadata(scene)
+    logger.info(
+        "scene bundle saved dir=%s scene_id=%s version_id=%s duration=%s",
+        saved_dir,
+        scene.meta.scene_id,
+        scene.meta.version_id,
+        format_seconds(started),
+    )
     return saved_dir
 
 
@@ -17,7 +29,14 @@ def write_verification_report(
     saved_dir: Path,
     scene: Scene,
 ) -> Path:
-    return context.report_writer.write_verification_report(saved_dir, scene)
+    started = perf_counter()
+    report_path = context.report_writer.write_verification_report(saved_dir, scene)
+    logger.info(
+        "verification report written path=%s duration=%s",
+        report_path,
+        format_seconds(started),
+    )
+    return report_path
 
 
 def track_run(
@@ -26,10 +45,15 @@ def track_run(
     scene: Scene,
     saved_dir: Path,
     composite_artifact: Path | None,
+    prompt_bundle_artifact: Path | None = None,
+    extra_params: dict[str, str] | None = None,
 ) -> None:
+    started = perf_counter()
     artifacts = [saved_dir / "scene.json", saved_dir / "verification.json"]
     if composite_artifact is not None:
         artifacts.append(composite_artifact)
+    if prompt_bundle_artifact is not None:
+        artifacts.append(prompt_bundle_artifact)
 
     context.tracker.log_pipeline_run(
         run_name="gen_verify",
@@ -42,6 +66,7 @@ def track_run(
                 f"model_version.{key}": value
                 for key, value in scene.meta.model_versions.items()
             },
+            **(extra_params or {}),
         },
         metrics={
             "logical_score": scene.verification.logical.score,
@@ -50,4 +75,9 @@ def track_run(
             "pass": 1.0 if scene.verification.final.pass_ else 0.0,
         },
         artifacts=artifacts,
+    )
+    logger.info(
+        "tracking completed artifacts=%d duration=%s",
+        len(artifacts),
+        format_seconds(started),
     )

@@ -34,6 +34,10 @@ def crop_bbox(image: Any, bbox: tuple[int, int, int, int]) -> Any:
     return image.crop(bbox)
 
 
+def resize_image(image: Any, size: tuple[int, int]) -> Any:
+    return image.resize(size)
+
+
 def apply_patch(image: Any, patch: Any, bbox: tuple[int, int, int, int]) -> Any:
     left, top, right, bottom = bbox
     region_w = max(1, right - left)
@@ -42,3 +46,13 @@ def apply_patch(image: Any, patch: Any, bbox: tuple[int, int, int, int]) -> Any:
     composited = image.copy()
     composited.paste(resized_patch, (left, top))
     return composited
+
+
+def apply_alpha_patch(image: Any, patch: Any, bbox: tuple[int, int, int, int]) -> Any:
+    left, top, right, bottom = bbox
+    region_w = max(1, right - left)
+    region_h = max(1, bottom - top)
+    rgba_patch = patch.convert("RGBA").resize((region_w, region_h))
+    composited = image.convert("RGBA")
+    composited.alpha_composite(rgba_patch, (left, top))
+    return composited.convert("RGB")

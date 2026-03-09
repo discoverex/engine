@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from time import perf_counter
+
 from discoverex.application.context import AppContextLike
 from discoverex.domain import (
     integrate_verification,
@@ -12,6 +14,9 @@ from discoverex.domain.verification import (
     VerificationResult,
 )
 from discoverex.models.types import ModelHandle, PerceptionRequest
+from discoverex.runtime_logging import format_seconds, get_logger
+
+logger = get_logger("discoverex.generate.verify")
 
 
 def run_perception_verification(
@@ -32,6 +37,12 @@ def verify_scene(
     context: AppContextLike,
     perception_handle: ModelHandle,
 ) -> None:
+    started = perf_counter()
+    logger.info(
+        "verification started final_image=%s regions=%d",
+        scene.composite.final_image_ref,
+        len(scene.regions),
+    )
     logical = run_logical_verification(
         scene,
         pass_threshold=float(context.thresholds.logical_pass),
@@ -68,3 +79,9 @@ def verify_scene(
         source="rule_based",
     )
     scene.meta.status = judge_scene(scene)
+    logger.info(
+        "verification completed pass=%s total_score=%.4f duration=%s",
+        scene.verification.final.pass_,
+        scene.verification.final.total_score,
+        format_seconds(started),
+    )

@@ -1,0 +1,16 @@
+# @package models.background_generator
+_target_: discoverex.adapters.outbound.models.sdxl_background_generation.SdxlBackgroundGenerationModel
+model_id: stabilityai/stable-diffusion-xl-base-1.0
+refiner_model_id: stabilityai/stable-diffusion-xl-refiner-1.0
+revision: main
+device: ${runtime.model_runtime.device}
+dtype: ${runtime.model_runtime.dtype}
+precision: ${runtime.model_runtime.precision}
+batch_size: ${runtime.model_runtime.batch_size}
+seed: ${runtime.model_runtime.seed}
+strict_runtime: true
+default_prompt: "cinematic hidden object puzzle background"
+default_negative_prompt: "blurry, low quality, artifact"
+default_num_inference_steps: 30
+default_guidance_scale: 7.5
+default_refiner_strength: 0.2

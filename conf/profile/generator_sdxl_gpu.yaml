@@ -1,0 +1,12 @@
+# @package _global_
+defaults:
+  - override /models/background_generator: sdxl_gpu
+  - override /models/hidden_region: hf
+  - override /models/inpaint: sdxl_gpu
+  - override /models/perception: hf
+  - override /models/fx: sdxl_gpu
+  - override /runtime/model_runtime: gpu
+
+runtime:
+  width: 1024
+  height: 768

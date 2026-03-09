@@ -1,0 +1,16 @@
+# @package models.inpaint
+_target_: discoverex.adapters.outbound.models.sdxl_inpaint.SdxlInpaintModel
+model_id: diffusers/stable-diffusion-xl-1.0-inpainting-0.1
+revision: main
+device: ${runtime.model_runtime.device}
+dtype: ${runtime.model_runtime.dtype}
+precision: ${runtime.model_runtime.precision}
+batch_size: ${runtime.model_runtime.batch_size}
+seed: ${runtime.model_runtime.seed}
+strict_runtime: true
+default_prompt: "place a visually coherent hidden object in the marked region"
+default_negative_prompt: "blurry, low quality, artifact"
+generation_strength: 0.5
+generation_steps: 28
+generation_guidance_scale: 4.0
+patch_target_long_side: 128

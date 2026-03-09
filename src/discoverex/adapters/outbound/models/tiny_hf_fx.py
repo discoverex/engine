@@ -9,14 +9,20 @@ class TinyHFFxModel:
     def __init__(
         self,
         model_id: str = "tiny-hf-fx",
+        revision: str = "main",
         device: str = "cpu",
         dtype: str = "float32",
+        precision: str = "fp32",
+        batch_size: int = 1,
         seed: int | None = 29,
         strict_runtime: bool = True,
     ) -> None:
         self.model_id = model_id
+        self.revision = revision
         self.device = device
         self.dtype = dtype
+        self.precision = precision
+        self.batch_size = batch_size
         self.seed = seed
         self.strict_runtime = strict_runtime
 
