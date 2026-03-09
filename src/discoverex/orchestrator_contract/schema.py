@@ -37,7 +37,7 @@ class EngineJobV1(BaseModel):
     @model_validator(mode="after")
     def validate_required_args(self) -> "EngineJobV1":
         required_by_command: dict[str, tuple[str, ...]] = {
-            "gen-verify": ("background_asset_ref",),
+            "gen-verify": (),
             "verify-only": ("scene_json",),
             "replay-eval": ("scene_jsons",),
         }
@@ -48,6 +48,8 @@ class EngineJobV1(BaseModel):
             raise ValueError(
                 f"missing required args for command={self.command}: {missing_str}"
             )
+        if self.command == "gen-verify":
+            _validate_generate_args(self.args)
         return self
 
 
@@ -63,7 +65,7 @@ class EngineJobV2(BaseModel):
     @model_validator(mode="after")
     def validate_required_args(self) -> "EngineJobV2":
         required_by_command: dict[str, tuple[str, ...]] = {
-            "generate": ("background_asset_ref",),
+            "generate": (),
             "verify": ("scene_json",),
             "animate": (),
         }
@@ -74,7 +76,19 @@ class EngineJobV2(BaseModel):
             raise ValueError(
                 f"missing required args for command={self.command}: {missing_str}"
             )
+        if self.command == "generate":
+            _validate_generate_args(self.args)
         return self
+
+
+def _validate_generate_args(args: dict[str, Any]) -> None:
+    background_asset_ref = str(args.get("background_asset_ref", "")).strip()
+    background_prompt = str(args.get("background_prompt", "")).strip()
+    if background_asset_ref or background_prompt:
+        return
+    raise ValueError(
+        "missing required args for command=generate: background_asset_ref or background_prompt"
+    )
 
 
 EngineJob = EngineJobV1 | EngineJobV2

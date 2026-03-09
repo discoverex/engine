@@ -104,12 +104,12 @@ def _validate_contract(raw_payload: dict[str, object]) -> None:
     command = str(raw_payload.get("command", "")).strip()
     required_by_command: dict[str, dict[str, tuple[str, ...]]] = {
         "v1": {
-            "gen-verify": ("background_asset_ref",),
+            "gen-verify": (),
             "verify-only": ("scene_json",),
             "replay-eval": ("scene_jsons",),
         },
         "v2": {
-            "generate": ("background_asset_ref",),
+            "generate": (),
             "verify": ("scene_json",),
             "animate": (),
         },
@@ -126,6 +126,14 @@ def _validate_contract(raw_payload: dict[str, object]) -> None:
         raise LauncherError(
             f"missing required args for command={command}: {missing_str}"
         )
+    if command in {"gen-verify", "generate"}:
+        background_asset_ref = str(args.get("background_asset_ref", "")).strip()
+        background_prompt = str(args.get("background_prompt", "")).strip()
+        if not background_asset_ref and not background_prompt:
+            raise LauncherError(
+                f"missing required args for command={command}: "
+                "background_asset_ref or background_prompt"
+            )
 
     overrides = raw_payload.get("overrides", [])
     if not isinstance(overrides, list):
