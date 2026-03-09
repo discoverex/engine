@@ -186,3 +186,43 @@ def test_run_orchestrator_job_passes_runtime_extra_env_to_discoverex(
     _, discoverex_env = calls[2]
     assert discoverex_env["MLFLOW_TRACKING_URI"] == "http://mlflow.local:5000"
     assert discoverex_env["ARTIFACT_BUCKET"] == "orchestrator-artifacts"
+
+
+def test_run_orchestrator_job_accepts_background_prompt_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setenv(
+        "ORCH_JOB_INPUTS_JSON",
+        json.dumps(
+            {
+                "contract_version": "v2",
+                "command": "generate",
+                "args": {"background_prompt": "moonlit forest"},
+            },
+            ensure_ascii=True,
+        ),
+    )
+    monkeypatch.setattr(
+        "discoverex.orchestrator_contract.launcher.shutil.which",
+        lambda _name: "/usr/bin/uv",
+    )
+
+    def fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> int:
+        calls.append(cmd)
+        if cmd[0:2] == ["uv", "venv"]:
+            (cwd / ".venv").mkdir(parents=True, exist_ok=True)
+        return 0
+
+    monkeypatch.setattr(launcher, "_run", fake_run)
+
+    code = launcher.run_orchestrator_job(cwd=tmp_path)
+    assert code == 0
+    assert calls[2][0:6] == [
+        "uv",
+        "run",
+        "discoverex",
+        "generate",
+        "--background-prompt",
+        "moonlit forest",
+    ]
