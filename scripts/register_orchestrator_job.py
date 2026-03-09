@@ -245,14 +245,27 @@ def _build_runtime_env(args: argparse.Namespace) -> dict[str, str]:
     return env
 
 
+def _build_runtime_extras(args: argparse.Namespace) -> list[str]:
+    extras = [item.strip() for item in args.runtime_extra if item.strip()]
+    if not extras:
+        extras = ["tracking", "storage"]
+    profile_extras: list[str] = []
+    if args.execution_profile == "local-tiny-cpu":
+        profile_extras.append("ml-cpu")
+    elif args.execution_profile == "remote-gpu-hf":
+        profile_extras.append("ml-gpu")
+    for extra in profile_extras:
+        if extra not in extras:
+            extras.append(extra)
+    return extras
+
+
 def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
     if args.run_mode == "repo" and (not args.repo_url or not args.ref):
         raise SystemExit("--repo-url and --ref are required when --run-mode=repo")
     _validate_command(args)
 
-    runtime_extras = [item.strip() for item in args.runtime_extra if item.strip()]
-    if not runtime_extras:
-        runtime_extras = ["tracking", "storage"]
+    runtime_extras = _build_runtime_extras(args)
     overrides = [*_build_profile_overrides(args), *args.override]
     entrypoint = DEFAULT_ENTRYPOINT
     if args.entrypoint_shell_command:

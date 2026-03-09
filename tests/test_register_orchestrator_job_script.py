@@ -141,6 +141,11 @@ def test_register_script_local_tiny_profile_adds_worker_overrides_and_env() -> N
         "AWS_SECRET_ACCESS_KEY": "minioadmin",
         "ARTIFACT_BUCKET": "orchestrator-artifacts",
     }
+    assert payload["inputs"]["runtime"]["extras"] == [
+        "tracking",
+        "storage",
+        "ml-cpu",
+    ]
 
 
 def test_register_script_remote_profile_adds_postgres_when_metadata_url_present() -> None:
@@ -181,6 +186,11 @@ def test_register_script_remote_profile_adds_postgres_when_metadata_url_present(
     assert payload["inputs"]["runtime"]["extra_env"]["METADATA_DB_URL"].startswith(
         "postgresql://"
     )
+    assert payload["inputs"]["runtime"]["extras"] == [
+        "tracking",
+        "storage",
+        "ml-gpu",
+    ]
 
 
 def test_register_script_accepts_custom_entrypoint_for_inline_mode() -> None:
