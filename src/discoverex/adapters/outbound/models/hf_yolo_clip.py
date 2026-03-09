@@ -12,7 +12,7 @@ class YoloCLIPAdapter:
 
     VRAM strategy: both models loaded simultaneously, combined < 4 GB.
     YOLO tracks per-object sigma_threshold (disappearance blur level).
-    CLIP computes Detail Retention Rate (DRR) via self-similarity cosine score.
+    CLIP computes DRR slope: decay rate of similarity over log(sigma) levels.
     """
 
     def __init__(
@@ -66,7 +66,7 @@ class YoloCLIPAdapter:
         if baseline_boxes is None or len(baseline_boxes) == 0:
             return VisualVerification(
                 sigma_threshold_map={},
-                detail_retention_rate_map={},
+                drr_slope_map={},
             )
 
         baseline_xyxy = baseline_boxes.xyxy.cpu().numpy()  # (n, 4) in pixel coords
@@ -98,30 +98,39 @@ class YoloCLIPAdapter:
                 if not matched:
                     sigma_threshold_map[oid] = sigma
 
-        # Per-object DRR: bbox-crop CLIP cosine similarity (original vs max-blur)
-        max_blurred = original.filter(ImageFilter.GaussianBlur(radius=max_sigma))
-        detail_retention_rate_map: dict[str, float] = {}
+        # Per-object DRR slope: decay rate of CLIP similarity over log(sigma)
+        # drr_slope = -slope(log(sigma), similarity) — larger = faster decay = harder
+        import numpy as np
+
+        sorted_sigmas = sorted(sigma_levels)
+        log_sigmas = np.log(np.array(sorted_sigmas, dtype=float))
+        drr_slope_map: dict[str, float] = {}
 
         for i, oid in enumerate(obj_ids):
             x1, y1, x2, y2 = (int(v) for v in baseline_xyxy[i])
             x1, y1 = max(0, x1), max(0, y1)
             x2, y2 = min(W, x2), min(H, y2)
             if x2 <= x1 or y2 <= y1:
-                detail_retention_rate_map[oid] = 1.0
+                drr_slope_map[oid] = 0.0
                 continue
             crop_orig = original.crop((x1, y1, x2, y2))
-            crop_blur = max_blurred.crop((x1, y1, x2, y2))
-            feat_orig = self._clip_image_features(crop_orig)
-            feat_blur = self._clip_image_features(crop_blur)
-            with torch.no_grad():
-                sim = torch.nn.functional.cosine_similarity(
-                    feat_orig, feat_blur, dim=-1
-                ).item()
-            detail_retention_rate_map[oid] = float(max(0.0, min(1.0, sim)))
+            similarities = []
+            for sigma in sorted_sigmas:
+                blurred = original.filter(ImageFilter.GaussianBlur(radius=sigma))
+                crop_blur = blurred.crop((x1, y1, x2, y2))
+                feat_orig = self._clip_image_features(crop_orig)
+                feat_blur = self._clip_image_features(crop_blur)
+                with torch.no_grad():
+                    sim = torch.nn.functional.cosine_similarity(
+                        feat_orig, feat_blur, dim=-1
+                    ).item()
+                similarities.append(float(max(0.0, min(1.0, sim))))
+            slope, _ = np.polyfit(log_sigmas, similarities, 1)
+            drr_slope_map[oid] = float(max(0.0, -slope))
 
         return VisualVerification(
             sigma_threshold_map=sigma_threshold_map,
-            detail_retention_rate_map=detail_retention_rate_map,
+            drr_slope_map=drr_slope_map,
         )
 
     def unload(self) -> None:

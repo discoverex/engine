@@ -12,14 +12,14 @@ Dummy 어댑터 고정 출력값
 --------------------------
   DummyPhysical  : occlusion=0.45, z_depth_hop=2, cluster_density=3
   DummyLogical   : degree=3, hop=2, diameter=4.0
-  DummyVisual    : sigma=4.0, drr=0.55  (obj_0, obj_1 고정)
+  DummyVisual    : sigma=4.0, drr_slope=0.15  (obj_0, obj_1 고정)
 
 Phase 4 수식 (ScoringWeights 기본값 기준 — 정규화 적용):
   p_denom    = 0.50+0.50 = 1.0
-  perception = (0.50*(1/4) + 0.50*0.45) / 1.0 = 0.35
+  perception = (0.50*(1/4) + 0.50*0.15) / 1.0 = 0.200
   l_denom    = 0.55+0.45 = 1.0
   logical    = (0.55*0.5 + 0.45*1.0) / 1.0 = 0.725
-  total      = 0.35*0.45 + 0.725*0.55 = 0.55625  → PASS
+  total      = 0.200*0.45 + 0.725*0.55 = 0.48875  → PASS
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ def _make_orchestrator(
 
 
 class _HardVisualVerification:
-    """sigma=1.0, drr=0.0 → perception 최댓값."""
+    """sigma=1.0, drr_slope=1.0 → perception 최댓값."""
 
     def load(self, handle: ModelHandle) -> None:  # noqa: ARG002
         pass
@@ -110,7 +110,7 @@ class _HardVisualVerification:
     ) -> VisualVerification:  # noqa: ARG002
         return VisualVerification(
             sigma_threshold_map={"obj_0": 1.0, "obj_1": 1.0},
-            detail_retention_rate_map={"obj_0": 0.0, "obj_1": 0.0},
+            drr_slope_map={"obj_0": 1.0, "obj_1": 1.0},
         )
 
     def unload(self) -> None:
@@ -148,12 +148,12 @@ _L_DENOM = _W.logical_hop + _W.logical_degree  # 1.0
 
 # 표준 (dummy) 시나리오
 _PERC_STD = (
-    _W.perception_sigma * (1.0 / 4.0) + _W.perception_drr * (1.0 - 0.55)
-) / _P_DENOM  # 0.35
+    _W.perception_sigma * (1.0 / 4.0) + _W.perception_drr * 0.15
+) / _P_DENOM  # 0.200
 _LOGI_STD = (
     _W.logical_hop * (2.0 / 4.0) + _W.logical_degree * 1.0**2
 ) / _L_DENOM  # 0.725
-_TOT_STD = _PERC_STD * _W.total_perception + _LOGI_STD * _W.total_logical  # 0.55625
+_TOT_STD = _PERC_STD * _W.total_perception + _LOGI_STD * _W.total_logical  # 0.48875
 
 # 어려운 시나리오 (sigma=1, drr=0, hop=diameter=4, degree=4)
 _PERC_HARD = (_W.perception_sigma * 1.0 + _W.perception_drr * 1.0) / _P_DENOM  # 1.0
@@ -244,7 +244,7 @@ class TestE2EFullPipelineDummy:
                 "hop": 2,
                 "diameter": 4.0,
                 "degree_norm": 1.0,
-                "detail_retention_rate": 0.55,
+                "drr_slope": 0.15,
             }
         )
         layers = [tmp_path / f"obj_{i}.png" for i in range(2)]
@@ -262,7 +262,7 @@ class TestE2EFullPipelineDummy:
         for p in layers:
             _make_png(p)
         bundle = orch.run(composite_image=composite, object_layers=layers)
-        for key in ("sigma_threshold_map", "detail_retention_rate_map"):
+        for key in ("sigma_threshold_map", "drr_slope_map"):
             assert key in bundle.perception.signals
         for key in (
             "answer_obj_count",
@@ -279,8 +279,8 @@ class TestE2EFullPipelineDummy:
         """
         1개 레이어: obj_1 은 physical/logical 기본값(0) 사용.
         obj_1.logical = 0.0  (hop=0, degree_norm=0)
-        avg_perception = 0.35, avg_logical = 0.725/2 = 0.3625
-        total = 0.35*0.45 + 0.3625*0.55 = 0.356875
+        avg_perception = 0.200, avg_logical = 0.725/2 = 0.3625
+        total = 0.200*0.45 + 0.3625*0.55 = 0.289375
         """
         layer = tmp_path / "obj_0.png"
         _make_png(layer)
@@ -409,7 +409,7 @@ class TestE2EPhase4Chain:
             "neighbor_count": 3,
             "hop": 2,
             "diameter": 4.0,
-            "detail_retention_rate": 0.55,
+            "drr_slope": 0.15,
         }
         assert resolve_answer(metrics) is True
         perc, logi, total = integrate_verification_v2(metrics)
@@ -438,7 +438,7 @@ class TestE2EPhase4Chain:
             "hop": 2,
             "diameter": 4.0,
             "degree_norm": 1.0,
-            "detail_retention_rate": 0.55,
+            "drr_slope": 0.15,
         }
         d = compute_difficulty(obj)
         assert d > 0.0
@@ -454,7 +454,7 @@ class TestE2EPhase4Chain:
             "neighbor_count": 4,
             "hop": 4,
             "diameter": 4.0,
-            "detail_retention_rate": 0.0,
+            "drr_slope": 1.0,
         }
         assert resolve_answer(hard) is True
         _, _, total = integrate_verification_v2(hard)
@@ -471,7 +471,7 @@ class TestE2EPhase4Chain:
             "neighbor_count": 0,
             "hop": 0,
             "diameter": 1.0,
-            "detail_retention_rate": 0.99,
+            "drr_slope": 0.0,
         }
         assert resolve_answer(easy) is False
         _, _, total = integrate_verification_v2(easy)
@@ -480,7 +480,7 @@ class TestE2EPhase4Chain:
     def test_total_score_is_weighted_sum_of_sub_scores(self) -> None:
         metrics = {
             "sigma_threshold": 2.0,
-            "detail_retention_rate": 0.4,
+            "drr_slope": 0.4,
             "hop": 3,
             "diameter": 4.0,
             "degree_norm": 0.6,
@@ -498,7 +498,7 @@ class TestE2EPhase4Chain:
     def test_custom_weights_alter_score(self) -> None:
         metrics = {
             "sigma_threshold": 4.0,
-            "detail_retention_rate": 0.55,
+            "drr_slope": 0.15,
             "hop": 2,
             "diameter": 4.0,
             "degree_norm": 1.0,

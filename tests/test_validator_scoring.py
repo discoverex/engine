@@ -74,7 +74,7 @@ class TestComputeDifficulty:
             "hop": 0,
             "diameter": 1.0,
             "degree_norm": 0.0,
-            "detail_retention_rate": 1.0,
+            "drr_slope": 0.0,
         }
         score = compute_difficulty(metrics)
         assert score >= 0.0
@@ -86,7 +86,7 @@ class TestComputeDifficulty:
             "hop": 0,
             "diameter": 4.0,
             "degree_norm": 0.0,
-            "detail_retention_rate": 1.0,
+            "drr_slope": 0.0,   # 소실 속도 낮음 = 쉬움
         }
         hard = {
             "occlusion_ratio": 0.9,
@@ -94,7 +94,7 @@ class TestComputeDifficulty:
             "hop": 3,
             "diameter": 4.0,
             "degree_norm": 0.9,
-            "detail_retention_rate": 0.1,
+            "drr_slope": 0.25,  # 소실 속도 높음 = 어려움
         }
         assert compute_difficulty(hard) > compute_difficulty(easy)
 
@@ -130,7 +130,7 @@ class TestComputeSceneDifficulty:
             "hop": 2,
             "diameter": 4.0,
             "degree_norm": 0.3,
-            "detail_retention_rate": 0.6,
+            "drr_slope": 0.12,
         }
         assert compute_scene_difficulty([obj]) == pytest.approx(compute_difficulty(obj))
 
@@ -142,7 +142,7 @@ class TestComputeSceneDifficulty:
                 "hop": 1,
                 "diameter": 3.0,
                 "degree_norm": 0.2,
-                "detail_retention_rate": 0.7,
+                "drr_slope": 0.08,
             },
             {
                 "occlusion_ratio": 0.8,
@@ -150,7 +150,7 @@ class TestComputeSceneDifficulty:
                 "hop": 3,
                 "diameter": 3.0,
                 "degree_norm": 0.7,
-                "detail_retention_rate": 0.3,
+                "drr_slope": 0.20,
             },
         ]
         expected = sum(compute_difficulty(o) for o in objs) / 2
@@ -169,13 +169,13 @@ class TestIntegrateVerificationV2:
         assert all(isinstance(v, float) for v in result)
 
     def test_high_difficulty_passes_threshold(self) -> None:
-        # 정규화 수식 기준:
-        # perception = (0.5*(1/1) + 0.5*(1-0.0)) / 1.0 = 1.0
+        # 정규화 수식 기준 (drr_slope 방식):
+        # perception = (0.5*(1/1) + 0.5*1.0) / 1.0 = 1.0  (sigma=1, drr_slope=1.0)
         # logical    = (0.55*(4/4) + 0.45*(1.0)²) / 1.0 = 1.0
         # total      = 1.0*0.45 + 1.0*0.55 = 1.0 >= 0.35
         hard = {
             "sigma_threshold": 1.0,
-            "detail_retention_rate": 0.0,
+            "drr_slope": 1.0,   # 빠른 소실 = 어려움 (직접 기여)
             "hop": 4,
             "diameter": 4.0,
             "degree_norm": 1.0,
@@ -186,9 +186,11 @@ class TestIntegrateVerificationV2:
         assert total >= 0.35
 
     def test_easy_scene_below_threshold(self) -> None:
+        # sigma=16 → 1/16 = 0.0625, drr_slope=0.0 → perception 낮음
+        # hop=0, degree_norm=0 → logical=0
         easy = {
             "sigma_threshold": 16.0,
-            "detail_retention_rate": 0.99,
+            "drr_slope": 0.0,   # 소실 없음 = 쉬움
             "hop": 0,
             "diameter": 1.0,
             "degree_norm": 0.0,
@@ -206,7 +208,7 @@ class TestIntegrateVerificationV2:
     def test_weighted_sum_formula(self) -> None:
         metrics = {
             "sigma_threshold": 4.0,
-            "detail_retention_rate": 0.6,
+            "drr_slope": 0.10,
             "hop": 2,
             "diameter": 4.0,
             "degree_norm": 0.5,

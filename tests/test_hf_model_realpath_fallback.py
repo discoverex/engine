@@ -39,6 +39,8 @@ def test_hf_hidden_region_falls_back_when_realpath_missing() -> None:
 
 
 def test_hf_inpaint_prefers_transformers_path_when_available() -> None:
+    import discoverex.adapters.outbound.models.hf_inpaint as _mod
+
     model = HFInpaintModel(model_id="stabilityai/stable-diffusion-2-inpainting")
     handle = ModelHandle(
         name="inpaint_model",
@@ -47,7 +49,9 @@ def test_hf_inpaint_prefers_transformers_path_when_available() -> None:
         extra={"runtime_available": True},
     )
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(model, "_predict_quality", lambda _handle, _request: 0.91)
+    monkeypatch.setattr(
+        _mod, "predict_quality_score", lambda **_kw: (None, 0.91)
+    )
     pred = model.predict(
         handle,
         InpaintRequest(region_id="r1", bbox=(1.0, 2.0, 3.0, 4.0)),

@@ -128,6 +128,8 @@ class CpuPhysicalAdapter:
         self._pre_arrays = layer_arrays
         self._factor = cluster_radius_factor
         self.last_result: PhysicalMetadata | None = None
+        self.last_alpha_degree_map: dict[str, int] = {}
+        self.last_diameter: float = 2.0
 
     def load(self, handle: ModelHandle) -> None:
         print("  [PHASE 1] CPU-only — occlusion/z_hop/density 실계산")
@@ -203,6 +205,26 @@ class CpuPhysicalAdapter:
                     pass
             z_depth_hop_map[obj_id] = max(hops, default=0)
 
+        # Alpha-overlap graph degree (undirected: count of overlapping neighbors)
+        alpha_degree_map: dict[str, int] = {}
+        for path in object_layers:
+            obj_id = path.stem
+            alpha_degree_map[obj_id] = len(list(g.predecessors(obj_id))) + len(list(g.successors(obj_id)))
+
+        # Graph diameter (longest shortest path among reachable node pairs)
+        try:
+            ug = g.to_undirected()
+            if nx.is_connected(ug):
+                graph_diameter = float(nx.diameter(ug))
+            else:
+                largest_cc = max(nx.connected_components(ug), key=len)
+                graph_diameter = float(nx.diameter(ug.subgraph(largest_cc)))
+        except Exception:
+            graph_diameter = float(max(z_depth_hop_map.values(), default=1))
+
+        self.last_alpha_degree_map = alpha_degree_map
+        self.last_diameter = max(graph_diameter, 2.0)
+
         # Cluster density
         obj_ids = list(centers.keys())
         for obj_id, (cx, cy) in centers.items():
@@ -237,19 +259,35 @@ class CpuPhysicalAdapter:
 
 
 class SmartLogicalAdapter:
+    """Phase 1 실계산 데이터를 재활용하는 논리 추출 어댑터.
+
+    hop_map   : CpuPhysicalAdapter의 BFS z_depth_hop_map 재활용 (실계산)
+    degree_map: alpha-overlap 그래프의 node degree 재활용 (실계산)
+    diameter  : alpha-overlap 그래프의 직경 재활용 (실계산)
+    (Moondream2 의미론적 관계 추출은 생략 — GPU 필요)
+    """
+
+    def __init__(self, physical_adapter: CpuPhysicalAdapter) -> None:
+        self._physical = physical_adapter
+
     def load(self, handle: ModelHandle) -> None:
-        print("  [PHASE 2] SmartDummy — Moondream2 생략")
+        print("  [PHASE 2] SmartLogical — Moondream2 생략, Phase 1 BFS/degree 재활용")
 
     def extract(
         self, composite_image: Path, physical: PhysicalMetadata
     ) -> LogicalStructure:
         obj_ids = sorted(physical.occlusion_map.keys())
-        n = max(len(obj_ids), 1)
+        hop_map    = {oid: physical.z_depth_hop_map.get(oid, 0) for oid in obj_ids}
+        degree_map = {
+            oid: self._physical.last_alpha_degree_map.get(oid, 0)
+            for oid in obj_ids
+        }
+        diameter = self._physical.last_diameter
         return LogicalStructure(
             relations=[],
-            degree_map={oid: min(n - 1, 4) for oid in obj_ids},
-            hop_map={oid: min(i + 1, 4) for i, oid in enumerate(obj_ids)},
-            diameter=float(max(n, 2)),
+            degree_map=degree_map,
+            hop_map=hop_map,
+            diameter=diameter,
         )
 
     def unload(self) -> None:
@@ -268,7 +306,7 @@ class SmartVisualAdapter:
         self._physical = physical_adapter
 
     def load(self, handle: ModelHandle) -> None:
-        print("  [PHASE 3] SmartDummy — YOLO+CLIP 생략 (sigma=8.0, DRR=0.75)")
+        print("  [PHASE 3] SmartDummy — YOLO+CLIP 생략 (sigma=8.0, drr_slope=0.15)")
 
     def verify(
         self, composite_image: Path, sigma_levels: list[float]
@@ -277,7 +315,7 @@ class SmartVisualAdapter:
         obj_ids = list(result.occlusion_map.keys()) if result else ["obj_00"]
         return VisualVerification(
             sigma_threshold_map={oid: 8.0 for oid in obj_ids},
-            detail_retention_rate_map={oid: 0.75 for oid in obj_ids},
+            drr_slope_map={oid: 0.15 for oid in obj_ids},
         )
 
     def unload(self) -> None:
@@ -326,7 +364,7 @@ def _print_bundle(bundle: object) -> None:
     print(f"  degree_map       : {sigs['degree_map']}")
     print(f"  hop_map          : {sigs['hop_map']}")
     print(f"  sigma_map        : {psigs.get('sigma_threshold_map', {})}")
-    print(f"  drr_map          : {psigs.get('detail_retention_rate_map', {})}")
+    print(f"  drr_map          : {psigs.get('drr_slope_map', {})}")
 
 
 # ---------------------------------------------------------------------------

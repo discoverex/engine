@@ -175,7 +175,7 @@ class DummyLogicalExtraction:
 
 
 class DummyVisualVerification:
-    """Dummy Phase 3: returns fixed sigma threshold and DRR values."""
+    """Dummy Phase 3: returns fixed sigma threshold and DRR slope values."""
 
     def load(self, handle: ModelHandle) -> None:  # noqa: ARG002
         pass
@@ -189,7 +189,7 @@ class DummyVisualVerification:
         obj_ids = ["obj_0", "obj_1"]
         return VisualVerification(
             sigma_threshold_map={oid: 4.0 for oid in obj_ids},
-            detail_retention_rate_map={oid: 0.55 for oid in obj_ids},
+            drr_slope_map={oid: 0.15 for oid in obj_ids},
         )
 
     def unload(self) -> None:
