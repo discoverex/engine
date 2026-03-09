@@ -37,7 +37,7 @@ def test_register_script_dry_run_builds_repo_job_spec() -> None:
     assert payload["repo_url"] == "https://github.com/example/engine.git"
     assert (
         payload["entrypoint"][2]
-        == "python -m discoverex.orchestrator_contract.launcher"
+        == "PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher"
     )
     assert payload["inputs"]["contract_version"] == "v2"
     assert payload["inputs"]["command"] == "generate"
@@ -192,7 +192,7 @@ def test_register_script_accepts_custom_entrypoint_for_inline_mode() -> None:
             "--run-mode",
             "inline",
             "--entrypoint-shell-command",
-            "cd /opt/engine-src && python -m discoverex.orchestrator_contract.launcher",
+            "cd /opt/engine-src && PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher",
             "--command",
             "generate",
             "--background-asset-ref",
@@ -208,5 +208,5 @@ def test_register_script_accepts_custom_entrypoint_for_inline_mode() -> None:
     assert payload["entrypoint"] == [
         "/bin/sh",
         "-lc",
-        "cd /opt/engine-src && python -m discoverex.orchestrator_contract.launcher",
+        "cd /opt/engine-src && PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher",
     ]

@@ -10,7 +10,7 @@ from urllib import error, request
 DEFAULT_ENTRYPOINT = [
     "/bin/sh",
     "-lc",
-    "python -m discoverex.orchestrator_contract.launcher",
+    "PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher",
 ]
 
 V1_COMMANDS = ("gen-verify", "verify-only", "replay-eval")
