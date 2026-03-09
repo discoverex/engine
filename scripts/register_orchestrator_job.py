@@ -15,6 +15,7 @@ DEFAULT_ENTRYPOINT = [
 
 V1_COMMANDS = ("gen-verify", "verify-only", "replay-eval")
 V2_COMMANDS = ("generate", "verify", "animate")
+EXECUTION_PROFILES = ("none", "local-tiny-cpu", "remote-gpu-hf")
 
 
 def _parse_kv_pairs(values: list[str]) -> dict[str, str]:
@@ -133,6 +134,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--job-name", default=None)
     parser.add_argument("--outputs-prefix", default=None)
     parser.add_argument("--contract-version", choices=("v1", "v2"), default="v2")
+    parser.add_argument(
+        "--execution-profile",
+        choices=EXECUTION_PROFILES,
+        default="none",
+    )
     parser.add_argument("--command", required=True)
     parser.add_argument("--background-asset-ref", default=None)
     parser.add_argument("--scene-json", default=None)
@@ -146,6 +152,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--runtime-extra", action="append", default=[])
     parser.add_argument("--runtime-env", action="append", default=[])
     parser.add_argument("--runner-env", action="append", default=[])
+    parser.add_argument("--mlflow-tracking-uri", default=None)
+    parser.add_argument("--mlflow-s3-endpoint-url", default=None)
+    parser.add_argument("--aws-access-key-id", default=None)
+    parser.add_argument("--aws-secret-access-key", default=None)
+    parser.add_argument("--artifact-bucket", default=None)
+    parser.add_argument("--metadata-db-url", default=None)
     parser.add_argument("--resume-key", default=None)
     parser.add_argument("--checkpoint-dir", default=None)
     parser.add_argument("--dry-run", action="store_true")
@@ -182,6 +194,56 @@ def _build_engine_args(args: argparse.Namespace) -> dict[str, Any]:
     raise SystemExit(f"unsupported command: {args.command}")
 
 
+def _build_profile_overrides(args: argparse.Namespace) -> list[str]:
+    overrides: list[str] = []
+    if args.execution_profile != "none":
+        overrides.extend(
+            [
+                "adapters/artifact_store=minio",
+                "adapters/tracker=mlflow_server",
+            ]
+        )
+        if args.metadata_db_url:
+            overrides.append("adapters/metadata_store=postgres")
+    if args.execution_profile == "local-tiny-cpu":
+        overrides.extend(
+            [
+                "runtime/model_runtime=cpu",
+                "models/hidden_region=tiny_torch",
+                "models/inpaint=tiny_torch",
+                "models/perception=tiny_torch",
+                "models/fx=tiny_torch",
+            ]
+        )
+    elif args.execution_profile == "remote-gpu-hf":
+        overrides.extend(
+            [
+                "runtime/model_runtime=gpu",
+                "models/hidden_region=hf",
+                "models/inpaint=hf",
+                "models/perception=hf",
+                "models/fx=hf",
+            ]
+        )
+    return overrides
+
+
+def _build_runtime_env(args: argparse.Namespace) -> dict[str, str]:
+    env = _parse_kv_pairs(args.runtime_env)
+    optional_env = {
+        "MLFLOW_TRACKING_URI": args.mlflow_tracking_uri,
+        "MLFLOW_S3_ENDPOINT_URL": args.mlflow_s3_endpoint_url,
+        "AWS_ACCESS_KEY_ID": args.aws_access_key_id,
+        "AWS_SECRET_ACCESS_KEY": args.aws_secret_access_key,
+        "ARTIFACT_BUCKET": args.artifact_bucket,
+        "METADATA_DB_URL": args.metadata_db_url,
+    }
+    for key, value in optional_env.items():
+        if value:
+            env[key] = value
+    return env
+
+
 def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
     if args.run_mode == "repo" and (not args.repo_url or not args.ref):
         raise SystemExit("--repo-url and --ref are required when --run-mode=repo")
@@ -190,17 +252,18 @@ def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
     runtime_extras = [item.strip() for item in args.runtime_extra if item.strip()]
     if not runtime_extras:
         runtime_extras = ["tracking", "storage"]
+    overrides = [*_build_profile_overrides(args), *args.override]
 
     inputs = {
         "contract_version": args.contract_version,
         "command": args.command,
         "args": _build_engine_args(args),
-        "overrides": args.override,
+        "overrides": overrides,
         "runtime": {
             "mode": "worker",
             "bootstrap_mode": args.bootstrap_mode,
             "extras": runtime_extras,
-            "extra_env": _parse_kv_pairs(args.runtime_env),
+            "extra_env": _build_runtime_env(args),
         },
     }
     return {
