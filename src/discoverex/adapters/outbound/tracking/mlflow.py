@@ -78,6 +78,8 @@ class MLflowTrackerAdapter:
                 tags["artifact_scene_json_uri"] = f"{key_base}/scene.json"
             elif artifact.name == "verification.json":
                 tags["artifact_verification_uri"] = f"{key_base}/verification.json"
+            elif artifact.name == "prompt_bundle.json":
+                tags["artifact_prompt_bundle_uri"] = f"{key_base}/prompt_bundle.json"
         return tags
 
     def log_pipeline_run(

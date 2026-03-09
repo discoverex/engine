@@ -9,6 +9,9 @@ from .hf_fx import HFFxModel
 from .hf_hidden_region import HFHiddenRegionModel
 from .hf_inpaint import HFInpaintModel
 from .hf_perception import HFPerceptionModel
+from .sdxl_background_generation import SdxlBackgroundGenerationModel
+from .sdxl_final_render import SdxlFinalRenderModel
+from .sdxl_inpaint import SdxlInpaintModel
 from .tiny_hf_fx import TinyHFFxModel
 from .tiny_hf_hidden_region import TinyHFHiddenRegionModel
 from .tiny_hf_inpaint import TinyHFInpaintModel
@@ -28,6 +31,9 @@ __all__ = [
     "HFHiddenRegionModel",
     "HFInpaintModel",
     "HFPerceptionModel",
+    "SdxlBackgroundGenerationModel",
+    "SdxlFinalRenderModel",
+    "SdxlInpaintModel",
     "TinyHFFxModel",
     "TinyHFHiddenRegionModel",
     "TinyHFInpaintModel",

@@ -1,4 +1,5 @@
 defaults:
+  - models/background_generator: dummy
   - models/hidden_region: dummy
   - models/inpaint: dummy
   - models/perception: dummy
@@ -28,6 +29,7 @@ thresholds:
   final_pass: 0.75
 
 model_versions:
+  background_generator: background-generator-v0
   hidden_region: hidden-region-v0
   inpaint: inpaint-v0
   perception: perception-v0

@@ -3,25 +3,34 @@ from __future__ import annotations
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from prefect import flow, task
 
 from discoverex.application.context import AppContextLike
+from discoverex.application.use_cases.gen_verify.background_pipeline import (
+    build_background_from_inputs,
+)
 from discoverex.application.use_cases.gen_verify.composite_pipeline import compose_scene
 from discoverex.application.use_cases.gen_verify.persistence import (
     save_scene,
     track_run,
     write_verification_report,
 )
+from discoverex.application.use_cases.gen_verify.prompt_bundle import (
+    build_prompt_tracking_params,
+    save_prompt_bundle,
+)
 from discoverex.application.use_cases.gen_verify.region_pipeline import generate_regions
 from discoverex.application.use_cases.gen_verify.scene_builder import (
-    build_background,
     build_scene,
     generate_run_ids,
 )
 from discoverex.application.use_cases.gen_verify.types import (
     CompositeResolution,
+    PromptBundle,
+    PromptStageRecord,
     RunIds,
 )
 from discoverex.application.use_cases.gen_verify.verification_pipeline import (
@@ -30,8 +39,11 @@ from discoverex.application.use_cases.gen_verify.verification_pipeline import (
 from discoverex.bootstrap import build_context
 from discoverex.config import PipelineConfig
 from discoverex.domain.scene import Background, LayerBBox, LayerItem, LayerType, Scene
+from discoverex.runtime_logging import format_seconds, get_logger
 
 from .common import build_scene_payload
+
+logger = get_logger("discoverex.generate.flow")
 
 
 @task(name="discoverex-generate-context", persist_result=False)
@@ -44,11 +56,6 @@ def _generate_run_ids() -> RunIds:
     return generate_run_ids()
 
 
-@task(name="discoverex-generate-background", persist_result=False)
-def _build_background(background_asset_ref: str, config: PipelineConfig) -> Background:
-    return build_background(background_asset_ref, config.runtime)
-
-
 @task(name="discoverex-generate-materialize-bg", persist_result=False)
 def _materialize_background_asset(background: Background, scene_dir: Path) -> Background:
     source = Path(background.asset_ref)
@@ -56,6 +63,8 @@ def _materialize_background_asset(background: Background, scene_dir: Path) -> Ba
         base_dir = scene_dir / "layers" / "base"
         base_dir.mkdir(parents=True, exist_ok=True)
         target = base_dir / source.name
+        if source.resolve() == target.resolve():
+            return background
         shutil.copy2(source, target)
         background.metadata["source_background_ref"] = background.asset_ref
         background.asset_ref = str(target)
@@ -71,7 +80,7 @@ def _finalize_layers(scene: Scene, background: Background, fx_input_ref: str) ->
         for idx, item in enumerate(candidates):
             if not isinstance(item, dict):
                 continue
-            patch_ref = item.get("patch_image_ref")
+            patch_ref = item.get("layer_image_ref") or item.get("object_image_ref") or item.get("patch_image_ref")
             bbox = item.get("bbox")
             region_id = item.get("region_id")
             if not isinstance(patch_ref, str) or not isinstance(bbox, dict):
@@ -125,25 +134,53 @@ def _finalize_layers(scene: Scene, background: Background, fx_input_ref: str) ->
 
 @flow(name="discoverex-generate-pipeline", persist_result=False)
 def run_generate_flow(*, args: dict[str, Any], config: PipelineConfig) -> dict[str, str]:
-    background_asset_ref = str(args["background_asset_ref"])
+    started = perf_counter()
+    background_asset_ref = str(args.get("background_asset_ref", "") or "")
+    background_prompt = str(args.get("background_prompt", "") or "")
+    background_negative_prompt = str(
+        args.get("background_negative_prompt", "") or ""
+    )
+    object_prompt = str(args.get("object_prompt", "") or "")
+    object_negative_prompt = str(args.get("object_negative_prompt", "") or "")
+    final_prompt = str(args.get("final_prompt", "") or "")
+    final_negative_prompt = str(args.get("final_negative_prompt", "") or "")
+    logger.info(
+        "generate flow started background_prompt=%s object_prompt=%s final_prompt=%s",
+        bool(background_prompt),
+        bool(object_prompt),
+        bool(final_prompt),
+    )
     context = _build_context(config)
     run_ids = _generate_run_ids()
 
+    background_handle = context.background_generator_model.load(
+        context.model_versions.background_generator
+    )
     hidden_handle = context.hidden_region_model.load(context.model_versions.hidden_region)
     inpaint_handle = context.inpaint_model.load(context.model_versions.inpaint)
     perception_handle = context.perception_model.load(context.model_versions.perception)
     fx_handle = context.fx_model.load(context.model_versions.fx)
 
     scene_dir = Path(context.artifacts_root) / "scenes" / run_ids.scene_id / run_ids.version_id
-    background = _build_background(background_asset_ref, config)
+    background, background_prompt_record = build_background_from_inputs(
+        context=context,
+        scene_dir=scene_dir,
+        fx_handle=background_handle,
+        background_asset_ref=background_asset_ref or None,
+        background_prompt=background_prompt or None,
+        background_negative_prompt=background_negative_prompt or None,
+    )
     background = _materialize_background_asset(background, scene_dir)
+    logger.info("generate flow background ready asset_ref=%s", background.asset_ref)
 
-    regions = generate_regions(
+    regions, region_prompt_records = generate_regions(
         context=context,
         background=background,
         scene_dir=scene_dir,
         hidden_handle=hidden_handle,
         inpaint_handle=inpaint_handle,
+        object_prompt=object_prompt,
+        object_negative_prompt=object_negative_prompt,
     )
     scene = build_scene(
         background=background,
@@ -163,13 +200,40 @@ def run_generate_flow(*, args: dict[str, Any], config: PipelineConfig) -> dict[s
         background_asset_ref=fx_input_ref,
         scene_dir=scene_dir,
         fx_handle=fx_handle,
+        prompt=final_prompt or "polished hidden object puzzle final render",
+        negative_prompt=final_negative_prompt or "blurry, low quality, artifact",
     )
     scene.composite.final_image_ref = composite.image_ref
     scene = _finalize_layers(scene, background, fx_input_ref)
+    logger.info(
+        "generate flow render complete regions=%d final_image=%s",
+        len(scene.regions),
+        scene.composite.final_image_ref,
+    )
 
     verify_scene(scene=scene, context=context, perception_handle=perception_handle)
     scene.meta.updated_at = datetime.now(timezone.utc)
 
+    prompt_bundle = PromptBundle(
+        input_mode=background_prompt_record.mode,
+        background=background_prompt_record.model_copy(
+            update={"output_ref": background.asset_ref}
+        ),
+        object=PromptStageRecord(
+            mode="shared",
+            prompt=object_prompt,
+            negative_prompt=object_negative_prompt,
+        ),
+        final_fx=PromptStageRecord(
+            mode="default",
+            prompt=final_prompt or "polished hidden object puzzle final render",
+            negative_prompt=final_negative_prompt or "blurry, low quality, artifact",
+            source_ref=fx_input_ref,
+            output_ref=scene.composite.final_image_ref,
+        ),
+        regions=region_prompt_records,
+    )
+    prompt_bundle_path = save_prompt_bundle(scene_dir, prompt_bundle)
     saved_dir = save_scene(context=context, scene=scene)
     write_verification_report(context=context, saved_dir=saved_dir, scene=scene)
     track_run(
@@ -177,5 +241,13 @@ def run_generate_flow(*, args: dict[str, Any], config: PipelineConfig) -> dict[s
         scene=scene,
         saved_dir=saved_dir,
         composite_artifact=composite.artifact_path,
+        prompt_bundle_artifact=prompt_bundle_path,
+        extra_params=build_prompt_tracking_params(prompt_bundle),
+    )
+    logger.info(
+        "generate flow completed scene_id=%s version_id=%s duration=%s",
+        scene.meta.scene_id,
+        scene.meta.version_id,
+        format_seconds(started),
     )
     return build_scene_payload(scene, config.runtime.artifacts_root)
