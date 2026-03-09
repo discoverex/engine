@@ -11,7 +11,7 @@ from discoverex.orchestrator_contract import (
 
 
 def test_engine_job_v1_requires_command_specific_args() -> None:
-    with pytest.raises(ValueError, match="missing required args"):
+    with pytest.raises(ValueError, match="background_asset_ref or background_prompt"):
         EngineJobV1.model_validate(
             {
                 "contract_version": "v1",
@@ -81,3 +81,19 @@ def test_engine_job_v2_accepts_animate_without_required_args() -> None:
         }
     )
     assert build_cli_tokens(job) == ["discoverex", "animate"]
+
+
+def test_engine_job_v2_accepts_background_prompt_without_asset_ref() -> None:
+    job = EngineJobV2.model_validate(
+        {
+            "contract_version": "v2",
+            "command": "generate",
+            "args": {"background_prompt": "a beach at dawn"},
+        }
+    )
+    assert build_cli_tokens(job) == [
+        "discoverex",
+        "generate",
+        "--background-prompt",
+        "a beach at dawn",
+    ]

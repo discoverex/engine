@@ -10,11 +10,17 @@ from urllib import error, request
 DEFAULT_ENTRYPOINT = [
     "/bin/sh",
     "-lc",
-    "python -m discoverex.orchestrator_contract.launcher",
+    "PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher",
 ]
 
 V1_COMMANDS = ("gen-verify", "verify-only", "replay-eval")
 V2_COMMANDS = ("generate", "verify", "animate")
+EXECUTION_PROFILES = (
+    "none",
+    "local-tiny-cpu",
+    "remote-gpu-hf",
+    "generator-sdxl-gpu",
+)
 
 
 def _parse_kv_pairs(values: list[str]) -> dict[str, str]:
@@ -130,11 +136,23 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-mode", choices=("repo", "inline"), default="repo")
     parser.add_argument("--repo-url", default=os.getenv("ENGINE_REPO_URL", ""))
     parser.add_argument("--ref", default=os.getenv("ENGINE_REPO_REF", "main"))
+    parser.add_argument("--entrypoint-shell-command", default=None)
     parser.add_argument("--job-name", default=None)
     parser.add_argument("--outputs-prefix", default=None)
     parser.add_argument("--contract-version", choices=("v1", "v2"), default="v2")
+    parser.add_argument(
+        "--execution-profile",
+        choices=EXECUTION_PROFILES,
+        default="none",
+    )
     parser.add_argument("--command", required=True)
     parser.add_argument("--background-asset-ref", default=None)
+    parser.add_argument("--background-prompt", default=None)
+    parser.add_argument("--background-negative-prompt", default=None)
+    parser.add_argument("--object-prompt", default=None)
+    parser.add_argument("--object-negative-prompt", default=None)
+    parser.add_argument("--final-prompt", default=None)
+    parser.add_argument("--final-negative-prompt", default=None)
     parser.add_argument("--scene-json", default=None)
     parser.add_argument("--scene-jsons", action="append", default=[])
     parser.add_argument("--override", "-o", action="append", default=[])
@@ -146,6 +164,14 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--runtime-extra", action="append", default=[])
     parser.add_argument("--runtime-env", action="append", default=[])
     parser.add_argument("--runner-env", action="append", default=[])
+    parser.add_argument("--mlflow-tracking-uri", default=None)
+    parser.add_argument("--mlflow-s3-endpoint-url", default=None)
+    parser.add_argument("--aws-access-key-id", default=None)
+    parser.add_argument("--aws-secret-access-key", default=None)
+    parser.add_argument("--artifact-bucket", default=None)
+    parser.add_argument("--metadata-db-url", default=None)
+    parser.add_argument("--cf-access-client-id", default=None)
+    parser.add_argument("--cf-access-client-secret", default=None)
     parser.add_argument("--resume-key", default=None)
     parser.add_argument("--checkpoint-dir", default=None)
     parser.add_argument("--dry-run", action="store_true")
@@ -162,11 +188,24 @@ def _validate_command(args: argparse.Namespace) -> None:
 
 def _build_engine_args(args: argparse.Namespace) -> dict[str, Any]:
     if args.command in {"gen-verify", "generate"}:
-        if not args.background_asset_ref:
+        if not args.background_asset_ref and not args.background_prompt:
             raise SystemExit(
-                f"--background-asset-ref is required for command={args.command}"
+                "--background-asset-ref or --background-prompt "
+                f"is required for command={args.command}"
             )
-        return {"background_asset_ref": args.background_asset_ref}
+        return {
+            key: value
+            for key, value in {
+                "background_asset_ref": args.background_asset_ref,
+                "background_prompt": args.background_prompt,
+                "background_negative_prompt": args.background_negative_prompt,
+                "object_prompt": args.object_prompt,
+                "object_negative_prompt": args.object_negative_prompt,
+                "final_prompt": args.final_prompt,
+                "final_negative_prompt": args.final_negative_prompt,
+            }.items()
+            if value is not None
+        }
     if args.command in {"verify-only", "verify"}:
         if not args.scene_json:
             raise SystemExit(f"--scene-json is required for command={args.command}")
@@ -182,25 +221,117 @@ def _build_engine_args(args: argparse.Namespace) -> dict[str, Any]:
     raise SystemExit(f"unsupported command: {args.command}")
 
 
+def _build_profile_overrides(args: argparse.Namespace) -> list[str]:
+    overrides: list[str] = []
+    if args.execution_profile != "none":
+        overrides.extend(
+            [
+                "adapters/artifact_store=minio",
+                "adapters/tracker=mlflow_server",
+            ]
+        )
+        if args.metadata_db_url:
+            overrides.append("adapters/metadata_store=postgres")
+    if args.execution_profile == "local-tiny-cpu":
+        overrides.extend(
+            [
+                "runtime/model_runtime=cpu",
+                "models/background_generator=tiny_sd_cpu",
+                "models/hidden_region=tiny_torch",
+                "models/inpaint=tiny_torch",
+                "models/perception=tiny_torch",
+                "models/fx=tiny_sd_cpu",
+            ]
+        )
+    elif args.execution_profile == "remote-gpu-hf":
+        overrides.extend(
+            [
+                "runtime/model_runtime=gpu",
+                "models/background_generator=hf",
+                "models/hidden_region=hf",
+                "models/inpaint=hf",
+                "models/perception=hf",
+                "models/fx=hf",
+            ]
+        )
+    elif args.execution_profile == "generator-sdxl-gpu":
+        overrides.extend(
+            [
+                "runtime/model_runtime=gpu",
+                "models/background_generator=sdxl_gpu",
+                "models/hidden_region=hf",
+                "models/inpaint=sdxl_gpu",
+                "models/perception=hf",
+                "models/fx=sdxl_gpu",
+            ]
+        )
+    return overrides
+
+
+def _build_runtime_env(args: argparse.Namespace) -> dict[str, str]:
+    env = _parse_kv_pairs(args.runtime_env)
+    optional_env = {
+        "MLFLOW_TRACKING_URI": args.mlflow_tracking_uri,
+        "MLFLOW_S3_ENDPOINT_URL": args.mlflow_s3_endpoint_url,
+        "AWS_ACCESS_KEY_ID": args.aws_access_key_id,
+        "AWS_SECRET_ACCESS_KEY": args.aws_secret_access_key,
+        "ARTIFACT_BUCKET": args.artifact_bucket,
+        "METADATA_DB_URL": args.metadata_db_url,
+    }
+    for key, value in optional_env.items():
+        if value:
+            env[key] = value
+    return env
+
+
+def _build_runner_env(args: argparse.Namespace) -> dict[str, str]:
+    env = _parse_kv_pairs(args.runner_env)
+    optional_env = {
+        "CF_ACCESS_CLIENT_ID": args.cf_access_client_id,
+        "CF_ACCESS_CLIENT_SECRET": args.cf_access_client_secret,
+    }
+    for key, value in optional_env.items():
+        if value:
+            env[key] = value
+    return env
+
+
+def _build_runtime_extras(args: argparse.Namespace) -> list[str]:
+    extras = [item.strip() for item in args.runtime_extra if item.strip()]
+    if not extras:
+        extras = ["tracking", "storage"]
+    profile_extras: list[str] = []
+    if args.execution_profile == "local-tiny-cpu":
+        profile_extras.append("ml-cpu")
+    elif args.execution_profile == "remote-gpu-hf":
+        profile_extras.append("ml-gpu")
+    for extra in profile_extras:
+        if extra not in extras:
+            extras.append(extra)
+    return extras
+
+
 def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
     if args.run_mode == "repo" and (not args.repo_url or not args.ref):
         raise SystemExit("--repo-url and --ref are required when --run-mode=repo")
     _validate_command(args)
 
-    runtime_extras = [item.strip() for item in args.runtime_extra if item.strip()]
-    if not runtime_extras:
-        runtime_extras = ["tracking", "storage"]
+    runtime_extras = _build_runtime_extras(args)
+    overrides = [*_build_profile_overrides(args), *args.override]
+    entrypoint = DEFAULT_ENTRYPOINT
+    if args.entrypoint_shell_command:
+        entrypoint = ["/bin/sh", "-lc", args.entrypoint_shell_command]
 
     inputs = {
         "contract_version": args.contract_version,
         "command": args.command,
         "args": _build_engine_args(args),
-        "overrides": args.override,
+        "overrides": overrides,
         "runtime": {
             "mode": "worker",
             "bootstrap_mode": args.bootstrap_mode,
             "extras": runtime_extras,
-            "extra_env": _parse_kv_pairs(args.runtime_env),
+            "extra_env": _build_runtime_env(args),
         },
     }
     return {
@@ -208,11 +339,11 @@ def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
         "engine": args.engine,
         "repo_url": args.repo_url if args.run_mode == "repo" else None,
         "ref": args.ref if args.run_mode == "repo" else None,
-        "entrypoint": DEFAULT_ENTRYPOINT,
+        "entrypoint": entrypoint,
         "config": None,
         "job_name": args.job_name,
         "inputs": inputs,
-        "env": _parse_kv_pairs(args.runner_env),
+        "env": _build_runner_env(args),
         "outputs_prefix": args.outputs_prefix,
     }
 
