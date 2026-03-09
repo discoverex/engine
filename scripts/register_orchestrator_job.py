@@ -159,6 +159,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--aws-secret-access-key", default=None)
     parser.add_argument("--artifact-bucket", default=None)
     parser.add_argument("--metadata-db-url", default=None)
+    parser.add_argument("--cf-access-client-id", default=None)
+    parser.add_argument("--cf-access-client-secret", default=None)
     parser.add_argument("--resume-key", default=None)
     parser.add_argument("--checkpoint-dir", default=None)
     parser.add_argument("--dry-run", action="store_true")
@@ -238,6 +240,8 @@ def _build_runtime_env(args: argparse.Namespace) -> dict[str, str]:
         "AWS_SECRET_ACCESS_KEY": args.aws_secret_access_key,
         "ARTIFACT_BUCKET": args.artifact_bucket,
         "METADATA_DB_URL": args.metadata_db_url,
+        "CF_ACCESS_CLIENT_ID": args.cf_access_client_id,
+        "CF_ACCESS_CLIENT_SECRET": args.cf_access_client_secret,
     }
     for key, value in optional_env.items():
         if value:

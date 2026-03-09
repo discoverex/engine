@@ -1,8 +1,25 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+
+
+class _CloudflareAccessRequestHeaderProvider:
+    def in_context(self) -> bool:
+        return bool(
+            os.getenv("CF_ACCESS_CLIENT_ID", "").strip()
+            and os.getenv("CF_ACCESS_CLIENT_SECRET", "").strip()
+        )
+
+    def request_headers(self) -> dict[str, str]:
+        return {
+            "CF-Access-Client-Id": os.getenv("CF_ACCESS_CLIENT_ID", "").strip(),
+            "CF-Access-Client-Secret": os.getenv(
+                "CF_ACCESS_CLIENT_SECRET", ""
+            ).strip(),
+        }
 
 
 class MLflowTrackerAdapter:
@@ -23,8 +40,25 @@ class MLflowTrackerAdapter:
         self._mlflow = mlflow
         self._tracking_uri = tracking_uri
         self._artifact_bucket = artifact_bucket
+        self._register_request_headers()
         self._mlflow.set_tracking_uri(tracking_uri)
         self._mlflow.set_experiment(experiment_name)
+
+    def _register_request_headers(self) -> None:
+        if not self._uses_remote_tracking():
+            return
+        try:
+            from mlflow.tracking.request_header import registry
+        except Exception:
+            return
+        if any(
+            isinstance(provider, _CloudflareAccessRequestHeaderProvider)
+            for provider in registry._request_header_provider_registry
+        ):
+            return
+        registry._request_header_provider_registry.register(
+            _CloudflareAccessRequestHeaderProvider
+        )
 
     def _uses_remote_tracking(self) -> bool:
         scheme = urlsplit(self._tracking_uri).scheme.lower()

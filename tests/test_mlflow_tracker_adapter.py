@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import types
 from pathlib import Path
 
 from discoverex.adapters.outbound.tracking.mlflow import MLflowTrackerAdapter
@@ -46,6 +47,17 @@ class _FakeMLflow:
         self.tags[key] = value
 
 
+class _FakeHeaderRegistry:
+    def __init__(self) -> None:
+        self._request_header_provider_registry: list[object] = []
+
+    def register(self, provider_cls) -> None:  # type: ignore[no-untyped-def]
+        self._request_header_provider_registry.append(provider_cls())
+
+    def __iter__(self):  # type: ignore[no-untyped-def]
+        return iter(self._request_header_provider_registry)
+
+
 def test_mlflow_tracker_logs_artifacts_for_local_tracking(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -71,6 +83,25 @@ def test_mlflow_tracker_uses_tags_for_remote_tracking(
 ) -> None:
     fake = _FakeMLflow()
     monkeypatch.setitem(sys.modules, "mlflow", fake)
+    fake_registry = _FakeHeaderRegistry()
+    tracking_pkg = types.ModuleType("mlflow.tracking")
+    request_header_pkg = types.ModuleType("mlflow.tracking.request_header")
+    registry_module = types.ModuleType("mlflow.tracking.request_header.registry")
+    registry_module._request_header_provider_registry = (  # type: ignore[attr-defined]
+        fake_registry
+    )
+    registry_module.register = fake_registry.register  # type: ignore[attr-defined]
+    tracking_pkg.request_header = request_header_pkg  # type: ignore[attr-defined]
+    request_header_pkg.registry = registry_module  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "mlflow.tracking", tracking_pkg)
+    monkeypatch.setitem(sys.modules, "mlflow.tracking.request_header", request_header_pkg)
+    monkeypatch.setitem(
+        sys.modules,
+        "mlflow.tracking.request_header.registry",
+        registry_module,
+    )
+    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "cf-client-id")
+    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "cf-client-secret")
 
     scene_json = tmp_path / "scene.json"
     scene_json.write_text("{}", encoding="utf-8")
@@ -97,3 +128,9 @@ def test_mlflow_tracker_uses_tags_for_remote_tracking(
         fake.tags["artifact_verification_uri"]
         == "s3://orchestrator-artifacts/scenes/scene-1/ver-1/verification.json"
     )
+    providers = fake_registry._request_header_provider_registry
+    assert len(providers) == 1
+    assert providers[0].request_headers() == {
+        "CF-Access-Client-Id": "cf-client-id",
+        "CF-Access-Client-Secret": "cf-client-secret",
+    }

@@ -117,6 +117,10 @@ def test_register_script_local_tiny_profile_adds_worker_overrides_and_env() -> N
             "minioadmin",
             "--artifact-bucket",
             "orchestrator-artifacts",
+            "--cf-access-client-id",
+            "cf-client-id",
+            "--cf-access-client-secret",
+            "cf-client-secret",
         ],
         capture_output=True,
         text=True,
@@ -140,6 +144,8 @@ def test_register_script_local_tiny_profile_adds_worker_overrides_and_env() -> N
         "AWS_ACCESS_KEY_ID": "minioadmin",
         "AWS_SECRET_ACCESS_KEY": "minioadmin",
         "ARTIFACT_BUCKET": "orchestrator-artifacts",
+        "CF_ACCESS_CLIENT_ID": "cf-client-id",
+        "CF_ACCESS_CLIENT_SECRET": "cf-client-secret",
     }
     assert payload["inputs"]["runtime"]["extras"] == [
         "tracking",
