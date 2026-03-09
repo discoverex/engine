@@ -131,6 +131,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-mode", choices=("repo", "inline"), default="repo")
     parser.add_argument("--repo-url", default=os.getenv("ENGINE_REPO_URL", ""))
     parser.add_argument("--ref", default=os.getenv("ENGINE_REPO_REF", "main"))
+    parser.add_argument("--entrypoint-shell-command", default=None)
     parser.add_argument("--job-name", default=None)
     parser.add_argument("--outputs-prefix", default=None)
     parser.add_argument("--contract-version", choices=("v1", "v2"), default="v2")
@@ -253,6 +254,9 @@ def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
     if not runtime_extras:
         runtime_extras = ["tracking", "storage"]
     overrides = [*_build_profile_overrides(args), *args.override]
+    entrypoint = DEFAULT_ENTRYPOINT
+    if args.entrypoint_shell_command:
+        entrypoint = ["/bin/sh", "-lc", args.entrypoint_shell_command]
 
     inputs = {
         "contract_version": args.contract_version,
@@ -271,7 +275,7 @@ def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
         "engine": args.engine,
         "repo_url": args.repo_url if args.run_mode == "repo" else None,
         "ref": args.ref if args.run_mode == "repo" else None,
-        "entrypoint": DEFAULT_ENTRYPOINT,
+        "entrypoint": entrypoint,
         "config": None,
         "job_name": args.job_name,
         "inputs": inputs,

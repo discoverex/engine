@@ -181,3 +181,32 @@ def test_register_script_remote_profile_adds_postgres_when_metadata_url_present(
     assert payload["inputs"]["runtime"]["extra_env"]["METADATA_DB_URL"].startswith(
         "postgresql://"
     )
+
+
+def test_register_script_accepts_custom_entrypoint_for_inline_mode() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--dry-run",
+            "--run-mode",
+            "inline",
+            "--entrypoint-shell-command",
+            "cd /opt/engine-src && python -m discoverex.orchestrator_contract.launcher",
+            "--command",
+            "generate",
+            "--background-asset-ref",
+            "bg://dummy",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["run_mode"] == "inline"
+    assert payload["entrypoint"] == [
+        "/bin/sh",
+        "-lc",
+        "cd /opt/engine-src && python -m discoverex.orchestrator_contract.launcher",
+    ]
