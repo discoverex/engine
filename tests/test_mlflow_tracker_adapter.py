@@ -107,15 +107,21 @@ def test_mlflow_tracker_uses_tags_for_remote_tracking(
     scene_json.write_text("{}", encoding="utf-8")
     verification = tmp_path / "verification.json"
     verification.write_text("{}", encoding="utf-8")
+    prompt_bundle = tmp_path / "prompt_bundle.json"
+    prompt_bundle.write_text("{}", encoding="utf-8")
     tracker = MLflowTrackerAdapter(
         tracking_uri="https://mlflow.example.com",
         artifact_bucket="orchestrator-artifacts",
     )
     tracker.log_pipeline_run(
         run_name="generate",
-        params={"scene_id": "scene-1", "version_id": "ver-1"},
+        params={
+            "scene_id": "scene-1",
+            "version_id": "ver-1",
+            "background_prompt_used": "forest",
+        },
         metrics={"pass": 1.0},
-        artifacts=[scene_json, verification],
+        artifacts=[scene_json, verification, prompt_bundle],
     )
 
     assert fake.logged_artifacts == []
@@ -127,6 +133,10 @@ def test_mlflow_tracker_uses_tags_for_remote_tracking(
     assert (
         fake.tags["artifact_verification_uri"]
         == "s3://orchestrator-artifacts/scenes/scene-1/ver-1/verification.json"
+    )
+    assert (
+        fake.tags["artifact_prompt_bundle_uri"]
+        == "s3://orchestrator-artifacts/scenes/scene-1/ver-1/prompt_bundle.json"
     )
     providers = fake_registry._request_header_provider_registry
     assert len(providers) == 1

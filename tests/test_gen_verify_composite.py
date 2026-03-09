@@ -56,9 +56,13 @@ def test_compose_scene_passes_runtime_dimensions_to_fx(tmp_path: Path) -> None:
         background_asset_ref="bg://dummy",
         scene_dir=tmp_path,
         fx_handle=ModelHandle(name="fx", version="v1", runtime="dummy"),
+        prompt="test scene",
+        negative_prompt="bad scene",
     )
 
     assert captured["width"] == 320
     assert captured["height"] == 240
     assert captured["seed"] == 11
+    assert captured["prompt"] == "test scene"
+    assert captured["negative_prompt"] == "bad scene"
     assert composite.artifact_path is not None
