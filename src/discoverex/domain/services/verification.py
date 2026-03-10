@@ -37,6 +37,9 @@ class ScoringWeights(BaseModel):
     difficulty_degree: float = Field(0.15, ge=0.0)
     difficulty_drr: float = Field(0.20, ge=0.0)
     difficulty_interaction: float = Field(0.10, ge=0.0)
+    # ^ w_ix: occlusion × (hop/diameter) 교호작용 가중치.
+    #   현재 WeightFitter 학습 대상 외 (total_score에 미관여, D(obj) 경로 전용).
+    #   D(obj) 분포 기반 loss 도입 시 _SCORED_KEYS 편입 가능 (A군 승격 1순위 후보).
 
 
 def run_logical_verification(scene: Scene, pass_threshold: float) -> VerificationResult:
@@ -102,11 +105,12 @@ def compute_difficulty(
            + w_sig · (1 / σ_threshold)
            + w_hop · (hop / diameter)
            + w_deg · degree_norm²
-           + w_drr · (1 - DRR)
+           + w_drr · drr_slope
            + w_ix  · occlusion · (hop / diameter)
 
     obj_metrics 키: occlusion_ratio, sigma_threshold, hop, diameter,
-                    degree_norm, detail_retention_rate
+                    degree_norm, drr_slope
+    drr_slope = -slope(log(sigma), CLIP_similarity): 클수록 빨리 소실 = 어려움
     """
     w = weights or ScoringWeights()
     occlusion = float(obj_metrics.get("occlusion_ratio", 0.0))
@@ -114,14 +118,14 @@ def compute_difficulty(
     hop = float(obj_metrics.get("hop", 0))
     diameter = max(float(obj_metrics.get("diameter", 1.0)), 1e-6)
     degree_n = float(obj_metrics.get("degree_norm", 0.0))
-    drr = float(obj_metrics.get("detail_retention_rate", 1.0))
+    drr_slope = float(obj_metrics.get("drr_slope", 0.0))
 
     return (
         w.difficulty_occlusion * occlusion**2
         + w.difficulty_sigma * (1.0 / sigma)
         + w.difficulty_hop * (hop / diameter)
         + w.difficulty_degree * degree_n**2
-        + w.difficulty_drr * (1.0 - drr)
+        + w.difficulty_drr * drr_slope
         + w.difficulty_interaction * occlusion * (hop / diameter)
     )
 
@@ -129,7 +133,14 @@ def compute_difficulty(
 def compute_scene_difficulty(
     answer_objs: list[dict[str, Any]], weights: ScoringWeights | None = None
 ) -> float:
-    """Scene_Difficulty = (1 / |answer|) · Σ D(obj)  (obj ∈ answer)"""
+    """Scene_Difficulty = (1 / |answer|) · Σ D(obj)  (obj ∈ answer)
+
+    집계 방식: 단순 평균 (의도적 선택)
+    "개별 객체의 평균 난이도를 씬 난이도로 본다"는 관점을 채택.
+    D(obj) 자체가 neighbor_count·degree를 통해 군집 복잡도를 간접 반영하므로
+    answer 수로 추가 보정하면 이중 계상이 될 수 있어 단순 평균 유지.
+    MVP 데이터 수집 후 분포 확인으로 재검토.
+    """
     if not answer_objs:
         return 0.0
     return sum(compute_difficulty(obj, weights) for obj in answer_objs) / len(
@@ -144,10 +155,11 @@ def integrate_verification_v2(
 ) -> tuple[float, float, float]:
     """오브젝트 하나에 대한 정규화된 perception / logical / total 점수 계산.
 
-    perception = (w_σ · (1/σ) + w_drr · (1−DRR)) / (w_σ + w_drr)   ∈ [0, 1]
+    perception = (w_σ · (1/σ) + w_drr · drr_slope) / (w_σ + w_drr)   ∈ [0, ∞)
     logical    = (w_hop · (hop/d) + w_deg · deg²) / (w_hop + w_deg)  ∈ [0, 1]
-    total      = perception · w_p + logical · w_l                     ∈ [0, 1]
+    total      = perception · w_p + logical · w_l
 
+    drr_slope = -slope(log(sigma), CLIP_similarity): 클수록 빨리 소실 = 어려움.
     각 sub-score 를 자신의 가중치 합으로 나누어 정규화하므로 가중치의 절댓값이
     아닌 비율만이 점수에 영향을 준다. total 의 최댓값은 w_p + w_l 이며,
     두 값의 합이 1.0 이면 total 최댓값도 1.0 이 된다.
@@ -156,14 +168,14 @@ def integrate_verification_v2(
     """
     w = weights or ScoringWeights()
     sigma = max(float(obj_metrics.get("sigma_threshold", 1.0)), 1e-6)
-    drr = float(obj_metrics.get("detail_retention_rate", 1.0))
+    drr_slope = float(obj_metrics.get("drr_slope", 0.0))
     hop = float(obj_metrics.get("hop", 0))
     diameter = max(float(obj_metrics.get("diameter", 1.0)), 1e-6)
     degree_n = float(obj_metrics.get("degree_norm", 0.0))
 
     p_denom = max(w.perception_sigma + w.perception_drr, 1e-9)
     perception = (
-        w.perception_sigma * (1.0 / sigma) + w.perception_drr * (1.0 - drr)
+        w.perception_sigma * (1.0 / sigma) + w.perception_drr * drr_slope
     ) / p_denom
 
     l_denom = max(w.logical_hop + w.logical_degree, 1e-9)

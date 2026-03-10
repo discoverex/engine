@@ -107,10 +107,13 @@ class LogicalStructure(BaseModel):
 
 
 class VisualVerification(BaseModel):
-    """Phase 3 output: YOLO sigma threshold + CLIP detail retention rate."""
+    """Phase 3 output: YOLO sigma threshold + CLIP similarity decay slope.
+
+    drr_slope = -slope(log(sigma), similarity): larger = faster decay = harder.
+    """
 
     sigma_threshold_map: dict[str, float] = Field(default_factory=dict)
-    detail_retention_rate_map: dict[str, float] = Field(default_factory=dict)
+    drr_slope_map: dict[str, float] = Field(default_factory=dict)
 
 
 class ValidatorInput(BaseModel):

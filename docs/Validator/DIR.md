@@ -1,6 +1,6 @@
 # Discoverex Engine - 디렉토리 구조 문서
 
-> 생성일: 2026-03-03
+> 생성일: 2026-03-03 / 최종 수정: 2026-03-09
 > 대상 경로: `/home/user/discoverex/engine`
 
 ---
@@ -48,7 +48,7 @@ engine/
 
 | 파일 | 프로토콜 | 설명 |
 |------|----------|------|
-| `models.py` | `HiddenRegionPort`, `InpaintPort`, `PerceptionPort`, `FxPort` (기존 load/predict 패턴) + **`PhysicalExtractionPort`**, **`LogicalExtractionPort`**, **`VisualVerificationPort`** (Validator load/extract\|verify/unload 패턴) |
+| `models.py` | `HiddenRegionPort`, `InpaintPort`, `PerceptionPort`, `FxPort` (기존 load/predict 패턴) + **`PhysicalExtractionPort`**, **`LogicalExtractionPort`**, **`VisualVerificationPort`** (Validator load/extract\|verify/unload 패턴) + **`BundleStorePort`** (VerificationBundle 영속화) |
 | `storage.py` | `ArtifactStorePort`, `MetadataStorePort` | 아티팩트 및 메타데이터 저장소 추상화 |
 | `tracking.py` | `TrackerPort` | MLflow 실험 추적 추상화 |
 | `io.py` | `SceneIOPort` | Scene JSON 입출력 추상화 |
@@ -69,6 +69,7 @@ engine/
 | `replay_eval.py` | 다수 Scene 일괄 평가 |
 | **`validator/__init__.py`** | **ValidatorOrchestrator, run_validator export** |
 | **`validator/orchestrator.py`** | **4단계 순차 파이프라인 오케스트레이터 (VRAM 바톤 터치 전략, try/finally 보장)** |
+| **`validator/scoring.py`** | **Phase 4 순수 계산: obj_metrics 조립 → integrate_verification_v2 호출 → VerificationBundle 생성** |
 
 ### 어댑터 레이어 - `adapters/`
 
@@ -90,11 +91,12 @@ engine/
 | `hf_*.py` | HuggingFace Transformers 구현체 (fx, hidden_region, inpaint, perception) |
 | **`hf_mobilesam.py`** | **Phase 1: MobileSAM 기반 물리 메타데이터 추출 (occlusion, z_index, z_depth_hop BFS, cluster_density, euclidean_distance)** |
 | **`hf_moondream2.py`** | **Phase 2: Moondream2 4-bit VLM 기반 논리 관계 추출 (encode_image → NetworkX graph → degree/hop/diameter)** |
-| **`hf_yolo_clip.py`** | **Phase 3: YOLOv10-N + CLIP 병렬 로드 (IoU 기반 sigma_threshold, bbox-crop per-object DRR)** |
+| **`hf_yolo_clip.py`** | **Phase 3: YOLOv10-N + CLIP 병렬 로드 (IoU 기반 sigma_threshold, bbox-crop per-object `drr_slope` — log(σ) 대비 유사도 감소 기울기, np.polyfit)** |
 | `tiny_hf_*.py` | 경량 HuggingFace 변형 |
 | `tiny_torch_*.py` | 경량 PyTorch 변형 |
 | `runtime.py` | 디바이스/dtype/배치 관리 |
 | `fx_artifact.py` | FX 출력 아티팩트 처리 |
+| **`bundle_store.py`** | **`LocalJsonBundleStore` — VerificationBundle을 JSON 파일로 영속화 (BundleStorePort 구현체)** |
 
 **저장소 어댑터:**
 | 파일 | 설명 |
@@ -129,7 +131,31 @@ engine/
 
 | 파일 | 설명 |
 |------|------|
-| `types.py` | `ModelHandle`, `HiddenRegionRequest`, `InpaintRequest`, `PerceptionRequest`, `FxRequest`, `FxPrediction` + **`PhysicalMetadata`, `LogicalStructure`, `VisualVerification`, `ValidatorInput`** (Validator Phase 1~4 I/O 타입) |
+| `types.py` | `ModelHandle`, `HiddenRegionRequest`, `InpaintRequest`, `PerceptionRequest`, `FxRequest`, `FxPrediction` + **`PhysicalMetadata`, `LogicalStructure`, `VisualVerification`** (`drr_slope_map` 필드), **`ValidatorInput`** (Validator Phase 1~4 I/O 타입) |
+
+---
+
+## 학습 파이프라인 (`src/ML/`)
+
+추론 코드(`discoverex/`)와 독립적으로 동작하는 학습 전용 패키지.
+
+| 파일/디렉터리 | 설명 |
+|-------------|------|
+| `weight_fitter.py` | `WeightFitter` 클래스 — Nelder-Mead + hinge loss로 `ScoringWeights` scoring 5개 파라미터 최적화 |
+| `fit_weights.py` | CLI 진입점 — labeled JSONL → `weights.json` 변환 |
+| `data/` | MVP 운영 중 수집된 `VerificationBundle` JSON 저장 디렉터리 (`.gitkeep` 포함) |
+
+**의존성 방향**: `ML/` → `discoverex/domain/services/verification.py` (단방향). `discoverex/`는 `ML/`을 import하지 않음.
+
+---
+
+## 샘플 (`src/sample/`)
+
+| 파일/디렉터리 | 설명 |
+|-------------|------|
+| `sample_1.png` ~ `sample_3.png` | 테스트용 샘플 합성 이미지 (640×415, 793×521) |
+| `layers/` | 각 샘플의 RGBA 레이어 PNG (색상 군집화 + 마스크 팽창 생성) |
+| `test_samples.py` | 샘플 이미지 기반 파이프라인 통합 테스트 스크립트 |
 
 ---
 
@@ -193,8 +219,10 @@ conf/
 | `test_tiny_model_pipeline_smoke.py` | E2E 스모크 테스트 |
 | `test_gen_verify_composite.py` | gen-verify 합성 |
 | `test_artifact_verification_consistency.py` | 아티팩트 일관성 |
-| **`test_validator_pipeline_smoke.py`** | **Dummy 어댑터 기반 Validator E2E 스모크 테스트 (5개)** |
-| **`test_validator_scoring.py`** | **Phase 4 순수 수식 단위 테스트 (21개): resolve_answer, compute_difficulty, compute_scene_difficulty, integrate_verification_v2** |
+| **`test_validator_pipeline_smoke.py`** | **Dummy 어댑터 기반 Validator E2E 스모크 테스트 (5개), drr_slope_map 시그널 검증** |
+| **`test_validator_scoring.py`** | **Phase 4 순수 수식 단위 테스트 (21개): resolve_answer, compute_difficulty, compute_scene_difficulty, integrate_verification_v2 — drr_slope 기준** |
+| **`test_validator_e2e.py`** | **Phase 4 수치 사전 계산 + E2E 수치 검증 (표준/어려운 시나리오, Phase 4 체인 테스트)** |
+| **`test_hf_model_realpath_fallback.py`** | **HFInpaintModel / HFHiddenRegionModel transformers 경로 우선/fallback 검증** |
 | `delivery/test_schema_validation.py` | 딜리버리 번들 스키마 |
 | `delivery/test_converter_mapping.py` | Scene→Bundle 변환 |
 | `delivery/test_scene_to_bundle_artifact.py` | 번들 아티팩트 생성 |
@@ -228,7 +256,12 @@ docs/
 └── Validator/
     ├── instruction_1.md        # Validator 파이프라인 설계 명세 (4단계 연쇄 추출)
     ├── DIR.md                  # 현재 파일 - 디렉토리 구조 문서
-    └── plan_pipeline.md        # Validator 파이프라인 구현 계획
+    ├── plan_pipeline.md        # Validator 파이프라인 구현 계획 (원본)
+    ├── plan_pipeline_R.md      # 구현 계획 수정본 (z_depth_hop BFS, encode_image 수정 등)
+    ├── plan_weights.md         # ScoringWeights 학습 파이프라인 계획 (원본)
+    ├── plan_weights_R.md       # 가중치 계획 수정본 (WeightFitter 3분류 체계)
+    ├── 구현현황.md              # 현재 구현 상태 + 계획 대비 차이 분석
+    └── 수정계획.md              # 설계 피드백 기반 수정 계획 (drr_slope, w_ix, Scene_Difficulty 등)
 ```
 
 ---

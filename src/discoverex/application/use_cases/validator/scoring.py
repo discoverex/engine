@@ -43,7 +43,7 @@ def build_verification_bundle(
             "neighbor_count": physical.cluster_density_map.get(obj_id, 0),
             "hop": logical.hop_map.get(obj_id, 0),
             "diameter": logical.diameter,
-            "detail_retention_rate": visual.detail_retention_rate_map.get(obj_id, 1.0),
+            "drr_slope": visual.drr_slope_map.get(obj_id, 0.0),
         }
         if resolve_answer(metrics):
             answer_obj_metrics.append(metrics)
@@ -65,7 +65,7 @@ def build_verification_bundle(
             **{"pass": passed},
             signals={
                 "sigma_threshold_map": visual.sigma_threshold_map,
-                "detail_retention_rate_map": visual.detail_retention_rate_map,
+                "drr_slope_map": visual.drr_slope_map,
             },
         ),
         logical=VerificationResult(
