@@ -3,16 +3,26 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from discoverex.models.types import ModelHandle, VisualVerification
+from discoverex.adapters.outbound.models.cv_color_edge import compute_visual_similarity
+from discoverex.models.types import (
+    ColorEdgeMetadata,
+    ModelHandle,
+    PhysicalMetadata,
+    VisualVerification,
+)
+
+_SIMILARITY_THRESHOLD = 0.75  # 색상+형상 앙상블 유사도 기준
+_DIST_THRESH = 100.0  # 유사 객체 거리 기본값 (euclidean_distance_map 없을 때)
 
 
 class YoloCLIPAdapter:
     """
-    Phase 3: Visual difficulty verification via YOLO + CLIP (parallel load).
+    Phase 4: Visual difficulty verification via YOLO + CLIP (parallel load).
 
     VRAM strategy: both models loaded simultaneously, combined < 4 GB.
     YOLO tracks per-object sigma_threshold (disappearance blur level).
     CLIP computes DRR slope: decay rate of similarity over log(sigma) levels.
+    Reuses ColorEdgeMetadata from Phase 2 for visual similarity computation.
     """
 
     def __init__(
@@ -50,7 +60,11 @@ class YoloCLIPAdapter:
         self._clip_model.eval()
 
     def verify(
-        self, composite_image: Path, sigma_levels: list[float]
+        self,
+        composite_image: Path,
+        sigma_levels: list[float],
+        color_edge: ColorEdgeMetadata | None = None,
+        physical: PhysicalMetadata | None = None,
     ) -> VisualVerification:
         import numpy as np
         import torch
@@ -67,6 +81,9 @@ class YoloCLIPAdapter:
             return VisualVerification(
                 sigma_threshold_map={},
                 drr_slope_map={},
+                similar_count_map={},
+                similar_distance_map={},
+                object_count_map={},
             )
 
         baseline_xyxy = baseline_boxes.xyxy.cpu().numpy()  # (n, 4) in pixel coords
@@ -128,9 +145,54 @@ class YoloCLIPAdapter:
             slope, _ = np.polyfit(log_sigmas, similarities, 1)
             drr_slope_map[oid] = float(max(0.0, -slope))
 
+        # object_count_map: YOLO baseline detection count per object (= 1 each from baseline)
+        object_count_map: dict[str, int] = {oid: 1 for oid in obj_ids}
+
+        # similar_count_map / similar_distance_map: visual similarity using Phase 2 data
+        similar_count_map: dict[str, int] = {}
+        similar_distance_map: dict[str, float] = {}
+
+        if color_edge is not None and color_edge.obj_color_map:
+            ce_obj_ids = list(color_edge.obj_color_map.keys())
+            for oid in obj_ids:
+                if oid not in color_edge.obj_color_map:
+                    similar_count_map[oid] = 0
+                    similar_distance_map[oid] = _DIST_THRESH
+                    continue
+                sim_count = 0
+                dist_sum = 0.0
+                for other in ce_obj_ids:
+                    if other == oid:
+                        continue
+                    if other not in color_edge.obj_color_map:
+                        continue
+                    sim = compute_visual_similarity(
+                        color_edge.obj_color_map[oid],
+                        color_edge.obj_color_map[other],
+                        color_edge.hu_moments_map.get(oid, [0.0] * 7),
+                        color_edge.hu_moments_map.get(other, [0.0] * 7),
+                    )
+                    if sim >= _SIMILARITY_THRESHOLD:
+                        sim_count += 1
+                        # euclidean distance from physical if available
+                        if physical is not None and oid in physical.euclidean_distance_map:
+                            dists = physical.euclidean_distance_map[oid]
+                            dist_sum += float(dists[0]) if dists else _DIST_THRESH
+                        else:
+                            dist_sum += _DIST_THRESH
+                similar_count_map[oid] = sim_count
+                similar_distance_map[oid] = dist_sum / sim_count if sim_count > 0 else _DIST_THRESH
+        else:
+            for oid in obj_ids:
+                similar_count_map[oid] = 0
+                similar_distance_map[oid] = _DIST_THRESH
+
         return VisualVerification(
             sigma_threshold_map=sigma_threshold_map,
             drr_slope_map=drr_slope_map,
+            similar_count_map=similar_count_map,
+            similar_distance_map=similar_distance_map,
+            object_count_map=object_count_map,
         )
 
     def unload(self) -> None:
