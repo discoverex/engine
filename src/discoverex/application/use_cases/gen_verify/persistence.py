@@ -4,6 +4,7 @@ from pathlib import Path
 from time import perf_counter
 
 from discoverex.application.context import AppContextLike
+from discoverex.execution_snapshot import build_tracking_params
 from discoverex.domain.scene import Scene
 from discoverex.runtime_logging import format_seconds, get_logger
 
@@ -54,10 +55,13 @@ def track_run(
         artifacts.append(composite_artifact)
     if prompt_bundle_artifact is not None:
         artifacts.append(prompt_bundle_artifact)
+    if context.execution_snapshot_path is not None:
+        artifacts.append(context.execution_snapshot_path)
 
     context.tracker.log_pipeline_run(
         run_name="gen_verify",
         params={
+            **build_tracking_params(context.execution_snapshot),
             "scene_id": scene.meta.scene_id,
             "version_id": scene.meta.version_id,
             "pipeline_run_id": scene.meta.pipeline_run_id,

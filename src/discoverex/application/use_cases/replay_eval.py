@@ -6,6 +6,7 @@ from pathlib import Path
 
 from discoverex.application.context import AppContextLike
 from discoverex.application.use_cases.verify_only import run_verify_only
+from discoverex.execution_snapshot import build_tracking_params
 
 
 def run_replay_eval(
@@ -46,8 +47,18 @@ def run_replay_eval(
     avg_after = sum(after_scores) / len(after_scores) if after_scores else 0.0
     context.tracker.log_pipeline_run(
         run_name="replay_eval",
-        params={"input_scene_count": len(scene_json_paths)},
+        params={
+            **build_tracking_params(context.execution_snapshot),
+            "input_scene_count": len(scene_json_paths),
+        },
         metrics={"avg_after_total_score": avg_after},
-        artifacts=[report_path],
+        artifacts=[
+            report_path,
+            *(
+                [context.execution_snapshot_path]
+                if context.execution_snapshot_path is not None
+                else []
+            ),
+        ],
     )
     return report_path

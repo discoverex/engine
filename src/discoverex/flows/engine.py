@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Literal, cast
+from pathlib import Path
 from time import perf_counter
+from typing import Any, Literal, cast
 
 from hydra.utils import instantiate
 from prefect import flow
 
 from discoverex.config import PipelineConfig
 from discoverex.config_loader import load_pipeline_config
+from discoverex.execution_snapshot import (
+    build_execution_snapshot,
+    summarize_for_logging,
+    write_execution_snapshot,
+)
 from discoverex.flows.common import build_error_payload
 from discoverex.runtime_logging import format_seconds, get_logger
 
@@ -45,9 +51,37 @@ def engine_entry_flow(
         config_dir=config_dir,
         overrides=overrides or [],
     )
+    execution_snapshot = build_execution_snapshot(
+        command=command,
+        args=args,
+        config_name=config_name,
+        config_dir=config_dir,
+        overrides=overrides or [],
+        config=cfg,
+    )
+    execution_config_path = write_execution_snapshot(
+        artifacts_root=Path(cfg.runtime.artifacts_root).resolve(),
+        command=command,
+        snapshot=execution_snapshot,
+    )
+    summary = summarize_for_logging(execution_snapshot)
+    logger.info(
+        "engine entry resolved command=%s config_name=%s tracker=%s artifact_store=%s device=%s",
+        summary["command"],
+        summary["config_name"],
+        summary["tracker"],
+        summary["artifact_store"],
+        summary["device"],
+    )
     subflow = _resolve_subflow(cfg, command)
     try:
-        payload = subflow(args=args, config=cfg)
+        payload = subflow(
+            args=args,
+            config=cfg,
+            execution_snapshot=execution_snapshot,
+            execution_snapshot_path=execution_config_path,
+        )
+        payload.setdefault("execution_config", str(execution_config_path))
         logger.info(
             "engine entry completed command=%s in %s",
             command,
@@ -60,7 +94,12 @@ def engine_entry_flow(
             command,
             format_seconds(started),
         )
-        return build_error_payload(command=command, args=args, exc=exc)
+        return build_error_payload(
+            command=command,
+            args=args,
+            exc=exc,
+            execution_config_path=str(execution_config_path),
+        )
 
 
 def run_engine_entry(

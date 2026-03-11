@@ -1,25 +1,8 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
-
-
-class _CloudflareAccessRequestHeaderProvider:
-    def in_context(self) -> bool:
-        return bool(
-            os.getenv("CF_ACCESS_CLIENT_ID", "").strip()
-            and os.getenv("CF_ACCESS_CLIENT_SECRET", "").strip()
-        )
-
-    def request_headers(self) -> dict[str, str]:
-        return {
-            "CF-Access-Client-Id": os.getenv("CF_ACCESS_CLIENT_ID", "").strip(),
-            "CF-Access-Client-Secret": os.getenv(
-                "CF_ACCESS_CLIENT_SECRET", ""
-            ).strip(),
-        }
 
 
 class MLflowTrackerAdapter:
@@ -40,25 +23,8 @@ class MLflowTrackerAdapter:
         self._mlflow = mlflow
         self._tracking_uri = tracking_uri
         self._artifact_bucket = artifact_bucket
-        self._register_request_headers()
         self._mlflow.set_tracking_uri(tracking_uri)
         self._mlflow.set_experiment(experiment_name)
-
-    def _register_request_headers(self) -> None:
-        if not self._uses_remote_tracking():
-            return
-        try:
-            from mlflow.tracking.request_header import registry
-        except Exception:
-            return
-        if any(
-            isinstance(provider, _CloudflareAccessRequestHeaderProvider)
-            for provider in registry._request_header_provider_registry
-        ):
-            return
-        registry._request_header_provider_registry.register(
-            _CloudflareAccessRequestHeaderProvider
-        )
 
     def _uses_remote_tracking(self) -> bool:
         scheme = urlsplit(self._tracking_uri).scheme.lower()
@@ -82,6 +48,9 @@ class MLflowTrackerAdapter:
                 tags["artifact_prompt_bundle_uri"] = f"{key_base}/prompt_bundle.json"
         return tags
 
+    def _always_log_artifact(self, artifact: Path) -> bool:
+        return artifact.name == "resolved_execution_config.json"
+
     def log_pipeline_run(
         self,
         run_name: str,
@@ -96,7 +65,12 @@ class MLflowTrackerAdapter:
                 tags = self._artifact_tags(params, artifacts)
                 for key, value in tags.items():
                     self._mlflow.set_tag(key, value)
-                self._mlflow.set_tag("artifact_logging_mode", "metadata_only")
+                self._mlflow.set_tag(
+                    "artifact_logging_mode", "metadata_plus_execution_config"
+                )
+                for artifact in artifacts:
+                    if artifact.exists() and self._always_log_artifact(artifact):
+                        self._mlflow.log_artifact(str(artifact))
                 return
             for artifact in artifacts:
                 if artifact.exists():

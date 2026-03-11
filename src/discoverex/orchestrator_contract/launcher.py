@@ -7,11 +7,17 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Literal
-
+from urllib.parse import urlparse
 
 BootstrapModeName = Literal["auto", "uv", "pip"]
 
 INPUTS_ENV = "ORCH_JOB_INPUTS_JSON"
+_WORKER_ONLY_ENV_KEYS = {
+    "CF_ACCESS_CLIENT_ID",
+    "CF_ACCESS_CLIENT_SECRET",
+    "MLFLOW_TRACKING_PROXY_URL",
+    "PREFECT_API_PROXY_URL",
+}
 
 
 class LauncherError(RuntimeError):
@@ -34,6 +40,25 @@ def _load_raw_payload_from_env() -> dict[str, object]:
     if not isinstance(payload, dict):
         raise LauncherError(f"{INPUTS_ENV} must be a JSON object")
     return payload
+
+
+def _extract_engine_run_spec(raw_payload: dict[str, object]) -> dict[str, object]:
+    engine_run = raw_payload.get("engine_run")
+    if engine_run is not None:
+        if not isinstance(engine_run, dict):
+            raise LauncherError("engine_run must be a JSON object")
+        return engine_run
+    legacy_inputs = raw_payload.get("inputs")
+    if legacy_inputs is not None:
+        if not isinstance(legacy_inputs, dict):
+            raise LauncherError("inputs must be a JSON object")
+        print(
+            "[discoverex-orch-launcher] deprecated wrapper payload: "
+            "use engine_run instead of inputs",
+            file=sys.stderr,
+        )
+        return legacy_inputs
+    return raw_payload
 
 
 def _runtime_payload(raw_payload: dict[str, object]) -> dict[str, object]:
@@ -89,11 +114,53 @@ def _venv_bin(cwd: Path, name: str) -> str:
 def _prepare_env(cwd: Path, extra_env: dict[str, str]) -> dict[str, str]:
     env = os.environ.copy()
     env.pop("VIRTUAL_ENV", None)
+    for key in _WORKER_ONLY_ENV_KEYS:
+        env.pop(key, None)
     env.update(extra_env)
+    _rewrite_proxy_targets(env)
     env["UV_CACHE_DIR"] = env.get("UV_CACHE_DIR", str(cwd / ".cache" / "uv"))
     env["UV_PROJECT_ENVIRONMENT"] = str(cwd / ".venv")
     Path(env["UV_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
     return env
+
+
+def _rewrite_proxy_targets(env: dict[str, str]) -> None:
+    tracking_uri = env.get("MLFLOW_TRACKING_URI", "").strip()
+    if tracking_uri:
+        env["MLFLOW_TRACKING_URI"] = _resolve_proxy_target(
+            target_name="MLFLOW_TRACKING_URI",
+            upstream_url=tracking_uri,
+            proxy_url=os.getenv("MLFLOW_TRACKING_PROXY_URL", "").strip(),
+        )
+
+
+def _resolve_proxy_target(
+    *,
+    target_name: str,
+    upstream_url: str,
+    proxy_url: str,
+) -> str:
+    if not _is_remote_url(upstream_url) or _is_local_mlflow_url(upstream_url):
+        return upstream_url
+    if not proxy_url:
+        raise LauncherError(
+            f"{target_name} is a remote URL but worker proxy is not configured"
+        )
+    return proxy_url
+
+
+def _is_remote_url(value: str) -> bool:
+    lower = value.lower()
+    return lower.startswith("http://") or lower.startswith("https://")
+
+
+def _is_local_mlflow_url(value: str) -> bool:
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        return False
+    hostname = (parsed.hostname or "").lower()
+    return hostname in {"localhost", "127.0.0.1"}
 
 
 def _validate_contract(raw_payload: dict[str, object]) -> None:
@@ -138,6 +205,10 @@ def _validate_contract(raw_payload: dict[str, object]) -> None:
     overrides = raw_payload.get("overrides", [])
     if not isinstance(overrides, list):
         raise LauncherError("overrides must be a JSON list")
+    for key in ("config_name", "config_dir"):
+        value = raw_payload.get(key)
+        if value is not None and not isinstance(value, str):
+            raise LauncherError(f"{key} must be a string")
 
 
 def _is_legacy_command(raw_payload: dict[str, object]) -> bool:
@@ -182,6 +253,12 @@ def _build_cli_tokens(raw_payload: dict[str, object]) -> list[str]:
         raise LauncherError("overrides must be a JSON list")
 
     tokens = ["discoverex", _mapped_command(raw_payload)]
+    config_name = raw_payload.get("config_name")
+    if isinstance(config_name, str) and config_name.strip():
+        tokens.extend(["--config-name", config_name])
+    config_dir = raw_payload.get("config_dir")
+    if isinstance(config_dir, str) and config_dir.strip():
+        tokens.extend(["--config-dir", config_dir])
     for key, value in args.items():
         _append_arg(tokens, str(key), value)
     for override in overrides:
@@ -234,7 +311,7 @@ def _run_job_with_pip(*, cwd: Path, env: dict[str, str], cli_tokens: list[str]) 
 
 
 def run_orchestrator_job(cwd: Path | None = None) -> int:
-    raw_payload = _load_raw_payload_from_env()
+    raw_payload = _extract_engine_run_spec(_load_raw_payload_from_env())
     _validate_contract(raw_payload)
     run_cwd = cwd or Path.cwd()
     env = _prepare_env(run_cwd, _runtime_extra_env(raw_payload))

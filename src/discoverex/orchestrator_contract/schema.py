@@ -25,17 +25,19 @@ class JobRuntime(BaseModel):
         return self
 
 
-class EngineJobV1(BaseModel):
+class EngineRunSpecV1(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     contract_version: Literal["v1"]
     command: EngineCommandV1
+    config_name: str | None = None
+    config_dir: str | None = None
     args: dict[str, Any] = Field(default_factory=dict)
     overrides: list[str] = Field(default_factory=list)
     runtime: JobRuntime = Field(default_factory=JobRuntime)
 
     @model_validator(mode="after")
-    def validate_required_args(self) -> "EngineJobV1":
+    def validate_required_args(self) -> "EngineRunSpecV1":
         required_by_command: dict[str, tuple[str, ...]] = {
             "gen-verify": (),
             "verify-only": ("scene_json",),
@@ -53,17 +55,19 @@ class EngineJobV1(BaseModel):
         return self
 
 
-class EngineJobV2(BaseModel):
+class EngineRunSpecV2(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     contract_version: Literal["v2"]
     command: EngineCommandV2
+    config_name: str | None = None
+    config_dir: str | None = None
     args: dict[str, Any] = Field(default_factory=dict)
     overrides: list[str] = Field(default_factory=list)
     runtime: JobRuntime = Field(default_factory=JobRuntime)
 
     @model_validator(mode="after")
-    def validate_required_args(self) -> "EngineJobV2":
+    def validate_required_args(self) -> "EngineRunSpecV2":
         required_by_command: dict[str, tuple[str, ...]] = {
             "generate": (),
             "verify": ("scene_json",),
@@ -91,7 +95,27 @@ def _validate_generate_args(args: dict[str, Any]) -> None:
     )
 
 
-EngineJob = EngineJobV1 | EngineJobV2
-OrchestratorInputs = EngineJob
-OrchestratorInputsV1 = EngineJobV1
-OrchestratorInputsV2 = EngineJobV2
+EngineRunSpec = EngineRunSpecV1 | EngineRunSpecV2
+
+
+class JobSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_mode: Literal["repo", "inline"]
+    engine: str
+    repo_url: str | None = None
+    ref: str | None = None
+    entrypoint: list[str]
+    config: str | None = None
+    job_name: str | None = None
+    engine_run: EngineRunSpec
+    env: dict[str, str] = Field(default_factory=dict)
+    outputs_prefix: str | None = None
+
+
+EngineJob = EngineRunSpec
+EngineJobV1 = EngineRunSpecV1
+EngineJobV2 = EngineRunSpecV2
+OrchestratorInputs = EngineRunSpec
+OrchestratorInputsV1 = EngineRunSpecV1
+OrchestratorInputsV2 = EngineRunSpecV2

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from typing import Any
 from urllib import error, request
 
@@ -21,6 +22,34 @@ EXECUTION_PROFILES = (
     "remote-gpu-hf",
     "generator-sdxl-gpu",
 )
+
+
+def _sanitize_name(value: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "-", value.strip())
+    cleaned = cleaned.strip("-").lower()
+    return cleaned or "default"
+
+
+def _default_config_name(command: str) -> str:
+    return {
+        "gen-verify": "gen_verify",
+        "verify-only": "verify_only",
+        "replay-eval": "replay_eval",
+        "generate": "generate",
+        "verify": "verify",
+        "animate": "animate",
+    }[command]
+
+
+def _mapped_command(command: str) -> str:
+    return {
+        "gen-verify": "generate",
+        "verify-only": "verify",
+        "replay-eval": "animate",
+        "generate": "generate",
+        "verify": "verify",
+        "animate": "animate",
+    }[command]
 
 
 def _parse_kv_pairs(values: list[str]) -> dict[str, str]:
@@ -131,7 +160,7 @@ def _build_parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument("--prefect-api-url", default=os.getenv("PREFECT_API_URL", ""))
-    parser.add_argument("--deployment", default="engine-run")
+    parser.add_argument("--deployment", default=os.getenv("PREFECT_DEPLOYMENT", ""))
     parser.add_argument("--engine", default="discoverex")
     parser.add_argument("--run-mode", choices=("repo", "inline"), default="repo")
     parser.add_argument("--repo-url", default=os.getenv("ENGINE_REPO_URL", ""))
@@ -146,6 +175,8 @@ def _build_parser() -> argparse.ArgumentParser:
         default="none",
     )
     parser.add_argument("--command", required=True)
+    parser.add_argument("--config-name", default=None)
+    parser.add_argument("--config-dir", default="conf")
     parser.add_argument("--background-asset-ref", default=None)
     parser.add_argument("--background-prompt", default=None)
     parser.add_argument("--background-negative-prompt", default=None)
@@ -322,9 +353,11 @@ def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
     if args.entrypoint_shell_command:
         entrypoint = ["/bin/sh", "-lc", args.entrypoint_shell_command]
 
-    inputs = {
+    engine_run = {
         "contract_version": args.contract_version,
         "command": args.command,
+        "config_name": _resolved_config_name(args),
+        "config_dir": args.config_dir,
         "args": _build_engine_args(args),
         "overrides": overrides,
         "runtime": {
@@ -341,11 +374,37 @@ def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
         "ref": args.ref if args.run_mode == "repo" else None,
         "entrypoint": entrypoint,
         "config": None,
-        "job_name": args.job_name,
-        "inputs": inputs,
+        "job_name": _resolved_job_name(args),
+        "engine_run": engine_run,
         "env": _build_runner_env(args),
         "outputs_prefix": args.outputs_prefix,
     }
+
+
+def _resolved_config_name(args: argparse.Namespace) -> str:
+    value = str(args.config_name or "").strip()
+    if value:
+        return value
+    return _default_config_name(args.command)
+
+
+def _resolved_deployment_name(args: argparse.Namespace) -> str:
+    explicit = str(args.deployment or "").strip()
+    if explicit:
+        return explicit
+    command = _sanitize_name(_mapped_command(args.command))
+    config_name = _sanitize_name(_resolved_config_name(args))
+    return f"discoverex-{command}--{config_name}"
+
+
+def _resolved_job_name(args: argparse.Namespace) -> str:
+    explicit = str(args.job_name or "").strip()
+    if explicit:
+        return explicit
+    command = _sanitize_name(_mapped_command(args.command))
+    config_name = _sanitize_name(_resolved_config_name(args))
+    profile = _sanitize_name(args.execution_profile)
+    return f"{command}--{config_name}--{profile}"
 
 
 def main() -> int:
@@ -359,16 +418,22 @@ def main() -> int:
     if not args.prefect_api_url:
         raise SystemExit("--prefect-api-url is required unless PREFECT_API_URL is set")
     api_url = _normalize_api_url(args.prefect_api_url)
-    deployment_id = _find_deployment_id(api_url, args.deployment)
+    deployment_name = _resolved_deployment_name(args)
+    deployment_id = _find_deployment_id(api_url, deployment_name)
     params: dict[str, Any] = {
         "job_spec_json": json.dumps(job_spec, ensure_ascii=True),
         "resume_key": args.resume_key,
         "checkpoint_dir": args.checkpoint_dir,
     }
-    created = _create_flow_run(api_url, deployment_id, params, args.job_name)
+    created = _create_flow_run(
+        api_url,
+        deployment_id,
+        params,
+        _resolved_job_name(args),
+    )
     output = {
         "ok": True,
-        "deployment": args.deployment,
+        "deployment": deployment_name,
         "deployment_id": deployment_id,
         "flow_run_id": created.get("id"),
         "flow_run_name": created.get("name"),

@@ -133,7 +133,13 @@ def _finalize_layers(scene: Scene, background: Background, fx_input_ref: str) ->
 
 
 @flow(name="discoverex-generate-pipeline", persist_result=False)
-def run_generate_flow(*, args: dict[str, Any], config: PipelineConfig) -> dict[str, str]:
+def run_generate_flow(
+    *,
+    args: dict[str, Any],
+    config: PipelineConfig,
+    execution_snapshot: dict[str, Any] | None = None,
+    execution_snapshot_path: Path | None = None,
+) -> dict[str, str]:
     started = perf_counter()
     background_asset_ref = str(args.get("background_asset_ref", "") or "")
     background_prompt = str(args.get("background_prompt", "") or "")
@@ -150,7 +156,11 @@ def run_generate_flow(*, args: dict[str, Any], config: PipelineConfig) -> dict[s
         bool(object_prompt),
         bool(final_prompt),
     )
-    context = _build_context(config)
+    context = build_context(
+        config=config,
+        execution_snapshot=execution_snapshot,
+        execution_snapshot_path=execution_snapshot_path,
+    )
     run_ids = _generate_run_ids()
 
     background_handle = context.background_generator_model.load(
@@ -250,4 +260,8 @@ def run_generate_flow(*, args: dict[str, Any], config: PipelineConfig) -> dict[s
         scene.meta.version_id,
         format_seconds(started),
     )
-    return build_scene_payload(scene, config.runtime.artifacts_root)
+    return build_scene_payload(
+        scene,
+        config.runtime.artifacts_root,
+        str(execution_snapshot_path) if execution_snapshot_path is not None else None,
+    )
