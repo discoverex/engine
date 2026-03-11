@@ -12,10 +12,37 @@ def _job_payload(runtime: dict[str, object] | None = None) -> str:
     payload: dict[str, object] = {
         "contract_version": "v2",
         "command": "generate",
+        "config_name": "generate_gpu",
+        "config_dir": "/workspace/conf",
         "args": {"background_asset_ref": "bg://dummy"},
     }
     if runtime is not None:
         payload["runtime"] = runtime
+    return json.dumps(payload, ensure_ascii=True)
+
+
+def _wrapper_payload(runtime: dict[str, object] | None = None) -> str:
+    engine_run: dict[str, object] = {
+        "contract_version": "v2",
+        "command": "generate",
+        "config_name": "generate_gpu",
+        "config_dir": "/workspace/conf",
+        "args": {"background_asset_ref": "bg://dummy"},
+    }
+    if runtime is not None:
+        engine_run["runtime"] = runtime
+    payload = {
+        "run_mode": "inline",
+        "engine": "discoverex",
+        "entrypoint": [
+            "/bin/sh",
+            "-lc",
+            "PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher",
+        ],
+        "engine_run": engine_run,
+        "env": {},
+        "outputs_prefix": None,
+    }
     return json.dumps(payload, ensure_ascii=True)
 
 
@@ -43,7 +70,13 @@ def test_run_orchestrator_job_uses_uv_path_when_available(
     assert calls[0] == ["uv", "venv", ".venv"]
     assert calls[1] == ["uv", "sync", "--extra", "tracking", "--extra", "storage"]
     assert calls[2][0:3] == ["uv", "run", "discoverex"]
-    assert "generate" in calls[2]
+    assert calls[2][3:7] == [
+        "generate",
+        "--config-name",
+        "generate_gpu",
+        "--config-dir",
+    ]
+    assert calls[2][7] == "/workspace/conf"
 
 
 def test_run_orchestrator_job_falls_back_to_pip_when_uv_missing(
@@ -162,12 +195,15 @@ def test_run_orchestrator_job_passes_runtime_extra_env_to_discoverex(
         _job_payload(
             runtime={
                 "extra_env": {
-                    "MLFLOW_TRACKING_URI": "http://mlflow.local:5000",
+                    "MLFLOW_TRACKING_URI": "https://mlflow.example.com",
                     "ARTIFACT_BUCKET": "orchestrator-artifacts",
                 }
             }
         ),
     )
+    monkeypatch.setenv("MLFLOW_TRACKING_PROXY_URL", "http://127.0.0.1:15000")
+    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "worker-only-id")
+    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "worker-only-secret")
     monkeypatch.setattr(
         "discoverex.orchestrator_contract.launcher.shutil.which",
         lambda _name: "/usr/bin/uv",
@@ -184,8 +220,85 @@ def test_run_orchestrator_job_passes_runtime_extra_env_to_discoverex(
     code = launcher.run_orchestrator_job(cwd=tmp_path)
     assert code == 0
     _, discoverex_env = calls[2]
-    assert discoverex_env["MLFLOW_TRACKING_URI"] == "http://mlflow.local:5000"
+    assert discoverex_env["MLFLOW_TRACKING_URI"] == "http://127.0.0.1:15000"
     assert discoverex_env["ARTIFACT_BUCKET"] == "orchestrator-artifacts"
+    assert "CF_ACCESS_CLIENT_ID" not in discoverex_env
+    assert "CF_ACCESS_CLIENT_SECRET" not in discoverex_env
+    assert "MLFLOW_TRACKING_PROXY_URL" not in discoverex_env
+
+
+def test_run_orchestrator_job_accepts_wrapper_payload_shape(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setenv("ORCH_JOB_INPUTS_JSON", _wrapper_payload())
+    monkeypatch.setattr(
+        "discoverex.orchestrator_contract.launcher.shutil.which",
+        lambda _name: "/usr/bin/uv",
+    )
+
+    def fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> int:
+        calls.append(cmd)
+        if cmd[0:2] == ["uv", "venv"]:
+            (cwd / ".venv").mkdir(parents=True, exist_ok=True)
+        return 0
+
+    monkeypatch.setattr(launcher, "_run", fake_run)
+
+    code = launcher.run_orchestrator_job(cwd=tmp_path)
+    assert code == 0
+    assert calls[2][0:4] == ["uv", "run", "discoverex", "generate"]
+
+
+def test_run_orchestrator_job_fails_when_remote_tracking_uri_has_no_proxy(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv(
+        "ORCH_JOB_INPUTS_JSON",
+        _job_payload(
+            runtime={"extra_env": {"MLFLOW_TRACKING_URI": "https://mlflow.example.com"}}
+        ),
+    )
+    monkeypatch.delenv("MLFLOW_TRACKING_PROXY_URL", raising=False)
+    monkeypatch.setattr(
+        "discoverex.orchestrator_contract.launcher.shutil.which",
+        lambda _name: "/usr/bin/uv",
+    )
+
+    with pytest.raises(
+        launcher.LauncherError, match="MLFLOW_TRACKING_URI is a remote URL"
+    ):
+        launcher.run_orchestrator_job(cwd=tmp_path)
+
+
+def test_run_orchestrator_job_allows_localhost_tracking_uri_without_proxy(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[tuple[list[str], dict[str, str]]] = []
+    monkeypatch.setenv(
+        "ORCH_JOB_INPUTS_JSON",
+        _job_payload(
+            runtime={"extra_env": {"MLFLOW_TRACKING_URI": "http://127.0.0.1:5000"}}
+        ),
+    )
+    monkeypatch.delenv("MLFLOW_TRACKING_PROXY_URL", raising=False)
+    monkeypatch.setattr(
+        "discoverex.orchestrator_contract.launcher.shutil.which",
+        lambda _name: "/usr/bin/uv",
+    )
+
+    def fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> int:
+        calls.append((cmd, env.copy()))
+        if cmd[0:2] == ["uv", "venv"]:
+            (cwd / ".venv").mkdir(parents=True, exist_ok=True)
+        return 0
+
+    monkeypatch.setattr(launcher, "_run", fake_run)
+
+    code = launcher.run_orchestrator_job(cwd=tmp_path)
+    assert code == 0
+    _, discoverex_env = calls[2]
+    assert discoverex_env["MLFLOW_TRACKING_URI"] == "http://127.0.0.1:5000"
 
 
 def test_run_orchestrator_job_accepts_background_prompt_only(
