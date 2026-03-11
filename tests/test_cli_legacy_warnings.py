@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from typer.testing import CliRunner
 
 from discoverex.adapters.inbound.cli.main import app
@@ -110,4 +112,5 @@ def test_generate_accepts_final_prompt(monkeypatch) -> None:  # type: ignore[no-
         ],
     )
     assert result.exit_code == 0
-    assert captured["args"]["final_prompt"] == "polished render"
+    captured_args = cast(dict[str, object], captured["args"])
+    assert captured_args["final_prompt"] == "polished render"

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 
 def load_inpaint_pipe(*, current_pipe: Any | None, model_id: str, revision: str, handle: Any) -> Any:
@@ -15,7 +15,7 @@ def load_inpaint_pipe(*, current_pipe: Any | None, model_id: str, revision: str,
             "Install compatible ml-gpu or ml-cpu dependencies."
         ) from exc
     torch_dtype = torch.float32 if "32" in handle.dtype else torch.float16
-    pipe = AutoPipelineForInpainting.from_pretrained(
+    pipe = AutoPipelineForInpainting.from_pretrained(  # type: ignore[no-untyped-call]
         model_id,
         revision=revision,
         torch_dtype=torch_dtype,
@@ -85,7 +85,7 @@ def has_meaningful_mask(mask: Any) -> bool:
     histogram = mask.histogram()
     nonzero = sum(histogram[1:])
     weighted_alpha = sum(level * count for level, count in enumerate(histogram))
-    return nonzero >= 9 and weighted_alpha >= 255 * 6
+    return cast(bool, nonzero >= 9 and weighted_alpha >= 255 * 6)
 
 
 def _scale_mask_alpha(value: int) -> int:

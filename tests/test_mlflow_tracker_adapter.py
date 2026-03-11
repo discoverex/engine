@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 from discoverex.adapters.outbound.tracking.mlflow import MLflowTrackerAdapter
 
 
@@ -47,7 +49,7 @@ class _FakeMLflow:
 
 
 def test_mlflow_tracker_logs_artifacts_for_local_tracking(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     fake = _FakeMLflow()
     monkeypatch.setitem(sys.modules, "mlflow", fake)
@@ -67,7 +69,7 @@ def test_mlflow_tracker_logs_artifacts_for_local_tracking(
 
 
 def test_mlflow_tracker_uses_tags_for_remote_tracking(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     fake = _FakeMLflow()
     monkeypatch.setitem(sys.modules, "mlflow", fake)

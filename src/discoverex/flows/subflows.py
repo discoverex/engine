@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from discoverex.application.use_cases import run_replay_eval
@@ -15,7 +16,7 @@ def generate_v1_compat(
     args: dict[str, Any],
     config: PipelineConfig,
     execution_snapshot: dict[str, Any] | None = None,
-    execution_snapshot_path=None,
+    execution_snapshot_path: Path | None = None,
 ) -> dict[str, str]:
     return run_generate_flow(
         args=args,
@@ -30,7 +31,7 @@ def verify_v1_compat(
     args: dict[str, Any],
     config: PipelineConfig,
     execution_snapshot: dict[str, Any] | None = None,
-    execution_snapshot_path=None,
+    execution_snapshot_path: Path | None = None,
 ) -> dict[str, str]:
     return run_verify_flow(
         args=args,
@@ -45,7 +46,7 @@ def animate_replay_eval(
     args: dict[str, Any],
     config: PipelineConfig,
     execution_snapshot: dict[str, Any] | None = None,
-    execution_snapshot_path=None,
+    execution_snapshot_path: Path | None = None,
 ) -> dict[str, str]:
     scene_jsons = [str(item) for item in args.get("scene_jsons", [])]
     context = build_context(
@@ -65,7 +66,7 @@ def animate_stub(
     args: dict[str, Any],
     config: PipelineConfig,
     execution_snapshot: dict[str, Any] | None = None,
-    execution_snapshot_path=None,
+    execution_snapshot_path: Path | None = None,
 ) -> dict[str, Any]:
     _ = args
     _ = config

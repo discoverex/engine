@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 from urllib.parse import urlparse
 
 BootstrapModeName = Literal["auto", "uv", "pip"]
@@ -96,7 +96,7 @@ def _runtime_bootstrap_mode(raw_payload: dict[str, object]) -> BootstrapModeName
     mode = str(runtime.get("bootstrap_mode", "auto")).strip() or "auto"
     if mode not in {"auto", "uv", "pip"}:
         raise LauncherError(f"unsupported bootstrap_mode={mode}")
-    return mode
+    return cast(BootstrapModeName, mode)
 
 
 def _pick_mode(mode: BootstrapModeName) -> BootstrapModeName:

@@ -45,8 +45,13 @@ class TinyHFFxModel:
 
         if self.seed is not None:
             torch.manual_seed(self.seed)
-        cfg = GPT2Config(n_embd=32, n_layer=1, n_head=2, vocab_size=100)
-        model = GPT2Model(cfg).eval()
+        cfg = GPT2Config(  # type: ignore[no-untyped-call]
+            n_embd=32,
+            n_layer=1,
+            n_head=2,
+            vocab_size=100,
+        )
+        model = GPT2Model(cfg).eval()  # type: ignore[no-untyped-call]
         _ = (
             model(input_ids=torch.ones((1, 8), dtype=torch.long))
             .last_hidden_state.mean()

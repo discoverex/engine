@@ -4,7 +4,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 from discoverex.config import PipelineConfig
@@ -51,7 +51,7 @@ def build_execution_snapshot(
         "resolved_config": config.model_dump(mode="python"),
         "runtime_env": env_values,
     }
-    return _redact(snapshot)
+    return cast(dict[str, Any], _redact(snapshot))
 
 
 def write_execution_snapshot(

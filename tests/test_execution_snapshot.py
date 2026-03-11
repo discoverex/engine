@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from discoverex.config_loader import load_pipeline_config
 from discoverex.execution_snapshot import (
     build_execution_snapshot,
@@ -11,7 +13,9 @@ from discoverex.execution_snapshot import (
 )
 
 
-def test_execution_snapshot_redacts_sensitive_values(monkeypatch) -> None:
+def test_execution_snapshot_redacts_sensitive_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://mlflow.example.com")
     cfg = load_pipeline_config(config_name="generate", config_dir="conf")
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 from discoverex.application.use_cases import run_gen_verify
 from discoverex.config import ModelVersionsConfig, RuntimeConfig, ThresholdsConfig
@@ -99,6 +100,14 @@ class _Tracker:
         )
 
 
+def _tracker_call_value(
+    tracker: _Tracker,
+    *,
+    index: int = 0,
+) -> dict[str, object]:
+    return tracker.calls[index]
+
+
 class _SceneIO:
     pass
 
@@ -154,10 +163,16 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     assert prompt_bundle["object"]["prompt"] == "hidden brass key"
     assert prompt_bundle["final_fx"]["prompt"] == "polished playable scene"
     assert prompt_bundle["regions"][0]["generation_prompt"] == "hidden brass key"
-    assert tracker.calls[0]["params"]["background_prompt_used"] == "sunlit courtyard"
-    assert tracker.calls[0]["params"]["object_prompt_used"] == "hidden brass key"
-    assert tracker.calls[0]["params"]["final_prompt_used"] == "polished playable scene"
-    artifact_names = {path.name for path in tracker.calls[0]["artifacts"]}
+    tracker_call = _tracker_call_value(tracker)
+    tracker_params = cast(dict[str, object], tracker_call["params"])
+    tracker_artifacts = cast(list[Path], tracker_call["artifacts"])
+
+    assert tracker_params["background_prompt_used"] == "sunlit courtyard"
+    assert tracker_params["object_prompt_used"] == "hidden brass key"
+    assert tracker_params["final_prompt_used"] == "polished playable scene"
+    artifact_names = {path.name for path in tracker_artifacts}
     assert "prompt_bundle.json" in artifact_names
-    assert fx_model.requests[0].mode == "background"
-    assert inpaint_model.requests[0].generation_prompt == "hidden brass key"
+    fx_request = cast(SimpleNamespace, fx_model.requests[0])
+    inpaint_request = cast(SimpleNamespace, inpaint_model.requests[0])
+    assert fx_request.mode == "background"
+    assert inpaint_request.generation_prompt == "hidden brass key"
