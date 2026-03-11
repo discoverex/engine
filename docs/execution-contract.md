@@ -1,127 +1,103 @@
-# 외부 스케줄러/워커 실행 계약
+# Execution Contract (Prefect)
 
-이 저장소는 실행 엔진 패키지입니다. 스케줄러/큐/워커 오케스트레이션은 외부 저장소에서 담당합니다.
+This document defines the wrapper-facing `JobSpec` used by Prefect and workers.
+The engine itself executes the nested `engine_run` payload, which is the
+engine-facing runtime contract.
 
-## 계약 범위
-- 스케줄러는 오케스트레이터 JobSpec의 `inputs`로 실행 payload를 전달합니다.
-- 워커는 작업 1건당 CLI 프로세스 1개를 실행합니다.
-- 워커는 내부 설정 스키마를 알 필요가 없습니다.
-- 워커는 엔진 런처(`discoverex-orch-launcher`)를 통해 payload를 검증한 뒤 실행합니다.
+## Flow Input
 
-## 안정 인터페이스
-- 엔트리포인트: `discoverex`
-- v2 명령: `generate`, `verify`, `animate`
-- v1 shim 명령: `gen-verify`, `verify-only`, `replay-eval`
+- `job_spec_json: str`
+- `resume_key: str | None` (optional)
+- `checkpoint_dir: str | None` (optional)
 
-## 워커 초기화 요구사항
-```bash
-mkdir -p .cache/uv
-UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking --extra storage
-```
+`job_spec_json` schema:
 
-`uv`가 없으면 런처가 `python -m venv` + `pip install -e .[tracking,storage]`로 자동 폴백합니다.
+- `engine: str`
+- `repo_url: str`
+- `ref: str` (branch/tag/sha)
+- `entrypoint: list[str]`
+- `config: str | None` (repo-relative path only)
+- `job_name: str | None`
+- `engine_run: dict[str, Any]`
+- `env: dict[str, str]`
+- `outputs_prefix: str | None`
 
-## 오케스트레이터 JobSpec 매핑
-오케스트레이터가 전달하는 `job_spec_json`에서 엔진 실행에 사용하는 필드는 `inputs`입니다.
+`engine_run` schema:
 
-- `job_spec.engine`: 오케스트레이터 라우팅용 식별자(엔진 내부 실행 파라미터로는 사용하지 않음)
-- `job_spec.entrypoint`: 워커가 실행할 런처 엔트리포인트
-- `job_spec.inputs`: 엔진 실행 payload SSOT (`OrchestratorInputs`: v1/v2)
+- `contract_version: "v1" | "v2"`
+- `command: str`
+- `config_name: str | None`
+- `config_dir: str | None`
+- `args: dict[str, Any]`
+- `overrides: list[str]`
+- `runtime: { mode, bootstrap_mode, extras, extra_env }`
 
-권장 `entrypoint`:
+## Version Pinning Policy
 
-```json
-["/bin/sh", "-lc", "python -m discoverex.orchestrator_contract.launcher"]
-```
+- Flow starts with `resolve_commit(ref)`.
+- If `ref` is branch/tag, it is resolved once to `resolved_commit`.
+- All retries use the same `resolved_commit`.
 
-실제 잡 등록 스크립트(엔진 레포):
+## Artifact Layout
 
-```bash
-python scripts/register_orchestrator_job.py \
-  --prefect-api-url https://prefect-api.example.com/api \
-  --deployment engine-run \
-  --command generate \
-  --repo-url https://github.com/<org>/discoverex-engine.git \
-  --ref main \
-  --background-asset-ref bg://dummy \
-  -o adapters/artifact_store=minio \
-  -o adapters/tracker=mlflow_server \
-  --runtime-env MLFLOW_TRACKING_URI=https://mlflow.example.com
-```
+- `jobs/{flow_run_id}/attempt-{attempt}/stdout.log`
+- `jobs/{flow_run_id}/attempt-{attempt}/stderr.log`
+- `jobs/{flow_run_id}/attempt-{attempt}/result.json`
+- `jobs/{flow_run_id}/attempt-{attempt}/artifacts.json`
 
-## inputs(OrchestratorInputsV2) 페이로드 예시
-```json
-{
-  "contract_version": "v2",
-  "command": "generate",
-  "args": {
-    "background_asset_ref": "bg://dummy"
-  },
-  "overrides": [
-    "runtime/model_runtime=gpu",
-    "models/perception=hf",
-    "runtime.model_runtime.device=cuda:0"
-  ],
-  "runtime": {
-    "mode": "worker",
-    "bootstrap_mode": "auto",
-    "extras": ["tracking", "storage"],
-    "extra_env": {
-      "MLFLOW_TRACKING_URI": "https://mlflow.example.com"
-    }
-  }
-}
-```
+## Storage Gateway APIs
 
-## 워커 실행 규칙
-- 워커는 무상태(stateless) 실행만 담당합니다.
-- 작업 1건은 프로세스 1회 실행에 매핑합니다.
-- override는 전달 순서를 유지해 `-o` 인자로 전달합니다.
-- `ORCH_JOB_INPUTS_JSON`은 Pydantic(`OrchestratorInputs`)으로 강검증합니다.
-- 엔진 실행 후 delivery 후처리 단계를 별도로 호출합니다.
-- 워커에서는 로컬 저장소 사용을 피하고 adapter override를 명시적으로 강제합니다.
+- `POST /v1/presign/put`
+- `POST /v1/presign/get`
+- `POST /v1/presign/batch`
+- `POST /v1/object/head`
+- `PUT /v1/object/proxy?token=...`
+- `GET /v1/object/proxy?token=...`
 
-예시:
-```bash
-UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex generate \
-  --background-asset-ref bg://dummy \
-  -o runtime/model_runtime=gpu \
-  -o models/perception=hf \
-  -o runtime.model_runtime.device=cuda:0
-```
+All endpoints require bearer auth:
 
-권장 워커 override 최소 세트:
-- `adapters/artifact_store=minio`
-- `adapters/tracker=mlflow_server`
-- 필요 시 `adapters/metadata_store=postgres`
+- `CF-Access-Client-Id: <CF_ACCESS_CLIENT_ID>`
+- `CF-Access-Client-Secret: <CF_ACCESS_CLIENT_SECRET>`
 
-세부 운영 방식은 `docs/runtime-mode-guide.md`를 기준으로 합니다.
+Optional additional gateway protection:
 
-## 워커 출력 계약
-- `exit_code`: 프로세스 종료 코드
-- `stdout` / `stderr`: 원본 출력
-- `artifacts`: 명령 출력으로부터 파싱한 산출물 경로
+- Cloudflare Access service-token headers:
+  - `CF-Access-Client-Id`
+  - `CF-Access-Client-Secret`
 
-CLI 출력 키:
-- `generate`, `verify`: `scene_json` 포함 JSON
-- `animate`: 현재 stub 상태에서는 실패 payload(JSON), replay 모드 구성 시 `report` JSON
+## Flow Result Metadata
 
-## delivery 후처리 계약 (숨은그림찾기)
-엔진 산출 `scene.json`을 delivery 변환기로 변환해 번들을 만듭니다.
+- `flow_run_id`
+- `attempt`
+- `resolved_commit`
+- `outputs_prefix`
+- `stdout_uri`
+- `stderr_uri`
+- `result_uri`
+- `manifest_uri`
+- `exit_code`
 
-```bash
-python -m delivery.spot_the_hidden.cli --scene-json <scene_json_path>
-```
+`Prefect flow result` is the source of truth for run metadata.
 
-출력 파일:
-- `<scene_dir>/delivery/spot_hidden_bundle.json`
+Implementation-facing runtime contract:
 
-번들 정책:
-- 단일 JSON 안에 `playable` + `answer_key`를 함께 포함
-- 프런트 응답에서는 `answer_key`를 제거한 payload만 노출
-- 이미지 데이터는 인라인이 아니라 `playable.image_ref` 참조로 전달
+- [Engine Run Contract](/home/esillileu/discoverex/engine/docs/engine-run-contract.md)
+- [Engine Implementation Contract](/home/esillileu/discoverex/orchestrator/docs/dev/engine-implementation-contract.md)
 
-## 호환성 정책
-- 명령 이름은 안정적으로 유지합니다.
-- 기존 override 키는 하위 호환을 유지합니다.
-- 파괴적 설정 키 변경 시 `contract_version`을 올립니다.
+## E2E Acceptance (Register -> Worker -> Storage)
+
+The deterministic script `scripts/e2e/e2e_local_orchestrator.sh` verifies the orchestration chain in two modes:
+
+- `core`: deployment register, worker execution, object persistence in MinIO
+- `mlflow`: `core` + MLflow run tag linkage (`artifact_*_uri`)
+
+Core pass criteria:
+
+1. `engine-run/engine-run` deployment exists after register.
+2. Submitted flow run reaches `COMPLETED`.
+3. All required objects exist:
+   - `stdout.log`
+   - `stderr.log`
+   - `result.json`
+   - `artifacts.json`
+4. `artifacts.json` metadata matches expected `flow_run_id`, `attempt`, and object URIs.
