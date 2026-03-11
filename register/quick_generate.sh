@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ORCH_ENV="${ROOT_DIR}/../orchestrator/.env"
+ENGINE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ORCH_ENV="${ENGINE_ROOT}/../orchestrator/.env"
 ENGINE_REF="${ENGINE_REF:-dev}"
 
 if [[ ! -f "${ORCH_ENV}" ]]; then
@@ -16,9 +16,9 @@ export PREFECT_CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID:-}"
 export PREFECT_CF_ACCESS_CLIENT_SECRET="${CF_ACCESS_CLIENT_SECRET:-}"
 set +a
 
-cd "${ROOT_DIR}"
+cd "${ENGINE_ROOT}"
 
-python3 scripts/register_prefect_job.py \
+python3 register/register_prefect_job.py \
   --job-name quick-generate-1-https \
   --command generate \
   --execution-profile generator-sdxl-gpu \
@@ -40,7 +40,7 @@ python3 scripts/register_prefect_job.py \
   -o runtime.width=512 \
   -o runtime.height=384
 
-python3 scripts/register_prefect_job.py \
+python3 register/register_prefect_job.py \
   --job-name quick-generate-2-https \
   --command generate \
   --execution-profile generator-sdxl-gpu \

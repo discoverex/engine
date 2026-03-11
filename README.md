@@ -115,7 +115,7 @@ python -m discoverex.orchestrator_contract.launcher
 실제 잡 등록은 아래 스크립트를 사용합니다.
 
 ```bash
-python scripts/register_orchestrator_job.py --dry-run --command generate \
+python register/register_orchestrator_job.py --dry-run --command generate \
   --repo-url https://github.com/<org>/discoverex-engine.git \
   --ref main \
   --background-asset-ref bg://dummy

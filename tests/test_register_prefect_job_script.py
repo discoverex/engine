@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "register_prefect_job.py"
+SCRIPT = Path(__file__).resolve().parents[1] / "register" / "register_prefect_job.py"
 
 
 def test_prefect_wrapper_dry_run_defaults_to_remote_worker_profile() -> None:

@@ -84,7 +84,7 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex generate \
 ```
 
 ```bash
-python scripts/register_prefect_job.py \
+python register/register_prefect_job.py \
   --command generate \
   --config-name generate \
   --repo-url https://github.com/<org>/discoverex-engine.git \

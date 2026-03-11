@@ -6,9 +6,9 @@ import sys
 from pathlib import Path
 
 SCRIPT = (
-    Path(__file__).resolve().parents[1] / "scripts" / "register_orchestrator_job.py"
+    Path(__file__).resolve().parents[1] / "register" / "register_orchestrator_job.py"
 )
-BUILD_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "build_job_spec.py"
+BUILD_SCRIPT = Path(__file__).resolve().parents[1] / "register" / "build_job_spec.py"
 
 
 def test_register_script_dry_run_builds_repo_job_spec() -> None:
@@ -49,11 +49,16 @@ def test_register_script_dry_run_builds_repo_job_spec() -> None:
     assert payload["job_name"] == "generate--generate--none"
 
 
-def test_build_job_spec_script_outputs_job_spec_only() -> None:
+def test_build_job_spec_script_writes_job_spec_file_under_register_dir(
+    tmp_path: Path,
+) -> None:
+    output_path = tmp_path / "job_specs" / "generate--generate--none.json"
     proc = subprocess.run(
         [
             sys.executable,
             str(BUILD_SCRIPT),
+            "--output-file",
+            str(output_path),
             "--command",
             "generate",
             "--repo-url",
@@ -68,7 +73,8 @@ def test_build_job_spec_script_outputs_job_spec_only() -> None:
         check=False,
     )
     assert proc.returncode == 0, proc.stderr
-    payload = json.loads(proc.stdout)
+    assert Path(proc.stdout.strip()) == output_path
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["engine_run"]["command"] == "generate"
     assert payload["job_name"] == "generate--generate--none"
 

@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import re
+from pathlib import Path
 from typing import Any
 from urllib import error, request
 
@@ -22,6 +23,8 @@ EXECUTION_PROFILES = (
     "remote-gpu-hf",
     "generator-sdxl-gpu",
 )
+SCRIPT_DIR = Path(__file__).resolve().parent
+DEFAULT_JOB_SPEC_DIR = SCRIPT_DIR / "job_specs"
 
 
 def _sanitize_name(value: str) -> str:
@@ -465,6 +468,21 @@ def submit_job_spec(
         "engine": job_spec["engine"],
         "run_mode": job_spec["run_mode"],
     }
+
+
+def write_job_spec(
+    job_spec: dict[str, Any],
+    output_file: str | Path | None = None,
+) -> Path:
+    target = Path(output_file) if output_file else DEFAULT_JOB_SPEC_DIR / (
+        f"{str(job_spec.get('job_name', '')).strip() or 'job'}.json"
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(job_spec, ensure_ascii=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return target
 
 
 def main() -> int:

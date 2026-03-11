@@ -110,8 +110,8 @@
 
 실행/계약 관련 핵심 파일:
 
-* `scripts/register_prefect_job.py`
-* `scripts/register_orchestrator_job.py`
+* `register/register_prefect_job.py`
+* `register/register_orchestrator_job.py`
 * `src/discoverex/orchestrator_contract/launcher.py`
 * `src/discoverex/flows/engine.py`
 * `src/discoverex/flows/generate.py`
