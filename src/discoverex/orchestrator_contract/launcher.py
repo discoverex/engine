@@ -13,8 +13,8 @@ BootstrapModeName = Literal["auto", "uv", "pip"]
 
 INPUTS_ENV = "ORCH_JOB_INPUTS_JSON"
 _WORKER_ONLY_ENV_KEYS = {
-    "CF_ACCESS_CLIENT_ID",
-    "CF_ACCESS_CLIENT_SECRET",
+    "cf_access_client_id",
+    "cf_access_client_secret",
     "MLFLOW_TRACKING_PROXY_URL",
     "PREFECT_API_PROXY_URL",
 }
@@ -53,8 +53,7 @@ def _extract_engine_run_spec(raw_payload: dict[str, object]) -> dict[str, object
         if not isinstance(legacy_inputs, dict):
             raise LauncherError("inputs must be a JSON object")
         print(
-            "[discoverex-orch-launcher] deprecated wrapper payload: "
-            "use engine_run instead of inputs",
+            "[discoverex-execution-launcher] deprecated wrapper payload: use engine_run instead of inputs",
             file=sys.stderr,
         )
         return legacy_inputs
@@ -134,12 +133,7 @@ def _rewrite_proxy_targets(env: dict[str, str]) -> None:
         )
 
 
-def _resolve_proxy_target(
-    *,
-    target_name: str,
-    upstream_url: str,
-    proxy_url: str,
-) -> str:
+def _resolve_proxy_target(*, target_name: str, upstream_url: str, proxy_url: str) -> str:
     if not _is_remote_url(upstream_url) or _is_local_mlflow_url(upstream_url):
         return upstream_url
     if not proxy_url:
@@ -169,50 +163,9 @@ def _validate_contract(raw_payload: dict[str, object]) -> None:
         raise LauncherError(
             f"unsupported contract_version={contract_version or '<empty>'}"
         )
-
     command = str(raw_payload.get("command", "")).strip()
-    required_by_command: dict[str, dict[str, tuple[str, ...]]] = {
-        "v1": {
-            "gen-verify": (),
-            "verify-only": ("scene_json",),
-            "replay-eval": ("scene_jsons",),
-        },
-        "v2": {
-            "generate": (),
-            "verify": ("scene_json",),
-            "animate": (),
-        },
-    }
-    if command not in required_by_command[contract_version]:
+    if command not in {"gen-verify", "verify-only", "replay-eval", "generate", "verify", "animate"}:
         raise LauncherError(f"unsupported command={command or '<empty>'}")
-
-    args = raw_payload.get("args", {})
-    if not isinstance(args, dict):
-        raise LauncherError("args must be a JSON object")
-    missing = [
-        key for key in required_by_command[contract_version][command] if key not in args
-    ]
-    if missing:
-        missing_str = ", ".join(missing)
-        raise LauncherError(
-            f"missing required args for command={command}: {missing_str}"
-        )
-    if command in {"gen-verify", "generate"}:
-        background_asset_ref = str(args.get("background_asset_ref", "")).strip()
-        background_prompt = str(args.get("background_prompt", "")).strip()
-        if not background_asset_ref and not background_prompt:
-            raise LauncherError(
-                f"missing required args for command={command}: "
-                "background_asset_ref or background_prompt"
-            )
-
-    overrides = raw_payload.get("overrides", [])
-    if not isinstance(overrides, list):
-        raise LauncherError("overrides must be a JSON list")
-    for key in ("config_name", "config_dir"):
-        value = raw_payload.get(key)
-        if value is not None and not isinstance(value, str):
-            raise LauncherError(f"{key} must be a string")
 
 
 def _is_legacy_command(raw_payload: dict[str, object]) -> bool:
@@ -255,7 +208,6 @@ def _build_cli_tokens(raw_payload: dict[str, object]) -> list[str]:
     overrides = raw_payload.get("overrides", [])
     if not isinstance(overrides, list):
         raise LauncherError("overrides must be a JSON list")
-
     tokens = ["discoverex", _mapped_command(raw_payload)]
     config_name = raw_payload.get("config_name")
     if isinstance(config_name, str) and config_name.strip():
@@ -270,17 +222,11 @@ def _build_cli_tokens(raw_payload: dict[str, object]) -> list[str]:
     return tokens
 
 
-def _bootstrap_with_uv(
-    *,
-    cwd: Path,
-    env: dict[str, str],
-    extras: list[str],
-) -> None:
+def _bootstrap_with_uv(*, cwd: Path, env: dict[str, str], extras: list[str]) -> None:
     if not shutil.which("uv"):
         raise LauncherError("bootstrap_mode=uv requested but uv is not installed")
-    if not (cwd / ".venv").exists():
-        if _run(["uv", "venv", ".venv"], cwd=cwd, env=env) != 0:
-            raise LauncherError("uv venv failed")
+    if not (cwd / ".venv").exists() and _run(["uv", "venv", ".venv"], cwd=cwd, env=env) != 0:
+        raise LauncherError("uv venv failed")
     cmd = ["uv", "sync"]
     for extra in extras:
         cmd.extend(["--extra", extra])
@@ -288,15 +234,9 @@ def _bootstrap_with_uv(
         raise LauncherError("uv sync failed")
 
 
-def _bootstrap_with_pip(
-    *,
-    cwd: Path,
-    env: dict[str, str],
-    extras: list[str],
-) -> None:
-    if not (cwd / ".venv").exists():
-        if _run([sys.executable, "-m", "venv", ".venv"], cwd=cwd, env=env) != 0:
-            raise LauncherError("python -m venv failed")
+def _bootstrap_with_pip(*, cwd: Path, env: dict[str, str], extras: list[str]) -> None:
+    if not (cwd / ".venv").exists() and _run([sys.executable, "-m", "venv", ".venv"], cwd=cwd, env=env) != 0:
+        raise LauncherError("python -m venv failed")
     pip_bin = _venv_bin(cwd, "pip")
     extra_suffix = f"[{','.join(extras)}]" if extras else ""
     if _run([pip_bin, "install", "-e", f".{extra_suffix}"], cwd=cwd, env=env) != 0:
@@ -328,8 +268,7 @@ def run_orchestrator_job(cwd: Path | None = None) -> int:
     cli_tokens = _build_cli_tokens(raw_payload)
     if _is_legacy_command(raw_payload):
         print(
-            "[discoverex-orch-launcher] deprecated command set (v1): "
-            "use contract_version=v2 with generate|verify|animate",
+            "[discoverex-execution-launcher] deprecated command set (v1): use contract_version=v2 with generate|verify|animate",
             file=sys.stderr,
         )
     if mode == "uv":
@@ -341,7 +280,7 @@ def main() -> None:
     try:
         code = run_orchestrator_job()
     except LauncherError as exc:
-        print(f"[discoverex-orch-launcher] {exc}", file=sys.stderr)
+        print(f"[discoverex-execution-launcher] {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
     raise SystemExit(code)
 

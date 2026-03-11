@@ -6,6 +6,12 @@
 * 파이프라인 조합이 늘어나도 흔들리지 않는 **전역 계약(Contract)**
 * 현재 버전은 **Region-first + bbox-only**
 
+## 실행 책임 경계
+
+* 엔진은 flow 정의, CLI, execution contract, execution context preparation을 소유한다.
+* Prefect가 직접 모니터링하는 대상은 엔진의 `run-engine-job` flow다.
+* deployment 등록, worker/work pool/queue 운영, scheduling, 외부 job submission은 운영 계층 책임이다.
+
 ---
 
 ## 1) 용어

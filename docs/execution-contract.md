@@ -56,8 +56,8 @@ engine-facing runtime contract.
 
 All endpoints require bearer auth:
 
-- `CF-Access-Client-Id: <CF_ACCESS_CLIENT_ID>`
-- `CF-Access-Client-Secret: <CF_ACCESS_CLIENT_SECRET>`
+- `CF-Access-Client-Id: <cf_access_client_id>`
+- `CF-Access-Client-Secret: <cf_access_client_secret>`
 
 Optional additional gateway protection:
 
@@ -93,7 +93,7 @@ The deterministic script `scripts/e2e/e2e_local_orchestrator.sh` verifies the or
 
 Core pass criteria:
 
-1. `engine-run/engine-run` deployment exists after register.
+1. `run-engine-job/run-engine-job` deployment exists after register.
 2. Submitted flow run reaches `COMPLETED`.
 3. All required objects exist:
    - `stdout.log`

@@ -6,9 +6,10 @@ from time import perf_counter
 
 import typer
 
+from discoverex.application.contracts.execution.schema import JobRuntime
+from discoverex.application.flows import build_inline_job_spec, run_engine_job
 from discoverex.bootstrap import build_validator_context
 from discoverex.config_loader import load_validator_config
-from discoverex.flows import run_engine_entry
 from discoverex.runtime_logging import configure_logging, format_seconds, get_logger
 
 app = typer.Typer(no_args_is_help=True)
@@ -37,6 +38,25 @@ def _validate_generate_inputs(
     )
 
 
+def _run_command(
+    *,
+    command: str,
+    args: dict[str, object],
+    config_name: str,
+    config_dir: str,
+    overrides: list[str],
+) -> dict[str, object]:
+    job_spec = build_inline_job_spec(
+        command=command,
+        args=args,
+        config_name=config_name,
+        config_dir=config_dir,
+        overrides=overrides,
+        runtime=JobRuntime(mode="local"),
+    )
+    return run_engine_job(job_spec)
+
+
 @app.command("generate")
 def generate_command(
     background_asset_ref: str | None = typer.Option(None, "--background-asset-ref"),
@@ -62,7 +82,7 @@ def generate_command(
         bool((object_prompt or "").strip()),
         bool((final_prompt or "").strip()),
     )
-    payload = run_engine_entry(
+    payload = _run_command(
         command="generate",
         args={
             key: value
@@ -94,7 +114,7 @@ def verify_command(
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
     configure_logging(verbose=verbose)
-    payload = run_engine_entry(
+    payload = _run_command(
         command="verify",
         args={"scene_json": scene_json},
         config_name=config_name,
@@ -113,7 +133,7 @@ def animate_command(
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
     configure_logging(verbose=verbose)
-    payload = run_engine_entry(
+    payload = _run_command(
         command="animate",
         args={"scene_jsons": scene_jsons},
         config_name=config_name,
@@ -142,7 +162,7 @@ def gen_verify_legacy_command(
     _warn_legacy_command("gen-verify", "generate")
     _validate_generate_inputs(background_asset_ref, background_prompt)
     configure_logging(verbose=verbose)
-    payload = run_engine_entry(
+    payload = _run_command(
         command="generate",
         args={
             key: value
@@ -174,7 +194,7 @@ def verify_only_legacy_command(
 ) -> None:
     _warn_legacy_command("verify-only", "verify")
     configure_logging(verbose=verbose)
-    payload = run_engine_entry(
+    payload = _run_command(
         command="verify",
         args={"scene_json": scene_json},
         config_name=config_name,
@@ -194,7 +214,7 @@ def replay_eval_legacy_command(
 ) -> None:
     _warn_legacy_command("replay-eval", "animate")
     configure_logging(verbose=verbose)
-    payload = run_engine_entry(
+    payload = _run_command(
         command="animate",
         args={"scene_jsons": scene_jsons},
         config_name=config_name,

@@ -5,7 +5,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[1] / "register" / "register_prefect_job.py"
+SCRIPT = (
+    Path(__file__).resolve().parents[1]
+    / "infra"
+    / "register"
+    / "register_prefect_job.py"
+)
 
 
 def test_prefect_wrapper_dry_run_defaults_to_remote_worker_profile() -> None:
@@ -46,6 +51,9 @@ def test_prefect_wrapper_dry_run_defaults_to_remote_worker_profile() -> None:
     assert payload["run_mode"] == "repo"
     assert payload["repo_url"] == "https://github.com/example/engine.git"
     assert payload["ref"] == "feat/real-job"
+    assert payload["entrypoint"][2] == (
+        "PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher"
+    )
     assert payload["job_name"] == "generate--generate--generator-sdxl-gpu"
     assert payload["engine_run"]["runtime"]["extra_env"]["MLFLOW_TRACKING_URI"] == (
         "https://mlflow.example.com"
@@ -61,8 +69,8 @@ def test_prefect_wrapper_dry_run_defaults_to_remote_worker_profile() -> None:
         "models/fx=sdxl_gpu",
     ]
     assert payload["env"] == {
-        "CF_ACCESS_CLIENT_ID": "cf-id",
-        "CF_ACCESS_CLIENT_SECRET": "cf-secret",
+        "cf_access_client_id": "cf-id",
+        "cf_access_client_secret": "cf-secret",
     }
 
 

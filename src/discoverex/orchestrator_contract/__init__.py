@@ -24,11 +24,9 @@ __all__ = [
 
 def __getattr__(name: str) -> Any:
     if name == "run_orchestrator_job":
-        return import_module(
-            "discoverex.orchestrator_contract.launcher"
-        ).run_orchestrator_job
+        return import_module("discoverex.orchestrator_contract.launcher").run_orchestrator_job
     if name in {"build_cli_tokens", "build_worker_entrypoint", "is_legacy_command"}:
-        module = import_module("discoverex.orchestrator_contract.runner")
+        module = import_module("discoverex.application.contracts.execution")
         return getattr(module, name)
     if name in {
         "EngineRunSpec",
@@ -43,6 +41,6 @@ def __getattr__(name: str) -> Any:
         "OrchestratorInputsV1",
         "OrchestratorInputsV2",
     }:
-        module = import_module("discoverex.orchestrator_contract.schema")
+        module = import_module("discoverex.application.contracts.execution")
         return getattr(module, name)
     raise AttributeError(name)

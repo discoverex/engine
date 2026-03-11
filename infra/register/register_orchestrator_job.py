@@ -3,16 +3,21 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
+import sys
 from pathlib import Path
 from typing import Any
-from urllib import error, request
+from uuid import UUID
+
+from prefect.client.orchestration import SyncPrefectClient, get_client
+from prefect.client.schemas.filters import DeploymentFilter, DeploymentFilterName
+from prefect.settings import PREFECT_API_URL, temporary_settings
+from settings import SETTINGS
 
 DEFAULT_ENTRYPOINT = [
     "/bin/sh",
     "-lc",
-    "PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher",
+    "PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher",
 ]
 
 V1_COMMANDS = ("gen-verify", "verify-only", "replay-eval")
@@ -75,93 +80,73 @@ def _normalize_api_url(url: str) -> str:
     return f"{value}/api"
 
 
-def _headers() -> dict[str, str]:
+def _extra_headers() -> dict[str, str]:
     headers: dict[str, str] = {
-        "Accept": "application/json",
         "User-Agent": "discoverex-job-register/1.0",
-        "Content-Type": "application/json",
     }
-    cf_id = os.getenv("PREFECT_CF_ACCESS_CLIENT_ID", "").strip()
-    cf_secret = os.getenv("PREFECT_CF_ACCESS_CLIENT_SECRET", "").strip()
+    cf_id = (
+        SETTINGS.prefect_cf_access_client_id or SETTINGS.cf_access_client_id
+    ).strip()
+    cf_secret = (
+        SETTINGS.prefect_cf_access_client_secret or SETTINGS.cf_access_client_secret
+    ).strip()
     if cf_id and cf_secret:
         headers["CF-Access-Client-Id"] = cf_id
         headers["CF-Access-Client-Secret"] = cf_secret
     return headers
 
 
-def _http_json(
-    method: str,
-    api_url: str,
-    path: str,
-    payload: dict[str, Any] | None = None,
-) -> Any:
-    body = None
-    if payload is not None:
-        body = json.dumps(payload, ensure_ascii=True).encode("utf-8")
-    req = request.Request(
-        f"{api_url}/{path.lstrip('/')}",
-        method=method,
-        data=body,
-        headers=_headers(),
-    )
-    try:
-        with request.urlopen(req, timeout=30) as resp:  # nosec B310
-            raw = resp.read()
-            content_type = resp.headers.get("Content-Type", "")
-    except error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise SystemExit(f"{method} {path} failed: HTTP {exc.code} {detail}") from exc
-    if not raw:
-        return {}
-    text = raw.decode("utf-8", errors="replace")
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as exc:
-        snippet = text[:240].replace("\n", " ").strip()
-        raise SystemExit(
-            f"{method} {path} returned non-JSON response "
-            f"(content-type={content_type or '<unknown>'}): {snippet}"
-        ) from exc
+def _client_httpx_settings() -> dict[str, dict[str, str]]:
+    return {"headers": _extra_headers()}
 
 
-def _find_deployment_id(api_url: str, name: str) -> str:
-    rows = _http_json(
-        "POST",
-        api_url,
-        "deployments/filter",
-        {
-            "sort": "NAME_ASC",
-            "limit": 20,
-            "offset": 0,
-            "deployments": {"name": {"any_": [name]}},
-        },
+def _find_deployment(client: SyncPrefectClient, name: str) -> Any:
+    rows = client.read_deployments(
+        deployment_filter=DeploymentFilter(name=DeploymentFilterName(any_=[name])),
+        limit=20,
     )
-    if not isinstance(rows, list):
-        raise SystemExit("unexpected deployments/filter response shape")
     for row in rows:
-        if str(row.get("name", "")) == name and row.get("id"):
-            return str(row["id"])
+        if str(getattr(row, "name", "")) == name and getattr(row, "id", None):
+            return row
     raise SystemExit(f"deployment not found: {name}")
 
 
 def _create_flow_run(
-    api_url: str,
-    deployment_id: str,
+    client: SyncPrefectClient,
+    deployment_id: UUID,
     parameters: dict[str, Any],
     flow_run_name: str | None,
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {"parameters": parameters}
-    if flow_run_name:
-        payload["name"] = flow_run_name
-    row = _http_json(
-        "POST",
-        api_url,
-        f"deployments/{deployment_id}/create_flow_run",
-        payload,
+) -> Any:
+    return client.create_flow_run_from_deployment(
+        deployment_id,
+        parameters=parameters,
+        name=flow_run_name,
     )
-    if not isinstance(row, dict):
-        raise SystemExit("unexpected create_flow_run response shape")
-    return row
+
+
+def _emit_prefect_diagnostics(api_url: str, deployment_name: str) -> None:
+    headers = _extra_headers()
+    print(
+        "[discoverex-register] prefect submission failed",
+        file=sys.stderr,
+    )
+    print(
+        f"[discoverex-register] api_url={api_url} deployment={deployment_name}",
+        file=sys.stderr,
+    )
+    print(
+        "[discoverex-register] cf_access_headers="
+        f"{'enabled' if 'CF-Access-Client-Id' in headers else 'missing'} "
+        f"(prefect_cf={'set' if SETTINGS.prefect_cf_access_client_id else 'unset'}, "
+        f"cf={'set' if SETTINGS.cf_access_client_id else 'unset'})",
+        file=sys.stderr,
+    )
+    print(
+        "[discoverex-register] likely cause: Prefect API responded with HTML "
+        "login/challenge page instead of JSON. Check Cloudflare Access tokens "
+        "and PREFECT_API_URL.",
+        file=sys.stderr,
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -171,12 +156,12 @@ def _build_parser() -> argparse.ArgumentParser:
             "to a Prefect deployment."
         )
     )
-    parser.add_argument("--prefect-api-url", default=os.getenv("PREFECT_API_URL", ""))
-    parser.add_argument("--deployment", default=os.getenv("PREFECT_DEPLOYMENT", ""))
+    parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
+    parser.add_argument("--deployment", default=SETTINGS.prefect_deployment)
     parser.add_argument("--engine", default="discoverex")
     parser.add_argument("--run-mode", choices=("repo", "inline"), default="repo")
-    parser.add_argument("--repo-url", default=os.getenv("ENGINE_REPO_URL", ""))
-    parser.add_argument("--ref", default=os.getenv("ENGINE_REPO_REF", "main"))
+    parser.add_argument("--repo-url", default=SETTINGS.engine_repo_url)
+    parser.add_argument("--ref", default=SETTINGS.engine_repo_ref or "main")
     parser.add_argument("--entrypoint-shell-command", default=None)
     parser.add_argument("--job-name", default=None)
     parser.add_argument("--outputs-prefix", default=None)
@@ -207,14 +192,31 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--runtime-extra", action="append", default=[])
     parser.add_argument("--runtime-env", action="append", default=[])
     parser.add_argument("--runner-env", action="append", default=[])
-    parser.add_argument("--mlflow-tracking-uri", default=None)
-    parser.add_argument("--mlflow-s3-endpoint-url", default=None)
-    parser.add_argument("--aws-access-key-id", default=None)
-    parser.add_argument("--aws-secret-access-key", default=None)
-    parser.add_argument("--artifact-bucket", default=None)
-    parser.add_argument("--metadata-db-url", default=None)
-    parser.add_argument("--cf-access-client-id", default=None)
-    parser.add_argument("--cf-access-client-secret", default=None)
+    parser.add_argument(
+        "--mlflow-tracking-uri", default=SETTINGS.mlflow_tracking_uri or None
+    )
+    parser.add_argument(
+        "--mlflow-s3-endpoint-url",
+        default=SETTINGS.mlflow_s3_endpoint_url or None,
+    )
+    parser.add_argument(
+        "--aws-access-key-id",
+        default=(SETTINGS.aws_access_key_id or SETTINGS.minio_access_key) or None,
+    )
+    parser.add_argument(
+        "--aws-secret-access-key",
+        default=(SETTINGS.aws_secret_access_key or SETTINGS.minio_secret_key) or None,
+    )
+    parser.add_argument("--artifact-bucket", default=SETTINGS.artifact_bucket or None)
+    parser.add_argument("--metadata-db-url", default=SETTINGS.metadata_db_url or None)
+    parser.add_argument(
+        "--cf-access-client-id",
+        default=SETTINGS.cf_access_client_id or None,
+    )
+    parser.add_argument(
+        "--cf-access-client-secret",
+        default=SETTINGS.cf_access_client_secret or None,
+    )
     parser.add_argument("--resume-key", default=None)
     parser.add_argument("--checkpoint-dir", default=None)
     parser.add_argument("--dry-run", action="store_true")
@@ -267,47 +269,39 @@ def _build_engine_args(args: argparse.Namespace) -> dict[str, Any]:
 def _build_profile_overrides(args: argparse.Namespace) -> list[str]:
     overrides: list[str] = []
     if args.execution_profile != "none":
-        overrides.extend(
-            [
-                "adapters/artifact_store=minio",
-                "adapters/tracker=mlflow_server",
-            ]
-        )
+        overrides.extend([
+            "adapters/artifact_store=minio",
+            "adapters/tracker=mlflow_server",
+        ])
         if args.metadata_db_url:
             overrides.append("adapters/metadata_store=postgres")
     if args.execution_profile == "local-tiny-cpu":
-        overrides.extend(
-            [
-                "runtime/model_runtime=cpu",
-                "models/background_generator=tiny_sd_cpu",
-                "models/hidden_region=tiny_torch",
-                "models/inpaint=tiny_torch",
-                "models/perception=tiny_torch",
-                "models/fx=tiny_sd_cpu",
-            ]
-        )
+        overrides.extend([
+            "runtime/model_runtime=cpu",
+            "models/background_generator=tiny_sd_cpu",
+            "models/hidden_region=tiny_torch",
+            "models/inpaint=tiny_torch",
+            "models/perception=tiny_torch",
+            "models/fx=tiny_sd_cpu",
+        ])
     elif args.execution_profile == "remote-gpu-hf":
-        overrides.extend(
-            [
-                "runtime/model_runtime=gpu",
-                "models/background_generator=hf",
-                "models/hidden_region=hf",
-                "models/inpaint=hf",
-                "models/perception=hf",
-                "models/fx=hf",
-            ]
-        )
+        overrides.extend([
+            "runtime/model_runtime=gpu",
+            "models/background_generator=hf",
+            "models/hidden_region=hf",
+            "models/inpaint=hf",
+            "models/perception=hf",
+            "models/fx=hf",
+        ])
     elif args.execution_profile == "generator-sdxl-gpu":
-        overrides.extend(
-            [
-                "runtime/model_runtime=gpu",
-                "models/background_generator=sdxl_gpu",
-                "models/hidden_region=hf",
-                "models/inpaint=sdxl_gpu",
-                "models/perception=hf",
-                "models/fx=sdxl_gpu",
-            ]
-        )
+        overrides.extend([
+            "runtime/model_runtime=gpu",
+            "models/background_generator=sdxl_gpu",
+            "models/hidden_region=hf",
+            "models/inpaint=sdxl_gpu",
+            "models/perception=hf",
+            "models/fx=sdxl_gpu",
+        ])
     return overrides
 
 
@@ -330,8 +324,8 @@ def _build_runtime_env(args: argparse.Namespace) -> dict[str, str]:
 def _build_runner_env(args: argparse.Namespace) -> dict[str, str]:
     env = _parse_kv_pairs(args.runner_env)
     optional_env = {
-        "CF_ACCESS_CLIENT_ID": args.cf_access_client_id,
-        "CF_ACCESS_CLIENT_SECRET": args.cf_access_client_secret,
+        "cf_access_client_id": args.cf_access_client_id,
+        "cf_access_client_secret": args.cf_access_client_secret,
     }
     for key, value in optional_env.items():
         if value:
@@ -404,9 +398,7 @@ def _resolved_deployment_name(args: argparse.Namespace) -> str:
     explicit = str(args.deployment or "").strip()
     if explicit:
         return explicit
-    command = _sanitize_name(_mapped_command(args.command))
-    config_name = _sanitize_name(_resolved_config_name(args))
-    return f"discoverex-{command}--{config_name}"
+    return "run-engine-job"
 
 
 def _resolved_job_name(args: argparse.Namespace) -> str:
@@ -426,12 +418,8 @@ def _resolved_deployment_name_from_job_spec(
     explicit = str(explicit_deployment or "").strip()
     if explicit:
         return explicit
-    engine_run = job_spec.get("engine_run")
-    if not isinstance(engine_run, dict):
-        raise SystemExit("job_spec.engine_run must be a JSON object")
-    command = _mapped_command(str(engine_run.get("command", "")).strip())
-    config_name = str(engine_run.get("config_name", "")).strip() or "default"
-    return f"discoverex-{_sanitize_name(command)}--{_sanitize_name(config_name)}"
+    _ = job_spec
+    return "run-engine-job"
 
 
 def submit_job_spec(
@@ -447,24 +435,37 @@ def submit_job_spec(
         raise SystemExit("--prefect-api-url is required unless PREFECT_API_URL is set")
     api_url = _normalize_api_url(prefect_api_url)
     deployment_name = _resolved_deployment_name_from_job_spec(job_spec, deployment)
-    deployment_id = _find_deployment_id(api_url, deployment_name)
     params: dict[str, Any] = {
         "job_spec_json": json.dumps(job_spec, ensure_ascii=True),
         "resume_key": resume_key,
         "checkpoint_dir": checkpoint_dir,
     }
-    created = _create_flow_run(
-        api_url,
-        deployment_id,
-        params,
-        job_name or str(job_spec.get("job_name", "")).strip() or None,
-    )
+    with temporary_settings(updates={PREFECT_API_URL: api_url}):
+        with get_client(
+            sync_client=True,
+            httpx_settings=_client_httpx_settings(),
+        ) as client:
+            try:
+                deployment_row = _find_deployment(client, deployment_name)
+                deployment_id = UUID(str(deployment_row.id))
+                created = _create_flow_run(
+                    client,
+                    deployment_id,
+                    params,
+                    job_name or str(job_spec.get("job_name", "")).strip() or None,
+                )
+            except json.JSONDecodeError as exc:
+                _emit_prefect_diagnostics(api_url, deployment_name)
+                raise SystemExit(
+                    "Prefect client expected JSON but received a non-JSON response. "
+                    "Most likely Cloudflare Access blocked the request."
+                ) from exc
     return {
         "ok": True,
         "deployment": deployment_name,
-        "deployment_id": deployment_id,
-        "flow_run_id": created.get("id"),
-        "flow_run_name": created.get("name"),
+        "deployment_id": str(deployment_id),
+        "flow_run_id": str(getattr(created, "id", "")),
+        "flow_run_name": getattr(created, "name", None),
         "engine": job_spec["engine"],
         "run_mode": job_spec["run_mode"],
     }
@@ -474,8 +475,11 @@ def write_job_spec(
     job_spec: dict[str, Any],
     output_file: str | Path | None = None,
 ) -> Path:
-    target = Path(output_file) if output_file else DEFAULT_JOB_SPEC_DIR / (
-        f"{str(job_spec.get('job_name', '')).strip() or 'job'}.json"
+    target = (
+        Path(output_file)
+        if output_file
+        else DEFAULT_JOB_SPEC_DIR
+        / (f"{str(job_spec.get('job_name', '')).strip() or 'job'}.json")
     )
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(

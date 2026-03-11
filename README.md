@@ -103,7 +103,7 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex animate \
 오케스트레이터 JobSpec의 `entrypoint`는 아래 런처를 권장합니다.
 
 ```bash
-python -m discoverex.orchestrator_contract.launcher
+python -m discoverex.adapters.outbound.execution.launcher
 ```
 
 런처는 `ORCH_JOB_INPUTS_JSON`을 `OrchestratorInputs`(v1/v2)으로 검증한 뒤
@@ -115,7 +115,7 @@ python -m discoverex.orchestrator_contract.launcher
 실제 잡 등록은 아래 스크립트를 사용합니다.
 
 ```bash
-python register/register_orchestrator_job.py --dry-run --command generate \
+python infra/register/register_orchestrator_job.py --dry-run --command generate \
   --repo-url https://github.com/<org>/discoverex-engine.git \
   --ref main \
   --background-asset-ref bg://dummy

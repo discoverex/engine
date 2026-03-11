@@ -36,3 +36,8 @@
 ## Scope
 - 이 파일에는 긴 실행 로그/상세 절차를 기록하지 않습니다.
 - 상세 내용은 각 원문 문서에만 유지합니다.
+
+## Engine Boundary
+- 엔진은 `src/discoverex/application/flows` 아래의 engine flow와 CLI 진입점을 소유합니다.
+- Prefect가 직접 모니터링하는 공식 외부 진입점은 `run-engine-job` flow 하나입니다.
+- deployment 등록, work pool/queue, scheduling, job submission은 운영 계층 책임입니다.

@@ -230,11 +230,11 @@ conf/
 
 ---
 
-## 오케스트레이터 (`orchestrator/`)
+## 엔진 Prefect 플로우 (`src/discoverex/flows/`)
 
 | 파일 | 설명 |
 |------|------|
-| `prefect_flows.py` | Prefect 플로우 래퍼: `generate_flow()`(재시도 2회, 3초 딜레이), `verify_flow()`, `animate_flow()` |
+| `prefect_flows.py` | Prefect 플로우 래퍼: `engine_run_flow()`, `generate_flow()`(재시도 2회, 3초 딜레이), `verify_flow()`, `animate_flow()` |
 
 ---
 

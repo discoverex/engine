@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-import discoverex.flows.engine as engine
+import discoverex.application.flows.engine_entry as engine
 
 
 def test_engine_entry_flow_returns_canonical_error_payload(monkeypatch) -> None:  # type: ignore[no-untyped-def]

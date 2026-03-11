@@ -113,7 +113,7 @@ def test_job_spec_requires_nested_engine_run() -> None:
             "entrypoint": [
                 "/bin/sh",
                 "-lc",
-                "python -m discoverex.orchestrator_contract.launcher",
+                "python -m discoverex.adapters.outbound.execution.launcher",
             ],
             "engine_run": {
                 "contract_version": "v2",

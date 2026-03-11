@@ -8,7 +8,7 @@
 - 실행 엔진은 동일: `discoverex generate|verify|animate`
 - 차이는 Hydra adapter 선택과 runtime env 주입입니다.
 - config 선택은 `--config-name`, `--config-dir`, `-o/--override`로 통일합니다.
-- 오케스트레이터 워커에서는 `python -m discoverex.orchestrator_contract.launcher`를
+- 오케스트레이터 워커에서는 `python -m discoverex.adapters.outbound.execution.launcher`를
   `entrypoint`로 호출하고, 실제 엔진 실행 계약(`EngineRunSpec`)은
   `ORCH_JOB_INPUTS_JSON`으로 전달합니다.
 - 결과 전달 단위:
@@ -104,7 +104,7 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex animate \
 - 원격 `MLFLOW_TRACKING_URI`를 child engine에 직접 주입하지 않습니다.
 - worker는 upstream URL을 받아 `MLFLOW_TRACKING_PROXY_URL`로 치환한 뒤 child engine에 넣습니다.
 - 단, 로컬 테스트에서는 `MLFLOW_TRACKING_URI`가 `localhost` 또는 `127.0.0.1`면 direct 연결을 허용합니다.
-- `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`는 worker만 보유하고 child engine에는 전달하지 않습니다.
+- `cf_access_client_id`, `cf_access_client_secret`는 worker만 보유하고 child engine에는 전달하지 않습니다.
 
 권장 워커 override 최소 세트:
 - `adapters/artifact_store=minio`
@@ -113,12 +113,11 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex animate \
 
 ## Prefect / Job Naming 규칙
 - flow 이름은 고정입니다.
-  - `discoverex-engine-entry`
-  - `discoverex-generate`
-  - `discoverex-verify`
-- config별 구분은 deployment/job 이름으로 합니다.
+  - `run-engine-job`
+  - 내부 엔진 orchestration은 `discoverex-engine-entry` 및 하위 pipeline flow를 사용합니다.
+- 외부 운영 계층은 단일 deployment를 사용하고, config별 구분은 job 이름으로 합니다.
 - 기본 규칙:
-  - deployment: `discoverex-<command>--<config_name>`
+  - deployment: `run-engine-job`
   - flow/job name: `<command>--<config_name>--<execution_profile>`
 - `--deployment`, `--job-name`을 직접 주면 그 값을 우선합니다.
 

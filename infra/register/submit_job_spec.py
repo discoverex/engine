@@ -3,19 +3,22 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 from register_orchestrator_job import submit_job_spec
+from settings import SETTINGS
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Submit an existing job spec JSON to a Prefect deployment."
     )
-    parser.add_argument("--prefect-api-url", default=os.getenv("PREFECT_API_URL", ""))
-    parser.add_argument("--deployment", default=os.getenv("PREFECT_DEPLOYMENT", ""))
+    parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
+    parser.add_argument(
+        "--deployment",
+        default=SETTINGS.prefect_deployment or "run-engine-job",
+    )
     parser.add_argument("--job-spec-file", default=None)
     parser.add_argument("--job-spec-json", default=None)
     parser.add_argument("--job-name", default=None)

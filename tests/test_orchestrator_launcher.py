@@ -202,8 +202,8 @@ def test_run_orchestrator_job_passes_runtime_extra_env_to_discoverex(
         ),
     )
     monkeypatch.setenv("MLFLOW_TRACKING_PROXY_URL", "http://127.0.0.1:15000")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "worker-only-id")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "worker-only-secret")
+    monkeypatch.setenv("cf_access_client_id", "worker-only-id")
+    monkeypatch.setenv("cf_access_client_secret", "worker-only-secret")
     monkeypatch.setattr(
         "discoverex.orchestrator_contract.launcher.shutil.which",
         lambda _name: "/usr/bin/uv",
@@ -222,8 +222,8 @@ def test_run_orchestrator_job_passes_runtime_extra_env_to_discoverex(
     _, discoverex_env = calls[2]
     assert discoverex_env["MLFLOW_TRACKING_URI"] == "http://127.0.0.1:15000"
     assert discoverex_env["ARTIFACT_BUCKET"] == "orchestrator-artifacts"
-    assert "CF_ACCESS_CLIENT_ID" not in discoverex_env
-    assert "CF_ACCESS_CLIENT_SECRET" not in discoverex_env
+    assert "cf_access_client_id" not in discoverex_env
+    assert "cf_access_client_secret" not in discoverex_env
     assert "MLFLOW_TRACKING_PROXY_URL" not in discoverex_env
 
 

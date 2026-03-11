@@ -10,7 +10,7 @@ from discoverex.adapters.inbound.cli.main import app
 def test_gen_verify_legacy_emits_deprecation_warning(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     runner = CliRunner()
 
-    def _fake_run_engine_entry(**_kwargs):  # type: ignore[no-untyped-def]
+    def _fake_run_command(**_kwargs):  # type: ignore[no-untyped-def]
         return {
             "scene_id": "s1",
             "version_id": "v1",
@@ -19,8 +19,8 @@ def test_gen_verify_legacy_emits_deprecation_warning(monkeypatch) -> None:  # ty
         }
 
     monkeypatch.setattr(
-        "discoverex.adapters.inbound.cli.main.run_engine_entry",
-        _fake_run_engine_entry,
+        "discoverex.adapters.inbound.cli.main._run_command",
+        _fake_run_command,
     )
 
     result = runner.invoke(app, ["gen-verify", "--background-asset-ref", "bg://d"])
@@ -31,7 +31,7 @@ def test_gen_verify_legacy_emits_deprecation_warning(monkeypatch) -> None:  # ty
 def test_verify_only_legacy_emits_deprecation_warning(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     runner = CliRunner()
 
-    def _fake_run_engine_entry(**_kwargs):  # type: ignore[no-untyped-def]
+    def _fake_run_command(**_kwargs):  # type: ignore[no-untyped-def]
         return {
             "scene_id": "s1",
             "version_id": "v1",
@@ -40,8 +40,8 @@ def test_verify_only_legacy_emits_deprecation_warning(monkeypatch) -> None:  # t
         }
 
     monkeypatch.setattr(
-        "discoverex.adapters.inbound.cli.main.run_engine_entry",
-        _fake_run_engine_entry,
+        "discoverex.adapters.inbound.cli.main._run_command",
+        _fake_run_command,
     )
 
     result = runner.invoke(app, ["verify-only", "--scene-json", "/tmp/s.json"])
@@ -53,7 +53,7 @@ def test_generate_accepts_background_prompt_and_object_prompt(monkeypatch) -> No
     runner = CliRunner()
     captured: dict[str, object] = {}
 
-    def _fake_run_engine_entry(**kwargs):  # type: ignore[no-untyped-def]
+    def _fake_run_command(**kwargs):  # type: ignore[no-untyped-def]
         captured.update(kwargs)
         return {
             "scene_id": "s1",
@@ -63,8 +63,8 @@ def test_generate_accepts_background_prompt_and_object_prompt(monkeypatch) -> No
         }
 
     monkeypatch.setattr(
-        "discoverex.adapters.inbound.cli.main.run_engine_entry",
-        _fake_run_engine_entry,
+        "discoverex.adapters.inbound.cli.main._run_command",
+        _fake_run_command,
     )
 
     result = runner.invoke(
@@ -88,7 +88,7 @@ def test_generate_accepts_final_prompt(monkeypatch) -> None:  # type: ignore[no-
     runner = CliRunner()
     captured: dict[str, object] = {}
 
-    def _fake_run_engine_entry(**kwargs):  # type: ignore[no-untyped-def]
+    def _fake_run_command(**kwargs):  # type: ignore[no-untyped-def]
         captured.update(kwargs)
         return {
             "scene_id": "s1",
@@ -98,8 +98,8 @@ def test_generate_accepts_final_prompt(monkeypatch) -> None:  # type: ignore[no-
         }
 
     monkeypatch.setattr(
-        "discoverex.adapters.inbound.cli.main.run_engine_entry",
-        _fake_run_engine_entry,
+        "discoverex.adapters.inbound.cli.main._run_command",
+        _fake_run_command,
     )
     result = runner.invoke(
         app,

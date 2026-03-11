@@ -6,9 +6,14 @@ import sys
 from pathlib import Path
 
 SCRIPT = (
-    Path(__file__).resolve().parents[1] / "register" / "register_orchestrator_job.py"
+    Path(__file__).resolve().parents[1]
+    / "infra"
+    / "register"
+    / "register_orchestrator_job.py"
 )
-BUILD_SCRIPT = Path(__file__).resolve().parents[1] / "register" / "build_job_spec.py"
+BUILD_SCRIPT = (
+    Path(__file__).resolve().parents[1] / "infra" / "register" / "build_job_spec.py"
+)
 
 
 def test_register_script_dry_run_builds_repo_job_spec() -> None:
@@ -38,7 +43,7 @@ def test_register_script_dry_run_builds_repo_job_spec() -> None:
     assert payload["repo_url"] == "https://github.com/example/engine.git"
     assert (
         payload["entrypoint"][2]
-        == "PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher"
+        == "PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher"
     )
     assert payload["engine_run"]["contract_version"] == "v2"
     assert payload["engine_run"]["command"] == "generate"
@@ -210,8 +215,8 @@ def test_register_script_local_tiny_profile_adds_worker_overrides_and_env() -> N
         "ARTIFACT_BUCKET": "orchestrator-artifacts",
     }
     assert payload["env"] == {
-        "CF_ACCESS_CLIENT_ID": "cf-client-id",
-        "CF_ACCESS_CLIENT_SECRET": "cf-client-secret",
+        "cf_access_client_id": "cf-client-id",
+        "cf_access_client_secret": "cf-client-secret",
     }
     assert payload["engine_run"]["runtime"]["extras"] == [
         "tracking",
@@ -351,7 +356,7 @@ def test_register_script_accepts_custom_entrypoint_for_inline_mode() -> None:
             "--run-mode",
             "inline",
             "--entrypoint-shell-command",
-            "cd /opt/engine-src && PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher",
+            "cd /opt/engine-src && PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher",
             "--command",
             "generate",
             "--background-asset-ref",
@@ -367,5 +372,5 @@ def test_register_script_accepts_custom_entrypoint_for_inline_mode() -> None:
     assert payload["entrypoint"] == [
         "/bin/sh",
         "-lc",
-        "cd /opt/engine-src && PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher",
+        "cd /opt/engine-src && PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher",
     ]
