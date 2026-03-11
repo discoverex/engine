@@ -166,7 +166,9 @@ def _is_local_mlflow_url(value: str) -> bool:
 def _validate_contract(raw_payload: dict[str, object]) -> None:
     contract_version = str(raw_payload.get("contract_version", "")).strip()
     if contract_version not in {"v1", "v2"}:
-        raise LauncherError(f"unsupported contract_version={contract_version or '<empty>'}")
+        raise LauncherError(
+            f"unsupported contract_version={contract_version or '<empty>'}"
+        )
 
     command = str(raw_payload.get("command", "")).strip()
     required_by_command: dict[str, dict[str, tuple[str, ...]]] = {
@@ -187,7 +189,9 @@ def _validate_contract(raw_payload: dict[str, object]) -> None:
     args = raw_payload.get("args", {})
     if not isinstance(args, dict):
         raise LauncherError("args must be a JSON object")
-    missing = [key for key in required_by_command[contract_version][command] if key not in args]
+    missing = [
+        key for key in required_by_command[contract_version][command] if key not in args
+    ]
     if missing:
         missing_str = ", ".join(missing)
         raise LauncherError(

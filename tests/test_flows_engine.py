@@ -37,7 +37,9 @@ def test_engine_entry_flow_returns_canonical_error_payload(monkeypatch) -> None:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(engine, "load_pipeline_config", _fake_load_pipeline_config)
-    monkeypatch.setattr(engine, "_resolve_subflow", lambda *_args, **_kwargs: _failing_subflow)
+    monkeypatch.setattr(
+        engine, "_resolve_subflow", lambda *_args, **_kwargs: _failing_subflow
+    )
 
     out = engine.engine_entry_flow.fn(
         command="verify",

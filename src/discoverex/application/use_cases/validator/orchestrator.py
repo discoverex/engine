@@ -48,7 +48,9 @@ class ValidatorOrchestrator:
         self._sigma_levels = sigma_levels or _DEFAULT_SIGMA_LEVELS
         self._bundle_store = bundle_store
 
-    def run(self, composite_image: Path, object_layers: list[Path]) -> VerificationBundle:
+    def run(
+        self, composite_image: Path, object_layers: list[Path]
+    ) -> VerificationBundle:
         physical = self._run_phase1(composite_image, object_layers)
         logical = self._run_phase2(composite_image, physical)
         visual = self._run_phase3(composite_image)

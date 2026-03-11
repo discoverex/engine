@@ -108,7 +108,9 @@ class HFInpaintModel:
             handle=handle,
             request=request,
         )
-        result["quality_score"] = quality if quality is not None else 0.86 if request.prompt else 0.80
+        result["quality_score"] = (
+            quality if quality is not None else 0.86 if request.prompt else 0.80
+        )
 
         composited_ref = self._predict_patch_and_composite(handle, request)
         if composited_ref is not None:
@@ -133,7 +135,9 @@ class HFInpaintModel:
             image = load_image_rgb(source)
             bbox = sanitize_bbox(request.bbox, image.width, image.height)
             patch = crop_bbox(image, bbox)
-            generated_patch = self._generate_patch_with_diffusers(handle, request, patch)
+            generated_patch = self._generate_patch_with_diffusers(
+                handle, request, patch
+            )
             composited = apply_patch(image, generated_patch, bbox)
             patch_path = save_image(
                 generated_patch,

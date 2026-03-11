@@ -24,7 +24,9 @@ __all__ = [
 
 def __getattr__(name: str) -> Any:
     if name == "run_orchestrator_job":
-        return import_module("discoverex.orchestrator_contract.launcher").run_orchestrator_job
+        return import_module(
+            "discoverex.orchestrator_contract.launcher"
+        ).run_orchestrator_job
     if name in {"build_cli_tokens", "build_worker_entrypoint", "is_legacy_command"}:
         module = import_module("discoverex.orchestrator_contract.runner")
         return getattr(module, name)

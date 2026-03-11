@@ -4,8 +4,8 @@ from pathlib import Path
 from time import perf_counter
 
 from discoverex.application.context import AppContextLike
-from discoverex.execution_snapshot import build_tracking_params
 from discoverex.domain.scene import Scene
+from discoverex.execution_snapshot import build_tracking_params
 from discoverex.runtime_logging import format_seconds, get_logger
 
 logger = get_logger("discoverex.generate.persistence")

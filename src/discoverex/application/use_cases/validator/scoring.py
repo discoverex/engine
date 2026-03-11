@@ -47,15 +47,21 @@ def build_verification_bundle(
         }
         if resolve_answer(metrics):
             answer_obj_metrics.append(metrics)
-        p_score, l_score, _ = integrate_verification_v2(metrics, pass_threshold, weights)
+        p_score, l_score, _ = integrate_verification_v2(
+            metrics, pass_threshold, weights
+        )
         per_obj_perception.append(p_score)
         per_obj_logical.append(l_score)
 
     avg_perception = (
         sum(per_obj_perception) / len(per_obj_perception) if per_obj_perception else 0.0
     )
-    avg_logical = sum(per_obj_logical) / len(per_obj_logical) if per_obj_logical else 0.0
-    total_score = avg_perception * weights.total_perception + avg_logical * weights.total_logical
+    avg_logical = (
+        sum(per_obj_logical) / len(per_obj_logical) if per_obj_logical else 0.0
+    )
+    total_score = (
+        avg_perception * weights.total_perception + avg_logical * weights.total_logical
+    )
     passed = total_score >= pass_threshold
     difficulty = compute_scene_difficulty(answer_obj_metrics, weights)
 

@@ -209,7 +209,9 @@ class CpuPhysicalAdapter:
         alpha_degree_map: dict[str, int] = {}
         for path in object_layers:
             obj_id = path.stem
-            alpha_degree_map[obj_id] = len(list(g.predecessors(obj_id))) + len(list(g.successors(obj_id)))
+            alpha_degree_map[obj_id] = len(list(g.predecessors(obj_id))) + len(
+                list(g.successors(obj_id))
+            )
 
         # Graph diameter (longest shortest path among reachable node pairs)
         try:
@@ -277,10 +279,9 @@ class SmartLogicalAdapter:
         self, composite_image: Path, physical: PhysicalMetadata
     ) -> LogicalStructure:
         obj_ids = sorted(physical.occlusion_map.keys())
-        hop_map    = {oid: physical.z_depth_hop_map.get(oid, 0) for oid in obj_ids}
+        hop_map = {oid: physical.z_depth_hop_map.get(oid, 0) for oid in obj_ids}
         degree_map = {
-            oid: self._physical.last_alpha_degree_map.get(oid, 0)
-            for oid in obj_ids
+            oid: self._physical.last_alpha_degree_map.get(oid, 0) for oid in obj_ids
         }
         diameter = self._physical.last_diameter
         return LogicalStructure(

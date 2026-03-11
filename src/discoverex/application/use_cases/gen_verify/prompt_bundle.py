@@ -29,13 +29,9 @@ def build_prompt_tracking_params(prompt_bundle: PromptBundle) -> dict[str, str]:
             prompt_bundle.background.negative_prompt
         ),
         "object_prompt_used": _truncate(prompt_bundle.object.prompt),
-        "object_negative_prompt_used": _truncate(
-            prompt_bundle.object.negative_prompt
-        ),
+        "object_negative_prompt_used": _truncate(prompt_bundle.object.negative_prompt),
         "final_prompt_used": _truncate(prompt_bundle.final_fx.prompt),
-        "final_negative_prompt_used": _truncate(
-            prompt_bundle.final_fx.negative_prompt
-        ),
+        "final_negative_prompt_used": _truncate(prompt_bundle.final_fx.negative_prompt),
     }
 
 

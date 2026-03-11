@@ -38,9 +38,7 @@ def build_execution_snapshot(
     config: PipelineConfig,
 ) -> dict[str, Any]:
     env_values = {
-        key: value
-        for key in _ENV_KEYS
-        if (value := os.getenv(key, "").strip())
+        key: value for key in _ENV_KEYS if (value := os.getenv(key, "").strip())
     }
     snapshot = {
         "command": command,

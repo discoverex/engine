@@ -33,6 +33,7 @@ from .sdxl_inpaint_inference import (
 
 logger = get_logger("discoverex.models.sdxl_inpaint")
 
+
 class SdxlInpaintModel:
     def __init__(
         self,
@@ -68,13 +69,20 @@ class SdxlInpaintModel:
         self._pipe: Any | None = None
 
     def load(self, model_ref_or_version: str) -> ModelHandle:
-        logger.info("loading object inpaint model model_id=%s revision=%s requested_device=%s", self.model_id, self.revision, self.device)
+        logger.info(
+            "loading object inpaint model model_id=%s revision=%s requested_device=%s",
+            self.model_id,
+            self.revision,
+            self.device,
+        )
         runtime = resolve_runtime()
         validate_diffusers_runtime(runtime)
         selected_device = resolve_device(self.device, runtime.torch)
         selected_dtype = str(normalize_dtype(self.dtype, runtime.torch))
         if self.strict_runtime and not runtime.available:
-            raise RuntimeError(f"torch/transformers runtime unavailable: {runtime.reason}")
+            raise RuntimeError(
+                f"torch/transformers runtime unavailable: {runtime.reason}"
+            )
         if self.strict_runtime and selected_device != self.device:
             raise RuntimeError(f"requested device '{self.device}' is unavailable")
         apply_seed(self.seed, runtime.torch)
@@ -97,6 +105,7 @@ class SdxlInpaintModel:
                 seed=self.seed,
             ),
         )
+
     def predict(
         self,
         handle: ModelHandle,
@@ -115,8 +124,15 @@ class SdxlInpaintModel:
             result["object_image_ref"] = str(composited_ref["object"])
             result["object_mask_ref"] = str(composited_ref["mask"])
             result["composited_image_ref"] = str(composited_ref["composited"])
-        logger.info("object inpaint prediction completed region=%s object=%s composited=%s duration=%s", request.region_id, result.get("object_image_ref"), result.get("composited_image_ref"), format_seconds(started))
+        logger.info(
+            "object inpaint prediction completed region=%s object=%s composited=%s duration=%s",
+            request.region_id,
+            result.get("object_image_ref"),
+            result.get("composited_image_ref"),
+            format_seconds(started),
+        )
         return result
+
     def _predict_and_inpaint(
         self,
         handle: ModelHandle,
@@ -134,28 +150,36 @@ class SdxlInpaintModel:
             image = load_image_rgb(source)
             bbox = sanitize_bbox(request.bbox, image.width, image.height)
             original_patch = crop_bbox(image, bbox)
-            working_patch, working_size = resize_patch_to_long_side(original_patch, self.patch_target_long_side)
+            working_patch, working_size = resize_patch_to_long_side(
+                original_patch, self.patch_target_long_side
+            )
             mask = build_full_mask(*working_size)
             generated_patch = self._generate_image(
                 handle=handle,
                 image=working_patch,
                 mask=mask,
-                prompt=request.generation_prompt or request.prompt or self.default_prompt,
+                prompt=request.generation_prompt
+                or request.prompt
+                or self.default_prompt,
                 negative_prompt=request.negative_prompt or self.default_negative_prompt,
                 strength=float(request.generation_strength or self.generation_strength),
                 num_inference_steps=int(
                     request.generation_steps or self.generation_steps
                 ),
                 guidance_scale=float(
-                    request.generation_guidance_scale
-                    or self.generation_guidance_scale
+                    request.generation_guidance_scale or self.generation_guidance_scale
                 ),
             )
             generated_patch = normalize_generated_patch(generated_patch, working_size)
             output = Path(output_path)
-            object_image, object_mask = extract_object_rgba(working_patch, generated_patch)
+            object_image, object_mask = extract_object_rgba(
+                working_patch, generated_patch
+            )
             if not has_meaningful_mask(object_mask):
-                logger.warning("object inpaint produced no meaningful foreground region=%s", request.region_id)
+                logger.warning(
+                    "object inpaint produced no meaningful foreground region=%s",
+                    request.region_id,
+                )
                 return None
             composited = apply_alpha_patch(image, object_image, bbox)
             composited_path = save_image(composited, output)
@@ -185,7 +209,12 @@ class SdxlInpaintModel:
         num_inference_steps: int,
         guidance_scale: float,
     ) -> Any:
-        self._pipe = load_inpaint_pipe(current_pipe=self._pipe, model_id=self.model_id, revision=self.revision, handle=handle)
+        self._pipe = load_inpaint_pipe(
+            current_pipe=self._pipe,
+            model_id=self.model_id,
+            revision=self.revision,
+            handle=handle,
+        )
         pipe = self._pipe
         result = pipe(
             prompt=prompt,

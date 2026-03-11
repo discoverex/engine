@@ -5,7 +5,6 @@ from pathlib import Path
 from uuid import uuid4
 
 from discoverex.application.context import AppContextLike
-from discoverex.execution_snapshot import build_tracking_params
 from discoverex.domain import (
     integrate_verification,
     judge_scene,
@@ -13,6 +12,7 @@ from discoverex.domain import (
 )
 from discoverex.domain.scene import Scene
 from discoverex.domain.verification import VerificationBundle, VerificationResult
+from discoverex.execution_snapshot import build_tracking_params
 from discoverex.models.types import PerceptionRequest
 
 

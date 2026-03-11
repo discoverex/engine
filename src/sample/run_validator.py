@@ -30,7 +30,6 @@ Phase 구성
 from __future__ import annotations
 
 import argparse
-import math
 import sys
 from pathlib import Path
 
@@ -42,7 +41,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from discoverex.application.use_cases.validator import ValidatorOrchestrator
 from discoverex.domain.services.verification import ScoringWeights
 from discoverex.models.types import ModelHandle
-from sample.test_samples import CpuPhysicalAdapter, SmartLogicalAdapter, SmartVisualAdapter
+from sample.test_samples import (
+    CpuPhysicalAdapter,
+    SmartLogicalAdapter,
+    SmartVisualAdapter,
+)
 
 # ---------------------------------------------------------------------------
 # 출력 유틸
@@ -72,7 +75,7 @@ def _print_phase1(physical_result, layer_files: list[Path]) -> None:
 
 
 def _print_result(bundle, layer_files: list[Path]) -> None:
-    sigs  = bundle.logical.signals
+    sigs = bundle.logical.signals
     psigs = bundle.perception.signals
 
     _section("PHASE 4 — 최종 결과")
@@ -85,18 +88,22 @@ def _print_result(bundle, layer_files: list[Path]) -> None:
         print(f"  failure_reason   : {bundle.final.failure_reason}")
 
     print()
-    print(f"  answer_obj_count : {sigs['answer_obj_count']}  (숨어있다고 판단된 오브젝트)")
+    print(
+        f"  answer_obj_count : {sigs['answer_obj_count']}  (숨어있다고 판단된 오브젝트)"
+    )
     print(f"  scene_difficulty : {sigs['scene_difficulty']:.4f}")
     print(f"  diameter         : {sigs.get('diameter', '-')}")
 
     print()
     print("  per-object 상세:")
-    header2 = f"  {'파일명':<20} {'hop':>5} {'degree':>7} {'sigma':>7} {'drr_slope':>10}"
+    header2 = (
+        f"  {'파일명':<20} {'hop':>5} {'degree':>7} {'sigma':>7} {'drr_slope':>10}"
+    )
     print(header2)
     print("  " + BAR_THIN)
-    sigma_map  = psigs.get("sigma_threshold_map", {})
-    drr_map    = psigs.get("drr_slope_map", {})
-    hop_map    = sigs.get("hop_map", {})
+    sigma_map = psigs.get("sigma_threshold_map", {})
+    drr_map = psigs.get("drr_slope_map", {})
+    hop_map = sigs.get("hop_map", {})
     degree_map = sigs.get("degree_map", {})
     for path in layer_files:
         oid = path.stem
@@ -129,7 +136,7 @@ def main() -> None:
         nargs="+",
         metavar="FILENAME",
         help="레이어 Z-index 순서 지정. 앞=아래(피가림), 뒤=위(가림). "
-             "예: --layer-order 쥐구멍.png MARS.png 고양이1.png",
+        "예: --layer-order 쥐구멍.png MARS.png 고양이1.png",
     )
     parser.add_argument(
         "--threshold",
@@ -140,8 +147,8 @@ def main() -> None:
     args = parser.parse_args()
 
     sample_dir = Path(__file__).resolve().parent
-    composite  = sample_dir / "합본.png"
-    layer_dir  = sample_dir / "layer"
+    composite = sample_dir / "합본.png"
+    layer_dir = sample_dir / "layer"
 
     if not composite.exists():
         print(f"[ERROR] 합본.png 없음: {composite}", file=sys.stderr)
@@ -161,7 +168,8 @@ def main() -> None:
             layer_files.append(p)
     else:
         layer_files = sorted(
-            p for p in layer_dir.glob("*.png")
+            p
+            for p in layer_dir.glob("*.png")
             if args.include_bg or p.name != "배경.png"
         )
 
@@ -182,9 +190,9 @@ def main() -> None:
 
     # 어댑터 구성
     handle = ModelHandle(name="cpu", version="v0", runtime="cpu")
-    phys   = CpuPhysicalAdapter(layer_arrays)
-    logic  = SmartLogicalAdapter(phys)   # Phase 1 BFS/degree 실계산값 재활용
-    vis    = SmartVisualAdapter(phys)
+    phys = CpuPhysicalAdapter(layer_arrays)
+    logic = SmartLogicalAdapter(phys)  # Phase 1 BFS/degree 실계산값 재활용
+    vis = SmartVisualAdapter(phys)
 
     orch = ValidatorOrchestrator(
         physical_port=phys,
@@ -199,8 +207,10 @@ def main() -> None:
 
     print()
     print(f"  pass_threshold : {args.threshold}")
-    print(f"  실계산 항목    : occlusion / z_depth_hop / cluster_density / degree(alpha) / diameter")
-    print(f"  더미 항목      : sigma_threshold(8.0) / drr_slope(0.15)  ← GPU/CLIP 필요")
+    print(
+        "  실계산 항목    : occlusion / z_depth_hop / cluster_density / degree(alpha) / diameter"
+    )
+    print("  더미 항목      : sigma_threshold(8.0) / drr_slope(0.15)  ← GPU/CLIP 필요")
 
     # 실행
     _section("파이프라인 실행")

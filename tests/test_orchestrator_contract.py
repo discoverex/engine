@@ -62,8 +62,7 @@ def test_build_worker_entrypoint_wraps_uv_run() -> None:
     entrypoint = build_worker_entrypoint(job)
     assert entrypoint[0:2] == ["/bin/sh", "-lc"]
     assert (
-        "uv run discoverex generate --background-asset-ref bg://dummy"
-        in entrypoint[2]
+        "uv run discoverex generate --background-asset-ref bg://dummy" in entrypoint[2]
     )
 
 
@@ -111,7 +110,11 @@ def test_job_spec_requires_nested_engine_run() -> None:
         {
             "run_mode": "inline",
             "engine": "discoverex",
-            "entrypoint": ["/bin/sh", "-lc", "python -m discoverex.orchestrator_contract.launcher"],
+            "entrypoint": [
+                "/bin/sh",
+                "-lc",
+                "python -m discoverex.orchestrator_contract.launcher",
+            ],
             "engine_run": {
                 "contract_version": "v2",
                 "command": "generate",

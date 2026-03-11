@@ -45,13 +45,9 @@ def generate_command(
         None, "--background-negative-prompt"
     ),
     object_prompt: str | None = typer.Option(None, "--object-prompt"),
-    object_negative_prompt: str | None = typer.Option(
-        None, "--object-negative-prompt"
-    ),
+    object_negative_prompt: str | None = typer.Option(None, "--object-negative-prompt"),
     final_prompt: str | None = typer.Option(None, "--final-prompt"),
-    final_negative_prompt: str | None = typer.Option(
-        None, "--final-negative-prompt"
-    ),
+    final_negative_prompt: str | None = typer.Option(None, "--final-negative-prompt"),
     config_name: str = typer.Option("generate", "--config-name"),
     config_dir: str = typer.Option("conf", "--config-dir"),
     override: list[str] = typer.Option([], "--override", "-o"),
@@ -135,13 +131,9 @@ def gen_verify_legacy_command(
         None, "--background-negative-prompt"
     ),
     object_prompt: str | None = typer.Option(None, "--object-prompt"),
-    object_negative_prompt: str | None = typer.Option(
-        None, "--object-negative-prompt"
-    ),
+    object_negative_prompt: str | None = typer.Option(None, "--object-negative-prompt"),
     final_prompt: str | None = typer.Option(None, "--final-prompt"),
-    final_negative_prompt: str | None = typer.Option(
-        None, "--final-negative-prompt"
-    ),
+    final_negative_prompt: str | None = typer.Option(None, "--final-negative-prompt"),
     config_name: str = typer.Option("gen_verify", "--config-name"),
     config_dir: str = typer.Option("conf", "--config-dir"),
     override: list[str] = typer.Option([], "--override", "-o"),

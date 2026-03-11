@@ -25,7 +25,9 @@ def _git_output(*args: str) -> str:
 
 
 def _default_repo_url() -> str:
-    return os.getenv("ENGINE_REPO_URL", "") or _git_output("remote", "get-url", "origin")
+    return os.getenv("ENGINE_REPO_URL", "") or _git_output(
+        "remote", "get-url", "origin"
+    )
 
 
 def _default_ref() -> str:
@@ -75,7 +77,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--runtime-extra", action="append", default=[])
     parser.add_argument("--runtime-env", action="append", default=[])
     parser.add_argument("--runner-env", action="append", default=[])
-    parser.add_argument("--mlflow-tracking-uri", default=os.getenv("MLFLOW_TRACKING_URI", ""))
+    parser.add_argument(
+        "--mlflow-tracking-uri", default=os.getenv("MLFLOW_TRACKING_URI", "")
+    )
     parser.add_argument(
         "--mlflow-s3-endpoint-url",
         default=os.getenv("MLFLOW_S3_ENDPOINT_URL", ""),
@@ -142,13 +146,9 @@ def _build_forward_argv(args: argparse.Namespace) -> list[str]:
         argv, "--background-negative-prompt", args.background_negative_prompt
     )
     _append_option(argv, "--object-prompt", args.object_prompt)
-    _append_option(
-        argv, "--object-negative-prompt", args.object_negative_prompt
-    )
+    _append_option(argv, "--object-negative-prompt", args.object_negative_prompt)
     _append_option(argv, "--final-prompt", args.final_prompt)
-    _append_option(
-        argv, "--final-negative-prompt", args.final_negative_prompt
-    )
+    _append_option(argv, "--final-negative-prompt", args.final_negative_prompt)
     _append_option(argv, "--scene-json", args.scene_json)
     _append_option(argv, "--mlflow-tracking-uri", args.mlflow_tracking_uri)
     _append_option(argv, "--mlflow-s3-endpoint-url", args.mlflow_s3_endpoint_url)

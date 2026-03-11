@@ -41,7 +41,9 @@ def build_context(
     artifacts_root = Path(cfg.runtime.artifacts_root)
     env_defaults = _build_env_defaults(cfg)
 
-    background_generator_model = instantiate(cfg.models.background_generator.as_kwargs())
+    background_generator_model = instantiate(
+        cfg.models.background_generator.as_kwargs()
+    )
     hidden_region_model = instantiate(cfg.models.hidden_region.as_kwargs())
     inpaint_model = instantiate(cfg.models.inpaint.as_kwargs())
     perception_model = instantiate(cfg.models.perception.as_kwargs())

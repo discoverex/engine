@@ -86,7 +86,7 @@ class TestComputeDifficulty:
             "hop": 0,
             "diameter": 4.0,
             "degree_norm": 0.0,
-            "drr_slope": 0.0,   # 소실 속도 낮음 = 쉬움
+            "drr_slope": 0.0,  # 소실 속도 낮음 = 쉬움
         }
         hard = {
             "occlusion_ratio": 0.9,
@@ -175,7 +175,7 @@ class TestIntegrateVerificationV2:
         # total      = 1.0*0.45 + 1.0*0.55 = 1.0 >= 0.35
         hard = {
             "sigma_threshold": 1.0,
-            "drr_slope": 1.0,   # 빠른 소실 = 어려움 (직접 기여)
+            "drr_slope": 1.0,  # 빠른 소실 = 어려움 (직접 기여)
             "hop": 4,
             "diameter": 4.0,
             "degree_norm": 1.0,
@@ -190,7 +190,7 @@ class TestIntegrateVerificationV2:
         # hop=0, degree_norm=0 → logical=0
         easy = {
             "sigma_threshold": 16.0,
-            "drr_slope": 0.0,   # 소실 없음 = 쉬움
+            "drr_slope": 0.0,  # 소실 없음 = 쉬움
             "hop": 0,
             "diameter": 1.0,
             "degree_norm": 0.0,

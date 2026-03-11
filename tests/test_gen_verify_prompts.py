@@ -15,7 +15,9 @@ class _HiddenRegionModel:
     def load(self, version: str) -> ModelHandle:
         return ModelHandle(name="hidden", version=version, runtime="dummy")
 
-    def predict(self, _handle: ModelHandle, _request) -> list[tuple[float, float, float, float]]:  # type: ignore[no-untyped-def]
+    def predict(
+        self, _handle: ModelHandle, _request
+    ) -> list[tuple[float, float, float, float]]:  # type: ignore[no-untyped-def]
         return [(10.0, 20.0, 30.0, 40.0)]
 
 
@@ -156,7 +158,9 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     )
 
     scene_dir = tmp_path / "scenes" / scene.meta.scene_id / scene.meta.version_id
-    prompt_bundle = json.loads((scene_dir / "prompt_bundle.json").read_text(encoding="utf-8"))
+    prompt_bundle = json.loads(
+        (scene_dir / "prompt_bundle.json").read_text(encoding="utf-8")
+    )
 
     assert prompt_bundle["input_mode"] == "prompt"
     assert prompt_bundle["background"]["prompt"] == "sunlit courtyard"

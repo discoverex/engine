@@ -190,7 +190,9 @@ def test_register_script_local_tiny_profile_adds_worker_overrides_and_env() -> N
     assert payload["job_name"] == "generate--generate--local-tiny-cpu"
 
 
-def test_register_script_remote_profile_adds_postgres_when_metadata_url_present() -> None:
+def test_register_script_remote_profile_adds_postgres_when_metadata_url_present() -> (
+    None
+):
     proc = subprocess.run(
         [
             sys.executable,

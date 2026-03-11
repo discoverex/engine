@@ -118,7 +118,9 @@ def generate_regions(
         object_ref = details.get("object_image_ref")
         object_mask_ref = details.get("object_mask_ref")
         patch_ref = details.get("patch_image_ref")
-        layer_ref = object_ref if isinstance(object_ref, str) and object_ref else patch_ref
+        layer_ref = (
+            object_ref if isinstance(object_ref, str) and object_ref else patch_ref
+        )
         if isinstance(layer_ref, str) and layer_ref:
             candidates = background.metadata.setdefault("inpaint_layer_candidates", [])
             if isinstance(candidates, list):

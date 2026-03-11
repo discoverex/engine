@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import Any, cast
 
 
-def load_inpaint_pipe(*, current_pipe: Any | None, model_id: str, revision: str, handle: Any) -> Any:
+def load_inpaint_pipe(
+    *, current_pipe: Any | None, model_id: str, revision: str, handle: Any
+) -> Any:
     if current_pipe is not None:
         return current_pipe
     try:
@@ -33,7 +35,9 @@ def build_full_mask(width: int, height: int) -> Any:
     return mask
 
 
-def resize_patch_to_long_side(patch: Any, target_long_side: int) -> tuple[Any, tuple[int, int]]:
+def resize_patch_to_long_side(
+    patch: Any, target_long_side: int
+) -> tuple[Any, tuple[int, int]]:
     width, height = patch.size
     if width <= 0 or height <= 0:
         return patch.resize((target_long_side, target_long_side)), (
@@ -48,7 +52,9 @@ def resize_patch_to_long_side(patch: Any, target_long_side: int) -> tuple[Any, t
     return patch.resize(size), size
 
 
-def normalize_generated_patch(generated_patch: Any, target_size: tuple[int, int]) -> Any:
+def normalize_generated_patch(
+    generated_patch: Any, target_size: tuple[int, int]
+) -> Any:
     from PIL import Image  # type: ignore
 
     patch = generated_patch.convert("RGB")
