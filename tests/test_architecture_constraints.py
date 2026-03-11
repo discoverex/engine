@@ -57,6 +57,10 @@ def test_application_layer_does_not_import_infra_packages() -> None:
     offenders: list[str] = []
     blocked = ("import mlflow", "import sqlalchemy", "import boto3", "from prefect")
     for path in Path("src/discoverex/application").rglob("*.py"):
+        if path.parts[:4] == ("src", "discoverex", "application", "flows"):
+            blocked = ("import mlflow", "import sqlalchemy", "import boto3")
+        else:
+            blocked = ("import mlflow", "import sqlalchemy", "import boto3", "from prefect")
         text = path.read_text(encoding="utf-8")
         if any(pattern in text for pattern in blocked):
             offenders.append(str(path))
@@ -67,10 +71,23 @@ def test_application_layer_does_not_import_bootstrap_package() -> None:
     offenders: list[str] = []
     blocked = ("from discoverex.bootstrap", "import discoverex.bootstrap")
     for path in Path("src/discoverex/application").rglob("*.py"):
+        if path.parts[:4] == ("src", "discoverex", "application", "flows"):
+            continue
         text = path.read_text(encoding="utf-8")
         if any(pattern in text for pattern in blocked):
             offenders.append(str(path))
     assert offenders == []
+
+
+def test_engine_flow_entrypoint_lives_in_application_flows() -> None:
+    assert Path("src/discoverex/application/flows/run_engine_job.py").exists()
+
+
+def test_prefect_deploy_script_targets_single_engine_job_flow() -> None:
+    text = Path("infra/register/deploy_prefect_flows.py").read_text(encoding="utf-8")
+    assert "run_engine_job_flow" in text
+    assert 'name="run-engine-job"' in text
+    assert "discoverex-generate--generate" not in text
 
 
 def test_use_cases_do_not_write_files_directly() -> None:

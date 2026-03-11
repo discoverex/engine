@@ -10,7 +10,9 @@ from discoverex.adapters.outbound.models.sdxl_inpaint import SdxlInpaintModel
 from discoverex.models.types import InpaintRequest
 
 
-def test_sdxl_inpaint_writes_patch_and_composited(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_sdxl_inpaint_writes_patch_and_composited(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     model = SdxlInpaintModel(strict_runtime=False)
     monkeypatch.setattr(
         "discoverex.adapters.outbound.models.sdxl_inpaint.resolve_runtime",

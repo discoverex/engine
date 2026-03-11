@@ -15,7 +15,9 @@ class _FakeImage:
         path.write_bytes(b"rendered-image")
 
 
-def test_sdxl_final_render_uses_input_image(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_sdxl_final_render_uses_input_image(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     captured: dict[str, object] = {}
     model = SdxlFinalRenderModel(strict_runtime=False)
     monkeypatch.setattr(

@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import argparse
-import os
 import subprocess
 import sys
 from pathlib import Path
 
+from settings import SETTINGS
+
 SCRIPT_DIR = Path(__file__).resolve().parent
-ENGINE_ROOT = SCRIPT_DIR.parent
+ENGINE_ROOT = SCRIPT_DIR.parent.parent
 LOW_LEVEL_SCRIPT = SCRIPT_DIR / "register_orchestrator_job.py"
 
 
@@ -25,11 +26,11 @@ def _git_output(*args: str) -> str:
 
 
 def _default_repo_url() -> str:
-    return os.getenv("ENGINE_REPO_URL", "") or _git_output("remote", "get-url", "origin")
+    return SETTINGS.engine_repo_url or _git_output("remote", "get-url", "origin")
 
 
 def _default_ref() -> str:
-    return os.getenv("ENGINE_REPO_REF", "") or _git_output("branch", "--show-current")
+    return SETTINGS.engine_repo_ref or _git_output("branch", "--show-current")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -39,8 +40,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "orchestrator contract wrapper."
         )
     )
-    parser.add_argument("--prefect-api-url", default=os.getenv("PREFECT_API_URL", ""))
-    parser.add_argument("--deployment", default=os.getenv("PREFECT_DEPLOYMENT", "engine-run"))
+    parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
+    parser.add_argument("--deployment", default=SETTINGS.prefect_deployment)
     parser.add_argument("--engine", default="discoverex")
     parser.add_argument("--run-mode", choices=("repo", "inline"), default="repo")
     parser.add_argument("--repo-url", default=_default_repo_url())
@@ -52,9 +53,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--execution-profile",
         choices=("none", "local-tiny-cpu", "remote-gpu-hf", "generator-sdxl-gpu"),
-        default=os.getenv("ENGINE_EXECUTION_PROFILE", "generator-sdxl-gpu"),
+        default=SETTINGS.engine_execution_profile,
     )
     parser.add_argument("--command", required=True)
+    parser.add_argument("--config-name", default=None)
+    parser.add_argument("--config-dir", default="conf")
     parser.add_argument("--background-asset-ref", default=None)
     parser.add_argument("--background-prompt", default=None)
     parser.add_argument("--background-negative-prompt", default=None)
@@ -73,28 +76,28 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--runtime-extra", action="append", default=[])
     parser.add_argument("--runtime-env", action="append", default=[])
     parser.add_argument("--runner-env", action="append", default=[])
-    parser.add_argument("--mlflow-tracking-uri", default=os.getenv("MLFLOW_TRACKING_URI", ""))
+    parser.add_argument("--mlflow-tracking-uri", default=SETTINGS.mlflow_tracking_uri)
     parser.add_argument(
         "--mlflow-s3-endpoint-url",
-        default=os.getenv("MLFLOW_S3_ENDPOINT_URL", ""),
+        default=SETTINGS.mlflow_s3_endpoint_url,
     )
     parser.add_argument(
         "--aws-access-key-id",
-        default=os.getenv("AWS_ACCESS_KEY_ID", os.getenv("MINIO_ACCESS_KEY", "")),
+        default=SETTINGS.aws_access_key_id or SETTINGS.minio_access_key,
     )
     parser.add_argument(
         "--aws-secret-access-key",
-        default=os.getenv("AWS_SECRET_ACCESS_KEY", os.getenv("MINIO_SECRET_KEY", "")),
+        default=SETTINGS.aws_secret_access_key or SETTINGS.minio_secret_key,
     )
-    parser.add_argument("--artifact-bucket", default=os.getenv("ARTIFACT_BUCKET", ""))
-    parser.add_argument("--metadata-db-url", default=os.getenv("METADATA_DB_URL", ""))
+    parser.add_argument("--artifact-bucket", default=SETTINGS.artifact_bucket)
+    parser.add_argument("--metadata-db-url", default=SETTINGS.metadata_db_url)
     parser.add_argument(
         "--cf-access-client-id",
-        default=os.getenv("CF_ACCESS_CLIENT_ID", ""),
+        default=SETTINGS.cf_access_client_id,
     )
     parser.add_argument(
         "--cf-access-client-secret",
-        default=os.getenv("CF_ACCESS_CLIENT_SECRET", ""),
+        default=SETTINGS.cf_access_client_secret,
     )
     parser.add_argument("--resume-key", default=None)
     parser.add_argument("--checkpoint-dir", default=None)
@@ -131,6 +134,8 @@ def _build_forward_argv(args: argparse.Namespace) -> list[str]:
     _append_option(argv, "--ref", args.ref)
     _append_option(argv, "--entrypoint-shell-command", args.entrypoint_shell_command)
     _append_option(argv, "--job-name", args.job_name)
+    _append_option(argv, "--config-name", args.config_name)
+    _append_option(argv, "--config-dir", args.config_dir)
     _append_option(argv, "--outputs-prefix", args.outputs_prefix)
     _append_option(argv, "--background-asset-ref", args.background_asset_ref)
     _append_option(argv, "--background-prompt", args.background_prompt)
@@ -138,13 +143,9 @@ def _build_forward_argv(args: argparse.Namespace) -> list[str]:
         argv, "--background-negative-prompt", args.background_negative_prompt
     )
     _append_option(argv, "--object-prompt", args.object_prompt)
-    _append_option(
-        argv, "--object-negative-prompt", args.object_negative_prompt
-    )
+    _append_option(argv, "--object-negative-prompt", args.object_negative_prompt)
     _append_option(argv, "--final-prompt", args.final_prompt)
-    _append_option(
-        argv, "--final-negative-prompt", args.final_negative_prompt
-    )
+    _append_option(argv, "--final-negative-prompt", args.final_negative_prompt)
     _append_option(argv, "--scene-json", args.scene_json)
     _append_option(argv, "--mlflow-tracking-uri", args.mlflow_tracking_uri)
     _append_option(argv, "--mlflow-s3-endpoint-url", args.mlflow_s3_endpoint_url)

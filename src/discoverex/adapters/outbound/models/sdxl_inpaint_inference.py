@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 
-def load_inpaint_pipe(*, current_pipe: Any | None, model_id: str, revision: str, handle: Any) -> Any:
+def load_inpaint_pipe(
+    *, current_pipe: Any | None, model_id: str, revision: str, handle: Any
+) -> Any:
     if current_pipe is not None:
         return current_pipe
     try:
@@ -15,7 +17,7 @@ def load_inpaint_pipe(*, current_pipe: Any | None, model_id: str, revision: str,
             "Install compatible ml-gpu or ml-cpu dependencies."
         ) from exc
     torch_dtype = torch.float32 if "32" in handle.dtype else torch.float16
-    pipe = AutoPipelineForInpainting.from_pretrained(
+    pipe = AutoPipelineForInpainting.from_pretrained(  # type: ignore[no-untyped-call]
         model_id,
         revision=revision,
         torch_dtype=torch_dtype,
@@ -33,7 +35,9 @@ def build_full_mask(width: int, height: int) -> Any:
     return mask
 
 
-def resize_patch_to_long_side(patch: Any, target_long_side: int) -> tuple[Any, tuple[int, int]]:
+def resize_patch_to_long_side(
+    patch: Any, target_long_side: int
+) -> tuple[Any, tuple[int, int]]:
     width, height = patch.size
     if width <= 0 or height <= 0:
         return patch.resize((target_long_side, target_long_side)), (
@@ -48,7 +52,9 @@ def resize_patch_to_long_side(patch: Any, target_long_side: int) -> tuple[Any, t
     return patch.resize(size), size
 
 
-def normalize_generated_patch(generated_patch: Any, target_size: tuple[int, int]) -> Any:
+def normalize_generated_patch(
+    generated_patch: Any, target_size: tuple[int, int]
+) -> Any:
     from PIL import Image  # type: ignore
 
     patch = generated_patch.convert("RGB")
@@ -85,7 +91,7 @@ def has_meaningful_mask(mask: Any) -> bool:
     histogram = mask.histogram()
     nonzero = sum(histogram[1:])
     weighted_alpha = sum(level * count for level, count in enumerate(histogram))
-    return nonzero >= 9 and weighted_alpha >= 255 * 6
+    return cast(bool, nonzero >= 9 and weighted_alpha >= 255 * 6)
 
 
 def _scale_mask_alpha(value: int) -> int:

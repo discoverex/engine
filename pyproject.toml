@@ -12,6 +12,8 @@ dependencies = [
     "prefect>=3.6.20",
     "pydantic>=2.12.5",
     "typer>=0.24.1",
+    "pydantic-settings>=2.13.1",
+    "typer>=0.24.1",
 ]
 
 [project.optional-dependencies]
@@ -64,6 +66,7 @@ packages = ["src/discoverex"]
 [project.scripts]
 discoverex = "discoverex.adapters.inbound.cli.main:app"
 discoverex-orch-launcher = "discoverex.orchestrator_contract.launcher:main"
+discoverex-execution-launcher = "discoverex.adapters.outbound.execution.launcher:main"
 
 [tool.uv]
 index-url = "https://pypi.org/simple"
@@ -99,7 +102,7 @@ warn_unused_configs = true
 warn_unused_ignores = false
 plugins = ["pydantic.mypy"]
 mypy_path = ["src"]
-files = ["src", "scripts", "tests"]
+files = ["src", "infra/register", "tests"]
 exclude = ["^src/sample/", "^src/ML/"]
 
 [[tool.mypy.overrides]]

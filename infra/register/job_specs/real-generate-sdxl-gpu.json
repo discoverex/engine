@@ -1,0 +1,48 @@
+{
+  "run_mode": "repo",
+  "engine": "discoverex",
+  "repo_url": "https://github.com/discoverex/engine.git",
+  "ref": "feat/engine-run-wrapper-contract",
+  "entrypoint": [
+    "/bin/sh",
+    "-lc",
+    "PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher"
+  ],
+  "config": null,
+  "job_name": "generate--generate--generator-sdxl-gpu",
+  "engine_run": {
+    "contract_version": "v2",
+    "command": "generate",
+    "config_name": "generate",
+    "config_dir": "conf",
+    "args": {
+      "background_asset_ref": "bg://dummy"
+    },
+    "overrides": [
+      "adapters/artifact_store=minio",
+      "adapters/tracker=mlflow_server",
+      "runtime/model_runtime=gpu",
+      "models/background_generator=sdxl_gpu",
+      "models/hidden_region=hf",
+      "models/inpaint=sdxl_gpu",
+      "models/perception=hf",
+      "models/fx=sdxl_gpu"
+    ],
+    "runtime": {
+      "mode": "worker",
+      "bootstrap_mode": "auto",
+      "extras": [
+        "tracking",
+        "storage"
+      ],
+      "extra_env": {
+        "MLFLOW_TRACKING_URI": "https://mlflow.discoverex.qzz.io",
+        "AWS_ACCESS_KEY_ID": "discoverex-admin-key",
+        "AWS_SECRET_ACCESS_KEY": "Jon9L8acCN8croZUmatxuJOVB2VWPhypaCCyCJQG+zQ=",
+        "ARTIFACT_BUCKET": "orchestrator-artifacts"
+      }
+    }
+  },
+  "env": {},
+  "outputs_prefix": null
+}

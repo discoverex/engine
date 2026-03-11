@@ -5,6 +5,7 @@ import pytest
 from discoverex.orchestrator_contract import (
     EngineJobV1,
     EngineJobV2,
+    JobSpec,
     build_cli_tokens,
     build_worker_entrypoint,
 )
@@ -26,6 +27,8 @@ def test_build_cli_tokens_preserves_override_order() -> None:
         {
             "contract_version": "v1",
             "command": "verify-only",
+            "config_name": "verify_prod",
+            "config_dir": "/tmp/conf",
             "args": {"scene_json": "/tmp/scene.json"},
             "overrides": ["a=1", "b=2"],
         }
@@ -34,6 +37,10 @@ def test_build_cli_tokens_preserves_override_order() -> None:
     assert build_cli_tokens(job) == [
         "discoverex",
         "verify",
+        "--config-name",
+        "verify_prod",
+        "--config-dir",
+        "/tmp/conf",
         "--scene-json",
         "/tmp/scene.json",
         "-o",
@@ -55,8 +62,7 @@ def test_build_worker_entrypoint_wraps_uv_run() -> None:
     entrypoint = build_worker_entrypoint(job)
     assert entrypoint[0:2] == ["/bin/sh", "-lc"]
     assert (
-        "uv run discoverex generate --background-asset-ref bg://dummy"
-        in entrypoint[2]
+        "uv run discoverex generate --background-asset-ref bg://dummy" in entrypoint[2]
     )
 
 
@@ -97,3 +103,23 @@ def test_engine_job_v2_accepts_background_prompt_without_asset_ref() -> None:
         "--background-prompt",
         "a beach at dawn",
     ]
+
+
+def test_job_spec_requires_nested_engine_run() -> None:
+    job_spec = JobSpec.model_validate(
+        {
+            "run_mode": "inline",
+            "engine": "discoverex",
+            "entrypoint": [
+                "/bin/sh",
+                "-lc",
+                "python -m discoverex.adapters.outbound.execution.launcher",
+            ],
+            "engine_run": {
+                "contract_version": "v2",
+                "command": "generate",
+                "args": {"background_asset_ref": "bg://dummy"},
+            },
+        }
+    )
+    assert job_spec.engine_run.command == "generate"

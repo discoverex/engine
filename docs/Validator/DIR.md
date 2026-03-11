@@ -229,7 +229,7 @@ conf/
 
 ---
 
-## 오케스트레이터 (`orchestrator/`)
+## 엔진 Prefect 플로우 (`src/discoverex/flows/`)
 
 | 파일 | 설명 |
 |------|------|

@@ -155,7 +155,7 @@ class SdxlFinalRenderModel:
                 "Install compatible ml-gpu or ml-cpu dependencies."
             ) from exc
         torch_dtype = torch.float32 if "32" in handle.dtype else torch.float16
-        pipe = AutoPipelineForImage2Image.from_pretrained(
+        pipe = AutoPipelineForImage2Image.from_pretrained(  # type: ignore[no-untyped-call]
             self.model_id,
             revision=self.revision,
             torch_dtype=torch_dtype,

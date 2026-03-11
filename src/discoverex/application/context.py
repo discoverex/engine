@@ -39,3 +39,5 @@ class AppContextLike(Protocol):
     runtime: RuntimeConfig
     thresholds: ThresholdsConfig
     model_versions: ModelVersionsConfig
+    execution_snapshot: dict[str, object] | None
+    execution_snapshot_path: Path | None

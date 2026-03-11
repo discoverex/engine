@@ -19,9 +19,10 @@ Discoverex는 캐논 중심 퍼즐 엔진이며 헥사고널 아키텍처로 구
 ### 1) `generate`
 입력:
 - `--background-asset-ref <asset_ref>`
+- 선택: `--config-name <config_name>`, `--config-dir <config_dir>`, `-o <hydra_override>`
 
 출력(stdout JSON):
-- `scene_id`, `version_id`, `status`, `scene_json`
+- `scene_id`, `version_id`, `status`, `scene_json`, `execution_config`
 
 아티팩트:
 - `{artifacts_root}/scenes/{scene_id}/{version_id}/scene.json`
@@ -31,16 +32,18 @@ Discoverex는 캐논 중심 퍼즐 엔진이며 헥사고널 아키텍처로 구
 ### 2) `verify`
 입력:
 - `--scene-json <path_to_scene_json>`
+- 선택: `--config-name <config_name>`, `--config-dir <config_dir>`, `-o <hydra_override>`
 
 출력(stdout JSON):
-- `scene_id`, `version_id`, `status`, `scene_json`
+- `scene_id`, `version_id`, `status`, `scene_json`, `execution_config`
 
 ### 3) `animate` (현재 stub)
 입력:
 - `--scene-jsons <scene1.json> --scene-jsons <scene2.json> ...`
+- 선택: `--config-name <config_name>`, `--config-dir <config_dir>`, `-o <hydra_override>`
 
 출력(stdout JSON):
-- `report`
+- `report` 또는 실패 payload, `execution_config`
 
 아티팩트:
 - `{artifacts_root}/reports/replay_eval_<timestamp>.json`
@@ -57,25 +60,61 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking
 ## 운영 모드 (로컬/워커)
 - 로컬 모드(기본): `artifact_store=local`, `metadata_store=local_json`, `tracker=mlflow_file`
 - 워커 모드(권장): `artifact_store=minio`, `tracker=mlflow_server`, 필요 시 `metadata_store=postgres`
-- 워커 필수 env: `MLFLOW_TRACKING_URI`, `MLFLOW_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (및 `METADATA_DB_URL`)
+- 워커 입력 env: `MLFLOW_TRACKING_URI`
+- 워커 프록시 env: `MLFLOW_TRACKING_PROXY_URL`
+- child engine env: `MLFLOW_TRACKING_URI`(프록시 URL), `MLFLOW_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (및 `METADATA_DB_URL`)
 - 상세 절차: `docs/runtime-mode-guide.md`
 
 ## 최소 실행 절차
 
 ```bash
 make sync
-make run ARGS='discoverex generate --background-asset-ref bg://dummy'
-make run ARGS='discoverex verify --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json'
-make run ARGS='discoverex animate --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json'
+make run ARGS='discoverex generate --config-name generate --config-dir conf --background-asset-ref bg://dummy'
+make run ARGS='discoverex verify --config-name verify --config-dir conf --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json'
+make run ARGS='discoverex animate --config-name animate --config-dir conf --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json'
+```
+
+직접 실행 예시:
+
+```bash
+UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex generate \
+  --config-name generate \
+  --config-dir conf \
+  --background-asset-ref bg://dummy
+```
+
+```bash
+python infra/register/register_prefect_job.py \
+  --command generate \
+  --config-name generate \
+  --repo-url https://github.com/<org>/discoverex-engine.git \
+  --ref main \
+  --background-asset-ref bg://dummy
 ```
 
 ## 설정으로 바꿀 수 있는 항목
 - 모델: `models/hidden_region`, `models/inpaint`, `models/perception`, `models/fx`
 - 어댑터: `adapters/artifact_store`, `adapters/metadata_store`, `adapters/tracker`, `adapters/scene_io`, `adapters/report_writer`
 - 런타임 파라미터: `runtime`, `thresholds`, `model_versions`
+- 설정 파일 선택: `--config-name`, `--config-dir`
 
 주의:
 - 새로운 파이프라인 타입 추가는 use case/CLI 코드 추가가 필요합니다.
+
+## Prefect 식별 규칙
+- flow 이름은 고정입니다.
+- config별 구분은 deployment/job 이름으로 합니다.
+- 기본 규칙:
+  - deployment: `discoverex-<command>--<config_name>`
+  - job/run name: `<command>--<config_name>--<execution_profile>`
+
+## 실행 설정 기록
+- 모든 실행은 `resolved_execution_config.json`을 생성합니다.
+- 기본 위치:
+  - `artifacts/execution/<command>/<run_id>/resolved_execution_config.json`
+- `MLflow`에는 검색용 params와 함께 이 파일이 artifact로 기록됩니다.
+- 민감값은 redaction 처리됩니다.
+- worker 전용 인증 env는 child engine snapshot에 남지 않습니다.
 
 ## 숨은그림찾기 전달 규칙
 - 엔진 결과 `scene.json`을 delivery 번들로 변환해 서버에 전달합니다.

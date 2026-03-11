@@ -128,7 +128,7 @@ class TinySDFxModel:
 
         normalized_dtype = handle.dtype.lower()
         torch_dtype = torch.float32 if "32" in normalized_dtype else torch.float16
-        pipe = StableDiffusionPipeline.from_pretrained(
+        pipe = StableDiffusionPipeline.from_pretrained(  # type: ignore[no-untyped-call]
             self.model_id,
             revision=self.revision,
             torch_dtype=torch_dtype,

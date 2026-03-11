@@ -37,14 +37,14 @@ class TinyHFPerceptionModel:
 
         if self.seed is not None:
             torch.manual_seed(self.seed)
-        cfg = DistilBertConfig(
+        cfg = DistilBertConfig(  # type: ignore[no-untyped-call]
             dim=32,
             hidden_dim=64,
             n_layers=1,
             n_heads=2,
             vocab_size=100,
         )
-        model = DistilBertModel(cfg).eval()
+        model = DistilBertModel(cfg).eval()  # type: ignore[no-untyped-call]
         _ = (
             model(input_ids=torch.ones((1, 8), dtype=torch.long))
             .last_hidden_state.mean()

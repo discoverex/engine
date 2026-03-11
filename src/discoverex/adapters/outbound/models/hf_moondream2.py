@@ -42,12 +42,12 @@ class Moondream2Adapter:
 
         quant_cfg = None
         if self._quantization == "4bit":
-            quant_cfg = BitsAndBytesConfig(
+            quant_cfg = BitsAndBytesConfig(  # type: ignore[no-untyped-call]
                 load_in_4bit=True,
                 bnb_4bit_compute_dtype=torch.float16,
             )
 
-        self._tokenizer = AutoTokenizer.from_pretrained(
+        self._tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[no-untyped-call]
             self._model_id, trust_remote_code=True
         )
         self._model = AutoModelForCausalLM.from_pretrained(
