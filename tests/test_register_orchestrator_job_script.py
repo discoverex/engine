@@ -8,6 +8,7 @@ from pathlib import Path
 SCRIPT = (
     Path(__file__).resolve().parents[1] / "scripts" / "register_orchestrator_job.py"
 )
+BUILD_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "build_job_spec.py"
 
 
 def test_register_script_dry_run_builds_repo_job_spec() -> None:
@@ -45,6 +46,30 @@ def test_register_script_dry_run_builds_repo_job_spec() -> None:
     assert payload["engine_run"]["config_dir"] == "conf"
     assert payload["engine_run"]["args"]["background_asset_ref"] == "bg://dummy"
     assert payload["engine_run"]["overrides"] == ["adapters/artifact_store=minio"]
+    assert payload["job_name"] == "generate--generate--none"
+
+
+def test_build_job_spec_script_outputs_job_spec_only() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(BUILD_SCRIPT),
+            "--command",
+            "generate",
+            "--repo-url",
+            "https://github.com/example/engine.git",
+            "--ref",
+            "main",
+            "--background-asset-ref",
+            "bg://dummy",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["engine_run"]["command"] == "generate"
     assert payload["job_name"] == "generate--generate--none"
 
 

@@ -407,31 +407,47 @@ def _resolved_job_name(args: argparse.Namespace) -> str:
     return f"{command}--{config_name}--{profile}"
 
 
-def main() -> int:
-    args = _build_parser().parse_args()
-    job_spec = _build_job_spec(args)
+def _resolved_deployment_name_from_job_spec(
+    job_spec: dict[str, Any],
+    explicit_deployment: str | None = None,
+) -> str:
+    explicit = str(explicit_deployment or "").strip()
+    if explicit:
+        return explicit
+    engine_run = job_spec.get("engine_run")
+    if not isinstance(engine_run, dict):
+        raise SystemExit("job_spec.engine_run must be a JSON object")
+    command = _mapped_command(str(engine_run.get("command", "")).strip())
+    config_name = str(engine_run.get("config_name", "")).strip() or "default"
+    return f"discoverex-{_sanitize_name(command)}--{_sanitize_name(config_name)}"
 
-    if args.dry_run:
-        print(json.dumps(job_spec, ensure_ascii=True, indent=2))
-        return 0
 
-    if not args.prefect_api_url:
+def submit_job_spec(
+    *,
+    job_spec: dict[str, Any],
+    prefect_api_url: str,
+    deployment: str | None = None,
+    job_name: str | None = None,
+    resume_key: str | None = None,
+    checkpoint_dir: str | None = None,
+) -> dict[str, Any]:
+    if not prefect_api_url:
         raise SystemExit("--prefect-api-url is required unless PREFECT_API_URL is set")
-    api_url = _normalize_api_url(args.prefect_api_url)
-    deployment_name = _resolved_deployment_name(args)
+    api_url = _normalize_api_url(prefect_api_url)
+    deployment_name = _resolved_deployment_name_from_job_spec(job_spec, deployment)
     deployment_id = _find_deployment_id(api_url, deployment_name)
     params: dict[str, Any] = {
         "job_spec_json": json.dumps(job_spec, ensure_ascii=True),
-        "resume_key": args.resume_key,
-        "checkpoint_dir": args.checkpoint_dir,
+        "resume_key": resume_key,
+        "checkpoint_dir": checkpoint_dir,
     }
     created = _create_flow_run(
         api_url,
         deployment_id,
         params,
-        _resolved_job_name(args),
+        job_name or str(job_spec.get("job_name", "")).strip() or None,
     )
-    output = {
+    return {
         "ok": True,
         "deployment": deployment_name,
         "deployment_id": deployment_id,
@@ -440,6 +456,24 @@ def main() -> int:
         "engine": job_spec["engine"],
         "run_mode": job_spec["run_mode"],
     }
+
+
+def main() -> int:
+    args = _build_parser().parse_args()
+    job_spec = _build_job_spec(args)
+
+    if args.dry_run:
+        print(json.dumps(job_spec, ensure_ascii=True, indent=2))
+        return 0
+
+    output = submit_job_spec(
+        job_spec=job_spec,
+        prefect_api_url=args.prefect_api_url,
+        deployment=_resolved_deployment_name(args),
+        job_name=_resolved_job_name(args),
+        resume_key=args.resume_key,
+        checkpoint_dir=args.checkpoint_dir,
+    )
     print(json.dumps(output, ensure_ascii=True))
     return 0
 
