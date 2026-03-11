@@ -5,6 +5,7 @@ from typing import Protocol
 
 from discoverex.domain.verification import VerificationBundle
 from discoverex.models.types import (
+    ColorEdgeMetadata,
     FxPrediction,
     FxRequest,
     HiddenRegionRequest,
@@ -72,8 +73,20 @@ class PhysicalExtractionPort(Protocol):
     def unload(self) -> None: ...
 
 
+class ColorEdgeExtractionPort(Protocol):
+    """Phase 2: Classical CV color contrast + edge strength extraction (CPU-only, no model)."""
+
+    def load(self, handle: ModelHandle) -> None: ...
+
+    def extract(
+        self, composite_image: Path, object_layers: list[Path]
+    ) -> ColorEdgeMetadata: ...
+
+    def unload(self) -> None: ...
+
+
 class LogicalExtractionPort(Protocol):
-    """Phase 2: Moondream2-based scene graph + logical relation extraction."""
+    """Phase 3: Moondream2-based scene graph + logical relation extraction."""
 
     def load(self, handle: ModelHandle) -> None: ...
 
@@ -85,12 +98,16 @@ class LogicalExtractionPort(Protocol):
 
 
 class VisualVerificationPort(Protocol):
-    """Phase 3: YOLO+CLIP parallel visual difficulty verification."""
+    """Phase 4: YOLO+CLIP parallel visual difficulty verification."""
 
     def load(self, handle: ModelHandle) -> None: ...
 
     def verify(
-        self, composite_image: Path, sigma_levels: list[float]
+        self,
+        composite_image: Path,
+        sigma_levels: list[float],
+        color_edge: ColorEdgeMetadata | None = None,
+        physical: PhysicalMetadata | None = None,
     ) -> VisualVerification: ...
 
     def unload(self) -> None: ...

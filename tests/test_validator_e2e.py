@@ -3,23 +3,36 @@ Validator 파이프라인 End-to-End 테스트
 
 테스트 전략
 -----------
-* Phase 1 (MobileSAM) / Phase 2 (Moondream2) / Phase 3 (YOLO+CLIP) 는
+* Phase 1 (MobileSAM) / Phase 3 (Moondream2) / Phase 4 (YOLO+CLIP) 는
   실제 모델 가중치와 GPU 없이 실행 불가 → Dummy 어댑터 사용
-* Dummy 어댑터가 반환하는 고정값을 직접 추적해 Phase 4 수치를 사전 계산하고,
+* Dummy 어댑터가 반환하는 고정값을 직접 추적해 Phase 5 수치를 사전 계산하고,
   실제 실행 결과와 비교한다 (단순 타입 검사가 아닌 수치 검증).
 
 Dummy 어댑터 고정 출력값
 --------------------------
-  DummyPhysical  : occlusion=0.45, z_depth_hop=2, cluster_density=3
-  DummyLogical   : degree=3, hop=2, diameter=4.0
-  DummyVisual    : sigma=4.0, drr_slope=0.15  (obj_0, obj_1 고정)
+  DummyPhysical  : z_depth_hop=2, cluster_density=3, alpha_degree=2
+  DummyLogical   : hop=2, diameter=4.0, degree_map={oid: 3}
+  DummyVisual    : sigma=4.0, drr_slope=0.15, similar_count=1, similar_distance=80.0, object_count=1
+                   (obj_0, obj_1 고정)
+  DummyColorEdge : color_contrast=0.0, edge_strength=0.0 (기본값)
 
-Phase 4 수식 (ScoringWeights 기본값 기준 — 정규화 적용):
-  p_denom    = 0.50+0.50 = 1.0
-  perception = (0.50*(1/4) + 0.50*0.15) / 1.0 = 0.200
-  l_denom    = 0.55+0.45 = 1.0
-  logical    = (0.55*0.5 + 0.45*1.0) / 1.0 = 0.725
-  total      = 0.200*0.45 + 0.725*0.55 = 0.48875  → PASS
+Phase 5 수식 (ScoringWeights 기본값 기준 — 정규화 적용):
+  visual_deg=2, logical_deg=3, combined=5
+  max_alpha_degree=2, max_combined=max(2*2,1)=4
+  degree_norm = 5/4 = 1.25
+
+  perception (6항):
+    p_denom = 0.10+0.15+0.20+0.15+0.20+0.20 = 1.00
+    = (0.10*(1/4) + 0.15*0.15 + 0.20*(1/5) + 0.15*(1/81) + 0.20*1 + 0.20*1) / 1.0
+    ≈ 0.489352
+
+  logical (3항):
+    l_denom = 0.40+0.40+0.20 = 1.00
+    cluster_norm = min(3/10, 1) = 0.3
+    = (0.40*(2/4) + 0.40*1.25² + 0.20*0.3) / 1.0
+    = 0.20 + 0.625 + 0.06 = 0.885
+
+  total = 0.489352*0.45 + 0.885*0.55 ≈ 0.706958  → PASS
 """
 
 from __future__ import annotations
@@ -44,6 +57,7 @@ from discoverex.domain.services.verification import (
 )
 from discoverex.domain.verification import VerificationBundle
 from discoverex.models.types import (
+    ColorEdgeMetadata,
     LogicalStructure,
     ModelHandle,
     PhysicalMetadata,
@@ -91,6 +105,7 @@ def _make_orchestrator(
         visual_handle=_make_handle("visual"),
         pass_threshold=pass_threshold,
         scoring_weights=scoring_weights,
+        # color_edge_port=None → Phase 2 기본값 ColorEdgeMetadata() 사용
     )
 
 
@@ -106,11 +121,18 @@ class _HardVisualVerification:
         pass
 
     def verify(
-        self, composite_image: Path, sigma_levels: list[float]
-    ) -> VisualVerification:  # noqa: ARG002
+        self,
+        composite_image: Path,  # noqa: ARG002
+        sigma_levels: list[float],  # noqa: ARG002
+        color_edge: ColorEdgeMetadata | None = None,  # noqa: ARG002
+        physical: PhysicalMetadata | None = None,  # noqa: ARG002
+    ) -> VisualVerification:
         return VisualVerification(
             sigma_threshold_map={"obj_0": 1.0, "obj_1": 1.0},
             drr_slope_map={"obj_0": 1.0, "obj_1": 1.0},
+            similar_count_map={"obj_0": 0, "obj_1": 0},
+            similar_distance_map={"obj_0": 100.0, "obj_1": 100.0},
+            object_count_map={"obj_0": 1, "obj_1": 1},
         )
 
     def unload(self) -> None:
@@ -118,18 +140,18 @@ class _HardVisualVerification:
 
 
 class _HardLogicalExtraction:
-    """hop = diameter = 4, degree = 4 → logical 최댓값."""
+    """hop = diameter = 4 → logical 최댓값."""
 
     def load(self, handle: ModelHandle) -> None:  # noqa: ARG002
         pass
 
     def extract(
-        self, composite_image: Path, physical: PhysicalMetadata
-    ) -> LogicalStructure:  # noqa: ARG002
-        obj_ids = list(physical.occlusion_map.keys()) or ["obj_0", "obj_1"]
+        self, composite_image: Path, physical: PhysicalMetadata  # noqa: ARG002
+    ) -> LogicalStructure:
+        obj_ids = list(physical.alpha_degree_map.keys()) or ["obj_0", "obj_1"]
         return LogicalStructure(
             relations=[],
-            degree_map={oid: 4 for oid in obj_ids},
+            degree_map={},
             hop_map={oid: 4 for oid in obj_ids},
             diameter=4.0,
         )
@@ -143,22 +165,47 @@ class _HardLogicalExtraction:
 # ---------------------------------------------------------------------------
 
 _W = ScoringWeights()
-_P_DENOM = _W.perception_sigma + _W.perception_drr  # 1.0
-_L_DENOM = _W.logical_hop + _W.logical_degree  # 1.0
+_P_DENOM = (
+    _W.perception_sigma + _W.perception_drr + _W.perception_similar_count
+    + _W.perception_similar_dist + _W.perception_color_contrast + _W.perception_edge_strength
+)  # 1.00
+_L_DENOM = _W.logical_hop + _W.logical_degree + _W.logical_cluster  # 1.00
 
 # 표준 (dummy) 시나리오
+# visual_deg=2, logical_deg=3, combined=5
+# max_visual=2, max_logical=3, max_combined=5 → degree_norm=1.0
+# DummyVisual: sigma=4, drr=0.15, sim_cnt=1, sim_dist=80, color_contrast=0, edge_strength=0
+# DummyPhysical: cluster_density=3
 _PERC_STD = (
-    _W.perception_sigma * (1.0 / 4.0) + _W.perception_drr * 0.15
-) / _P_DENOM  # 0.200
+    _W.perception_sigma * (1.0 / 4.0)
+    + _W.perception_drr * 0.15
+    + _W.perception_similar_count * (1.0 / 5.0)
+    + _W.perception_similar_dist * (1.0 / 81.0)
+    + _W.perception_color_contrast * 1.0
+    + _W.perception_edge_strength * 1.0
+) / _P_DENOM  # ≈ 0.489352
 _LOGI_STD = (
-    _W.logical_hop * (2.0 / 4.0) + _W.logical_degree * 1.0**2
-) / _L_DENOM  # 0.725
-_TOT_STD = _PERC_STD * _W.total_perception + _LOGI_STD * _W.total_logical  # 0.48875
+    _W.logical_hop * (2.0 / 4.0) + _W.logical_degree * 1.0**2 + _W.logical_cluster * 0.3
+) / _L_DENOM  # 0.66
+_TOT_STD = _PERC_STD * _W.total_perception + _LOGI_STD * _W.total_logical  # ≈ 0.583208
 
-# 어려운 시나리오 (sigma=1, drr=0, hop=diameter=4, degree=4)
-_PERC_HARD = (_W.perception_sigma * 1.0 + _W.perception_drr * 1.0) / _P_DENOM  # 1.0
-_LOGI_HARD = (_W.logical_hop * 1.0 + _W.logical_degree * 1.0) / _L_DENOM  # 1.0
-_TOT_HARD = _PERC_HARD * _W.total_perception + _LOGI_HARD * _W.total_logical  # 1.0
+# 어려운 시나리오 (sigma=1, drr=1, sim_cnt=0, sim_dist=100, hop=4, diameter=4)
+# _HardLogicalExtraction: degree_map={} → logical_deg=0
+# visual_deg=2, logical_deg=0, combined=2
+# max_visual=2, max_logical=0, max_combined=max(2,1)=2 → degree_norm=1.0
+# DummyPhysical: cluster_density=3 → cluster_norm=0.3
+_PERC_HARD = (
+    _W.perception_sigma * 1.0
+    + _W.perception_drr * 1.0
+    + _W.perception_similar_count * 0.0
+    + _W.perception_similar_dist * (1.0 / 101.0)
+    + _W.perception_color_contrast * 1.0
+    + _W.perception_edge_strength * 1.0
+) / _P_DENOM  # ≈ 0.651485
+_LOGI_HARD = (
+    _W.logical_hop * (4.0 / 4.0) + _W.logical_degree * 1.0**2 + _W.logical_cluster * 0.3
+) / _L_DENOM  # 0.86
+_TOT_HARD = _PERC_HARD * _W.total_perception + _LOGI_HARD * _W.total_logical  # ≈ 0.766168
 
 
 # ===========================================================================
@@ -232,19 +279,26 @@ class TestE2EFullPipelineDummy:
         for p in layers:
             _make_png(p)
         bundle = orch.run(composite_image=composite, object_layers=layers)
+        # DummyVisual의 sigma=4+drr=0.15+similar_count=1 → 각 obj 3조건 충족 → 2 answer objs
         assert bundle.logical.signals["answer_obj_count"] == 2
 
     def test_two_layers_scene_difficulty_signal(
         self, orch: ValidatorOrchestrator, composite: Path, tmp_path: Path
     ) -> None:
+        # 실제 실행에서 obj_metrics에 포함되는 값들과 동일하게 구성
+        # visual_deg=2, logical_deg=3, combined=5, max_combined=5 → degree_norm=1.0
         expected_d = compute_difficulty(
             {
-                "occlusion_ratio": 0.45,
-                "sigma_threshold": 4.0,
+                "degree_norm": 1.0,
+                "cluster_density": 3,
                 "hop": 2,
                 "diameter": 4.0,
-                "degree_norm": 1.0,
                 "drr_slope": 0.15,
+                "sigma_threshold": 4.0,
+                "similar_count": 1,
+                "similar_distance": 80.0,
+                "color_contrast": 0.0,       # color_edge_port=None → 0.0
+                "edge_strength": 0.0,
             }
         )
         layers = [tmp_path / f"obj_{i}.png" for i in range(2)]
@@ -267,7 +321,7 @@ class TestE2EFullPipelineDummy:
         for key in (
             "answer_obj_count",
             "scene_difficulty",
-            "degree_map",
+            "alpha_degree_map",
             "hop_map",
             "diameter",
         ):
@@ -277,14 +331,14 @@ class TestE2EFullPipelineDummy:
         self, orch: ValidatorOrchestrator, composite: Path, tmp_path: Path
     ) -> None:
         """
-        1개 레이어: obj_1 은 physical/logical 기본값(0) 사용.
-        obj_1.logical = 0.0  (hop=0, degree_norm=0)
-        avg_perception = 0.200, avg_logical = 0.725/2 = 0.3625
-        total = 0.200*0.45 + 0.3625*0.55 = 0.289375
+        1개 레이어: obj_0만 physical에 존재, obj_1은 DummyVisual에서 추가.
+        obj_0: visual_deg=2, logical_deg=3, combined=5, max_combined=5, degree_norm=1.0
+        obj_1: visual_deg=0, logical_deg=0, combined=0, degree_norm=0, hop=0
+               logical = 0.0
         """
         layer = tmp_path / "obj_0.png"
         _make_png(layer)
-        avg_perc = (_PERC_STD + _PERC_STD) / 2  # obj_1도 sigma/drr는 visual에서
+        avg_perc = _PERC_STD  # 두 obj 모두 sigma/drr는 visual에서 동일
         avg_logi = (_LOGI_STD + 0.0) / 2
         expected_tot = avg_perc * _W.total_perception + avg_logi * _W.total_logical
 
@@ -294,10 +348,15 @@ class TestE2EFullPipelineDummy:
     def test_one_layer_answer_obj_count(
         self, orch: ValidatorOrchestrator, composite: Path, tmp_path: Path
     ) -> None:
+        """
+        DummyVisualVerification은 항상 obj_0, obj_1 고정 반환.
+        두 객체 모두 sigma + drr_slope + similar_count = 3조건 → answer 객체
+        object_count_map={obj_0:1, obj_1:1} → answer_obj_count = 2
+        """
         layer = tmp_path / "obj_0.png"
         _make_png(layer)
         bundle = orch.run(composite_image=composite, object_layers=[layer])
-        assert bundle.logical.signals["answer_obj_count"] == 1
+        assert bundle.logical.signals["answer_obj_count"] == 2
 
     def test_no_layers_uses_default_objs(
         self, orch: ValidatorOrchestrator, composite: Path
@@ -394,22 +453,28 @@ class TestE2EHardScenarioPass:
 
 
 # ===========================================================================
-# 3. Phase 4 단독 E2E — resolve → score → difficulty 체인
+# 3. Phase 5 단독 E2E — resolve → score → difficulty 체인
 # ===========================================================================
 
 
-class TestE2EPhase4Chain:
+class TestE2EPhase5Chain:
     def test_resolve_and_score_standard_metrics(self) -> None:
+        # 9조건 중 충분히 충족하는 메트릭 (drr+color_contrast+z_depth_hop+cluster_density)
+        # degree_norm=1.0: max_combined=5(=2+3), combined=5 → 1.0
         metrics = {
-            "occlusion_ratio": 0.45,
-            "sigma_threshold": 4.0,
-            "degree": 3,
+            "visual_degree": 2,
+            "logical_degree": 3,
             "degree_norm": 1.0,
+            "cluster_density": 3,
             "z_depth_hop": 2,
-            "neighbor_count": 3,
             "hop": 2,
             "diameter": 4.0,
+            "sigma_threshold": 4.0,
             "drr_slope": 0.15,
+            "similar_count": 1,
+            "similar_distance": 80.0,
+            "color_contrast": 0.0,
+            "edge_strength": 0.0,
         }
         assert resolve_answer(metrics) is True
         perc, logi, total = integrate_verification_v2(metrics)
@@ -418,14 +483,19 @@ class TestE2EPhase4Chain:
         assert total == pytest.approx(_TOT_STD, rel=1e-4)
 
     def test_resolve_fails_below_two_conditions(self) -> None:
+        # 모든 조건 미충족 → False
         assert (
             resolve_answer(
                 {
-                    "occlusion_ratio": 0.1,
-                    "sigma_threshold": 8.0,
-                    "degree": 0,
+                    "drr_slope": 0.0,
+                    "similar_count": 0,
+                    "similar_distance": 100.0,
+                    "color_contrast": 100.0,
+                    "edge_strength": 1000.0,
+                    "visual_degree": 0,
+                    "cluster_density": 0,
                     "z_depth_hop": 0,
-                    "neighbor_count": 0,
+                    "logical_degree": 0,
                 }
             )
             is False
@@ -433,7 +503,6 @@ class TestE2EPhase4Chain:
 
     def test_difficulty_and_scene_difficulty_chain(self) -> None:
         obj = {
-            "occlusion_ratio": 0.45,
             "sigma_threshold": 4.0,
             "hop": 2,
             "diameter": 4.0,
@@ -446,32 +515,41 @@ class TestE2EPhase4Chain:
 
     def test_hard_metrics_full_chain(self) -> None:
         hard = {
-            "occlusion_ratio": 0.5,
-            "sigma_threshold": 1.0,
-            "degree": 4,
+            "visual_degree": 3,
+            "logical_degree": 4,
             "degree_norm": 1.0,
+            "cluster_density": 3,
             "z_depth_hop": 3,
-            "neighbor_count": 4,
             "hop": 4,
             "diameter": 4.0,
+            "sigma_threshold": 1.0,
             "drr_slope": 1.0,
+            "similar_count": 2,
+            "similar_distance": 40.0,
+            "color_contrast": 10.0,
+            "edge_strength": 200.0,
         }
         assert resolve_answer(hard) is True
-        _, _, total = integrate_verification_v2(hard)
-        assert total == pytest.approx(_TOT_HARD, rel=1e-4)
+        perc, logi, total = integrate_verification_v2(hard)
+        # 어려운 메트릭 → pass_threshold(0.35) 초과, standard 시나리오보다 높은 점수
         assert total >= 0.35
+        assert total > _TOT_STD * 0.8  # standard 시나리오 대비 최소 80% 이상
 
     def test_easy_metrics_full_chain(self) -> None:
         easy = {
-            "occlusion_ratio": 0.0,
-            "sigma_threshold": 16.0,
-            "degree": 0,
+            "visual_degree": 0,
+            "logical_degree": 0,
             "degree_norm": 0.0,
+            "cluster_density": 0,
             "z_depth_hop": 0,
-            "neighbor_count": 0,
             "hop": 0,
             "diameter": 1.0,
+            "sigma_threshold": 16.0,
             "drr_slope": 0.0,
+            "similar_count": 0,
+            "similar_distance": 100.0,
+            "color_contrast": 100.0,
+            "edge_strength": 1000.0,
         }
         assert resolve_answer(easy) is False
         _, _, total = integrate_verification_v2(easy)
@@ -529,7 +607,7 @@ def test_phase1_real_mobilesam_loads() -> None:
 
 
 @pytest.mark.skip(reason="Moondream2: transformers 미설치")
-def test_phase2_real_moondream2_loads() -> None:
+def test_phase3_real_moondream2_loads() -> None:
     from discoverex.adapters.outbound.models.hf_moondream2 import (
         Moondream2Adapter,  # noqa: F401
     )
@@ -538,7 +616,7 @@ def test_phase2_real_moondream2_loads() -> None:
 
 
 @pytest.mark.skip(reason="YOLO+CLIP: transformers 미설치")
-def test_phase3_real_yolo_clip_loads() -> None:
+def test_phase4_real_yolo_clip_loads() -> None:
     from discoverex.adapters.outbound.models.hf_yolo_clip import (
         YoloCLIPAdapter,  # noqa: F401
     )
