@@ -104,12 +104,21 @@ def _http_json(
     try:
         with request.urlopen(req, timeout=30) as resp:  # nosec B310
             raw = resp.read()
+            content_type = resp.headers.get("Content-Type", "")
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         raise SystemExit(f"{method} {path} failed: HTTP {exc.code} {detail}") from exc
     if not raw:
         return {}
-    return json.loads(raw.decode("utf-8"))
+    text = raw.decode("utf-8", errors="replace")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        snippet = text[:240].replace("\n", " ").strip()
+        raise SystemExit(
+            f"{method} {path} returned non-JSON response "
+            f"(content-type={content_type or '<unknown>'}): {snippet}"
+        ) from exc
 
 
 def _find_deployment_id(api_url: str, name: str) -> str:
