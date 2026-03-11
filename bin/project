@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REGISTER_WRAPPER="${ROOT_DIR}/scripts/register_prefect_job.py"
+REGISTER_RAW="${ROOT_DIR}/scripts/register_orchestrator_job.py"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./bin/project register [register_prefect_job.py args...]
+  ./bin/project register-raw [register_orchestrator_job.py args...]
+
+Examples:
+  ./bin/project register --dry-run --command generate --background-asset-ref bg://dummy
+  ./bin/project register --command generate --execution-profile generator-sdxl-gpu \
+    --background-prompt "stormy harbor at dusk" \
+    --object-prompt "hidden golden compass" \
+    --final-prompt "polished playable hidden object scene"
+EOF
+}
+
+COMMAND="${1:-}"
+shift || true
+
+case "${COMMAND}" in
+  register)
+    exec python3 "${REGISTER_WRAPPER}" "$@"
+    ;;
+  register-raw)
+    exec python3 "${REGISTER_RAW}" "$@"
+    ;;
+  ""|-h|--help|help)
+    usage
+    ;;
+  *)
+    echo "unknown command: ${COMMAND}" >&2
+    usage
+    exit 1
+    ;;
+esac
