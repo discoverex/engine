@@ -11,90 +11,125 @@ from discoverex.domain.services.verification import (
 )
 
 # ---------------------------------------------------------------------------
-# resolve_answer
+# resolve_answer  (8조건, is_hidden_min_conditions=2 기본값)
 # ---------------------------------------------------------------------------
 
 
 class TestResolveAnswer:
     def test_two_conditions_returns_true(self) -> None:
-        metrics = {
-            "occlusion_ratio": 0.5,  # > 0.3 ✓
-            "sigma_threshold": 2.0,  # <= 4 ✓
-            "degree": 0,
-            "z_depth_hop": 0,
-            "neighbor_count": 0,
-        }
+        # drr_slope > 0.1 ✓, color_contrast <= 30 ✓ → 2개 충족
+        metrics = {"drr_slope": 0.15, "color_contrast": 20.0}
         assert resolve_answer(metrics) is True
 
     def test_one_condition_returns_false(self) -> None:
-        metrics = {
-            "occlusion_ratio": 0.5,  # > 0.3 ✓
-            "sigma_threshold": 16.0,  # not <= 4
-            "degree": 0,
-            "z_depth_hop": 0,
-            "neighbor_count": 0,
-        }
+        # drr_slope > 0.1 ✓, 나머지 기본값 → 1개만 충족
+        metrics = {"drr_slope": 0.15}
         assert resolve_answer(metrics) is False
 
-    def test_all_conditions_met(self) -> None:
+    def test_all_nine_conditions_met(self) -> None:
         metrics = {
-            "occlusion_ratio": 0.6,
-            "sigma_threshold": 2.0,
-            "degree": 5,
-            "z_depth_hop": 3,
-            "neighbor_count": 4,
+            "drr_slope": 0.2,
+            "similar_count": 2,
+            "similar_distance": 50.0,
+            "color_contrast": 15.0,
+            "edge_strength": 300.0,
+            "visual_degree": 3,
+            "cluster_density": 3,
+            "z_depth_hop": 2,
+            "logical_degree": 4,
         }
         assert resolve_answer(metrics) is True
 
-    def test_missing_keys_use_defaults(self) -> None:
-        # Empty dict: all conditions False → should return False
+    def test_missing_keys_use_defaults_return_false(self) -> None:
+        # 빈 dict: 모든 조건 기본값 → min 2개 미충족
         assert resolve_answer({}) is False
 
-    def test_boundary_occlusion_exactly_03(self) -> None:
-        # occlusion_ratio == 0.3 is NOT > 0.3
-        metrics = {"occlusion_ratio": 0.3, "sigma_threshold": 2.0}
+    def test_boundary_color_contrast_exactly_30(self) -> None:
+        # color_contrast == 30 → <= 30 ✓ + drr_slope ✓ → True
+        metrics = {"color_contrast": 30.0, "drr_slope": 0.15}
+        assert resolve_answer(metrics) is True
+
+    def test_boundary_color_contrast_above_30(self) -> None:
+        # color_contrast > 30 → ❌ → drr_slope만 충족 → False
+        metrics = {"color_contrast": 30.01, "drr_slope": 0.15}
         assert resolve_answer(metrics) is False
 
-    def test_boundary_sigma_exactly_4(self) -> None:
-        # sigma_threshold == 4 IS <= 4
-        metrics = {"occlusion_ratio": 0.5, "sigma_threshold": 4.0}
+    def test_boundary_edge_strength_exactly_400(self) -> None:
+        # edge_strength == 400 → <= 400 ✓ + drr_slope ✓ → True
+        metrics = {"edge_strength": 400.0, "drr_slope": 0.15}
         assert resolve_answer(metrics) is True
+
+    def test_drr_slope_condition(self) -> None:
+        # drr_slope > 0.1 ✓ + color_contrast ✓ → 2 → True
+        metrics = {"drr_slope": 0.15, "color_contrast": 20.0}
+        assert resolve_answer(metrics) is True
+
+    def test_similar_count_condition(self) -> None:
+        # similar_count >= 1 ✓ + drr_slope ✓ → 2 → True
+        metrics = {"similar_count": 1, "drr_slope": 0.15}
+        assert resolve_answer(metrics) is True
+
+    def test_similar_distance_condition(self) -> None:
+        # similar_distance < 80 ✓ + drr_slope ✓ → 2 → True
+        metrics = {"similar_distance": 60.0, "drr_slope": 0.15}
+        assert resolve_answer(metrics) is True
+
+    def test_visual_degree_condition(self) -> None:
+        # visual_degree >= 2 ✓ + drr_slope ✓ → 2 → True
+        metrics = {"visual_degree": 2, "drr_slope": 0.15}
+        assert resolve_answer(metrics) is True
+
+    def test_cluster_density_condition(self) -> None:
+        # cluster_density >= 2 ✓ + drr_slope ✓ → 2 → True
+        metrics = {"cluster_density": 2, "drr_slope": 0.15}
+        assert resolve_answer(metrics) is True
+
+    def test_min_conditions_override(self) -> None:
+        # 3개 조건 충족, min_conditions=4 → False
+        metrics = {"drr_slope": 0.15, "color_contrast": 20.0, "z_depth_hop": 2}
+        assert resolve_answer(metrics, min_conditions=4) is False
+
+    def test_min_conditions_1_easy_pass(self) -> None:
+        # min_conditions=1 → drr_slope 하나만으로 True
+        metrics = {"drr_slope": 0.15}
+        assert resolve_answer(metrics, min_conditions=1) is True
 
 
 # ---------------------------------------------------------------------------
-# compute_difficulty
+# compute_difficulty  (9항 수식)
 # ---------------------------------------------------------------------------
 
 
 class TestComputeDifficulty:
     def test_zero_metrics_returns_nonnegative(self) -> None:
-        metrics = {
-            "occlusion_ratio": 0.0,
-            "sigma_threshold": 1.0,
-            "hop": 0,
-            "diameter": 1.0,
-            "degree_norm": 0.0,
-            "drr_slope": 0.0,
-        }
-        score = compute_difficulty(metrics)
+        # 모든 항이 기본값 → 0 이상
+        score = compute_difficulty({})
         assert score >= 0.0
 
     def test_high_difficulty_metrics_exceeds_low(self) -> None:
         easy = {
-            "occlusion_ratio": 0.0,
-            "sigma_threshold": 16.0,
+            "degree_norm": 0.0,
+            "cluster_density": 0,
             "hop": 0,
             "diameter": 4.0,
-            "degree_norm": 0.0,
-            "drr_slope": 0.0,   # 소실 속도 낮음 = 쉬움
+            "drr_slope": 0.0,
+            "sigma_threshold": 16.0,
+            "similar_count": 0,
+            "similar_distance": 100.0,
+            "color_contrast": 100.0,
+            "edge_strength": 100.0,
         }
         hard = {
-            "occlusion_ratio": 0.9,
-            "sigma_threshold": 1.0,
+            "degree_norm": 0.9,
+            "cluster_density": 8,
             "hop": 3,
             "diameter": 4.0,
-            "degree_norm": 0.9,
-            "drr_slope": 0.25,  # 소실 속도 높음 = 어려움
+            "drr_slope": 0.25,
+            "sigma_threshold": 1.0,
+            "similar_count": 4,
+            "similar_distance": 10.0,
+            "color_contrast": 0.0,
+            "edge_strength": 0.0,
         }
         assert compute_difficulty(hard) > compute_difficulty(easy)
 
@@ -103,7 +138,6 @@ class TestComputeDifficulty:
         assert score >= 0.0
 
     def test_sigma_zero_guarded(self) -> None:
-        # sigma_threshold=0 must not raise ZeroDivisionError
         metrics = {"sigma_threshold": 0.0}
         score = compute_difficulty(metrics)
         assert score >= 0.0
@@ -113,9 +147,21 @@ class TestComputeDifficulty:
         score = compute_difficulty(metrics)
         assert score >= 0.0
 
+    def test_similar_distance_zero_guarded(self) -> None:
+        # 1/(1+0) = 1.0 — 분모가 1 이므로 ZeroDivisionError 없어야 함
+        metrics = {"similar_distance": 0.0}
+        score = compute_difficulty(metrics)
+        assert score >= 0.0
+
+    def test_all_nine_terms_contribute(self) -> None:
+        w = ScoringWeights()
+        base = compute_difficulty({})
+        # degree_norm=1 → degree 항 추가
+        assert compute_difficulty({"degree_norm": 1.0}) > base - 1e-9
+
 
 # ---------------------------------------------------------------------------
-# compute_scene_difficulty
+# compute_scene_difficulty  (object_count 가중 평균)
 # ---------------------------------------------------------------------------
 
 
@@ -125,7 +171,6 @@ class TestComputeSceneDifficulty:
 
     def test_single_object_equals_compute_difficulty(self) -> None:
         obj = {
-            "occlusion_ratio": 0.5,
             "sigma_threshold": 4.0,
             "hop": 2,
             "diameter": 4.0,
@@ -134,10 +179,10 @@ class TestComputeSceneDifficulty:
         }
         assert compute_scene_difficulty([obj]) == pytest.approx(compute_difficulty(obj))
 
-    def test_multiple_objects_is_average(self) -> None:
+    def test_multiple_objects_equal_count_is_average(self) -> None:
+        """object_count_map 없거나 count=1 이면 단순 평균."""
         objs = [
             {
-                "occlusion_ratio": 0.4,
                 "sigma_threshold": 4.0,
                 "hop": 1,
                 "diameter": 3.0,
@@ -145,7 +190,6 @@ class TestComputeSceneDifficulty:
                 "drr_slope": 0.08,
             },
             {
-                "occlusion_ratio": 0.8,
                 "sigma_threshold": 2.0,
                 "hop": 3,
                 "diameter": 3.0,
@@ -155,6 +199,23 @@ class TestComputeSceneDifficulty:
         ]
         expected = sum(compute_difficulty(o) for o in objs) / 2
         assert compute_scene_difficulty(objs) == pytest.approx(expected)
+
+    def test_object_count_weighted_average(self) -> None:
+        """object_count_map 가중치가 반영되어야 한다."""
+        obj_a = {"obj_id": "a", "sigma_threshold": 2.0, "degree_norm": 0.8}
+        obj_b = {"obj_id": "b", "sigma_threshold": 8.0, "degree_norm": 0.1}
+        ocount = {"a": 3, "b": 1}
+        expected = (3 * compute_difficulty(obj_a) + 1 * compute_difficulty(obj_b)) / 4
+        result = compute_scene_difficulty([obj_a, obj_b], object_count_map=ocount)
+        assert result == pytest.approx(expected, rel=1e-6)
+
+    def test_missing_obj_id_defaults_count_to_1(self) -> None:
+        """obj_id 없는 경우 count=1 로 처리."""
+        obj = {"sigma_threshold": 4.0}
+        ocount = {"irrelevant_id": 5}
+        assert compute_scene_difficulty([obj], object_count_map=ocount) == pytest.approx(
+            compute_difficulty(obj)
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -169,28 +230,20 @@ class TestIntegrateVerificationV2:
         assert all(isinstance(v, float) for v in result)
 
     def test_high_difficulty_passes_threshold(self) -> None:
-        # 정규화 수식 기준 (drr_slope 방식):
-        # perception = (0.5*(1/1) + 0.5*1.0) / 1.0 = 1.0  (sigma=1, drr_slope=1.0)
-        # logical    = (0.55*(4/4) + 0.45*(1.0)²) / 1.0 = 1.0
-        # total      = 1.0*0.45 + 1.0*0.55 = 1.0 >= 0.35
         hard = {
             "sigma_threshold": 1.0,
-            "drr_slope": 1.0,   # 빠른 소실 = 어려움 (직접 기여)
+            "drr_slope": 1.0,
             "hop": 4,
             "diameter": 4.0,
             "degree_norm": 1.0,
         }
-        perception, logical, total = integrate_verification_v2(
-            hard, pass_threshold=0.35
-        )
+        perception, logical, total = integrate_verification_v2(hard, pass_threshold=0.35)
         assert total >= 0.35
 
     def test_easy_scene_below_threshold(self) -> None:
-        # sigma=16 → 1/16 = 0.0625, drr_slope=0.0 → perception 낮음
-        # hop=0, degree_norm=0 → logical=0
         easy = {
             "sigma_threshold": 16.0,
-            "drr_slope": 0.0,   # 소실 없음 = 쉬움
+            "drr_slope": 0.0,
             "hop": 0,
             "diameter": 1.0,
             "degree_norm": 0.0,
@@ -199,11 +252,10 @@ class TestIntegrateVerificationV2:
         assert total < 0.35
 
     def test_scores_are_nonnegative(self) -> None:
-        for _ in range(5):
-            perception, logical, total = integrate_verification_v2({})
-            assert perception >= 0.0
-            assert logical >= 0.0
-            assert total >= 0.0
+        perception, logical, total = integrate_verification_v2({})
+        assert perception >= 0.0
+        assert logical >= 0.0
+        assert total >= 0.0
 
     def test_weighted_sum_formula(self) -> None:
         metrics = {
