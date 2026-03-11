@@ -7,11 +7,6 @@
 2. 각 영역 마스크를 MaxFilter로 팽창 → 인접 레이어 간 overlap 생성
 3. 레이어 순서(Z-index)가 낮은 레이어를 높은 레이어가 가리는 구조
 
-occlusion 계산 (개선)
----------------------
-단일 RGB 이미지에는 투명도가 없으므로, 레이어 간 overlap(dilation)으로
-"위 레이어가 아래 레이어를 가리는 비율"을 직접 시뮬레이션한다.
-
 실행:
     cd engine
     python src/sample/test_samples.py
@@ -32,9 +27,14 @@ import networkx as nx
 import numpy as np
 from PIL import Image, ImageFilter
 
+from discoverex.adapters.outbound.models.cv_color_edge import (
+    CvColorEdgeAdapter,
+    compute_visual_similarity,
+)
 from discoverex.application.use_cases.validator import ValidatorOrchestrator
 from discoverex.domain.services.verification import ScoringWeights
 from discoverex.models.types import (
+    ColorEdgeMetadata,
     LogicalStructure,
     ModelHandle,
     PhysicalMetadata,
@@ -111,13 +111,9 @@ def make_alpha_layers(
 class CpuPhysicalAdapter:
     """alpha overlap 기반 물리 메타데이터 실계산.
 
-    occlusion_ratio:
-        단일 RGB 이미지 한계를 우회하여, 레이어 Z-order 상
-        '위 레이어가 아래 레이어 alpha 영역을 가리는 비율'로 계산.
-        (j > i 인 레이어가 i 의 영역을 덮는 픽셀 수 / i 의 총 픽셀 수)
-
     z_depth_hop: Z-graph BFS (overlap 있으면 edge 생성)
     cluster_density: center 간 거리 + cluster_radius_factor 적용
+    alpha_degree: alpha-overlap 그래프의 undirected node degree
     """
 
     def __init__(
@@ -132,7 +128,7 @@ class CpuPhysicalAdapter:
         self.last_diameter: float = 2.0
 
     def load(self, handle: ModelHandle) -> None:
-        print("  [PHASE 1] CPU-only — occlusion/z_hop/density 실계산")
+        print("  [PHASE 1] CPU-only — z_hop/density/degree 실계산")
 
     def extract(
         self, composite_image: Path, object_layers: list[Path]
@@ -144,7 +140,6 @@ class CpuPhysicalAdapter:
 
         alphas = [la[:, :, 3] > 0 for la in layer_arrays]
 
-        occlusion_map: dict[str, float] = {}
         z_index_map: dict[str, int] = {}
         z_depth_hop_map: dict[str, int] = {}
         centers: dict[str, tuple[float, float]] = {}
@@ -159,16 +154,8 @@ class CpuPhysicalAdapter:
             z_index_map[obj_id] = i
 
             if total_px == 0:
-                occlusion_map[obj_id] = 0.0
                 z_depth_hop_map[obj_id] = 0
                 continue
-
-            # occlusion: i 위에 있는 레이어(j > i)가 가리는 픽셀 비율
-            covered = np.zeros((h, w), dtype=bool)
-            for j in range(i + 1, n):
-                covered |= alphas[j]
-            occluded_px = int((alpha_i & covered).sum())
-            occlusion_map[obj_id] = occluded_px / total_px
 
             ys, xs = np.where(alpha_i)
             cx, cy = float(xs.mean()), float(ys.mean())
@@ -209,7 +196,9 @@ class CpuPhysicalAdapter:
         alpha_degree_map: dict[str, int] = {}
         for path in object_layers:
             obj_id = path.stem
-            alpha_degree_map[obj_id] = len(list(g.predecessors(obj_id))) + len(list(g.successors(obj_id)))
+            alpha_degree_map[obj_id] = len(list(g.predecessors(obj_id))) + len(
+                list(g.successors(obj_id))
+            )
 
         # Graph diameter (longest shortest path among reachable node pairs)
         try:
@@ -240,11 +229,11 @@ class CpuPhysicalAdapter:
 
         result = PhysicalMetadata(
             regions=regions,
-            occlusion_map=occlusion_map,
             z_index_map=z_index_map,
             z_depth_hop_map=z_depth_hop_map,
             cluster_density_map=cluster_density_map,
             euclidean_distance_map=euclidean_distance_map,
+            alpha_degree_map=alpha_degree_map,
         )
         self.last_result = result
         return result
@@ -254,7 +243,7 @@ class CpuPhysicalAdapter:
 
 
 # ---------------------------------------------------------------------------
-# PHASE 2 — 스마트 더미
+# PHASE 3 — 스마트 더미 (논리)
 # ---------------------------------------------------------------------------
 
 
@@ -271,17 +260,14 @@ class SmartLogicalAdapter:
         self._physical = physical_adapter
 
     def load(self, handle: ModelHandle) -> None:
-        print("  [PHASE 2] SmartLogical — Moondream2 생략, Phase 1 BFS/degree 재활용")
+        print("  [PHASE 3] SmartLogical — Moondream2 생략, Phase 1 BFS/degree 재활용")
 
     def extract(
         self, composite_image: Path, physical: PhysicalMetadata
     ) -> LogicalStructure:
-        obj_ids = sorted(physical.occlusion_map.keys())
-        hop_map    = {oid: physical.z_depth_hop_map.get(oid, 0) for oid in obj_ids}
-        degree_map = {
-            oid: self._physical.last_alpha_degree_map.get(oid, 0)
-            for oid in obj_ids
-        }
+        obj_ids = sorted(physical.alpha_degree_map.keys())
+        hop_map = {oid: physical.z_depth_hop_map.get(oid, 0) for oid in obj_ids}
+        degree_map = {oid: physical.alpha_degree_map.get(oid, 0) for oid in obj_ids}
         diameter = self._physical.last_diameter
         return LogicalStructure(
             relations=[],
@@ -291,11 +277,11 @@ class SmartLogicalAdapter:
         )
 
     def unload(self) -> None:
-        print("  [PHASE 2] 완료")
+        print("  [PHASE 3] 완료")
 
 
 # ---------------------------------------------------------------------------
-# PHASE 3 — 스마트 더미
+# PHASE 4 — 스마트 더미 (시각)
 # ---------------------------------------------------------------------------
 
 
@@ -306,20 +292,52 @@ class SmartVisualAdapter:
         self._physical = physical_adapter
 
     def load(self, handle: ModelHandle) -> None:
-        print("  [PHASE 3] SmartDummy — YOLO+CLIP 생략 (sigma=8.0, drr_slope=0.15)")
+        print("  [PHASE 4] SmartDummy — YOLO+CLIP 생략 (sigma=8.0, drr_slope=0.15)")
 
     def verify(
-        self, composite_image: Path, sigma_levels: list[float]
+        self,
+        composite_image: Path,
+        sigma_levels: list[float],
+        color_edge: ColorEdgeMetadata | None = None,
+        physical: PhysicalMetadata | None = None,
     ) -> VisualVerification:
-        result = self._physical.last_result
-        obj_ids = list(result.occlusion_map.keys()) if result else ["obj_00"]
+        src = physical or self._physical.last_result
+        obj_ids = list(src.alpha_degree_map.keys()) if src else ["obj_00"]
+
+        similar_count_map: dict[str, int] = {oid: 0 for oid in obj_ids}
+        similar_distance_map: dict[str, float] = {oid: 100.0 for oid in obj_ids}
+
+        # color_edge 결과가 있으면 LAB+Hu 앙상블로 유사 객체 실계산 (CPU)
+        if color_edge is not None:
+            sim_threshold = 0.6  # 유사도 기준
+            for oid in obj_ids:
+                color_i = color_edge.obj_color_map.get(oid, [0.0, 0.0, 0.0])
+                hu_i = color_edge.hu_moments_map.get(oid, [0.0] * 7)
+                distances: list[float] = []
+                for other in obj_ids:
+                    if other == oid:
+                        continue
+                    color_j = color_edge.obj_color_map.get(other, [0.0, 0.0, 0.0])
+                    hu_j = color_edge.hu_moments_map.get(other, [0.0] * 7)
+                    sim = compute_visual_similarity(color_i, color_j, hu_i, hu_j)
+                    if sim >= sim_threshold:
+                        distances.append(1.0 - sim)  # 유사도 → 거리
+                similar_count_map[oid] = len(distances)
+                similar_distance_map[oid] = (
+                    float(sum(distances) / len(distances)) * 100.0
+                    if distances else 100.0
+                )
+
         return VisualVerification(
             sigma_threshold_map={oid: 8.0 for oid in obj_ids},
             drr_slope_map={oid: 0.15 for oid in obj_ids},
+            similar_count_map=similar_count_map,
+            similar_distance_map=similar_distance_map,
+            object_count_map={oid: 1 for oid in obj_ids},
         )
 
     def unload(self) -> None:
-        print("  [PHASE 3] 완료")
+        print("  [PHASE 4] 완료")
 
 
 # ---------------------------------------------------------------------------
@@ -336,15 +354,15 @@ def _print_phase1(result: PhysicalMetadata) -> None:
     print("PHASE 1 실계산값")
     print(_bar())
     print(
-        f"  {'obj_id':<12} {'occlusion':>10} {'z_depth_hop':>12} {'neighbor_cnt':>13}"
+        f"  {'obj_id':<12} {'z_depth_hop':>12} {'cluster_density':>16} {'alpha_deg':>10}"
     )
-    print("  " + _bar("-", 50))
-    for oid in sorted(result.occlusion_map):
+    print("  " + _bar("-", 55))
+    for oid in sorted(result.alpha_degree_map):
         print(
             f"  {oid:<12}"
-            f" {result.occlusion_map[oid]:>10.3f}"
             f" {result.z_depth_hop_map.get(oid, 0):>12}"
-            f" {result.cluster_density_map.get(oid, 0):>13}"
+            f" {result.cluster_density_map.get(oid, 0):>16}"
+            f" {result.alpha_degree_map.get(oid, 0):>10}"
         )
 
 
@@ -361,10 +379,12 @@ def _print_bundle(bundle: object) -> None:
     print(_bar())
     print(f"  answer_obj_count : {sigs['answer_obj_count']}  (숨어있다고 판단된 객체)")
     print(f"  scene_difficulty : {sigs['scene_difficulty']:.4f}")
-    print(f"  degree_map       : {sigs['degree_map']}")
+    print(f"  alpha_degree_map : {sigs['alpha_degree_map']}")
     print(f"  hop_map          : {sigs['hop_map']}")
     print(f"  sigma_map        : {psigs.get('sigma_threshold_map', {})}")
     print(f"  drr_map          : {psigs.get('drr_slope_map', {})}")
+    print(f"  similar_count    : {psigs.get('similar_count_map', {})}")
+    print(f"  similar_dist     : {psigs.get('similar_distance_map', {})}")
 
 
 # ---------------------------------------------------------------------------
@@ -394,9 +414,11 @@ def process_image(
 
     orch = ValidatorOrchestrator(
         physical_port=physical_adapter,
-        logical_port=SmartLogicalAdapter(),
+        color_edge_port=CvColorEdgeAdapter(),
+        logical_port=SmartLogicalAdapter(physical_adapter),
         visual_port=visual_adapter,
         physical_handle=handle,
+        color_edge_handle=handle,
         logical_handle=handle,
         visual_handle=handle,
         pass_threshold=0.23,

@@ -31,12 +31,19 @@ def _build_env_defaults(config: PipelineConfig) -> dict[str, str]:
     }
 
 
-def build_context(config: PipelineConfig | dict[str, Any] | None = None) -> AppContext:
+def build_context(
+    config: PipelineConfig | dict[str, Any] | None = None,
+    *,
+    execution_snapshot: dict[str, object] | None = None,
+    execution_snapshot_path: Path | None = None,
+) -> AppContext:
     cfg = resolve_config(config)
     artifacts_root = Path(cfg.runtime.artifacts_root)
     env_defaults = _build_env_defaults(cfg)
 
-    background_generator_model = instantiate(cfg.models.background_generator.as_kwargs())
+    background_generator_model = instantiate(
+        cfg.models.background_generator.as_kwargs()
+    )
     hidden_region_model = instantiate(cfg.models.hidden_region.as_kwargs())
     inpaint_model = instantiate(cfg.models.inpaint.as_kwargs())
     perception_model = instantiate(cfg.models.perception.as_kwargs())
@@ -67,6 +74,8 @@ def build_context(config: PipelineConfig | dict[str, Any] | None = None) -> AppC
         runtime=cfg.runtime,
         thresholds=cfg.thresholds,
         model_versions=cfg.model_versions,
+        execution_snapshot=execution_snapshot,
+        execution_snapshot_path=execution_snapshot_path,
     )
 
 

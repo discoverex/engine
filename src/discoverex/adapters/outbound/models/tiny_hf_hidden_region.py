@@ -37,7 +37,7 @@ class TinyHFHiddenRegionModel:
 
         if self.seed is not None:
             torch.manual_seed(self.seed)
-        cfg = ViTConfig(
+        cfg = ViTConfig(  # type: ignore[no-untyped-call]
             image_size=32,
             patch_size=16,
             hidden_size=32,
@@ -45,7 +45,7 @@ class TinyHFHiddenRegionModel:
             num_attention_heads=2,
             intermediate_size=64,
         )
-        model = ViTModel(cfg).eval()
+        model = ViTModel(cfg).eval()  # type: ignore[no-untyped-call]
         _ = model(torch.randn(1, 3, 32, 32)).last_hidden_state.mean().item()
         selected_device = self.device
         if self.device.startswith("cuda") and not torch.cuda.is_available():

@@ -84,7 +84,7 @@
 정리:
 
 * engine은 MLflow SDK를 사용한다
-* worker는 `MLFLOW_TRACKING_URI`를 로컬 프록시로 바꿔 child process에 주입한다
+* worker는 upstream `MLFLOW_TRACKING_URI`를 로컬 프록시 URL로 바꿔 child process에 주입한다
 * worker만 Cloudflare Access credential을 가진다
 
 ## 5) 최근 실 run에서 확인된 산출물 형태
@@ -110,8 +110,8 @@
 
 실행/계약 관련 핵심 파일:
 
-* `scripts/register_prefect_job.py`
-* `scripts/register_orchestrator_job.py`
+* `infra/register/register_prefect_job.py`
+* `infra/register/register_orchestrator_job.py`
 * `src/discoverex/orchestrator_contract/launcher.py`
 * `src/discoverex/flows/engine.py`
 * `src/discoverex/flows/generate.py`

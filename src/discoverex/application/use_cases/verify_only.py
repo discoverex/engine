@@ -12,6 +12,7 @@ from discoverex.domain import (
 )
 from discoverex.domain.scene import Scene
 from discoverex.domain.verification import VerificationBundle, VerificationResult
+from discoverex.execution_snapshot import build_tracking_params
 from discoverex.models.types import PerceptionRequest
 
 
@@ -70,6 +71,7 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
     context.tracker.log_pipeline_run(
         run_name="verify_only",
         params={
+            **build_tracking_params(context.execution_snapshot),
             "scene_id": scene.meta.scene_id,
             "version_id": scene.meta.version_id,
             "pipeline_run_id": scene.meta.pipeline_run_id,
@@ -86,6 +88,11 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
             saved_dir / "scene.json",
             saved_dir / "verification.json",
             scene_artifact,
+            *(
+                [context.execution_snapshot_path]
+                if context.execution_snapshot_path is not None
+                else []
+            ),
         ],
     )
     return scene

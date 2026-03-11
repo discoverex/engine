@@ -25,3 +25,5 @@ class AppContext(BaseModel):
     runtime: RuntimeConfig
     thresholds: ThresholdsConfig
     model_versions: ModelVersionsConfig
+    execution_snapshot: dict[str, object] | None = None
+    execution_snapshot_path: Path | None = None

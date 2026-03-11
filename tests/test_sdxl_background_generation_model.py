@@ -16,7 +16,9 @@ class _FakeImage:
         path.write_bytes(b"fake-image")
 
 
-def test_sdxl_background_generation_writes_output(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_sdxl_background_generation_writes_output(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     captured: dict[str, object] = {}
     model = SdxlBackgroundGenerationModel(strict_runtime=False, refiner_model_id=None)
     monkeypatch.setattr(

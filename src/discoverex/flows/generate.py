@@ -57,7 +57,9 @@ def _generate_run_ids() -> RunIds:
 
 
 @task(name="discoverex-generate-materialize-bg", persist_result=False)
-def _materialize_background_asset(background: Background, scene_dir: Path) -> Background:
+def _materialize_background_asset(
+    background: Background, scene_dir: Path
+) -> Background:
     source = Path(background.asset_ref)
     if source.exists() and source.is_file():
         base_dir = scene_dir / "layers" / "base"
@@ -80,7 +82,11 @@ def _finalize_layers(scene: Scene, background: Background, fx_input_ref: str) ->
         for idx, item in enumerate(candidates):
             if not isinstance(item, dict):
                 continue
-            patch_ref = item.get("layer_image_ref") or item.get("object_image_ref") or item.get("patch_image_ref")
+            patch_ref = (
+                item.get("layer_image_ref")
+                or item.get("object_image_ref")
+                or item.get("patch_image_ref")
+            )
             bbox = item.get("bbox")
             region_id = item.get("region_id")
             if not isinstance(patch_ref, str) or not isinstance(bbox, dict):
@@ -133,13 +139,17 @@ def _finalize_layers(scene: Scene, background: Background, fx_input_ref: str) ->
 
 
 @flow(name="discoverex-generate-pipeline", persist_result=False)
-def run_generate_flow(*, args: dict[str, Any], config: PipelineConfig) -> dict[str, str]:
+def run_generate_flow(
+    *,
+    args: dict[str, Any],
+    config: PipelineConfig,
+    execution_snapshot: dict[str, Any] | None = None,
+    execution_snapshot_path: Path | None = None,
+) -> dict[str, str]:
     started = perf_counter()
     background_asset_ref = str(args.get("background_asset_ref", "") or "")
     background_prompt = str(args.get("background_prompt", "") or "")
-    background_negative_prompt = str(
-        args.get("background_negative_prompt", "") or ""
-    )
+    background_negative_prompt = str(args.get("background_negative_prompt", "") or "")
     object_prompt = str(args.get("object_prompt", "") or "")
     object_negative_prompt = str(args.get("object_negative_prompt", "") or "")
     final_prompt = str(args.get("final_prompt", "") or "")
@@ -150,18 +160,26 @@ def run_generate_flow(*, args: dict[str, Any], config: PipelineConfig) -> dict[s
         bool(object_prompt),
         bool(final_prompt),
     )
-    context = _build_context(config)
+    context = build_context(
+        config=config,
+        execution_snapshot=execution_snapshot,
+        execution_snapshot_path=execution_snapshot_path,
+    )
     run_ids = _generate_run_ids()
 
     background_handle = context.background_generator_model.load(
         context.model_versions.background_generator
     )
-    hidden_handle = context.hidden_region_model.load(context.model_versions.hidden_region)
+    hidden_handle = context.hidden_region_model.load(
+        context.model_versions.hidden_region
+    )
     inpaint_handle = context.inpaint_model.load(context.model_versions.inpaint)
     perception_handle = context.perception_model.load(context.model_versions.perception)
     fx_handle = context.fx_model.load(context.model_versions.fx)
 
-    scene_dir = Path(context.artifacts_root) / "scenes" / run_ids.scene_id / run_ids.version_id
+    scene_dir = (
+        Path(context.artifacts_root) / "scenes" / run_ids.scene_id / run_ids.version_id
+    )
     background, background_prompt_record = build_background_from_inputs(
         context=context,
         scene_dir=scene_dir,
@@ -250,4 +268,8 @@ def run_generate_flow(*, args: dict[str, Any], config: PipelineConfig) -> dict[s
         scene.meta.version_id,
         format_seconds(started),
     )
-    return build_scene_payload(scene, config.runtime.artifacts_root)
+    return build_scene_payload(
+        scene,
+        config.runtime.artifacts_root,
+        str(execution_snapshot_path) if execution_snapshot_path is not None else None,
+    )

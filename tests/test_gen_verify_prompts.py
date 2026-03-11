@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 from discoverex.application.use_cases import run_gen_verify
 from discoverex.config import ModelVersionsConfig, RuntimeConfig, ThresholdsConfig
@@ -14,7 +15,9 @@ class _HiddenRegionModel:
     def load(self, version: str) -> ModelHandle:
         return ModelHandle(name="hidden", version=version, runtime="dummy")
 
-    def predict(self, _handle: ModelHandle, _request) -> list[tuple[float, float, float, float]]:  # type: ignore[no-untyped-def]
+    def predict(
+        self, _handle: ModelHandle, _request
+    ) -> list[tuple[float, float, float, float]]:  # type: ignore[no-untyped-def]
         return [(10.0, 20.0, 30.0, 40.0)]
 
 
@@ -99,6 +102,14 @@ class _Tracker:
         )
 
 
+def _tracker_call_value(
+    tracker: _Tracker,
+    *,
+    index: int = 0,
+) -> dict[str, object]:
+    return tracker.calls[index]
+
+
 class _SceneIO:
     pass
 
@@ -147,17 +158,25 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     )
 
     scene_dir = tmp_path / "scenes" / scene.meta.scene_id / scene.meta.version_id
-    prompt_bundle = json.loads((scene_dir / "prompt_bundle.json").read_text(encoding="utf-8"))
+    prompt_bundle = json.loads(
+        (scene_dir / "prompt_bundle.json").read_text(encoding="utf-8")
+    )
 
     assert prompt_bundle["input_mode"] == "prompt"
     assert prompt_bundle["background"]["prompt"] == "sunlit courtyard"
     assert prompt_bundle["object"]["prompt"] == "hidden brass key"
     assert prompt_bundle["final_fx"]["prompt"] == "polished playable scene"
     assert prompt_bundle["regions"][0]["generation_prompt"] == "hidden brass key"
-    assert tracker.calls[0]["params"]["background_prompt_used"] == "sunlit courtyard"
-    assert tracker.calls[0]["params"]["object_prompt_used"] == "hidden brass key"
-    assert tracker.calls[0]["params"]["final_prompt_used"] == "polished playable scene"
-    artifact_names = {path.name for path in tracker.calls[0]["artifacts"]}
+    tracker_call = _tracker_call_value(tracker)
+    tracker_params = cast(dict[str, object], tracker_call["params"])
+    tracker_artifacts = cast(list[Path], tracker_call["artifacts"])
+
+    assert tracker_params["background_prompt_used"] == "sunlit courtyard"
+    assert tracker_params["object_prompt_used"] == "hidden brass key"
+    assert tracker_params["final_prompt_used"] == "polished playable scene"
+    artifact_names = {path.name for path in tracker_artifacts}
     assert "prompt_bundle.json" in artifact_names
-    assert fx_model.requests[0].mode == "background"
-    assert inpaint_model.requests[0].generation_prompt == "hidden brass key"
+    fx_request = cast(SimpleNamespace, fx_model.requests[0])
+    inpaint_request = cast(SimpleNamespace, inpaint_model.requests[0])
+    assert fx_request.mode == "background"
+    assert inpaint_request.generation_prompt == "hidden brass key"

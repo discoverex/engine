@@ -90,13 +90,18 @@ def run(
         background_asset_ref=fx_input_ref,
         scene_dir=scene_dir,
         fx_handle=fx_handle,
-        prompt=(final_prompt or "").strip() or "polished hidden object puzzle final render",
+        prompt=(final_prompt or "").strip()
+        or "polished hidden object puzzle final render",
         negative_prompt=(final_negative_prompt or "").strip()
         or "blurry, low quality, artifact",
     )
     scene.composite.final_image_ref = composite.image_ref
     _finalize_layers(scene=scene, background=background, fx_input_ref=fx_input_ref)
-    logger.info("scene assembled regions=%d final_image=%s", len(scene.regions), scene.composite.final_image_ref)
+    logger.info(
+        "scene assembled regions=%d final_image=%s",
+        len(scene.regions),
+        scene.composite.final_image_ref,
+    )
 
     verify_scene(scene=scene, context=context, perception_handle=perception_handle)
     scene.meta.updated_at = datetime.now(timezone.utc)
@@ -166,7 +171,11 @@ def _finalize_layers(scene: Scene, background, fx_input_ref: str) -> None:  # ty
         for idx, item in enumerate(candidates):
             if not isinstance(item, dict):
                 continue
-            patch_ref = item.get("layer_image_ref") or item.get("object_image_ref") or item.get("patch_image_ref")
+            patch_ref = (
+                item.get("layer_image_ref")
+                or item.get("object_image_ref")
+                or item.get("patch_image_ref")
+            )
             bbox = item.get("bbox")
             region_id = item.get("region_id")
             if not isinstance(patch_ref, str):
