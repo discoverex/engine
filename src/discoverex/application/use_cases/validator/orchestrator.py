@@ -4,6 +4,7 @@ from pathlib import Path
 
 from discoverex.application.ports.models import (
     BundleStorePort,
+    ColorEdgeExtractionPort,
     LogicalExtractionPort,
     PhysicalExtractionPort,
     VisualVerificationPort,
@@ -11,6 +12,7 @@ from discoverex.application.ports.models import (
 from discoverex.domain.services.verification import ScoringWeights
 from discoverex.domain.verification import VerificationBundle
 from discoverex.models.types import (
+    ColorEdgeMetadata,
     LogicalStructure,
     ModelHandle,
     PhysicalMetadata,
@@ -32,6 +34,8 @@ class ValidatorOrchestrator:
         physical_handle: ModelHandle,
         logical_handle: ModelHandle,
         visual_handle: ModelHandle,
+        color_edge_port: ColorEdgeExtractionPort | None = None,
+        color_edge_handle: ModelHandle | None = None,
         pass_threshold: float = 0.35,
         scoring_weights: ScoringWeights | None = None,
         sigma_levels: list[float] | None = None,
@@ -43,6 +47,8 @@ class ValidatorOrchestrator:
         self._physical_handle = physical_handle
         self._logical_handle = logical_handle
         self._visual_handle = visual_handle
+        self._color_edge_port = color_edge_port
+        self._color_edge_handle = color_edge_handle or physical_handle
         self._pass_threshold = pass_threshold
         self._weights = scoring_weights or ScoringWeights()
         self._sigma_levels = sigma_levels or _DEFAULT_SIGMA_LEVELS
@@ -50,10 +56,16 @@ class ValidatorOrchestrator:
 
     def run(self, composite_image: Path, object_layers: list[Path]) -> VerificationBundle:
         physical = self._run_phase1(composite_image, object_layers)
-        logical = self._run_phase2(composite_image, physical)
-        visual = self._run_phase3(composite_image)
-        bundle = self._run_phase4(
-            ValidatorInput(physical=physical, logical=logical, visual=visual)
+        color_edge = self._run_phase2(composite_image, object_layers)
+        logical = self._run_phase3(composite_image, physical)
+        visual = self._run_phase4(composite_image, color_edge, physical)
+        bundle = self._run_phase5(
+            ValidatorInput(
+                physical=physical,
+                color_edge=color_edge,
+                logical=logical,
+                visual=visual,
+            )
         )
         if self._bundle_store is not None:
             self._bundle_store.save(bundle, composite_image, object_layers)
@@ -73,6 +85,19 @@ class ValidatorOrchestrator:
     def _run_phase2(
         self,
         composite_image: Path,
+        object_layers: list[Path],
+    ) -> ColorEdgeMetadata:
+        if self._color_edge_port is None:
+            return ColorEdgeMetadata()
+        self._color_edge_port.load(self._color_edge_handle)
+        try:
+            return self._color_edge_port.extract(composite_image, object_layers)
+        finally:
+            self._color_edge_port.unload()
+
+    def _run_phase3(
+        self,
+        composite_image: Path,
         physical: PhysicalMetadata,
     ) -> LogicalStructure:
         self._logical_port.load(self._logical_handle)
@@ -81,14 +106,24 @@ class ValidatorOrchestrator:
         finally:
             self._logical_port.unload()
 
-    def _run_phase3(self, composite_image: Path) -> VisualVerification:
+    def _run_phase4(
+        self,
+        composite_image: Path,
+        color_edge: ColorEdgeMetadata,
+        physical: PhysicalMetadata,
+    ) -> VisualVerification:
         self._visual_port.load(self._visual_handle)
         try:
-            return self._visual_port.verify(composite_image, self._sigma_levels)
+            return self._visual_port.verify(
+                composite_image,
+                self._sigma_levels,
+                color_edge=color_edge,
+                physical=physical,
+            )
         finally:
             self._visual_port.unload()
 
-    def _run_phase4(self, data: ValidatorInput) -> VerificationBundle:
+    def _run_phase5(self, data: ValidatorInput) -> VerificationBundle:
         return build_verification_bundle(
             data,
             pass_threshold=self._pass_threshold,
