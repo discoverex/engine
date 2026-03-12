@@ -12,8 +12,9 @@ defaults:
   - _self_
 
 thresholds:
-  is_hidden_min_conditions: 2
-  pass_threshold: 0.23  # MVP: 0.35 → 0.23 (데이터 확보 우선, 학습 후 상향 조정)
+  difficulty_min: 0.1   # 설계안 §3 MVP 변수
+  difficulty_max: 0.9   # 설계안 §3 MVP 변수
+  hidden_obj_min: 3     # 설계안 §3 — is_hidden() 통과 객체 수 기준
 
 # weights_path: null  # 학습된 가중치 JSON 경로. 지정 시 weights: 섹션 무시.
 weights_path: null
@@ -45,5 +46,3 @@ weights:
   difficulty_similar_dist: 0.09   # 1 / (1 + similar_distance)
   difficulty_color_contrast: 0.07  # 1 / (1 + color_contrast)
   difficulty_edge_strength: 0.07   # 1 / (1 + edge_strength)
-  # resolve_answer 최소 조건 수 (ScoringWeights에 포함)
-  is_hidden_min_conditions: 2

@@ -150,7 +150,7 @@ def _print_result(bundle, layer_files: list[Path]) -> None:
     print(
         f"  answer_obj_count : {sigs['answer_obj_count']}  (숨어있다고 판단된 오브젝트)"
     )
-    print(f"  scene_difficulty : {sigs['scene_difficulty']:.4f}")
+    print(f"  scene_difficulty : {bundle.scene_difficulty:.4f}")
     print(f"  diameter         : {sigs.get('diameter', '-')}")
 
     print()
@@ -218,10 +218,22 @@ def main() -> None:
         "예: --layer-order 쥐구멍.png MARS.png 고양이1.png",
     )
     parser.add_argument(
-        "--threshold",
+        "--difficulty-min",
         type=float,
-        default=0.23,
-        help="pass 기준 점수 (기본 0.23)",
+        default=0.1,
+        help="난이도 하한 (기본 0.1)",
+    )
+    parser.add_argument(
+        "--difficulty-max",
+        type=float,
+        default=0.9,
+        help="난이도 상한 (기본 0.9)",
+    )
+    parser.add_argument(
+        "--hidden-obj-min",
+        type=int,
+        default=3,
+        help="최소 숨은 객체 수 (기본 3)",
     )
     args = parser.parse_args()
 
@@ -281,13 +293,15 @@ def main() -> None:
         color_edge_handle=handle,
         logical_handle=handle,
         visual_handle=handle,
-        pass_threshold=args.threshold,
+        difficulty_min=args.difficulty_min,
+        difficulty_max=args.difficulty_max,
+        hidden_obj_min=args.hidden_obj_min,
         scoring_weights=ScoringWeights(),
     )
 
     print()
     print(f"  런타임         : {runtime}")
-    print(f"  pass_threshold : {args.threshold}")
+    print(f"  difficulty     : [{args.difficulty_min}, {args.difficulty_max}]  hidden_min={args.hidden_obj_min}")
     if runtime == "GPU":
         print(f"  실계산 항목    : 전 항목 (MobileSAM / Moondream2 / YOLO+CLIP)")
     else:

@@ -48,9 +48,6 @@ class ScoringWeights(BaseModel):
     difficulty_color_contrast: float = Field(0.07, ge=0.0)  # 1 / (1 + color_contrast)
     difficulty_edge_strength: float = Field(0.07, ge=0.0)   # 1 / (1 + edge_strength)
 
-    # resolve_answer 은닉 판정 최소 조건 수
-    is_hidden_min_conditions: int = Field(2, ge=1)
-
 
 def run_logical_verification(scene: Scene, pass_threshold: float) -> VerificationResult:
     answer_count = len(scene.answer.answer_region_ids)
@@ -90,48 +87,10 @@ def integrate_verification(
 # ---------------------------------------------------------------------------
 
 
-def resolve_answer(
-    obj_metrics: dict[str, Any],
-    min_conditions: int = 2,
-) -> bool:
-    """9개 은닉 조건 중 min_conditions 개 이상 충족 시 True 반환.
-
-    시각적 조건 (6):
-        drr_slope      : 블러 소실 속도 — 빨리 소실될수록 찾기 어려움
-        similar_count  : 유사 객체 수 많을수록 혼동 유발
-        similar_distance: 유사 객체가 가까울수록 혼동 유발
-        color_contrast : 배경 대비 낮을수록 묻혀 보임
-        edge_strength  : 경계가 불분명할수록 구분 어려움
-        visual_degree  : alpha-overlap 연결 차수 높을수록 주변에 묻힘
-    물리적 조건 (1):
-        cluster_density: 군집 밀집도 높을수록 찾기 어려움
-    논리적 조건 (2):
-        z_depth_hop    : 레이어 매몰 깊이
-        logical_degree : scene graph 논리 연결 차수
-
-    obj_metrics 키: drr_slope, similar_count, similar_distance,
-                    color_contrast, edge_strength, visual_degree,
-                    cluster_density, z_depth_hop, logical_degree
-    """
-    conditions: list[bool] = [
-        # 시각적 조건
-        obj_metrics.get("drr_slope", 0.0) > 0.1,
-        obj_metrics.get("similar_count", 0) >= 1,
-        obj_metrics.get("similar_distance", 100.0) < 80.0,
-        obj_metrics.get("color_contrast", 100.0) <= 30.0,
-        obj_metrics.get("edge_strength", 1000.0) <= 400.0,
-        obj_metrics.get("visual_degree", 0) >= 2,
-        # 물리적 조건
-        obj_metrics.get("cluster_density", 0) >= 2,
-        # 논리적 조건
-        obj_metrics.get("z_depth_hop", 0) >= 2,
-        obj_metrics.get("logical_degree", 0) >= 3,
-    ]
-    return sum(1 for cond in conditions if cond) >= min_conditions
-
-
 def compute_difficulty(
-    obj_metrics: dict[str, Any], weights: ScoringWeights | None = None
+    obj_metrics: dict[str, Any],
+    weights: ScoringWeights | None = None,
+    answer_obj_count: int = 6,
 ) -> float:
     """D(obj) 난이도 점수 계산 (9항 수식, 합계 가중치 = 1.00).
 
@@ -163,8 +122,10 @@ def compute_difficulty(
 
     # cluster_norm: 정규화 기준 10 (일반적 씬 최대 밀집도)
     cluster_norm = min(cluster / 10.0, 1.0)
-    # similar_count_norm: 정규화 기준 5
-    similar_count_norm = min(similar_count / 5.0, 1.0)
+    # similar_count_norm: 설계안 §2 — similar_count / (answer_obj_count - 1)
+    similar_count_norm = min(similar_count / max(answer_obj_count - 1, 1), 1.0)
+    # drr_slope_norm: np.polyfit 결과는 [0,1] 보장 없으므로 clip
+    drr_slope = max(0.0, min(drr_slope, 1.0))
 
     return (
         w.difficulty_degree * degree_n**2
@@ -182,30 +143,22 @@ def compute_difficulty(
 def compute_scene_difficulty(
     answer_objs: list[dict[str, Any]],
     weights: ScoringWeights | None = None,
-    object_count_map: dict[str, int] | None = None,
+    answer_obj_count: int | None = None,
 ) -> float:
-    """Scene_Difficulty = Σ(object_count · D(obj)) / Σ object_count  (obj ∈ answer)
+    """Scene_Difficulty = (1/|hidden|) · Σ D(obj)  (설계안 §2 — 단순 평균).
 
-    object_count_map 이 없거나 obj_id 가 없으면 가중치 1 로 처리 (단순 평균 호환).
-    obj_id 는 obj_metrics dict 의 'obj_id' 키에서 읽는다.
+    answer_obj_count 가 None 이면 len(answer_objs) 로 자동 산정.
     """
     if not answer_objs:
         return 0.0
-    weighted_sum = 0.0
-    total_count = 0
-    for obj in answer_objs:
-        obj_id = obj.get("obj_id", "")
-        count = int((object_count_map or {}).get(obj_id, 1)) if obj_id else 1
-        count = max(count, 1)
-        weighted_sum += compute_difficulty(obj, weights) * count
-        total_count += count
-    return weighted_sum / total_count if total_count > 0 else 0.0
+    count = answer_obj_count if answer_obj_count is not None else len(answer_objs)
+    return sum(compute_difficulty(obj, weights, count) for obj in answer_objs) / len(answer_objs)
 
 
 def integrate_verification_v2(
     obj_metrics: dict[str, Any],
-    pass_threshold: float = 0.35,
     weights: ScoringWeights | None = None,
+    answer_obj_count: int = 6,
 ) -> tuple[float, float, float]:
     """오브젝트 하나에 대한 정규화된 perception / logical / total 점수 계산.
 
@@ -235,8 +188,8 @@ def integrate_verification_v2(
     degree_n = float(obj_metrics.get("degree_norm", 0.0))
     cluster = float(obj_metrics.get("cluster_density", 0))
 
-    # similar_count 정규화 기준 5 (compute_difficulty 와 동일)
-    sim_cnt_norm = min(similar_count / 5.0, 1.0)
+    # similar_count_norm: 설계안 §2 — similar_count / (answer_obj_count - 1)
+    sim_cnt_norm = min(similar_count / max(answer_obj_count - 1, 1), 1.0)
     cluster_norm = min(cluster / 10.0, 1.0)
 
     p_denom = max(

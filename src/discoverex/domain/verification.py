@@ -21,7 +21,27 @@ class FinalVerification(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class HiddenObjectMeta(BaseModel):
+    """설계안 §4 — hidden_objects 배열의 단위 원소.
+
+    difficulty_signals 9개 키:
+        degree_norm, cluster_density_norm, hop_diameter,
+        drr_slope_norm, sigma_threshold_norm,
+        similar_count_norm, similar_distance_norm,
+        color_contrast_norm, edge_strength_norm
+    """
+
+    obj_id: str
+    human_field: float
+    ai_field: float
+    D_obj: float
+    difficulty_signals: dict[str, float]
+
+
 class VerificationBundle(BaseModel):
     logical: VerificationResult
     perception: VerificationResult
     final: FinalVerification
+    # 설계안 §4 추가
+    scene_difficulty: float = 0.0
+    hidden_objects: list[HiddenObjectMeta] = Field(default_factory=list)

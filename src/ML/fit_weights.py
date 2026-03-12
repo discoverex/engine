@@ -60,7 +60,12 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="초기 가중치 JSON (없으면 ScoringWeights 기본값 사용)",
     )
-    p.add_argument("--pass-threshold", type=float, default=0.35)
+    p.add_argument(
+        "--difficulty-min", type=float, default=0.1, help="설계안 §3 난이도 하한 (기본 0.1)"
+    )
+    p.add_argument(
+        "--difficulty-max", type=float, default=0.9, help="설계안 §3 난이도 상한 (기본 0.9)"
+    )
     p.add_argument(
         "--margin", type=float, default=0.05, help="hinge loss 마진 (기본 0.05)"
     )
@@ -71,14 +76,14 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
 
-    # 레이블 데이터 로드
+    # 레이블 데이터 로드 (bundle_to_jsonl.py 출력 형식)
     lines = args.labeled_jsonl.read_text(encoding="utf-8").strip().splitlines()
     labeled: list[tuple[dict, bool]] = []
     for line in lines:
         if not line.strip():
             continue
         obj = json.loads(line)
-        labeled.append((obj["metrics"], bool(obj["label"])))
+        labeled.append((obj, bool(obj["label"])))
 
     if not labeled:
         print(json.dumps({"error": "레이블 데이터가 비어 있습니다."}), flush=True)
@@ -97,7 +102,8 @@ def main() -> None:
         labeled=labeled,
         init_weights=init_weights,
         margin=args.margin,
-        pass_threshold=args.pass_threshold,
+        difficulty_min=args.difficulty_min,
+        difficulty_max=args.difficulty_max,
         max_iter=args.max_iter,
     )
 
