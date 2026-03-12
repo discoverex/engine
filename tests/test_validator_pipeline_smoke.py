@@ -27,7 +27,6 @@ def orchestrator() -> ValidatorOrchestrator:
         physical_handle=_make_handle("physical"),
         logical_handle=_make_handle("logical"),
         visual_handle=_make_handle("visual"),
-        pass_threshold=0.35,
     )
 
 
