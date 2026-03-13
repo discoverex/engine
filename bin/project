@@ -17,6 +17,11 @@ Usage:
   ./bin/project submit-job-spec [infra/register/submit_job_spec.py args...]
   ./bin/project deploy-flows [infra/register/deploy_prefect_flows.py args...]
 
+Notes:
+  - Official operator-facing registration surface:
+    src/discoverex/flows/engine_run_flow.py:run_job_flow
+  - Commands below are compatibility/helpers for local testing and integration.
+
 Examples:
   ./bin/project register --dry-run --command generate --background-asset-ref bg://dummy
   ./bin/project build-job-spec --command generate --background-asset-ref bg://dummy

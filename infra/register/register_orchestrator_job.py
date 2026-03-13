@@ -268,57 +268,46 @@ def _build_engine_args(args: argparse.Namespace) -> dict[str, Any]:
 
 def _build_profile_overrides(args: argparse.Namespace) -> list[str]:
     overrides: list[str] = []
-    if args.execution_profile != "none":
-        overrides.extend([
-            "adapters/artifact_store=minio",
-            "adapters/tracker=mlflow_server",
-        ])
-        if args.metadata_db_url:
-            overrides.append("adapters/metadata_store=postgres")
     if args.execution_profile == "local-tiny-cpu":
-        overrides.extend([
-            "runtime/model_runtime=cpu",
-            "models/background_generator=tiny_sd_cpu",
-            "models/hidden_region=tiny_torch",
-            "models/inpaint=tiny_torch",
-            "models/perception=tiny_torch",
-            "models/fx=tiny_sd_cpu",
-        ])
+        overrides.extend(
+            [
+                "runtime/model_runtime=cpu",
+                "models/background_generator=tiny_sd_cpu",
+                "models/hidden_region=tiny_torch",
+                "models/inpaint=tiny_torch",
+                "models/perception=tiny_torch",
+                "models/fx=tiny_sd_cpu",
+            ]
+        )
     elif args.execution_profile == "remote-gpu-hf":
-        overrides.extend([
-            "runtime/model_runtime=gpu",
-            "models/background_generator=hf",
-            "models/hidden_region=hf",
-            "models/inpaint=hf",
-            "models/perception=hf",
-            "models/fx=hf",
-        ])
+        overrides.extend(
+            [
+                "runtime/model_runtime=gpu",
+                "models/background_generator=hf",
+                "models/hidden_region=hf",
+                "models/inpaint=hf",
+                "models/perception=hf",
+                "models/fx=hf",
+            ]
+        )
     elif args.execution_profile == "generator-sdxl-gpu":
-        overrides.extend([
-            "runtime/model_runtime=gpu",
-            "models/background_generator=sdxl_gpu",
-            "models/hidden_region=hf",
-            "models/inpaint=sdxl_gpu",
-            "models/perception=hf",
-            "models/fx=sdxl_gpu",
-        ])
+        overrides.extend(
+            [
+                "runtime/model_runtime=gpu",
+                "runtime.width=512",
+                "runtime.height=512",
+                "models/background_generator=sdxl_gpu",
+                "models/hidden_region=hf",
+                "models/inpaint=sdxl_gpu",
+                "models/perception=hf",
+                "models/fx=copy_image",
+            ]
+        )
     return overrides
 
 
 def _build_runtime_env(args: argparse.Namespace) -> dict[str, str]:
-    env = _parse_kv_pairs(args.runtime_env)
-    optional_env = {
-        "MLFLOW_TRACKING_URI": args.mlflow_tracking_uri,
-        "MLFLOW_S3_ENDPOINT_URL": args.mlflow_s3_endpoint_url,
-        "AWS_ACCESS_KEY_ID": args.aws_access_key_id,
-        "AWS_SECRET_ACCESS_KEY": args.aws_secret_access_key,
-        "ARTIFACT_BUCKET": args.artifact_bucket,
-        "METADATA_DB_URL": args.metadata_db_url,
-    }
-    for key, value in optional_env.items():
-        if value:
-            env[key] = value
-    return env
+    return _parse_kv_pairs(args.runtime_env)
 
 
 def _build_runner_env(args: argparse.Namespace) -> dict[str, str]:
@@ -340,7 +329,7 @@ def _build_runtime_extras(args: argparse.Namespace) -> list[str]:
     profile_extras: list[str] = []
     if args.execution_profile == "local-tiny-cpu":
         profile_extras.append("ml-cpu")
-    elif args.execution_profile == "remote-gpu-hf":
+    elif args.execution_profile in {"remote-gpu-hf", "generator-sdxl-gpu"}:
         profile_extras.append("ml-gpu")
     for extra in profile_extras:
         if extra not in extras:
@@ -359,7 +348,7 @@ def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
     if args.entrypoint_shell_command:
         entrypoint = ["/bin/sh", "-lc", args.entrypoint_shell_command]
 
-    engine_run = {
+    inputs = {
         "contract_version": args.contract_version,
         "command": args.command,
         "config_name": _resolved_config_name(args),
@@ -381,7 +370,7 @@ def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
         "entrypoint": entrypoint,
         "config": None,
         "job_name": _resolved_job_name(args),
-        "engine_run": engine_run,
+        "inputs": inputs,
         "env": _build_runner_env(args),
         "outputs_prefix": args.outputs_prefix,
     }
@@ -398,7 +387,7 @@ def _resolved_deployment_name(args: argparse.Namespace) -> str:
     explicit = str(args.deployment or "").strip()
     if explicit:
         return explicit
-    return "run-engine-job"
+    return "discoverex-engine-job"
 
 
 def _resolved_job_name(args: argparse.Namespace) -> str:
@@ -419,7 +408,7 @@ def _resolved_deployment_name_from_job_spec(
     if explicit:
         return explicit
     _ = job_spec
-    return "run-engine-job"
+    return "discoverex-engine-job"
 
 
 def submit_job_spec(

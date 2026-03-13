@@ -9,7 +9,7 @@
     "PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher"
   ],
   "config": null,
-  "job_name": "generate--generate--generator-sdxl-gpu",
+  "job_name": "quick-generate-1-https",
   "inputs": {
     "contract_version": "v2",
     "command": "generate",
@@ -26,7 +26,7 @@
     "overrides": [
       "runtime/model_runtime=gpu",
       "runtime.width=512",
-      "runtime.height=512",
+      "runtime.height=384",
       "models/background_generator=sdxl_gpu",
       "models/hidden_region=hf",
       "models/inpaint=sdxl_gpu",

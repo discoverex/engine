@@ -36,8 +36,9 @@ def _default_ref() -> str:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Register a real engine job to Prefect using the engine-side "
-            "orchestrator contract wrapper."
+            "Compatibility helper that builds a job spec and submits it to an "
+            "existing deployment. The public operator contract remains the "
+            "registerable flow entrypoint."
         )
     )
     parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
