@@ -2,9 +2,22 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from .pipeline_memory import configure_diffusers_pipeline
+
 
 def load_inpaint_pipe(
-    *, current_pipe: Any | None, model_id: str, revision: str, handle: Any
+    *,
+    current_pipe: Any | None,
+    model_id: str,
+    revision: str,
+    handle: Any,
+    offload_mode: str = "none",
+    enable_attention_slicing: bool = False,
+    enable_vae_slicing: bool = False,
+    enable_vae_tiling: bool = False,
+    enable_xformers_memory_efficient_attention: bool = False,
+    enable_fp8_layerwise_casting: bool = False,
+    enable_channels_last: bool = False,
 ) -> Any:
     if current_pipe is not None:
         return current_pipe
@@ -22,9 +35,17 @@ def load_inpaint_pipe(
         revision=revision,
         torch_dtype=torch_dtype,
     )
-    if hasattr(pipe, "set_progress_bar_config"):
-        pipe.set_progress_bar_config(disable=False)
-    return pipe.to(handle.device)
+    return configure_diffusers_pipeline(
+        pipe,
+        handle=handle,
+        offload_mode=offload_mode,
+        enable_attention_slicing=enable_attention_slicing,
+        enable_vae_slicing=enable_vae_slicing,
+        enable_vae_tiling=enable_vae_tiling,
+        enable_xformers_memory_efficient_attention=enable_xformers_memory_efficient_attention,
+        enable_fp8_layerwise_casting=enable_fp8_layerwise_casting,
+        enable_channels_last=enable_channels_last,
+    )
 
 
 def build_full_mask(width: int, height: int) -> Any:

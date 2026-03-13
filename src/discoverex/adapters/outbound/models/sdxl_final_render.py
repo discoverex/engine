@@ -9,6 +9,8 @@ from discoverex.runtime_logging import format_seconds, get_logger
 
 from .fx_param_parsing import as_float, as_int_or_none, as_positive_int, as_str
 from .image_patch_ops import load_image_rgb
+from .pipeline_memory import OffloadMode, configure_diffusers_pipeline
+from .runtime_cleanup import clear_model_runtime
 from .runtime import (
     apply_seed,
     build_runtime_extra,
@@ -32,6 +34,13 @@ class SdxlFinalRenderModel:
         batch_size: int = 1,
         seed: int | None = None,
         strict_runtime: bool = False,
+        offload_mode: OffloadMode = "none",
+        enable_attention_slicing: bool = False,
+        enable_vae_slicing: bool = False,
+        enable_vae_tiling: bool = False,
+        enable_xformers_memory_efficient_attention: bool = False,
+        enable_fp8_layerwise_casting: bool = False,
+        enable_channels_last: bool = False,
         default_prompt: str = "polished hidden object puzzle final render",
         default_negative_prompt: str = "blurry, low quality, artifact",
         default_num_inference_steps: int = 20,
@@ -46,6 +55,15 @@ class SdxlFinalRenderModel:
         self.batch_size = batch_size
         self.seed = seed
         self.strict_runtime = strict_runtime
+        self.offload_mode = offload_mode
+        self.enable_attention_slicing = enable_attention_slicing
+        self.enable_vae_slicing = enable_vae_slicing
+        self.enable_vae_tiling = enable_vae_tiling
+        self.enable_xformers_memory_efficient_attention = (
+            enable_xformers_memory_efficient_attention
+        )
+        self.enable_fp8_layerwise_casting = enable_fp8_layerwise_casting
+        self.enable_channels_last = enable_channels_last
         self.default_prompt = default_prompt
         self.default_negative_prompt = default_negative_prompt
         self.default_num_inference_steps = default_num_inference_steps
@@ -121,12 +139,16 @@ class SdxlFinalRenderModel:
             fallback=self.default_strength,
         )
         image = load_image_rgb(source)
+        width = as_positive_int(request.params.get("width"), fallback=image.width)
+        height = as_positive_int(request.params.get("height"), fallback=image.height)
         rendered = self._generate_image(
             handle=handle,
             source_image=image,
             prompt=prompt,
             negative_prompt=negative_prompt,
             seed=seed,
+            width=width,
+            height=height,
             num_inference_steps=num_inference_steps,
             guidance_scale=guidance_scale,
             strength=strength,
@@ -160,9 +182,17 @@ class SdxlFinalRenderModel:
             revision=self.revision,
             torch_dtype=torch_dtype,
         )
-        if hasattr(pipe, "set_progress_bar_config"):
-            pipe.set_progress_bar_config(disable=False)
-        self._pipe = pipe.to(handle.device)
+        self._pipe = configure_diffusers_pipeline(
+            pipe,
+            handle=handle,
+            offload_mode=self.offload_mode,
+            enable_attention_slicing=self.enable_attention_slicing,
+            enable_vae_slicing=self.enable_vae_slicing,
+            enable_vae_tiling=self.enable_vae_tiling,
+            enable_xformers_memory_efficient_attention=self.enable_xformers_memory_efficient_attention,
+            enable_fp8_layerwise_casting=self.enable_fp8_layerwise_casting,
+            enable_channels_last=self.enable_channels_last,
+        )
         return self._pipe
 
     def _generate_image(
@@ -173,6 +203,8 @@ class SdxlFinalRenderModel:
         prompt: str,
         negative_prompt: str,
         seed: int | None,
+        width: int,
+        height: int,
         num_inference_steps: int,
         guidance_scale: float,
         strength: float,
@@ -185,10 +217,13 @@ class SdxlFinalRenderModel:
         if seed is not None:
             generator = torch.Generator(device="cpu").manual_seed(seed)
         pipe = self._load_pipe(handle)
+        resized_source = source_image.resize((width, height))
         result = pipe(
             prompt=prompt,
             negative_prompt=negative_prompt,
-            image=source_image,
+            image=resized_source,
+            width=width,
+            height=height,
             strength=strength,
             num_inference_steps=num_inference_steps,
             guidance_scale=guidance_scale,
@@ -198,3 +233,7 @@ class SdxlFinalRenderModel:
         if not images:
             raise RuntimeError("img2img pipeline returned no images")
         return images[0]
+
+    def unload(self) -> None:
+        clear_model_runtime(self._pipe)
+        self._pipe = None

@@ -14,7 +14,10 @@ from discoverex.domain.verification import (
     VerificationResult,
 )
 from discoverex.models.types import ModelHandle, PerceptionRequest
+from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
+
+from .runtime_metrics import track_stage_vram
 
 logger = get_logger("discoverex.generate.verify")
 
@@ -43,22 +46,29 @@ def verify_scene(
         scene.composite.final_image_ref,
         len(scene.regions),
     )
+    emit_progress_event(
+        stage="verification",
+        status="started",
+        final_image_ref=scene.composite.final_image_ref,
+        region_count=len(scene.regions),
+    )
     logical = run_logical_verification(
         scene,
         pass_threshold=float(context.thresholds.logical_pass),
     )
-    pred = context.perception_model.predict(
-        perception_handle,
-        PerceptionRequest(
-            image_ref=scene.composite.final_image_ref,
-            region_count=len(scene.regions),
-            regions=[
-                {"region_id": region.region_id, "role": region.role.value}
-                for region in scene.regions
-            ],
-            question_context=scene.goal.goal_type.value,
-        ),
-    )
+    with track_stage_vram(context, "verification"):
+        pred = context.perception_model.predict(
+            perception_handle,
+            PerceptionRequest(
+                image_ref=scene.composite.final_image_ref,
+                region_count=len(scene.regions),
+                regions=[
+                    {"region_id": region.region_id, "role": region.role.value}
+                    for region in scene.regions
+                ],
+                question_context=scene.goal.goal_type.value,
+            ),
+        )
     perception = run_perception_verification(
         scene=scene,
         confidence=float(pred["confidence"]),
@@ -84,4 +94,10 @@ def verify_scene(
         scene.verification.final.pass_,
         scene.verification.final.total_score,
         format_seconds(started),
+    )
+    emit_progress_event(
+        stage="verification",
+        status="completed",
+        passed=scene.verification.final.pass_,
+        total_score=scene.verification.final.total_score,
     )

@@ -7,10 +7,12 @@ from time import perf_counter
 
 from discoverex.application.context import AppContextLike
 from discoverex.domain.scene import LayerBBox, LayerItem, LayerType, Scene
+from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 
 from .background_pipeline import build_background_from_inputs
 from .composite_pipeline import compose_scene
+from .model_lifecycle import unload_model
 from .persistence import save_scene, track_run, write_verification_report
 from .prompt_bundle import build_prompt_tracking_params, save_prompt_bundle
 from .region_pipeline import generate_regions
@@ -42,37 +44,40 @@ def run(
     runtime_cfg = context.runtime
     model_versions = context.model_versions
     run_ids = generate_run_ids()
-
-    background_handle = context.background_generator_model.load(
-        model_versions.background_generator
-    )
-    hidden_handle = context.hidden_region_model.load(model_versions.hidden_region)
-    inpaint_handle = context.inpaint_model.load(model_versions.inpaint)
-    perception_handle = context.perception_model.load(model_versions.perception)
-    fx_handle = context.fx_model.load(model_versions.fx)
     scene_dir = (
         Path(context.artifacts_root) / "scenes" / run_ids.scene_id / run_ids.version_id
     )
-
-    background, background_prompt_record = build_background_from_inputs(
-        context=context,
-        scene_dir=scene_dir,
-        fx_handle=background_handle,
-        background_asset_ref=background_asset_ref,
-        background_prompt=background_prompt,
-        background_negative_prompt=background_negative_prompt,
+    background_handle = context.background_generator_model.load(
+        model_versions.background_generator
     )
+    try:
+        background, background_prompt_record = build_background_from_inputs(
+            context=context,
+            scene_dir=scene_dir,
+            fx_handle=background_handle,
+            background_asset_ref=background_asset_ref,
+            background_prompt=background_prompt,
+            background_negative_prompt=background_negative_prompt,
+        )
+    finally:
+        unload_model(context.background_generator_model)
     _materialize_background_asset(background=background, scene_dir=scene_dir)
     logger.info("background ready asset_ref=%s", background.asset_ref)
-    regions, region_prompt_records = generate_regions(
-        context=context,
-        background=background,
-        scene_dir=scene_dir,
-        hidden_handle=hidden_handle,
-        inpaint_handle=inpaint_handle,
-        object_prompt=(object_prompt or "").strip(),
-        object_negative_prompt=(object_negative_prompt or "").strip(),
-    )
+    hidden_handle = context.hidden_region_model.load(model_versions.hidden_region)
+    inpaint_handle = context.inpaint_model.load(model_versions.inpaint)
+    try:
+        regions, region_prompt_records = generate_regions(
+            context=context,
+            background=background,
+            scene_dir=scene_dir,
+            hidden_handle=hidden_handle,
+            inpaint_handle=inpaint_handle,
+            object_prompt=(object_prompt or "").strip(),
+            object_negative_prompt=(object_negative_prompt or "").strip(),
+        )
+    finally:
+        unload_model(context.hidden_region_model)
+        unload_model(context.inpaint_model)
     scene = build_scene(
         background=background,
         regions=regions,
@@ -85,16 +90,20 @@ def run(
     inpaint_ref = background.metadata.get("inpaint_composited_ref")
     if isinstance(inpaint_ref, str) and inpaint_ref:
         fx_input_ref = inpaint_ref
-    composite = compose_scene(
-        context=context,
-        background_asset_ref=fx_input_ref,
-        scene_dir=scene_dir,
-        fx_handle=fx_handle,
-        prompt=(final_prompt or "").strip()
-        or "polished hidden object puzzle final render",
-        negative_prompt=(final_negative_prompt or "").strip()
-        or "blurry, low quality, artifact",
-    )
+    fx_handle = context.fx_model.load(model_versions.fx)
+    try:
+        composite = compose_scene(
+            context=context,
+            background_asset_ref=fx_input_ref,
+            scene_dir=scene_dir,
+            fx_handle=fx_handle,
+            prompt=(final_prompt or "").strip()
+            or "polished hidden object puzzle final render",
+            negative_prompt=(final_negative_prompt or "").strip()
+            or "blurry, low quality, artifact",
+        )
+    finally:
+        unload_model(context.fx_model)
     scene.composite.final_image_ref = composite.image_ref
     _finalize_layers(scene=scene, background=background, fx_input_ref=fx_input_ref)
     logger.info(
@@ -102,8 +111,11 @@ def run(
         len(scene.regions),
         scene.composite.final_image_ref,
     )
-
-    verify_scene(scene=scene, context=context, perception_handle=perception_handle)
+    perception_handle = context.perception_model.load(model_versions.perception)
+    try:
+        verify_scene(scene=scene, context=context, perception_handle=perception_handle)
+    finally:
+        unload_model(context.perception_model)
     scene.meta.updated_at = datetime.now(timezone.utc)
 
     prompt_bundle = PromptBundle(
@@ -138,6 +150,13 @@ def run(
         composite_artifact=composite.artifact_path,
         prompt_bundle_artifact=prompt_bundle_path,
         extra_params=build_prompt_tracking_params(prompt_bundle),
+    )
+    emit_progress_event(
+        stage="generate_pipeline",
+        status="completed",
+        scene_id=scene.meta.scene_id,
+        version_id=scene.meta.version_id,
+        final_status=scene.meta.status,
     )
     logger.info(
         "generate pipeline completed scene_id=%s version_id=%s duration=%s",

@@ -10,14 +10,14 @@ _PROMPT_PARAM_LIMIT = 250
 
 def save_prompt_bundle(scene_dir: Path, prompt_bundle: PromptBundle) -> Path:
     path = scene_dir / "prompt_bundle.json"
-    path.write_text(
-        json.dumps(
-            prompt_bundle.model_dump(mode="json"),
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                prompt_bundle.model_dump(mode="json"),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     return path
 
 

@@ -8,8 +8,10 @@ from discoverex.application.context import AppContextLike
 from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
 from discoverex.domain.scene import Background
 from discoverex.models.types import HiddenRegionRequest, InpaintRequest, ModelHandle
+from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 
+from .runtime_metrics import track_stage_vram
 from .types import RegionPromptRecord
 
 _DEFAULT_OBJECT_GENERATION_PROMPT = "repair hidden object region naturally"
@@ -54,19 +56,32 @@ def generate_regions(
         background.width,
         background.height,
     )
-    boxes = context.hidden_region_model.predict(
-        hidden_handle,
-        HiddenRegionRequest(
-            image_ref=background.asset_ref,
-            width=background.width,
-            height=background.height,
-        ),
+    emit_progress_event(
+        stage="hidden_region_detection",
+        status="started",
+        image_ref=background.asset_ref,
+        width=background.width,
+        height=background.height,
     )
+    with track_stage_vram(context, "hidden_region_detection"):
+        boxes = context.hidden_region_model.predict(
+            hidden_handle,
+            HiddenRegionRequest(
+                image_ref=background.asset_ref,
+                width=background.width,
+                height=background.height,
+            ),
+        )
     regions = build_candidate_regions(boxes)
     logger.info(
         "hidden region detection completed candidates=%d duration=%s",
         len(regions),
         format_seconds(hidden_started),
+    )
+    emit_progress_event(
+        stage="hidden_region_detection",
+        status="completed",
+        candidate_count=len(regions),
     )
 
     inpainted_regions: list[Region] = []
@@ -91,24 +106,38 @@ def generate_regions(
             region.geometry.bbox.w,
             region.geometry.bbox.h,
         )
-        details = context.inpaint_model.predict(
-            inpaint_handle,
-            InpaintRequest(
-                image_ref=background.asset_ref,
-                region_id=region.region_id,
-                bbox=(
-                    region.geometry.bbox.x,
-                    region.geometry.bbox.y,
-                    region.geometry.bbox.w,
-                    region.geometry.bbox.h,
-                ),
-                output_path=str(output_path),
-                composite_base_ref=background.asset_ref,
-                prompt=object_prompt,
-                negative_prompt=object_negative_prompt,
-                generation_prompt=generation_prompt,
-            ),
+        emit_progress_event(
+            stage="object_inpaint",
+            status="started",
+            region_id=region.region_id,
+            index=index,
+            total=total_regions,
+            bbox={
+                "x": region.geometry.bbox.x,
+                "y": region.geometry.bbox.y,
+                "w": region.geometry.bbox.w,
+                "h": region.geometry.bbox.h,
+            },
         )
+        with track_stage_vram(context, "object_inpaint"):
+            details = context.inpaint_model.predict(
+                inpaint_handle,
+                InpaintRequest(
+                    image_ref=background.asset_ref,
+                    region_id=region.region_id,
+                    bbox=(
+                        region.geometry.bbox.x,
+                        region.geometry.bbox.y,
+                        region.geometry.bbox.w,
+                        region.geometry.bbox.h,
+                    ),
+                    output_path=str(output_path),
+                    composite_base_ref=background.asset_ref,
+                    prompt=object_prompt,
+                    negative_prompt=object_negative_prompt,
+                    generation_prompt=generation_prompt,
+                ),
+            )
         updated = region.model_copy(deep=True)
         updated.source = RegionSource.INPAINT
         updated.attributes.update(details)
@@ -164,6 +193,16 @@ def generate_regions(
             details.get("object_image_ref"),
             details.get("composited_image_ref"),
             format_seconds(region_started),
+        )
+        emit_progress_event(
+            stage="object_inpaint",
+            status="completed",
+            region_id=region.region_id,
+            index=index,
+            total=total_regions,
+            patch_image_ref=details.get("patch_image_ref"),
+            object_image_ref=details.get("object_image_ref"),
+            composited_image_ref=details.get("composited_image_ref"),
         )
         inpainted_regions.append(updated)
     return inpainted_regions, prompt_records

@@ -35,4 +35,3 @@ __all__ = [
     "build_worker_entrypoint",
     "is_legacy_command",
 ]
-

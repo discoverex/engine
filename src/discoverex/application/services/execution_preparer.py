@@ -19,7 +19,8 @@ def prepare_execution(
     *,
     cwd: Path | None = None,
 ) -> ExecutionPreparation:
-    runtime = job_spec.engine_run.runtime
+    inputs = job_spec.inputs
+    runtime = inputs.runtime
     base_dir = (cwd or Path.cwd()).resolve()
     uv_cache_directory = base_dir / ".cache" / "uv"
     workspace_directory = base_dir
@@ -58,10 +59,14 @@ def _require_engine_repo(base_dir: Path) -> None:
         base_dir / "pyproject.toml",
         base_dir / "src" / "discoverex",
     )
-    missing = [str(path.relative_to(base_dir)) for path in required if not path.exists()]
+    missing = [
+        str(path.relative_to(base_dir)) for path in required if not path.exists()
+    ]
     if missing:
         missing_str = ", ".join(missing)
-        raise RuntimeError(f"execution preparation requires engine repo files: {missing_str}")
+        raise RuntimeError(
+            f"execution preparation requires engine repo files: {missing_str}"
+        )
 
 
 def _ensure_workspace(base_dir: Path, job_name: str | None) -> Path:
@@ -71,4 +76,3 @@ def _ensure_workspace(base_dir: Path, job_name: str | None) -> Path:
     workspace_dir = workspace_root / target_name.replace("/", "-")
     workspace_dir.mkdir(parents=True, exist_ok=True)
     return workspace_dir
-

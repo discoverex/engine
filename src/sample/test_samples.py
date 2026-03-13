@@ -325,7 +325,8 @@ class SmartVisualAdapter:
                 similar_count_map[oid] = len(distances)
                 similar_distance_map[oid] = (
                     float(sum(distances) / len(distances)) * 100.0
-                    if distances else 100.0
+                    if distances
+                    else 100.0
                 )
 
         return VisualVerification(

@@ -98,8 +98,8 @@ class MobileSAMAdapter:
         alpha_degree_map: dict[str, int] = {}
         for layer_path in object_layers:
             obj_id = layer_path.stem
-            alpha_degree_map[obj_id] = (
-                len(list(g.predecessors(obj_id))) + len(list(g.successors(obj_id)))
+            alpha_degree_map[obj_id] = len(list(g.predecessors(obj_id))) + len(
+                list(g.successors(obj_id))
             )
 
         # ------------------------------------------------------------------

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from discoverex.domain.services.verification import (
     ScoringWeights,
     compute_scene_difficulty,
@@ -26,9 +28,8 @@ def build_verification_bundle(
         data.logical,
         data.visual,
     )
-    all_obj_ids: set[str] = (
-        set(physical.alpha_degree_map)
-        | set(visual.sigma_threshold_map)
+    all_obj_ids: set[str] = set(physical.alpha_degree_map) | set(
+        visual.sigma_threshold_map
     )
 
     # degree_norm 정규화 기준: max(visual_degree) + max(logical_degree)
@@ -40,7 +41,7 @@ def build_verification_bundle(
     )
     max_combined = max(max_visual_degree + max_logical_degree, 1)
 
-    answer_obj_metrics: list[dict] = []
+    answer_obj_metrics: list[dict[str, Any]] = []
     per_obj_perception: list[float] = []
     per_obj_logical: list[float] = []
 
@@ -49,7 +50,7 @@ def build_verification_bundle(
         logical_deg = logical.degree_map.get(obj_id, 0)
         # degree_norm: visual(alpha-overlap) + logical(scene graph) 복합 차수 정규화
         combined_deg = visual_deg + logical_deg
-        metrics: dict = {
+        metrics: dict[str, Any] = {
             "obj_id": obj_id,
             "visual_degree": visual_deg,
             "logical_degree": logical_deg,
@@ -83,7 +84,9 @@ def build_verification_bundle(
         avg_perception * weights.total_perception + avg_logical * weights.total_logical
     )
     passed = total_score >= pass_threshold
-    difficulty = compute_scene_difficulty(answer_obj_metrics, weights, visual.object_count_map)
+    difficulty = compute_scene_difficulty(
+        answer_obj_metrics, weights, visual.object_count_map
+    )
 
     # answer_obj_count: Phase 4 object_count_map 기준 answer 오브젝트의 탐지 수 합산
     answer_obj_count = sum(

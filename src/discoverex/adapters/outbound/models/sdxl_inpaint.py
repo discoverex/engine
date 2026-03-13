@@ -14,6 +14,8 @@ from .image_patch_ops import (
     sanitize_bbox,
     save_image,
 )
+from .pipeline_memory import OffloadMode
+from .runtime_cleanup import clear_model_runtime
 from .runtime import (
     apply_seed,
     build_runtime_extra,
@@ -45,6 +47,13 @@ class SdxlInpaintModel:
         batch_size: int = 1,
         seed: int | None = None,
         strict_runtime: bool = False,
+        offload_mode: OffloadMode = "none",
+        enable_attention_slicing: bool = False,
+        enable_vae_slicing: bool = False,
+        enable_vae_tiling: bool = False,
+        enable_xformers_memory_efficient_attention: bool = False,
+        enable_fp8_layerwise_casting: bool = False,
+        enable_channels_last: bool = False,
         default_prompt: str = "place a visually coherent hidden object in the marked region",
         default_negative_prompt: str = "blurry, low quality, artifact",
         generation_strength: float = 0.5,
@@ -60,6 +69,15 @@ class SdxlInpaintModel:
         self.batch_size = batch_size
         self.seed = seed
         self.strict_runtime = strict_runtime
+        self.offload_mode = offload_mode
+        self.enable_attention_slicing = enable_attention_slicing
+        self.enable_vae_slicing = enable_vae_slicing
+        self.enable_vae_tiling = enable_vae_tiling
+        self.enable_xformers_memory_efficient_attention = (
+            enable_xformers_memory_efficient_attention
+        )
+        self.enable_fp8_layerwise_casting = enable_fp8_layerwise_casting
+        self.enable_channels_last = enable_channels_last
         self.default_prompt = default_prompt
         self.default_negative_prompt = default_negative_prompt
         self.generation_strength = generation_strength
@@ -214,6 +232,13 @@ class SdxlInpaintModel:
             model_id=self.model_id,
             revision=self.revision,
             handle=handle,
+            offload_mode=self.offload_mode,
+            enable_attention_slicing=self.enable_attention_slicing,
+            enable_vae_slicing=self.enable_vae_slicing,
+            enable_vae_tiling=self.enable_vae_tiling,
+            enable_xformers_memory_efficient_attention=self.enable_xformers_memory_efficient_attention,
+            enable_fp8_layerwise_casting=self.enable_fp8_layerwise_casting,
+            enable_channels_last=self.enable_channels_last,
         )
         pipe = self._pipe
         result = pipe(
@@ -231,3 +256,7 @@ class SdxlInpaintModel:
         if not images:
             raise RuntimeError("inpainting pipeline returned no images")
         return images[0]
+
+    def unload(self) -> None:
+        clear_model_runtime(self._pipe)
+        self._pipe = None

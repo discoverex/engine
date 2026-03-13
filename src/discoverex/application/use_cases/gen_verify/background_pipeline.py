@@ -6,9 +6,11 @@ from time import perf_counter
 from discoverex.application.context import AppContextLike
 from discoverex.domain.scene import Background
 from discoverex.models.types import FxRequest, ModelHandle
+from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 
 from .composite_pipeline import resolve_composite_image_ref
+from .runtime_metrics import track_stage_vram
 from .scene_builder import build_background
 from .types import PromptStageRecord
 
@@ -31,26 +33,35 @@ def build_background_from_inputs(
     if prompt:
         started = perf_counter()
         output_path = scene_dir / "layers" / "base" / "generated-background.png"
+        emit_progress_event(
+            stage="background_generation",
+            status="started",
+            mode="prompt",
+            output_path=str(output_path),
+            width=int(context.runtime.width),
+            height=int(context.runtime.height),
+        )
         logger.info(
             "background generation started mode=prompt output=%s size=%sx%s",
             output_path,
             int(context.runtime.width),
             int(context.runtime.height),
         )
-        prediction = context.background_generator_model.predict(
-            fx_handle,
-            FxRequest(
-                mode="background",
-                params={
-                    "output_path": str(output_path),
-                    "width": int(context.runtime.width),
-                    "height": int(context.runtime.height),
-                    "prompt": prompt,
-                    "negative_prompt": negative_prompt or _DEFAULT_BACKGROUND_NEGATIVE,
-                    "seed": context.runtime.model_runtime.seed,
-                },
-            ),
-        )
+        with track_stage_vram(context, "background_generation"):
+            prediction = context.background_generator_model.predict(
+                fx_handle,
+                FxRequest(
+                    mode="background",
+                    params={
+                        "output_path": str(output_path),
+                        "width": int(context.runtime.width),
+                        "height": int(context.runtime.height),
+                        "prompt": prompt,
+                        "negative_prompt": negative_prompt or _DEFAULT_BACKGROUND_NEGATIVE,
+                        "seed": context.runtime.model_runtime.seed,
+                    },
+                ),
+            )
         fallback_ref = (background_asset_ref or "").strip()
         resolved = resolve_composite_image_ref(
             background_asset_ref=fallback_ref,
@@ -58,6 +69,13 @@ def build_background_from_inputs(
         )
         if not resolved.image_ref:
             raise RuntimeError("background prompt generation produced no usable output")
+        emit_progress_event(
+            stage="background_generation",
+            status="completed",
+            mode="prompt",
+            image_ref=resolved.image_ref,
+            used_fallback=bool(fallback_ref and resolved.image_ref == fallback_ref),
+        )
         logger.info(
             "background generation completed output=%s fallback=%s duration=%s",
             resolved.image_ref,
@@ -81,6 +99,12 @@ def build_background_from_inputs(
         raise ValueError(
             "generate requires either background_asset_ref or background_prompt"
         )
+    emit_progress_event(
+        stage="background_generation",
+        status="completed",
+        mode="asset_ref",
+        image_ref=asset_ref,
+    )
     logger.info("background selection mode=asset_ref source=%s", asset_ref)
     return (
         build_background(asset_ref, context.runtime),

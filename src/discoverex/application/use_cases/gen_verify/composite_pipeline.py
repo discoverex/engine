@@ -5,8 +5,10 @@ from time import perf_counter
 
 from discoverex.application.context import AppContextLike
 from discoverex.models.types import FxPrediction, FxRequest, ModelHandle
+from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 
+from .runtime_metrics import track_stage_vram
 from .types import CompositeResolution
 
 logger = get_logger("discoverex.generate.final_render")
@@ -50,21 +52,30 @@ def compose_scene(
         int(context.runtime.width),
         int(context.runtime.height),
     )
-    fx_prediction = context.fx_model.predict(
-        fx_handle,
-        FxRequest(
-            image_ref=background_asset_ref,
-            mode="default",
-            params={
-                "output_path": str(output_path),
-                "width": int(context.runtime.width),
-                "height": int(context.runtime.height),
-                "prompt": prompt,
-                "negative_prompt": negative_prompt,
-                "seed": context.runtime.model_runtime.seed,
-            },
-        ),
+    emit_progress_event(
+        stage="final_render",
+        status="started",
+        source_ref=background_asset_ref,
+        output_path=str(output_path),
+        width=int(context.runtime.width),
+        height=int(context.runtime.height),
     )
+    with track_stage_vram(context, "final_render"):
+        fx_prediction = context.fx_model.predict(
+            fx_handle,
+            FxRequest(
+                image_ref=background_asset_ref,
+                mode="default",
+                params={
+                    "output_path": str(output_path),
+                    "width": int(context.runtime.width),
+                    "height": int(context.runtime.height),
+                    "prompt": prompt,
+                    "negative_prompt": negative_prompt,
+                    "seed": context.runtime.model_runtime.seed,
+                },
+            ),
+        )
     resolved = resolve_composite_image_ref(
         background_asset_ref=background_asset_ref,
         fx_prediction=fx_prediction,
@@ -73,5 +84,10 @@ def compose_scene(
         "final render completed output=%s duration=%s",
         resolved.image_ref,
         format_seconds(started),
+    )
+    emit_progress_event(
+        stage="final_render",
+        status="completed",
+        image_ref=resolved.image_ref,
     )
     return resolved

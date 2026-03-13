@@ -58,4 +58,3 @@ def build_cli_tokens(job: EngineRunSpec) -> list[str]:
 def build_worker_entrypoint(job: EngineRunSpec) -> list[str]:
     cli = shlex.join(build_cli_tokens(job))
     return ["/bin/sh", "-lc", f'UV_CACHE_DIR="$PWD/.cache/uv" uv run {cli}']
-

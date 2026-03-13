@@ -42,6 +42,13 @@ class RuntimeModelConfig(BaseModel):
     precision: Literal["fp16", "fp32"] = "fp16"
     batch_size: int = 1
     seed: int | None = None
+    offload_mode: Literal["none", "model", "sequential"] = "none"
+    enable_attention_slicing: bool = False
+    enable_vae_slicing: bool = False
+    enable_vae_tiling: bool = False
+    enable_xformers_memory_efficient_attention: bool = False
+    enable_fp8_layerwise_casting: bool = False
+    enable_channels_last: bool = False
 
     @field_validator("batch_size")
     @classmethod

@@ -7,10 +7,17 @@ dtype: ${runtime.model_runtime.dtype}
 precision: ${runtime.model_runtime.precision}
 batch_size: ${runtime.model_runtime.batch_size}
 seed: ${runtime.model_runtime.seed}
+offload_mode: ${runtime.model_runtime.offload_mode}
+enable_attention_slicing: ${runtime.model_runtime.enable_attention_slicing}
+enable_vae_slicing: ${runtime.model_runtime.enable_vae_slicing}
+enable_vae_tiling: ${runtime.model_runtime.enable_vae_tiling}
+enable_xformers_memory_efficient_attention: ${runtime.model_runtime.enable_xformers_memory_efficient_attention}
+enable_fp8_layerwise_casting: ${runtime.model_runtime.enable_fp8_layerwise_casting}
+enable_channels_last: ${runtime.model_runtime.enable_channels_last}
 strict_runtime: true
 default_prompt: "place a visually coherent hidden object in the marked region"
 default_negative_prompt: "blurry, low quality, artifact"
 generation_strength: 0.5
-generation_steps: 28
-generation_guidance_scale: 4.0
-patch_target_long_side: 128
+generation_steps: 12
+generation_guidance_scale: 3.0
+patch_target_long_side: 96

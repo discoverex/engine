@@ -175,13 +175,18 @@ class YoloCLIPAdapter:
                     if sim >= _SIMILARITY_THRESHOLD:
                         sim_count += 1
                         # euclidean distance from physical if available
-                        if physical is not None and oid in physical.euclidean_distance_map:
+                        if (
+                            physical is not None
+                            and oid in physical.euclidean_distance_map
+                        ):
                             dists = physical.euclidean_distance_map[oid]
                             dist_sum += float(dists[0]) if dists else _DIST_THRESH
                         else:
                             dist_sum += _DIST_THRESH
                 similar_count_map[oid] = sim_count
-                similar_distance_map[oid] = dist_sum / sim_count if sim_count > 0 else _DIST_THRESH
+                similar_distance_map[oid] = (
+                    dist_sum / sim_count if sim_count > 0 else _DIST_THRESH
+                )
         else:
             for oid in obj_ids:
                 similar_count_map[oid] = 0

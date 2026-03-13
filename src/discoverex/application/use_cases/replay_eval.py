@@ -7,6 +7,9 @@ from pathlib import Path
 from discoverex.application.context import AppContextLike
 from discoverex.application.use_cases.verify_only import run_verify_only
 from discoverex.execution_snapshot import build_tracking_params
+from discoverex.orchestrator_contract.worker_runtime import (
+    write_worker_artifact_manifest,
+)
 
 
 def run_replay_eval(
@@ -59,6 +62,13 @@ def run_replay_eval(
                 if context.execution_snapshot_path is not None
                 else []
             ),
+        ],
+    )
+    write_worker_artifact_manifest(
+        artifacts_root=context.artifacts_root,
+        artifacts=[
+            ("replay_eval_report", report_path),
+            ("execution_config", context.execution_snapshot_path),
         ],
     )
     return report_path

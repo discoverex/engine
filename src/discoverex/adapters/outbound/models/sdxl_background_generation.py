@@ -8,6 +8,8 @@ from discoverex.models.types import FxPrediction, FxRequest, ModelHandle
 from discoverex.runtime_logging import format_seconds, get_logger
 
 from .fx_param_parsing import as_float, as_int_or_none, as_positive_int, as_str
+from .pipeline_memory import configure_diffusers_pipeline
+from .runtime_cleanup import clear_model_runtime
 from .runtime import (
     apply_seed,
     build_runtime_extra,
@@ -31,6 +33,13 @@ class SdxlBackgroundGenerationModel:
         batch_size: int = 1,
         seed: int | None = None,
         strict_runtime: bool = False,
+        offload_mode: str = "none",
+        enable_attention_slicing: bool = False,
+        enable_vae_slicing: bool = False,
+        enable_vae_tiling: bool = False,
+        enable_xformers_memory_efficient_attention: bool = False,
+        enable_fp8_layerwise_casting: bool = False,
+        enable_channels_last: bool = False,
         refiner_model_id: str | None = "stabilityai/stable-diffusion-xl-refiner-1.0",
         default_prompt: str = "cinematic hidden object puzzle background",
         default_negative_prompt: str = "blurry, low quality, artifact",
@@ -46,6 +55,15 @@ class SdxlBackgroundGenerationModel:
         self.batch_size = batch_size
         self.seed = seed
         self.strict_runtime = strict_runtime
+        self.offload_mode = offload_mode
+        self.enable_attention_slicing = enable_attention_slicing
+        self.enable_vae_slicing = enable_vae_slicing
+        self.enable_vae_tiling = enable_vae_tiling
+        self.enable_xformers_memory_efficient_attention = (
+            enable_xformers_memory_efficient_attention
+        )
+        self.enable_fp8_layerwise_casting = enable_fp8_layerwise_casting
+        self.enable_channels_last = enable_channels_last
         self.refiner_model_id = refiner_model_id
         self.default_prompt = default_prompt
         self.default_negative_prompt = default_negative_prompt
@@ -158,9 +176,17 @@ class SdxlBackgroundGenerationModel:
             revision=self.revision,
             torch_dtype=torch_dtype,
         )
-        if hasattr(pipe, "set_progress_bar_config"):
-            pipe.set_progress_bar_config(disable=False)
-        self._base_pipe = pipe.to(handle.device)
+        self._base_pipe = configure_diffusers_pipeline(
+            pipe,
+            handle=handle,
+            offload_mode=self.offload_mode,
+            enable_attention_slicing=self.enable_attention_slicing,
+            enable_vae_slicing=self.enable_vae_slicing,
+            enable_vae_tiling=self.enable_vae_tiling,
+            enable_xformers_memory_efficient_attention=self.enable_xformers_memory_efficient_attention,
+            enable_fp8_layerwise_casting=self.enable_fp8_layerwise_casting,
+            enable_channels_last=self.enable_channels_last,
+        )
         return self._base_pipe
 
     def _load_refiner_pipe(self, handle: ModelHandle) -> Any | None:
@@ -183,9 +209,17 @@ class SdxlBackgroundGenerationModel:
             self.refiner_model_id,
             torch_dtype=torch_dtype,
         )
-        if hasattr(pipe, "set_progress_bar_config"):
-            pipe.set_progress_bar_config(disable=False)
-        self._refiner_pipe = pipe.to(handle.device)
+        self._refiner_pipe = configure_diffusers_pipeline(
+            pipe,
+            handle=handle,
+            offload_mode=self.offload_mode,
+            enable_attention_slicing=self.enable_attention_slicing,
+            enable_vae_slicing=self.enable_vae_slicing,
+            enable_vae_tiling=self.enable_vae_tiling,
+            enable_xformers_memory_efficient_attention=self.enable_xformers_memory_efficient_attention,
+            enable_fp8_layerwise_casting=self.enable_fp8_layerwise_casting,
+            enable_channels_last=self.enable_channels_last,
+        )
         return self._refiner_pipe
 
     def _generate_image(
@@ -238,3 +272,8 @@ class SdxlBackgroundGenerationModel:
         if not refined_images:
             return image
         return refined_images[0]
+
+    def unload(self) -> None:
+        clear_model_runtime(self._base_pipe, self._refiner_pipe)
+        self._base_pipe = None
+        self._refiner_pipe = None

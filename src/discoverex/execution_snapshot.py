@@ -68,6 +68,13 @@ def write_execution_snapshot(
     return path
 
 
+def update_execution_snapshot(path: Path, snapshot: dict[str, Any]) -> None:
+    path.write_text(
+        json.dumps(snapshot, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
 def build_tracking_params(snapshot: dict[str, Any] | None) -> dict[str, str]:
     if snapshot is None:
         return {}

@@ -4,9 +4,9 @@ defaults:
   - override /models/hidden_region: hf
   - override /models/inpaint: sdxl_gpu
   - override /models/perception: hf
-  - override /models/fx: sdxl_gpu
+  - override /models/fx: copy_image
   - override /runtime/model_runtime: gpu
 
 runtime:
-  width: 1024
-  height: 768
+  width: 512
+  height: 512

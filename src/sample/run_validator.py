@@ -58,6 +58,7 @@ def _detect_gpu() -> bool:
     """CUDA GPU 사용 가능 여부 확인."""
     try:
         import torch
+
         return torch.cuda.is_available()
     except ImportError:
         return False
@@ -74,23 +75,29 @@ def _build_adapters(
     """
     if gpu:
         try:
-            from discoverex.adapters.outbound.models.hf_mobilesam import MobileSAMAdapter
-            from discoverex.adapters.outbound.models.hf_moondream2 import Moondream2Adapter
+            from discoverex.adapters.outbound.models.hf_mobilesam import (
+                MobileSAMAdapter,
+            )
+            from discoverex.adapters.outbound.models.hf_moondream2 import (
+                Moondream2Adapter,
+            )
             from discoverex.adapters.outbound.models.hf_yolo_clip import YoloCLIPAdapter
-            phys   = MobileSAMAdapter(device="cuda")
-            logic  = Moondream2Adapter(device="cuda")
-            vis    = YoloCLIPAdapter()
+
+            phys = MobileSAMAdapter(device="cuda")
+            logic = Moondream2Adapter(device="cuda")
+            vis = YoloCLIPAdapter()
             handle = ModelHandle(name="gpu", version="v0", runtime="cuda")
             return phys, logic, vis, handle, "GPU"
         except ImportError as e:
             print(f"  [경고] GPU 어댑터 import 실패 ({e}) → CPU 폴백")
 
     # CPU 폴백
-    phys   = CpuPhysicalAdapter(layer_arrays)
-    logic  = SmartLogicalAdapter(phys)
-    vis    = SmartVisualAdapter(phys)
+    phys = CpuPhysicalAdapter(layer_arrays)
+    logic = SmartLogicalAdapter(phys)
+    vis = SmartVisualAdapter(phys)
     handle = ModelHandle(name="cpu", version="v0", runtime="cpu")
     return phys, logic, vis, handle, "CPU"
+
 
 # ---------------------------------------------------------------------------
 # 출력 유틸
@@ -141,7 +148,9 @@ def _print_result(bundle, layer_files: list[Path]) -> None:
     verdict = "✅ PASS" if bundle.final.pass_ else "❌ FAIL"
     print(f"  {verdict}")
     print(f"  total_score      : {bundle.final.total_score:.4f}")
-    print(f"  perception score : {bundle.perception.score:.4f}  (sigma/drr/similar/color/edge)")
+    print(
+        f"  perception score : {bundle.perception.score:.4f}  (sigma/drr/similar/color/edge)"
+    )
     print(f"  logical score    : {bundle.logical.score:.4f}  (hop/degree/cluster)")
     if bundle.final.failure_reason:
         print(f"  failure_reason   : {bundle.final.failure_reason}")
@@ -175,9 +184,13 @@ def _print_result(bundle, layer_files: list[Path]) -> None:
     for path in layer_files:
         oid = path.stem
         sim_dist = sim_dst_map.get(oid, "-")
-        sim_dist_str = f"{sim_dist:.1f}" if isinstance(sim_dist, float) else str(sim_dist)
+        sim_dist_str = (
+            f"{sim_dist:.1f}" if isinstance(sim_dist, float) else str(sim_dist)
+        )
         sigma_val = sigma_map.get(oid, "-")
-        sigma_str = f"{sigma_val:.1f}" if isinstance(sigma_val, float) else str(sigma_val)
+        sigma_str = (
+            f"{sigma_val:.1f}" if isinstance(sigma_val, float) else str(sigma_val)
+        )
         drr_val = drr_map.get(oid, "-")
         drr_str = f"{drr_val:.2f}" if isinstance(drr_val, float) else str(drr_val)
         print(
@@ -289,18 +302,26 @@ def main() -> None:
     print(f"  런타임         : {runtime}")
     print(f"  pass_threshold : {args.threshold}")
     if runtime == "GPU":
-        print(f"  실계산 항목    : 전 항목 (MobileSAM / Moondream2 / YOLO+CLIP)")
+        print("  실계산 항목    : 전 항목 (MobileSAM / Moondream2 / YOLO+CLIP)")
     else:
-        print(f"  실계산 항목    : z_depth_hop / cluster_density / degree(alpha) / diameter")
-        print(f"                   color_contrast / edge_strength / similar_count / similar_distance (CPU)")
-        print(f"  더미 항목      : sigma_threshold(8.0) / drr_slope(0.15)  ← GPU/CLIP 필요")
+        print(
+            "  실계산 항목    : z_depth_hop / cluster_density / degree(alpha) / diameter"
+        )
+        print(
+            "                   color_contrast / edge_strength / similar_count / similar_distance (CPU)"
+        )
+        print(
+            "  더미 항목      : sigma_threshold(8.0) / drr_slope(0.15)  ← GPU/CLIP 필요"
+        )
 
     # 실행
     _section("파이프라인 실행")
     bundle = orch.run(composite_image=composite, object_layers=layer_files)
 
     # 결과 출력 (CPU 모드에서만 Phase 1 내부값 직접 접근 가능)
-    _print_phase1(phys.last_result if hasattr(phys, "last_result") else None, layer_files)
+    _print_phase1(
+        phys.last_result if hasattr(phys, "last_result") else None, layer_files
+    )
     if color_edge.last_result is not None:
         _print_phase2(color_edge.last_result, layer_files)
     _print_result(bundle, layer_files)

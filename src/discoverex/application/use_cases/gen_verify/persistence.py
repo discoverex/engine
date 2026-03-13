@@ -6,7 +6,12 @@ from time import perf_counter
 from discoverex.application.context import AppContextLike
 from discoverex.domain.scene import Scene
 from discoverex.execution_snapshot import build_tracking_params
+from discoverex.orchestrator_contract.worker_runtime import (
+    write_worker_artifact_manifest,
+)
 from discoverex.runtime_logging import format_seconds, get_logger
+
+from ..worker_artifacts import collect_worker_artifacts
 
 logger = get_logger("discoverex.generate.persistence")
 
@@ -50,18 +55,23 @@ def track_run(
     extra_params: dict[str, str] | None = None,
 ) -> None:
     started = perf_counter()
-    artifacts = [saved_dir / "scene.json", saved_dir / "verification.json"]
-    if composite_artifact is not None:
-        artifacts.append(composite_artifact)
-    if prompt_bundle_artifact is not None:
-        artifacts.append(prompt_bundle_artifact)
-    if context.execution_snapshot_path is not None:
-        artifacts.append(context.execution_snapshot_path)
+    execution_snapshot = getattr(context, "execution_snapshot", None)
+    execution_snapshot_path = getattr(context, "execution_snapshot_path", None)
+    artifact_entries = collect_worker_artifacts(
+        saved_dir,
+        [
+            ("scene", saved_dir / "scene.json"),
+            ("verification", saved_dir / "verification.json"),
+            ("composite", composite_artifact),
+            ("prompt_bundle", prompt_bundle_artifact),
+            ("execution_config", execution_snapshot_path),
+        ],
+    )
 
     context.tracker.log_pipeline_run(
         run_name="gen_verify",
         params={
-            **build_tracking_params(context.execution_snapshot),
+            **build_tracking_params(execution_snapshot),
             "scene_id": scene.meta.scene_id,
             "version_id": scene.meta.version_id,
             "pipeline_run_id": scene.meta.pipeline_run_id,
@@ -78,10 +88,14 @@ def track_run(
             "total_score": scene.verification.final.total_score,
             "pass": 1.0 if scene.verification.final.pass_ else 0.0,
         },
-        artifacts=artifacts,
+        artifacts=[artifact_path for _, artifact_path in artifact_entries],
     )
     logger.info(
         "tracking completed artifacts=%d duration=%s",
-        len(artifacts),
+        len(artifact_entries),
         format_seconds(started),
+    )
+    write_worker_artifact_manifest(
+        artifacts_root=context.artifacts_root,
+        artifacts=artifact_entries,
     )

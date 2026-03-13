@@ -18,6 +18,9 @@ def build_scene_payload(
         "status": scene.meta.status.value,
         "scene_json": f"{artifacts_root}/scenes/{scene.meta.scene_id}/{scene.meta.version_id}/scene.json",
     }
+    failure_reason = scene.verification.final.failure_reason.strip()
+    if failure_reason:
+        payload["failure_reason"] = failure_reason
     if execution_config_path:
         payload["execution_config"] = execution_config_path
     return payload

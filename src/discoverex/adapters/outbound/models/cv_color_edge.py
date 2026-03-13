@@ -32,9 +32,7 @@ class CvColorEdgeAdapter:
         from PIL import Image
 
         composite_rgba = np.array(Image.open(composite_image).convert("RGBA"))
-        layer_arrays = [
-            np.array(Image.open(p).convert("RGBA")) for p in object_layers
-        ]
+        layer_arrays = [np.array(Image.open(p).convert("RGBA")) for p in object_layers]
 
         color_contrast_map: dict[str, float] = {}
         edge_strength_map: dict[str, float] = {}
