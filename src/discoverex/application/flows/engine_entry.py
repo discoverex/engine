@@ -6,7 +6,6 @@ from time import perf_counter
 from typing import Any, Literal, cast
 
 from hydra.utils import instantiate
-from prefect import flow
 
 from discoverex.config import PipelineConfig
 from discoverex.config_loader import load_pipeline_config
@@ -14,6 +13,9 @@ from discoverex.execution_snapshot import (
     build_execution_snapshot,
     summarize_for_logging,
     write_execution_snapshot,
+)
+from discoverex.orchestrator_contract.worker_runtime import (
+    normalize_pipeline_config_for_worker_runtime,
 )
 from discoverex.runtime_logging import format_seconds, get_logger
 
@@ -32,7 +34,6 @@ def _resolve_subflow(config: PipelineConfig, command: FlowCommand) -> SubflowHan
     return cast(SubflowHandler, handler)
 
 
-@flow(name="discoverex-engine-entry", retries=2, retry_delay_seconds=3)
 def engine_entry_flow(
     command: FlowCommand,
     args: dict[str, Any],
@@ -52,6 +53,7 @@ def engine_entry_flow(
         config_dir=config_dir,
         overrides=overrides or [],
     )
+    cfg = normalize_pipeline_config_for_worker_runtime(cfg)
     execution_snapshot = build_execution_snapshot(
         command=command,
         args=args,

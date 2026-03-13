@@ -15,6 +15,7 @@ INPUTS_ENV = "ORCH_JOB_INPUTS_JSON"
 _WORKER_ONLY_ENV_KEYS = {
     "cf_access_client_id",
     "cf_access_client_secret",
+    "PREFECT_API_URL",
     "MLFLOW_TRACKING_PROXY_URL",
     "PREFECT_API_PROXY_URL",
 }
@@ -43,20 +44,20 @@ def _load_raw_payload_from_env() -> dict[str, object]:
 
 
 def _extract_engine_run_spec(raw_payload: dict[str, object]) -> dict[str, object]:
+    inputs = raw_payload.get("inputs")
+    if inputs is not None:
+        if not isinstance(inputs, dict):
+            raise LauncherError("inputs must be a JSON object")
+        return inputs
     engine_run = raw_payload.get("engine_run")
     if engine_run is not None:
         if not isinstance(engine_run, dict):
             raise LauncherError("engine_run must be a JSON object")
-        return engine_run
-    legacy_inputs = raw_payload.get("inputs")
-    if legacy_inputs is not None:
-        if not isinstance(legacy_inputs, dict):
-            raise LauncherError("inputs must be a JSON object")
         print(
-            "[discoverex-execution-launcher] deprecated wrapper payload: use engine_run instead of inputs",
+            "[discoverex-execution-launcher] deprecated wrapper payload: use inputs instead of engine_run",
             file=sys.stderr,
         )
-        return legacy_inputs
+        return engine_run
     return raw_payload
 
 
@@ -69,8 +70,8 @@ def _runtime_payload(raw_payload: dict[str, object]) -> dict[str, object]:
     return runtime
 
 
-def _runtime_extras(raw_payload: dict[str, object]) -> list[str]:
-    runtime = _runtime_payload(raw_payload)
+def _runtime_extras(engine_payload: dict[str, object]) -> list[str]:
+    runtime = _runtime_payload(engine_payload)
     extras = runtime.get("extras", ["tracking", "storage"])
     if not isinstance(extras, list):
         raise LauncherError("runtime.extras must be a list")
@@ -82,16 +83,16 @@ def _runtime_extras(raw_payload: dict[str, object]) -> list[str]:
     return cleaned
 
 
-def _runtime_extra_env(raw_payload: dict[str, object]) -> dict[str, str]:
-    runtime = _runtime_payload(raw_payload)
+def _runtime_extra_env(engine_payload: dict[str, object]) -> dict[str, str]:
+    runtime = _runtime_payload(engine_payload)
     extra_env = runtime.get("extra_env", {})
     if not isinstance(extra_env, dict):
         raise LauncherError("runtime.extra_env must be a JSON object")
     return {str(key): str(value) for key, value in extra_env.items()}
 
 
-def _runtime_bootstrap_mode(raw_payload: dict[str, object]) -> BootstrapModeName:
-    runtime = _runtime_payload(raw_payload)
+def _runtime_bootstrap_mode(engine_payload: dict[str, object]) -> BootstrapModeName:
+    runtime = _runtime_payload(engine_payload)
     mode = str(runtime.get("bootstrap_mode", "auto")).strip() or "auto"
     if mode not in {"auto", "uv", "pip"}:
         raise LauncherError(f"unsupported bootstrap_mode={mode}")
@@ -119,6 +120,9 @@ def _prepare_env(cwd: Path, extra_env: dict[str, str]) -> dict[str, str]:
     _rewrite_proxy_targets(env)
     env["UV_CACHE_DIR"] = env.get("UV_CACHE_DIR", str(cwd / ".cache" / "uv"))
     env["UV_PROJECT_ENVIRONMENT"] = str(cwd / ".venv")
+    env["PREFECT_API_URL"] = ""
+    env.setdefault("PREFECT_SERVER_ALLOW_EPHEMERAL_MODE", "true")
+    env.setdefault("PREFECT_LOGGING_TO_API_ENABLED", "false")
     Path(env["UV_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
     return env
 
@@ -133,7 +137,9 @@ def _rewrite_proxy_targets(env: dict[str, str]) -> None:
         )
 
 
-def _resolve_proxy_target(*, target_name: str, upstream_url: str, proxy_url: str) -> str:
+def _resolve_proxy_target(
+    *, target_name: str, upstream_url: str, proxy_url: str
+) -> str:
     if not _is_remote_url(upstream_url) or _is_local_mlflow_url(upstream_url):
         return upstream_url
     if not proxy_url:
@@ -164,7 +170,14 @@ def _validate_contract(raw_payload: dict[str, object]) -> None:
             f"unsupported contract_version={contract_version or '<empty>'}"
         )
     command = str(raw_payload.get("command", "")).strip()
-    if command not in {"gen-verify", "verify-only", "replay-eval", "generate", "verify", "animate"}:
+    if command not in {
+        "gen-verify",
+        "verify-only",
+        "replay-eval",
+        "generate",
+        "verify",
+        "animate",
+    }:
         raise LauncherError(f"unsupported command={command or '<empty>'}")
 
 
@@ -172,60 +185,13 @@ def _is_legacy_command(raw_payload: dict[str, object]) -> bool:
     return str(raw_payload.get("contract_version", "")).strip() == "v1"
 
 
-def _mapped_command(raw_payload: dict[str, object]) -> str:
-    command = str(raw_payload.get("command", "")).strip()
-    if not _is_legacy_command(raw_payload):
-        return command
-    return {
-        "gen-verify": "generate",
-        "verify-only": "verify",
-        "replay-eval": "animate",
-    }[command]
-
-
-def _append_arg(tokens: list[str], key: str, value: object) -> None:
-    if value is None:
-        return
-    flag = f"--{key.replace('_', '-')}"
-    if isinstance(value, bool):
-        if value:
-            tokens.append(flag)
-        return
-    if isinstance(value, str):
-        tokens.extend([flag, value])
-        return
-    if isinstance(value, (list, tuple, set)):
-        for item in value:
-            tokens.extend([flag, str(item)])
-        return
-    tokens.extend([flag, str(value)])
-
-
-def _build_cli_tokens(raw_payload: dict[str, object]) -> list[str]:
-    args = raw_payload.get("args", {})
-    if not isinstance(args, dict):
-        raise LauncherError("args must be a JSON object")
-    overrides = raw_payload.get("overrides", [])
-    if not isinstance(overrides, list):
-        raise LauncherError("overrides must be a JSON list")
-    tokens = ["discoverex", _mapped_command(raw_payload)]
-    config_name = raw_payload.get("config_name")
-    if isinstance(config_name, str) and config_name.strip():
-        tokens.extend(["--config-name", config_name])
-    config_dir = raw_payload.get("config_dir")
-    if isinstance(config_dir, str) and config_dir.strip():
-        tokens.extend(["--config-dir", config_dir])
-    for key, value in args.items():
-        _append_arg(tokens, str(key), value)
-    for override in overrides:
-        tokens.extend(["-o", str(override)])
-    return tokens
-
-
 def _bootstrap_with_uv(*, cwd: Path, env: dict[str, str], extras: list[str]) -> None:
     if not shutil.which("uv"):
         raise LauncherError("bootstrap_mode=uv requested but uv is not installed")
-    if not (cwd / ".venv").exists() and _run(["uv", "venv", ".venv"], cwd=cwd, env=env) != 0:
+    if (
+        not (cwd / ".venv").exists()
+        and _run(["uv", "venv", ".venv"], cwd=cwd, env=env) != 0
+    ):
         raise LauncherError("uv venv failed")
     cmd = ["uv", "sync"]
     for extra in extras:
@@ -235,7 +201,10 @@ def _bootstrap_with_uv(*, cwd: Path, env: dict[str, str], extras: list[str]) -> 
 
 
 def _bootstrap_with_pip(*, cwd: Path, env: dict[str, str], extras: list[str]) -> None:
-    if not (cwd / ".venv").exists() and _run([sys.executable, "-m", "venv", ".venv"], cwd=cwd, env=env) != 0:
+    if (
+        not (cwd / ".venv").exists()
+        and _run([sys.executable, "-m", "venv", ".venv"], cwd=cwd, env=env) != 0
+    ):
         raise LauncherError("python -m venv failed")
     pip_bin = _venv_bin(cwd, "pip")
     extra_suffix = f"[{','.join(extras)}]" if extras else ""
@@ -243,37 +212,33 @@ def _bootstrap_with_pip(*, cwd: Path, env: dict[str, str], extras: list[str]) ->
         raise LauncherError("pip install failed")
 
 
-def _run_job_with_uv(*, cwd: Path, env: dict[str, str], cli_tokens: list[str]) -> int:
-    return _run(["uv", "run", *cli_tokens], cwd=cwd, env=env)
-
-
-def _run_job_with_pip(*, cwd: Path, env: dict[str, str], cli_tokens: list[str]) -> int:
-    discoverex_bin = _venv_bin(cwd, "discoverex")
-    if len(cli_tokens) < 2 or cli_tokens[0] != "discoverex":
-        raise LauncherError("invalid CLI tokens built for discoverex")
-    return _run([discoverex_bin, *cli_tokens[1:]], cwd=cwd, env=env)
+def _run_job_with_python(*, cwd: Path, env: dict[str, str]) -> int:
+    python_bin = _venv_bin(cwd, "python")
+    return _run(
+        [python_bin, "-m", "discoverex.application.flows.launcher_entry"],
+        cwd=cwd,
+        env=env,
+    )
 
 
 def run_orchestrator_job(cwd: Path | None = None) -> int:
-    raw_payload = _extract_engine_run_spec(_load_raw_payload_from_env())
-    _validate_contract(raw_payload)
+    raw_payload = _load_raw_payload_from_env()
+    engine_payload = _extract_engine_run_spec(raw_payload)
+    _validate_contract(engine_payload)
     run_cwd = cwd or Path.cwd()
-    env = _prepare_env(run_cwd, _runtime_extra_env(raw_payload))
-    extras = _runtime_extras(raw_payload)
-    mode = _pick_mode(_runtime_bootstrap_mode(raw_payload))
+    env = _prepare_env(run_cwd, _runtime_extra_env(engine_payload))
+    extras = _runtime_extras(engine_payload)
+    mode = _pick_mode(_runtime_bootstrap_mode(engine_payload))
     if mode == "uv":
         _bootstrap_with_uv(cwd=run_cwd, env=env, extras=extras)
     else:
         _bootstrap_with_pip(cwd=run_cwd, env=env, extras=extras)
-    cli_tokens = _build_cli_tokens(raw_payload)
-    if _is_legacy_command(raw_payload):
+    if _is_legacy_command(engine_payload):
         print(
             "[discoverex-execution-launcher] deprecated command set (v1): use contract_version=v2 with generate|verify|animate",
             file=sys.stderr,
         )
-    if mode == "uv":
-        return _run_job_with_uv(cwd=run_cwd, env=env, cli_tokens=cli_tokens)
-    return _run_job_with_pip(cwd=run_cwd, env=env, cli_tokens=cli_tokens)
+    return _run_job_with_python(cwd=run_cwd, env=env)
 
 
 def main() -> None:
