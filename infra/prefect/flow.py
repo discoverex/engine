@@ -20,6 +20,7 @@ from infra.prefect.artifacts import (
     write_local_artifacts,
 )
 from infra.prefect.job_spec import extract_inputs_payload, load_job_spec
+from infra.prefect.provision import provision_runtime_dependencies
 from infra.prefect.reporting import log_failure_summary, log_start_summary
 from infra.prefect.runtime import build_runtime_env, flow_attempt, outputs_prefix, patched_environ
 
@@ -59,6 +60,12 @@ def run_job_flow(
             outputs_prefix=output_prefix,
         )
         with patched_environ(env):
+            provision_runtime_dependencies(
+                payload=payload,
+                cwd=ensure_repo_root(),
+                env=env,
+                logger=logger,
+            )
             parsed = prefect_dispatch.dispatch_engine_job(payload)
         prefect_dispatch.apply_result_defaults(
             parsed=parsed,
@@ -101,3 +108,9 @@ def run_job_flow(
 
 
 __all__ = ["run_job_flow"]
+
+
+def ensure_repo_root() -> Any:
+    from infra.prefect.bootstrap import repo_root
+
+    return repo_root()

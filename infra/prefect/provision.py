@@ -1,0 +1,103 @@
+from __future__ import annotations
+
+import importlib
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Literal, cast
+
+BootstrapModeName = Literal["auto", "uv", "pip"]
+
+
+def provision_runtime_dependencies(
+    *,
+    payload: dict[str, Any],
+    cwd: Path,
+    env: dict[str, str],
+    logger: Any,
+) -> None:
+    runtime = _runtime_payload(payload)
+    if str(runtime.get("mode", "")).strip() != "worker":
+        return
+    mode = _pick_mode(_runtime_bootstrap_mode(runtime))
+    extras = _runtime_extras(runtime)
+    logger.info(
+        "engine dependency bootstrap: mode=%s extras=%s python=%s",
+        mode,
+        extras,
+        sys.executable,
+    )
+    if mode == "uv":
+        _bootstrap_with_uv(cwd=cwd, env=env, extras=extras)
+    else:
+        _bootstrap_with_pip(cwd=cwd, env=env, extras=extras)
+    importlib.invalidate_caches()
+
+
+def _runtime_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    runtime = payload.get("runtime", {})
+    if not isinstance(runtime, dict):
+        raise RuntimeError("inputs.runtime must be a JSON object")
+    return runtime
+
+
+def _runtime_bootstrap_mode(runtime: dict[str, Any]) -> BootstrapModeName:
+    mode = str(runtime.get("bootstrap_mode", "auto")).strip() or "auto"
+    if mode not in {"auto", "uv", "pip"}:
+        raise RuntimeError(f"unsupported bootstrap_mode={mode}")
+    return cast(BootstrapModeName, mode)
+
+
+def _runtime_extras(runtime: dict[str, Any]) -> list[str]:
+    extras = runtime.get("extras", [])
+    if not isinstance(extras, list):
+        raise RuntimeError("runtime.extras must be a JSON array")
+    cleaned: list[str] = []
+    for item in extras:
+        text = str(item).strip()
+        if text and text not in cleaned:
+            cleaned.append(text)
+    return cleaned
+
+
+def _pick_mode(mode: BootstrapModeName) -> BootstrapModeName:
+    if mode in {"uv", "pip"}:
+        return mode
+    if shutil.which("uv"):
+        return "uv"
+    return "pip"
+
+
+def _bootstrap_with_uv(*, cwd: Path, env: dict[str, str], extras: list[str]) -> None:
+    if not shutil.which("uv"):
+        raise RuntimeError("bootstrap_mode=uv requested but uv is not installed")
+    cmd = ["uv", "sync", "--active"]
+    if (cwd / "uv.lock").exists():
+        cmd.append("--frozen")
+    for extra in extras:
+        cmd.extend(["--extra", extra])
+    install_env = _install_env(env, cwd)
+    result = subprocess.run(cmd, cwd=cwd, env=install_env, check=False)
+    if result.returncode != 0:
+        raise RuntimeError("uv sync --active failed")
+
+
+def _bootstrap_with_pip(*, cwd: Path, env: dict[str, str], extras: list[str]) -> None:
+    spec = "."
+    if extras:
+        spec = f".[{','.join(extras)}]"
+    cmd = [sys.executable, "-m", "pip", "install", "-e", spec]
+    result = subprocess.run(cmd, cwd=cwd, env=_install_env(env, cwd), check=False)
+    if result.returncode != 0:
+        raise RuntimeError("pip install -e failed")
+
+
+def _install_env(env: dict[str, str], cwd: Path) -> dict[str, str]:
+    install_env = env.copy()
+    install_env.setdefault("UV_CACHE_DIR", str(cwd / ".cache" / "uv"))
+    install_env["VIRTUAL_ENV"] = sys.prefix
+    install_env["UV_PROJECT_ENVIRONMENT"] = sys.prefix
+    Path(install_env["UV_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
+    return install_env
