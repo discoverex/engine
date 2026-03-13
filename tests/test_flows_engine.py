@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import builtins
+import importlib
 import os
 import subprocess
 import sys
@@ -7,6 +9,33 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import discoverex.application.flows.engine_entry as engine
+
+
+def test_engine_entry_module_import_is_lazy_for_hydra(
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    original_import = builtins.__import__
+    prior_hydra = sys.modules.pop("hydra", None)
+    prior_omegaconf = sys.modules.pop("omegaconf", None)
+
+    def guarded_import(name, *args, **kwargs):  # type: ignore[no-untyped-def]
+        if name.startswith("hydra") or name.startswith("omegaconf"):
+            raise AssertionError(f"unexpected eager import: {name}")
+        return original_import(name, *args, **kwargs)
+
+    try:
+        monkeypatch.setattr(builtins, "__import__", guarded_import)
+        sys.modules.pop("discoverex.application.flows.engine_entry", None)
+        module = importlib.import_module("discoverex.application.flows.engine_entry")
+
+        assert callable(module.run_engine_entry)
+        assert "hydra" not in sys.modules
+        assert "omegaconf" not in sys.modules
+    finally:
+        if prior_hydra is not None:
+            sys.modules["hydra"] = prior_hydra
+        if prior_omegaconf is not None:
+            sys.modules["omegaconf"] = prior_omegaconf
 
 
 def test_engine_entry_flow_returns_canonical_error_payload(monkeypatch) -> None:  # type: ignore[no-untyped-def]

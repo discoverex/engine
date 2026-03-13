@@ -3,30 +3,63 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
-from hydra.utils import instantiate
-
-from discoverex.config import PipelineConfig
-from discoverex.config_loader import load_pipeline_config
-from discoverex.execution_snapshot import (
-    build_execution_snapshot,
-    summarize_for_logging,
-    write_execution_snapshot,
-)
-from discoverex.orchestrator_contract.worker_runtime import (
-    normalize_pipeline_config_for_worker_runtime,
-)
 from discoverex.runtime_logging import format_seconds, get_logger
 
 from .common import build_error_payload
+
+if TYPE_CHECKING:
+    from discoverex.config import PipelineConfig
 
 FlowCommand = Literal["generate", "verify", "animate"]
 SubflowHandler = Callable[..., dict[str, Any]]
 logger = get_logger("discoverex.engine")
 
 
-def _resolve_subflow(config: PipelineConfig, command: FlowCommand) -> SubflowHandler:
+def load_pipeline_config(
+    config_name: str,
+    config_dir: str = "conf",
+    overrides: list[str] | None = None,
+) -> "PipelineConfig":
+    from discoverex.config_loader import load_pipeline_config as _load_pipeline_config
+
+    return _load_pipeline_config(
+        config_name=config_name,
+        config_dir=config_dir,
+        overrides=overrides,
+    )
+
+
+def build_execution_snapshot(**kwargs: Any) -> dict[str, Any]:
+    from discoverex.execution_snapshot import build_execution_snapshot as _build
+
+    return _build(**kwargs)
+
+
+def summarize_for_logging(snapshot: dict[str, Any]) -> dict[str, str]:
+    from discoverex.execution_snapshot import summarize_for_logging as _summarize
+
+    return _summarize(snapshot)
+
+
+def write_execution_snapshot(**kwargs: Any) -> Path:
+    from discoverex.execution_snapshot import write_execution_snapshot as _write
+
+    return _write(**kwargs)
+
+
+def normalize_pipeline_config_for_worker_runtime(config: Any) -> Any:
+    from discoverex.orchestrator_contract.worker_runtime import (
+        normalize_pipeline_config_for_worker_runtime as _normalize,
+    )
+
+    return _normalize(config)
+
+
+def _resolve_subflow(config: "PipelineConfig", command: FlowCommand) -> SubflowHandler:
+    from hydra.utils import instantiate
+
     if config.flows is None:
         raise ValueError("flows config is required for engine entry flow")
     component = getattr(config.flows, command)
