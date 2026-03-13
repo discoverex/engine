@@ -136,7 +136,11 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
         }
         return {"status": "completed", "scene_id": "scene-1", "version_id": "v1"}
 
-    monkeypatch.setattr(prefect_flow, "run_engine_entry", fake_run_engine_entry)
+    monkeypatch.setattr(
+        prefect_flow,
+        "_load_run_engine_entry",
+        lambda: fake_run_engine_entry,
+    )
     monkeypatch.setattr(prefect_flow, "get_run_logger", lambda: _FakeLogger(logged))
     monkeypatch.setattr(prefect_flow.flow_run, "get_id", lambda: "flow-123")
 
@@ -185,12 +189,14 @@ def test_repo_root_prefect_entrypoint_uploads_worker_artifacts(
 ) -> None:
     monkeypatch.setattr(
         prefect_flow,
-        "run_engine_entry",
-        lambda **kwargs: {
-            "status": "completed",
-            "scene_id": "s1",
-            "version_id": "v1",
-        },
+        "_load_run_engine_entry",
+        lambda: (
+            lambda **kwargs: {
+                "status": "completed",
+                "scene_id": "s1",
+                "version_id": "v1",
+            }
+        ),
     )
     monkeypatch.setattr(prefect_flow, "get_run_logger", lambda: _FakeLogger([]))
     monkeypatch.setattr(prefect_flow.flow_run, "get_id", lambda: "flow-456")
@@ -243,12 +249,14 @@ def test_repo_root_prefect_entrypoint_raises_on_failed_payload(
     uploaded: list[dict[str, Any]] = []
     monkeypatch.setattr(
         prefect_flow,
-        "run_engine_entry",
-        lambda **kwargs: {
-            "status": "failed",
-            "failure_reason": "boom",
-            "scene_json": "",
-        },
+        "_load_run_engine_entry",
+        lambda: (
+            lambda **kwargs: {
+                "status": "failed",
+                "failure_reason": "boom",
+                "scene_json": "",
+            }
+        ),
     )
     monkeypatch.setattr(prefect_flow, "get_run_logger", lambda: _FakeLogger([]))
     monkeypatch.setattr(

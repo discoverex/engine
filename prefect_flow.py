@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib
 import os
 import sys
 import tempfile
@@ -16,8 +17,6 @@ from prefect.runtime import flow_run
 _SRC_ROOT = Path(__file__).resolve().parent / "src"
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
-
-from discoverex.application.flows.engine_entry import run_engine_entry
 
 _INPUTS_KEYS = ("inputs", "engine_run")
 _ARTIFACT_DIR_ENV = "ORCH_ENGINE_ARTIFACT_DIR"
@@ -119,6 +118,7 @@ def run_job_flow(
 
 
 def _dispatch_engine_job(payload: dict[str, Any]) -> dict[str, Any]:
+    run_engine_entry = _load_run_engine_entry()
     return run_engine_entry(
         command=_mapped_command(_string_value(payload.get("command"))),
         args=_coerce_args(payload.get("args")),
@@ -126,6 +126,11 @@ def _dispatch_engine_job(payload: dict[str, Any]) -> dict[str, Any]:
         config_dir=_string_value(payload.get("config_dir")) or "conf",
         overrides=_coerce_overrides(payload.get("overrides")),
     )
+
+
+def _load_run_engine_entry() -> Any:
+    module = importlib.import_module("discoverex.application.flows.engine_entry")
+    return getattr(module, "run_engine_entry")
 
 
 def _mapped_command(command: str) -> str:
