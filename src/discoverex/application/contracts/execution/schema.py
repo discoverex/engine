@@ -91,9 +91,7 @@ def _validate_required_args(
     missing = [key for key in required_by_command[command] if key not in args]
     if missing:
         missing_str = ", ".join(missing)
-        raise ValueError(
-            f"missing required args for command={command}: {missing_str}"
-        )
+        raise ValueError(f"missing required args for command={command}: {missing_str}")
 
 
 def _validate_generate_args(args: dict[str, Any]) -> None:
@@ -119,9 +117,13 @@ class JobSpec(BaseModel):
     entrypoint: list[str]
     config: str | None = None
     job_name: str | None = None
-    engine_run: EngineRunSpec
+    inputs: EngineRunSpec
     env: dict[str, str] = Field(default_factory=dict)
     outputs_prefix: str | None = None
+
+    @property
+    def engine_run(self) -> EngineRunSpec:
+        return self.inputs
 
 
 EngineJob = EngineRunSpec
@@ -130,4 +132,3 @@ EngineJobV2 = EngineRunSpecV2
 ExecutionInputs = EngineRunSpec
 ExecutionInputsV1 = EngineRunSpecV1
 ExecutionInputsV2 = EngineRunSpecV2
-
