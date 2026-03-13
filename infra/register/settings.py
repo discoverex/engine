@@ -20,7 +20,7 @@ class RegisterSettings(BaseSettings):
     prefect_compat_colab_deployment: str = "engine-job-colab"
     prefect_compat_colab_work_queue: str = "gpu-colab"
     register_flow_source: str = "/app"
-    register_flow_entrypoint: str = "prefect_flow.py:run_job_flow"
+    register_flow_entrypoint: str = "infra/prefect/flow.py:run_job_flow"
     register_flow_ref: str = "dev"
     register_deployment_version: str = ""
 

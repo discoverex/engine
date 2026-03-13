@@ -57,7 +57,7 @@ def test_apply_deployments_registers_expected_names(
     output = deploy_flows._apply_deployments(
         work_pool_name="gpu-pool",
         flow_source="/app",
-        flow_entrypoint="prefect_flow.py:run_job_flow",
+        flow_entrypoint="infra/prefect/flow.py:run_job_flow",
         flow_ref="dev",
         deployment_version="20260312120000",
         primary_name="discoverex-engine-job",
@@ -136,7 +136,7 @@ def test_apply_deployments_registers_primary_only_by_default(
     output = deploy_flows._apply_deployments(
         work_pool_name="gpu-pool",
         flow_source="/app",
-        flow_entrypoint="prefect_flow.py:run_job_flow",
+        flow_entrypoint="infra/prefect/flow.py:run_job_flow",
         flow_ref="dev",
         deployment_version="20260312120000",
         primary_name="discoverex-engine-job",
@@ -208,5 +208,6 @@ def test_build_parser_marks_script_as_compatibility_helper() -> None:
     assert parser.parse_args([]).primary_name == "discoverex-engine-job"
     assert parser.parse_args([]).primary_queue == "gpu-fixed"
     assert parser.parse_args([]).flow_source == "/app"
+    assert parser.parse_args([]).flow_entrypoint == "infra/prefect/flow.py:run_job_flow"
     assert parser.parse_args([]).flow_ref == "dev"
     assert parser.parse_args([]).deployment_version

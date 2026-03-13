@@ -9,6 +9,8 @@ from typing import Any
 
 import pytest
 
+import infra.prefect.dispatch as prefect_dispatch
+import infra.prefect.flow as prefect_entrypoint
 import prefect_flow
 from discoverex.application.flows.run_engine_job import run_engine_job
 
@@ -114,6 +116,7 @@ def test_repo_root_prefect_entrypoint_exposes_run_job_flow(
     sys.modules.pop("prefect_flow", None)
     module = importlib.import_module("prefect_flow")
     assert module.run_job_flow.name == "disoverex-engine-flow"
+    assert module.run_job_flow is prefect_entrypoint.run_job_flow
 
 
 def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
@@ -137,14 +140,16 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
         return {"status": "completed", "scene_id": "scene-1", "version_id": "v1"}
 
     monkeypatch.setattr(
-        prefect_flow,
-        "_load_run_engine_entry",
+        prefect_dispatch,
+        "load_run_engine_entry",
         lambda: fake_run_engine_entry,
     )
-    monkeypatch.setattr(prefect_flow, "get_run_logger", lambda: _FakeLogger(logged))
-    monkeypatch.setattr(prefect_flow.flow_run, "get_id", lambda: "flow-123")
+    monkeypatch.setattr(
+        prefect_entrypoint, "get_run_logger", lambda: _FakeLogger(logged)
+    )
+    monkeypatch.setattr(prefect_entrypoint.flow_run, "get_id", lambda: "flow-123")
 
-    output = prefect_flow.run_job_flow.fn(
+    output = prefect_entrypoint.run_job_flow.fn(
         json.dumps(
             {
                 "run_mode": "inline",
@@ -188,8 +193,8 @@ def test_repo_root_prefect_entrypoint_uploads_worker_artifacts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        prefect_flow,
-        "_load_run_engine_entry",
+        prefect_dispatch,
+        "load_run_engine_entry",
         lambda: (
             lambda **kwargs: {
                 "status": "completed",
@@ -198,11 +203,11 @@ def test_repo_root_prefect_entrypoint_uploads_worker_artifacts(
             }
         ),
     )
-    monkeypatch.setattr(prefect_flow, "get_run_logger", lambda: _FakeLogger([]))
-    monkeypatch.setattr(prefect_flow.flow_run, "get_id", lambda: "flow-456")
+    monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
+    monkeypatch.setattr(prefect_entrypoint.flow_run, "get_id", lambda: "flow-456")
     monkeypatch.setattr(
-        prefect_flow,
-        "_upload_worker_artifacts",
+        prefect_entrypoint,
+        "upload_worker_artifacts",
         lambda **kwargs: {
             "stdout_uri": "s3://bucket/jobs/flow-456/attempt-1/stdout.log",
             "stderr_uri": "s3://bucket/jobs/flow-456/attempt-1/stderr.log",
@@ -219,7 +224,7 @@ def test_repo_root_prefect_entrypoint_uploads_worker_artifacts(
         },
     )
 
-    output = prefect_flow.run_job_flow.fn(
+    output = prefect_entrypoint.run_job_flow.fn(
         json.dumps(
             {
                 "run_mode": "repo",
@@ -248,8 +253,8 @@ def test_repo_root_prefect_entrypoint_raises_on_failed_payload(
 ) -> None:
     uploaded: list[dict[str, Any]] = []
     monkeypatch.setattr(
-        prefect_flow,
-        "_load_run_engine_entry",
+        prefect_dispatch,
+        "load_run_engine_entry",
         lambda: (
             lambda **kwargs: {
                 "status": "failed",
@@ -258,15 +263,15 @@ def test_repo_root_prefect_entrypoint_raises_on_failed_payload(
             }
         ),
     )
-    monkeypatch.setattr(prefect_flow, "get_run_logger", lambda: _FakeLogger([]))
+    monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
     monkeypatch.setattr(
-        prefect_flow,
-        "_upload_worker_artifacts",
+        prefect_entrypoint,
+        "upload_worker_artifacts",
         lambda **kwargs: uploaded.append(kwargs) or {},
     )
 
     with pytest.raises(RuntimeError) as exc_info:
-        prefect_flow.run_job_flow.fn(
+        prefect_entrypoint.run_job_flow.fn(
             json.dumps(
                 {
                     "run_mode": "inline",
