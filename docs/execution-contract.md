@@ -1,7 +1,7 @@
 # Execution Contract (Prefect)
 
 This document defines the wrapper-facing `JobSpec` used by Prefect and workers.
-The engine itself executes the nested `engine_run` payload, which is the
+The engine itself executes the nested `inputs` payload, which is the canonical
 engine-facing runtime contract.
 
 ## Flow Input
@@ -9,6 +9,17 @@ engine-facing runtime contract.
 - `job_spec_json: str`
 - `resume_key: str | None` (optional)
 - `checkpoint_dir: str | None` (optional)
+
+Official registration entrypoint:
+
+- `prefect_flow.py:run_job_flow`
+- Prefect flow name: `disoverex-engine-flow`
+
+Responsibility boundary:
+
+- Engine repo owns the registerable flow callable and runtime compatibility.
+- External operator/orchestrator owns deployment creation, refresh, and later submission.
+- `infra/register/*` scripts in this repo are compatibility/helper tooling, not the public operator contract.
 
 `job_spec_json` schema:
 
@@ -18,11 +29,18 @@ engine-facing runtime contract.
 - `entrypoint: list[str]`
 - `config: str | None` (repo-relative path only)
 - `job_name: str | None`
-- `engine_run: dict[str, Any]`
+- `inputs: dict[str, Any]`
 - `env: dict[str, str]`
 - `outputs_prefix: str | None`
 
-`engine_run` schema:
+Runtime environment expected from the worker:
+
+- `ORCH_JOB_INPUTS_JSON`
+- `ORCH_ENGINE_ARTIFACT_DIR`
+- `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`
+- `MLFLOW_TRACKING_URI`
+
+`inputs` schema:
 
 - `contract_version: "v1" | "v2"`
 - `command: str`
@@ -93,7 +111,7 @@ The deterministic script `scripts/e2e/e2e_local_orchestrator.sh` verifies the or
 
 Core pass criteria:
 
-1. `run-engine-job/run-engine-job` deployment exists after register.
+1. `disoverex-engine-flow/discoverex-engine-job` deployment exists after register.
 2. Submitted flow run reaches `COMPLETED`.
 3. All required objects exist:
    - `stdout.log`

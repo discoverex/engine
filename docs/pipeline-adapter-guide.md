@@ -73,8 +73,8 @@ defaults:
 권장:
 
 ```bash
-make sync
-make run ARGS='discoverex generate --background-asset-ref bg://dummy'
+just sync
+just run discoverex generate --background-asset-ref bg://dummy
 ```
 
 직접 실행:

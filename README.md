@@ -54,13 +54,13 @@ devcontainer up --workspace-folder /home/esillileu/discoverex/engine --config /h
 
 ## 실행 방법
 
-### `make` 사용 (권장)
+### `just` 사용 (권장)
 
 ```bash
-make sync
-make run ARGS='discoverex generate --background-asset-ref bg://dummy'
-make run ARGS='discoverex verify --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json'
-make run ARGS='discoverex animate --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json'
+just sync
+just run discoverex generate --background-asset-ref bg://dummy
+just run discoverex verify --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json
+just run discoverex animate --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json
 ```
 
 ### `uv` 직접 실행
@@ -100,7 +100,7 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex animate \
 
 ### 오케스트레이터 워커 엔트리포인트
 
-오케스트레이터 JobSpec의 `entrypoint`는 아래 런처를 권장합니다.
+오케스트레이터 JobSpec의 child process `entrypoint`는 아래 런처를 권장합니다.
 
 ```bash
 python -m discoverex.adapters.outbound.execution.launcher
@@ -112,7 +112,19 @@ python -m discoverex.adapters.outbound.execution.launcher
 레거시 명령(`gen-verify`, `verify-only`, `replay-eval`)은 shim으로 지원되지만
 실행 시 deprecation 경고가 출력됩니다.
 
-실제 잡 등록은 아래 스크립트를 사용합니다.
+엔진 저장소가 외부 운영 계층에 공식적으로 제공하는 Prefect registration surface는
+아래 flow 하나입니다.
+
+```text
+prefect_flow.py:run_job_flow
+```
+
+- flow name: `disoverex-engine-flow`
+- flow parameters: `job_spec_json`, optional `resume_key`, optional `checkpoint_dir`
+- 운영 계층은 이 flow를 `flow.from_source(...)`로 등록하고 이후 deployment submission을 수행합니다.
+
+아래 스크립트들은 엔진 저장소 내부의 compatibility/helper 도구입니다. 외부 operator
+표준 절차를 대체하지는 않습니다.
 
 ```bash
 python infra/register/register_orchestrator_job.py --dry-run --command generate \
@@ -130,9 +142,9 @@ python infra/register/register_orchestrator_job.py --dry-run --command generate 
 ## 품질 검증
 
 ```bash
-make lint
-make typecheck
-make test
+just lint
+just typecheck
+just test
 ```
 
 또는

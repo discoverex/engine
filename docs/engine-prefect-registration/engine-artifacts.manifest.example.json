@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "artifacts": [
+    {
+      "logical_name": "scene",
+      "relative_path": "scene/scene.json",
+      "content_type": "application/json",
+      "mlflow_tag": "artifact_scene_uri",
+      "description": "Primary generated scene payload"
+    },
+    {
+      "logical_name": "verification",
+      "relative_path": "scene/verification.json",
+      "content_type": "application/json",
+      "mlflow_tag": "artifact_verification_uri",
+      "description": "Post-run verification report"
+    }
+  ]
+}

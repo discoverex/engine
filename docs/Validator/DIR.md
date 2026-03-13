@@ -22,7 +22,7 @@ engine/
 ├── .github/workflows/       # CI/CD 파이프라인
 ├── main.py                  # CLI 진입점 래퍼
 ├── pyproject.toml           # UV 프로젝트 설정 / 의존성 정의
-└── Makefile                 # 빌드 자동화 (sync, test, lint, typecheck, run)
+└── justfile                 # 작업 자동화 (sync, test, lint, typecheck, run)
 ```
 
 ---

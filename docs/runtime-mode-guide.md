@@ -9,8 +9,10 @@
 - 차이는 Hydra adapter 선택과 runtime env 주입입니다.
 - config 선택은 `--config-name`, `--config-dir`, `-o/--override`로 통일합니다.
 - 오케스트레이터 워커에서는 `python -m discoverex.adapters.outbound.execution.launcher`를
-  `entrypoint`로 호출하고, 실제 엔진 실행 계약(`EngineRunSpec`)은
+  `entrypoint`로 호출하고, 실제 엔진 실행 계약(`ExecutionInputs`)은
   `ORCH_JOB_INPUTS_JSON`으로 전달합니다.
+- 외부 operator가 Prefect에 등록하는 공식 flow entrypoint는
+  `prefect_flow.py:run_job_flow` 입니다.
 - 결과 전달 단위:
   - CLI stdout JSON (`scene_json` 또는 `report`)
   - artifacts 저장소
@@ -113,11 +115,14 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run discoverex animate \
 
 ## Prefect / Job Naming 규칙
 - flow 이름은 고정입니다.
-  - `run-engine-job`
+  - `disoverex-engine-flow`
   - 내부 엔진 orchestration은 `discoverex-engine-entry` 및 하위 pipeline flow를 사용합니다.
-- 외부 운영 계층은 단일 deployment를 사용하고, config별 구분은 job 이름으로 합니다.
+- deployment 생성/refresh와 submission은 운영 계층 책임입니다.
+- 이 저장소의 `infra/register/*` 는 local compatibility/helper 도구이며 공개 operator contract는 아닙니다.
+- 외부 운영 계층은 고정 deployment 이름들을 사용하고, config별 구분은 job 이름으로 합니다.
 - 기본 규칙:
-  - deployment: `run-engine-job`
+  - primary deployment: `discoverex-engine-job`
+  - colab deployment: `discoverex-engine-job-colab`
   - flow/job name: `<command>--<config_name>--<execution_profile>`
 - `--deployment`, `--job-name`을 직접 주면 그 값을 우선합니다.
 

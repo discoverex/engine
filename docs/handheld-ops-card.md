@@ -68,10 +68,10 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv sync --extra tracking
 ## 최소 실행 절차
 
 ```bash
-make sync
-make run ARGS='discoverex generate --config-name generate --config-dir conf --background-asset-ref bg://dummy'
-make run ARGS='discoverex verify --config-name verify --config-dir conf --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json'
-make run ARGS='discoverex animate --config-name animate --config-dir conf --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json'
+just sync
+just run discoverex generate --config-name generate --config-dir conf --background-asset-ref bg://dummy
+just run discoverex verify --config-name verify --config-dir conf --scene-json artifacts/scenes/<scene_id>/<version_id>/scene.json
+just run discoverex animate --config-name animate --config-dir conf --scene-jsons artifacts/scenes/<scene_id>/<version_id>/scene.json
 ```
 
 직접 실행 예시:
@@ -92,6 +92,13 @@ python infra/register/register_prefect_job.py \
   --background-asset-ref bg://dummy
 ```
 
+공식 registration handoff:
+- flow entrypoint: `src/discoverex/flows/engine_run_flow.py:run_job_flow`
+  - worker-safe wrapper: `prefect_flow.py:run_job_flow`
+- flow name: `disoverex-engine-flow`
+- flow parameters: `job_spec_json`, `resume_key?`, `checkpoint_dir?`
+- `infra/register/register_prefect_job.py` 와 `infra/register/deploy_prefect_flows.py` 는 엔진 repo 내부 compatibility/helper 도구입니다.
+
 ## 설정으로 바꿀 수 있는 항목
 - 모델: `models/hidden_region`, `models/inpaint`, `models/perception`, `models/fx`
 - 어댑터: `adapters/artifact_store`, `adapters/metadata_store`, `adapters/tracker`, `adapters/scene_io`, `adapters/report_writer`
@@ -103,9 +110,11 @@ python infra/register/register_prefect_job.py \
 
 ## Prefect 식별 규칙
 - flow 이름은 고정입니다.
-- config별 구분은 deployment/job 이름으로 합니다.
+- deployment 생성/refresh와 submission은 운영 계층 책임입니다.
+- config별 구분은 deployment가 아니라 주로 job 이름으로 합니다.
 - 기본 규칙:
-  - deployment: `discoverex-<command>--<config_name>`
+  - primary deployment: `discoverex-engine-job`
+  - colab deployment: `discoverex-engine-job-colab`
   - job/run name: `<command>--<config_name>--<execution_profile>`
 
 ## 실행 설정 기록
