@@ -373,12 +373,12 @@ def _print_bundle(bundle: object) -> None:
     psigs = bundle.perception.signals
     print(_bar("="))
     print(f"  pass             : {bundle.final.pass_}")
-    print(f"  total_score      : {bundle.final.total_score:.4f}  (기준 0.23)")
+    print(f"  total_score      : {bundle.final.total_score:.4f}  (= scene_difficulty)")
     print(f"  perception score : {bundle.perception.score:.4f}")
     print(f"  logical score    : {bundle.logical.score:.4f}")
     print(_bar())
     print(f"  answer_obj_count : {sigs['answer_obj_count']}  (숨어있다고 판단된 객체)")
-    print(f"  scene_difficulty : {sigs['scene_difficulty']:.4f}")
+    print(f"  scene_difficulty : {bundle.scene_difficulty:.4f}")
     print(f"  alpha_degree_map : {sigs['alpha_degree_map']}")
     print(f"  hop_map          : {sigs['hop_map']}")
     print(f"  sigma_map        : {psigs.get('sigma_threshold_map', {})}")
@@ -421,7 +421,9 @@ def process_image(
         color_edge_handle=handle,
         logical_handle=handle,
         visual_handle=handle,
-        pass_threshold=0.23,
+        difficulty_min=0.1,
+        difficulty_max=0.9,
+        hidden_obj_min=3,
         scoring_weights=ScoringWeights(),
     )
 

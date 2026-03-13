@@ -535,7 +535,7 @@ class TestE2EPhase5Chain:
         }
         perc, logi, total = integrate_verification_v2(hard)
         # 어려운 메트릭 → standard 시나리오보다 높은 점수
-        assert total > _TOT_STD * 0.8  # standard 시나리오 대비 최소 80% 이상
+        assert total > _TOT_STD_V2 * 0.8  # standard 시나리오 대비 최소 80% 이상
 
     def test_easy_metrics_full_chain(self) -> None:
         easy = {
