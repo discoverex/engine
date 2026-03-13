@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 from discoverex.application.use_cases import run_gen_verify
 from discoverex.config import ModelVersionsConfig, RuntimeConfig, ThresholdsConfig
@@ -16,8 +16,8 @@ class _HiddenRegionModel:
         return ModelHandle(name="hidden", version=version, runtime="dummy")
 
     def predict(
-        self, _handle: ModelHandle, _request
-    ) -> list[tuple[float, float, float, float]]:  # type: ignore[no-untyped-def]
+        self, _handle: ModelHandle, _request: Any
+    ) -> list[tuple[float, float, float, float]]:
         return [(10.0, 20.0, 30.0, 40.0)]
 
 
@@ -28,7 +28,7 @@ class _InpaintModel:
     def load(self, version: str) -> ModelHandle:
         return ModelHandle(name="inpaint", version=version, runtime="dummy")
 
-    def predict(self, _handle: ModelHandle, request) -> dict[str, object]:  # type: ignore[no-untyped-def]
+    def predict(self, _handle: ModelHandle, request: Any) -> dict[str, object]:
         self.requests.append(request)
         output_path = Path(str(request.output_path))
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -46,7 +46,7 @@ class _PerceptionModel:
     def load(self, version: str) -> ModelHandle:
         return ModelHandle(name="perception", version=version, runtime="dummy")
 
-    def predict(self, _handle: ModelHandle, _request) -> dict[str, float]:  # type: ignore[no-untyped-def]
+    def predict(self, _handle: ModelHandle, _request: Any) -> dict[str, float]:
         return {"confidence": 0.9}
 
 
@@ -57,7 +57,7 @@ class _FxModel:
     def load(self, version: str) -> ModelHandle:
         return ModelHandle(name="fx", version=version, runtime="dummy")
 
-    def predict(self, _handle: ModelHandle, request) -> dict[str, str]:  # type: ignore[no-untyped-def]
+    def predict(self, _handle: ModelHandle, request: Any) -> dict[str, str]:
         self.requests.append(request)
         output_path = Path(str(request.params["output_path"]))
         output_path.parent.mkdir(parents=True, exist_ok=True)

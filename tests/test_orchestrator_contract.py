@@ -105,7 +105,7 @@ def test_engine_job_v2_accepts_background_prompt_without_asset_ref() -> None:
     ]
 
 
-def test_job_spec_requires_nested_engine_run() -> None:
+def test_job_spec_requires_canonical_inputs() -> None:
     job_spec = JobSpec.model_validate(
         {
             "run_mode": "inline",
@@ -115,11 +115,13 @@ def test_job_spec_requires_nested_engine_run() -> None:
                 "-lc",
                 "python -m discoverex.adapters.outbound.execution.launcher",
             ],
-            "engine_run": {
+            "inputs": {
                 "contract_version": "v2",
                 "command": "generate",
                 "args": {"background_asset_ref": "bg://dummy"},
             },
         }
     )
+    assert job_spec.inputs is not None
+    assert job_spec.inputs.command == "generate"
     assert job_spec.engine_run.command == "generate"

@@ -25,7 +25,11 @@ def test_generator_sdxl_gpu_profile_loads_dedicated_generator_stack() -> None:
         "SdxlBackgroundGenerationModel"
     )
     assert cfg.models.inpaint.target.endswith("SdxlInpaintModel")
-    assert cfg.models.fx.target.endswith("SdxlFinalRenderModel")
+    assert cfg.models.fx.target.endswith("CopyImageFxModel")
+    assert cfg.runtime.width == 512
+    assert cfg.runtime.height == 512
+    assert cfg.runtime.model_runtime.offload_mode == "model"
+    assert cfg.runtime.model_runtime.enable_fp8_layerwise_casting is False
 
 
 def test_pipeline_config_rejects_invalid_threshold() -> None:

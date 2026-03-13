@@ -146,7 +146,9 @@ class _HardLogicalExtraction:
         pass
 
     def extract(
-        self, composite_image: Path, physical: PhysicalMetadata  # noqa: ARG002
+        self,
+        composite_image: Path,
+        physical: PhysicalMetadata,  # noqa: ARG002
     ) -> LogicalStructure:
         obj_ids = list(physical.alpha_degree_map.keys()) or ["obj_0", "obj_1"]
         return LogicalStructure(
@@ -166,8 +168,12 @@ class _HardLogicalExtraction:
 
 _W = ScoringWeights()
 _P_DENOM = (
-    _W.perception_sigma + _W.perception_drr + _W.perception_similar_count
-    + _W.perception_similar_dist + _W.perception_color_contrast + _W.perception_edge_strength
+    _W.perception_sigma
+    + _W.perception_drr
+    + _W.perception_similar_count
+    + _W.perception_similar_dist
+    + _W.perception_color_contrast
+    + _W.perception_edge_strength
 )  # 1.00
 _L_DENOM = _W.logical_hop + _W.logical_degree + _W.logical_cluster  # 1.00
 
@@ -205,7 +211,9 @@ _PERC_HARD = (
 _LOGI_HARD = (
     _W.logical_hop * (4.0 / 4.0) + _W.logical_degree * 1.0**2 + _W.logical_cluster * 0.3
 ) / _L_DENOM  # 0.86
-_TOT_HARD = _PERC_HARD * _W.total_perception + _LOGI_HARD * _W.total_logical  # ≈ 0.766168
+_TOT_HARD = (
+    _PERC_HARD * _W.total_perception + _LOGI_HARD * _W.total_logical
+)  # ≈ 0.766168
 
 
 # ===========================================================================
@@ -297,7 +305,7 @@ class TestE2EFullPipelineDummy:
                 "sigma_threshold": 4.0,
                 "similar_count": 1,
                 "similar_distance": 80.0,
-                "color_contrast": 0.0,       # color_edge_port=None → 0.0
+                "color_contrast": 0.0,  # color_edge_port=None → 0.0
                 "edge_strength": 0.0,
             }
         )

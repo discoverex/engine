@@ -55,18 +55,21 @@ def test_prefect_wrapper_dry_run_defaults_to_remote_worker_profile() -> None:
         "PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher"
     )
     assert payload["job_name"] == "generate--generate--generator-sdxl-gpu"
-    assert payload["engine_run"]["runtime"]["extra_env"]["MLFLOW_TRACKING_URI"] == (
-        "https://mlflow.example.com"
-    )
-    assert payload["engine_run"]["overrides"] == [
-        "adapters/artifact_store=minio",
-        "adapters/tracker=mlflow_server",
+    assert payload["inputs"]["overrides"] == [
         "runtime/model_runtime=gpu",
+        "runtime.width=512",
+        "runtime.height=512",
         "models/background_generator=sdxl_gpu",
         "models/hidden_region=hf",
         "models/inpaint=sdxl_gpu",
         "models/perception=hf",
-        "models/fx=sdxl_gpu",
+        "models/fx=copy_image",
+    ]
+    assert payload["inputs"]["runtime"]["extra_env"] == {}
+    assert payload["inputs"]["runtime"]["extras"] == [
+        "tracking",
+        "storage",
+        "ml-gpu",
     ]
     assert payload["env"] == {
         "cf_access_client_id": "cf-id",
@@ -96,15 +99,13 @@ def test_prefect_wrapper_allows_local_tiny_profile_override() -> None:
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
     assert payload["run_mode"] == "inline"
-    assert payload["engine_run"]["runtime"]["extras"] == [
+    assert payload["inputs"]["runtime"]["extras"] == [
         "tracking",
         "storage",
         "ml-cpu",
     ]
     assert payload["job_name"] == "generate--generate--local-tiny-cpu"
-    assert payload["engine_run"]["overrides"] == [
-        "adapters/artifact_store=minio",
-        "adapters/tracker=mlflow_server",
+    assert payload["inputs"]["overrides"] == [
         "runtime/model_runtime=cpu",
         "models/background_generator=tiny_sd_cpu",
         "models/hidden_region=tiny_torch",
@@ -143,11 +144,11 @@ def test_prefect_wrapper_forwards_prompt_args() -> None:
     )
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
-    assert payload["engine_run"]["args"]["background_prompt"] == "stormy harbor at dusk"
-    assert payload["engine_run"]["args"]["background_negative_prompt"] == "low quality"
-    assert payload["engine_run"]["args"]["object_prompt"] == "hidden golden compass"
-    assert payload["engine_run"]["args"]["object_negative_prompt"] == "blurry"
-    assert payload["engine_run"]["args"]["final_prompt"] == "playable polished render"
+    assert payload["inputs"]["args"]["background_prompt"] == "stormy harbor at dusk"
+    assert payload["inputs"]["args"]["background_negative_prompt"] == "low quality"
+    assert payload["inputs"]["args"]["object_prompt"] == "hidden golden compass"
+    assert payload["inputs"]["args"]["object_negative_prompt"] == "blurry"
+    assert payload["inputs"]["args"]["final_prompt"] == "playable polished render"
 
 
 def test_prefect_wrapper_forwards_config_selection() -> None:
@@ -171,6 +172,17 @@ def test_prefect_wrapper_forwards_config_selection() -> None:
     )
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
-    assert payload["engine_run"]["config_name"] == "verify_prod"
-    assert payload["engine_run"]["config_dir"] == "/srv/conf"
+    assert payload["inputs"]["config_name"] == "verify_prod"
+    assert payload["inputs"]["config_dir"] == "/srv/conf"
     assert payload["job_name"] == "verify--verify_prod--generator-sdxl-gpu"
+
+
+def test_prefect_wrapper_help_marks_script_as_compatibility_helper() -> None:
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "Compatibility helper" in proc.stdout

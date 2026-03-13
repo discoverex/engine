@@ -45,12 +45,12 @@ def test_register_script_dry_run_builds_repo_job_spec() -> None:
         payload["entrypoint"][2]
         == "PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher"
     )
-    assert payload["engine_run"]["contract_version"] == "v2"
-    assert payload["engine_run"]["command"] == "generate"
-    assert payload["engine_run"]["config_name"] == "generate"
-    assert payload["engine_run"]["config_dir"] == "conf"
-    assert payload["engine_run"]["args"]["background_asset_ref"] == "bg://dummy"
-    assert payload["engine_run"]["overrides"] == ["adapters/artifact_store=minio"]
+    assert payload["inputs"]["contract_version"] == "v2"
+    assert payload["inputs"]["command"] == "generate"
+    assert payload["inputs"]["config_name"] == "generate"
+    assert payload["inputs"]["config_dir"] == "conf"
+    assert payload["inputs"]["args"]["background_asset_ref"] == "bg://dummy"
+    assert payload["inputs"]["overrides"] == ["adapters/artifact_store=minio"]
     assert payload["job_name"] == "generate--generate--none"
 
 
@@ -80,7 +80,7 @@ def test_build_job_spec_script_writes_job_spec_file_under_register_dir(
     assert proc.returncode == 0, proc.stderr
     assert Path(proc.stdout.strip()) == output_path
     payload = json.loads(output_path.read_text(encoding="utf-8"))
-    assert payload["engine_run"]["command"] == "generate"
+    assert payload["inputs"]["command"] == "generate"
     assert payload["job_name"] == "generate--generate--none"
 
 
@@ -128,9 +128,9 @@ def test_register_script_accepts_background_prompt_only() -> None:
     )
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
-    assert payload["engine_run"]["args"]["background_prompt"] == "misty mountain lake"
-    assert payload["engine_run"]["args"]["object_prompt"] == "small hidden red lantern"
-    assert payload["engine_run"]["config_name"] == "generate"
+    assert payload["inputs"]["args"]["background_prompt"] == "misty mountain lake"
+    assert payload["inputs"]["args"]["object_prompt"] == "small hidden red lantern"
+    assert payload["inputs"]["config_name"] == "generate"
 
 
 def test_register_script_accepts_v1_command_when_version_is_v1() -> None:
@@ -156,9 +156,9 @@ def test_register_script_accepts_v1_command_when_version_is_v1() -> None:
     )
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
-    assert payload["engine_run"]["contract_version"] == "v1"
-    assert payload["engine_run"]["command"] == "gen-verify"
-    assert payload["engine_run"]["config_name"] == "gen_verify"
+    assert payload["inputs"]["contract_version"] == "v1"
+    assert payload["inputs"]["command"] == "gen-verify"
+    assert payload["inputs"]["config_name"] == "gen_verify"
 
 
 def test_register_script_local_tiny_profile_adds_worker_overrides_and_env() -> None:
@@ -197,9 +197,7 @@ def test_register_script_local_tiny_profile_adds_worker_overrides_and_env() -> N
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
     assert payload["run_mode"] == "inline"
-    assert payload["engine_run"]["overrides"] == [
-        "adapters/artifact_store=minio",
-        "adapters/tracker=mlflow_server",
+    assert payload["inputs"]["overrides"] == [
         "runtime/model_runtime=cpu",
         "models/background_generator=tiny_sd_cpu",
         "models/hidden_region=tiny_torch",
@@ -207,18 +205,12 @@ def test_register_script_local_tiny_profile_adds_worker_overrides_and_env() -> N
         "models/perception=tiny_torch",
         "models/fx=tiny_sd_cpu",
     ]
-    assert payload["engine_run"]["runtime"]["extra_env"] == {
-        "MLFLOW_TRACKING_URI": "http://mlflow.local:5000",
-        "MLFLOW_S3_ENDPOINT_URL": "http://minio.local:9000",
-        "AWS_ACCESS_KEY_ID": "minioadmin",
-        "AWS_SECRET_ACCESS_KEY": "minioadmin",
-        "ARTIFACT_BUCKET": "orchestrator-artifacts",
-    }
+    assert payload["inputs"]["runtime"]["extra_env"] == {}
     assert payload["env"] == {
         "cf_access_client_id": "cf-client-id",
         "cf_access_client_secret": "cf-client-secret",
     }
-    assert payload["engine_run"]["runtime"]["extras"] == [
+    assert payload["inputs"]["runtime"]["extras"] == [
         "tracking",
         "storage",
         "ml-cpu",
@@ -226,7 +218,7 @@ def test_register_script_local_tiny_profile_adds_worker_overrides_and_env() -> N
     assert payload["job_name"] == "generate--generate--local-tiny-cpu"
 
 
-def test_register_script_remote_profile_adds_postgres_when_metadata_url_present() -> (
+def test_register_script_remote_profile_keeps_engine_storage_local_when_metadata_url_present() -> (
     None
 ):
     proc = subprocess.run(
@@ -253,10 +245,7 @@ def test_register_script_remote_profile_adds_postgres_when_metadata_url_present(
     )
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
-    assert payload["engine_run"]["overrides"] == [
-        "adapters/artifact_store=minio",
-        "adapters/tracker=mlflow_server",
-        "adapters/metadata_store=postgres",
+    assert payload["inputs"]["overrides"] == [
         "runtime/model_runtime=gpu",
         "models/background_generator=hf",
         "models/hidden_region=hf",
@@ -264,10 +253,8 @@ def test_register_script_remote_profile_adds_postgres_when_metadata_url_present(
         "models/perception=hf",
         "models/fx=hf",
     ]
-    assert payload["engine_run"]["runtime"]["extra_env"]["METADATA_DB_URL"].startswith(
-        "postgresql://"
-    )
-    assert payload["engine_run"]["runtime"]["extras"] == [
+    assert payload["inputs"]["runtime"]["extra_env"] == {}
+    assert payload["inputs"]["runtime"]["extras"] == [
         "tracking",
         "storage",
         "ml-gpu",
@@ -302,17 +289,22 @@ def test_register_script_generator_sdxl_gpu_profile_sets_dedicated_models() -> N
     )
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
-    assert payload["engine_run"]["args"]["final_prompt"] == "polished puzzle render"
+    assert payload["inputs"]["args"]["final_prompt"] == "polished puzzle render"
     assert payload["job_name"] == "generate--generate--generator-sdxl-gpu"
-    assert payload["engine_run"]["overrides"] == [
-        "adapters/artifact_store=minio",
-        "adapters/tracker=mlflow_server",
+    assert payload["inputs"]["overrides"] == [
         "runtime/model_runtime=gpu",
+        "runtime.width=512",
+        "runtime.height=512",
         "models/background_generator=sdxl_gpu",
         "models/hidden_region=hf",
         "models/inpaint=sdxl_gpu",
         "models/perception=hf",
-        "models/fx=sdxl_gpu",
+        "models/fx=copy_image",
+    ]
+    assert payload["inputs"]["runtime"]["extras"] == [
+        "tracking",
+        "storage",
+        "ml-gpu",
     ]
 
 
@@ -341,10 +333,10 @@ def test_register_script_allows_explicit_config_name_and_dir() -> None:
     )
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
-    assert payload["engine_run"]["config_name"] == "verify_prod"
-    assert payload["engine_run"]["config_dir"] == "/srv/discoverex/conf"
+    assert payload["inputs"]["config_name"] == "verify_prod"
+    assert payload["inputs"]["config_dir"] == "/srv/discoverex/conf"
     assert payload["job_name"] == "verify--verify_prod--none"
-    assert payload["engine_run"]["overrides"] == []
+    assert payload["inputs"]["overrides"] == []
 
 
 def test_register_script_accepts_custom_entrypoint_for_inline_mode() -> None:

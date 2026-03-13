@@ -14,7 +14,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 register_job = importlib.import_module("register_orchestrator_job")
 
 
-def test_submit_job_spec_resolves_deployment_from_engine_run(
+def test_submit_job_spec_resolves_deployment_from_inputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
@@ -32,7 +32,7 @@ def test_submit_job_spec_resolves_deployment_from_engine_run(
             return [
                 SimpleNamespace(
                     id="12345678-1234-5678-1234-567812345678",
-                    name="run-engine-job",
+                    name="discoverex-engine-job",
                 )
             ]
 
@@ -70,7 +70,7 @@ def test_submit_job_spec_resolves_deployment_from_engine_run(
                 "-lc",
                 "python -m discoverex.adapters.outbound.execution.launcher",
             ],
-            "engine_run": {
+            "inputs": {
                 "contract_version": "v2",
                 "command": "generate",
                 "config_name": "generate",
@@ -85,7 +85,7 @@ def test_submit_job_spec_resolves_deployment_from_engine_run(
         prefect_api_url="http://127.0.0.1:4200/api",
     )
 
-    assert output["deployment"] == "run-engine-job"
+    assert output["deployment"] == "discoverex-engine-job"
     assert output["deployment_id"] == "12345678-1234-5678-1234-567812345678"
     assert output["flow_run_id"] == "flow-456"
     assert output["flow_run_name"] == "run-789"

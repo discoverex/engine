@@ -6,9 +6,11 @@ from discoverex.domain.services.verification import (
     ScoringWeights,
     compute_difficulty,
     compute_scene_difficulty,
+    integrate_verification,
     integrate_verification_v2,
     resolve_answer,
 )
+from discoverex.domain.verification import VerificationResult
 
 # ---------------------------------------------------------------------------
 # resolve_answer  (8조건, is_hidden_min_conditions=2 기본값)
@@ -154,7 +156,6 @@ class TestComputeDifficulty:
         assert score >= 0.0
 
     def test_all_nine_terms_contribute(self) -> None:
-        w = ScoringWeights()
         base = compute_difficulty({})
         # degree_norm=1 → degree 항 추가
         assert compute_difficulty({"degree_norm": 1.0}) > base - 1e-9
@@ -213,9 +214,21 @@ class TestComputeSceneDifficulty:
         """obj_id 없는 경우 count=1 로 처리."""
         obj = {"sigma_threshold": 4.0}
         ocount = {"irrelevant_id": 5}
-        assert compute_scene_difficulty([obj], object_count_map=ocount) == pytest.approx(
-            compute_difficulty(obj)
-        )
+        assert compute_scene_difficulty(
+            [obj], object_count_map=ocount
+        ) == pytest.approx(compute_difficulty(obj))
+
+
+class TestIntegrateVerification:
+    def test_always_passes_while_preserving_total_score(self) -> None:
+        logical = VerificationResult(score=1.0, pass_=True, signals={})
+        perception = VerificationResult(score=0.2, pass_=False, signals={})
+
+        final = integrate_verification(logical, perception, pass_threshold=0.9)
+
+        assert final.total_score == pytest.approx(0.6)
+        assert final.pass_ is True
+        assert final.failure_reason == ""
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +250,9 @@ class TestIntegrateVerificationV2:
             "diameter": 4.0,
             "degree_norm": 1.0,
         }
-        perception, logical, total = integrate_verification_v2(hard, pass_threshold=0.35)
+        perception, logical, total = integrate_verification_v2(
+            hard, pass_threshold=0.35
+        )
         assert total >= 0.35
 
     def test_easy_scene_below_threshold(self) -> None:

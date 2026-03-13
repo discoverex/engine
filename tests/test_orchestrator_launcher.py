@@ -22,7 +22,7 @@ def _job_payload(runtime: dict[str, object] | None = None) -> str:
 
 
 def _wrapper_payload(runtime: dict[str, object] | None = None) -> str:
-    engine_run: dict[str, object] = {
+    inputs: dict[str, object] = {
         "contract_version": "v2",
         "command": "generate",
         "config_name": "generate_gpu",
@@ -30,7 +30,7 @@ def _wrapper_payload(runtime: dict[str, object] | None = None) -> str:
         "args": {"background_asset_ref": "bg://dummy"},
     }
     if runtime is not None:
-        engine_run["runtime"] = runtime
+        inputs["runtime"] = runtime
     payload = {
         "run_mode": "inline",
         "engine": "discoverex",
@@ -39,7 +39,7 @@ def _wrapper_payload(runtime: dict[str, object] | None = None) -> str:
             "-lc",
             "PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher",
         ],
-        "engine_run": engine_run,
+        "inputs": inputs,
         "env": {},
         "outputs_prefix": None,
     }
@@ -69,14 +69,8 @@ def test_run_orchestrator_job_uses_uv_path_when_available(
     assert code == 0
     assert calls[0] == ["uv", "venv", ".venv"]
     assert calls[1] == ["uv", "sync", "--extra", "tracking", "--extra", "storage"]
-    assert calls[2][0:3] == ["uv", "run", "discoverex"]
-    assert calls[2][3:7] == [
-        "generate",
-        "--config-name",
-        "generate_gpu",
-        "--config-dir",
-    ]
-    assert calls[2][7] == "/workspace/conf"
+    assert calls[2][0].endswith("/.venv/bin/python")
+    assert calls[2][1:3] == ["-m", "discoverex.application.flows.launcher_entry"]
 
 
 def test_run_orchestrator_job_falls_back_to_pip_when_uv_missing(
@@ -106,8 +100,8 @@ def test_run_orchestrator_job_falls_back_to_pip_when_uv_missing(
     assert code == 0
     assert calls[0][1:4] == ["-m", "venv", ".venv"]
     assert calls[1][1:3] == ["install", "-e"]
-    assert calls[2][0].endswith("/.venv/bin/discoverex")
-    assert "generate" in calls[2]
+    assert calls[2][0].endswith("/.venv/bin/python")
+    assert calls[2][1:3] == ["-m", "discoverex.application.flows.launcher_entry"]
 
 
 def test_run_orchestrator_job_supports_v1_command_shim(
@@ -141,7 +135,8 @@ def test_run_orchestrator_job_supports_v1_command_shim(
 
     code = launcher.run_orchestrator_job(cwd=tmp_path)
     assert code == 0
-    assert calls[2][0:4] == ["uv", "run", "discoverex", "verify"]
+    assert calls[2][0].endswith("/.venv/bin/python")
+    assert calls[2][1:3] == ["-m", "discoverex.application.flows.launcher_entry"]
 
 
 def test_run_orchestrator_job_warns_for_legacy_v1(
@@ -202,6 +197,7 @@ def test_run_orchestrator_job_passes_runtime_extra_env_to_discoverex(
         ),
     )
     monkeypatch.setenv("MLFLOW_TRACKING_PROXY_URL", "http://127.0.0.1:15000")
+    monkeypatch.setenv("PREFECT_API_URL", "https://prefect-api.discoverex.qzz.io/api")
     monkeypatch.setenv("cf_access_client_id", "worker-only-id")
     monkeypatch.setenv("cf_access_client_secret", "worker-only-secret")
     monkeypatch.setattr(
@@ -222,6 +218,9 @@ def test_run_orchestrator_job_passes_runtime_extra_env_to_discoverex(
     _, discoverex_env = calls[2]
     assert discoverex_env["MLFLOW_TRACKING_URI"] == "http://127.0.0.1:15000"
     assert discoverex_env["ARTIFACT_BUCKET"] == "orchestrator-artifacts"
+    assert discoverex_env["PREFECT_API_URL"] == ""
+    assert discoverex_env["PREFECT_SERVER_ALLOW_EPHEMERAL_MODE"] == "true"
+    assert discoverex_env["PREFECT_LOGGING_TO_API_ENABLED"] == "false"
     assert "cf_access_client_id" not in discoverex_env
     assert "cf_access_client_secret" not in discoverex_env
     assert "MLFLOW_TRACKING_PROXY_URL" not in discoverex_env
@@ -230,8 +229,55 @@ def test_run_orchestrator_job_passes_runtime_extra_env_to_discoverex(
 def test_run_orchestrator_job_accepts_wrapper_payload_shape(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    calls: list[list[str]] = []
+    calls: list[tuple[list[str], dict[str, str]]] = []
+    raw_wrapper = _wrapper_payload()
     monkeypatch.setenv("ORCH_JOB_INPUTS_JSON", _wrapper_payload())
+    monkeypatch.setattr(
+        "discoverex.orchestrator_contract.launcher.shutil.which",
+        lambda _name: "/usr/bin/uv",
+    )
+
+    def fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> int:
+        calls.append((cmd, env.copy()))
+        if cmd[0:2] == ["uv", "venv"]:
+            (cwd / ".venv").mkdir(parents=True, exist_ok=True)
+        return 0
+
+    monkeypatch.setattr(launcher, "_run", fake_run)
+
+    code = launcher.run_orchestrator_job(cwd=tmp_path)
+    assert code == 0
+    assert calls[2][0][0].endswith("/.venv/bin/python")
+    assert calls[2][0][1:3] == ["-m", "discoverex.application.flows.launcher_entry"]
+    assert json.loads(calls[2][1]["ORCH_JOB_INPUTS_JSON"]) == json.loads(raw_wrapper)
+
+
+def test_run_orchestrator_job_accepts_legacy_engine_run_wrapper_payload(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setenv(
+        "ORCH_JOB_INPUTS_JSON",
+        json.dumps(
+            {
+                "run_mode": "inline",
+                "engine": "discoverex",
+                "entrypoint": [
+                    "/bin/sh",
+                    "-lc",
+                    "PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher",
+                ],
+                "engine_run": {
+                    "contract_version": "v2",
+                    "command": "generate",
+                    "args": {"background_asset_ref": "bg://dummy"},
+                },
+            },
+            ensure_ascii=True,
+        ),
+    )
     monkeypatch.setattr(
         "discoverex.orchestrator_contract.launcher.shutil.which",
         lambda _name: "/usr/bin/uv",
@@ -247,7 +293,9 @@ def test_run_orchestrator_job_accepts_wrapper_payload_shape(
 
     code = launcher.run_orchestrator_job(cwd=tmp_path)
     assert code == 0
-    assert calls[2][0:4] == ["uv", "run", "discoverex", "generate"]
+    assert calls[2][0].endswith("/.venv/bin/python")
+    assert calls[2][1:3] == ["-m", "discoverex.application.flows.launcher_entry"]
+    assert "deprecated wrapper payload" in capsys.readouterr().err
 
 
 def test_run_orchestrator_job_fails_when_remote_tracking_uri_has_no_proxy(
@@ -331,11 +379,5 @@ def test_run_orchestrator_job_accepts_background_prompt_only(
 
     code = launcher.run_orchestrator_job(cwd=tmp_path)
     assert code == 0
-    assert calls[2][0:6] == [
-        "uv",
-        "run",
-        "discoverex",
-        "generate",
-        "--background-prompt",
-        "moonlit forest",
-    ]
+    assert calls[2][0].endswith("/.venv/bin/python")
+    assert calls[2][1:3] == ["-m", "discoverex.application.flows.launcher_entry"]

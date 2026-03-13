@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -41,7 +44,7 @@ def test_engine_entry_flow_returns_canonical_error_payload(monkeypatch) -> None:
         engine, "_resolve_subflow", lambda *_args, **_kwargs: _failing_subflow
     )
 
-    out = engine.engine_entry_flow.fn(
+    out = engine.engine_entry_flow(
         command="verify",
         args={"scene_json": "/tmp/s.json"},
         config_name="verify",
@@ -53,3 +56,27 @@ def test_engine_entry_flow_returns_canonical_error_payload(monkeypatch) -> None:
     assert out["metadata"]["error_type"] == "RuntimeError"
     assert out["execution_config"].endswith("resolved_execution_config.json")
     assert Path(out["execution_config"]).exists()
+
+
+def test_subflows_import_without_repo_root_on_syspath(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(repo_root / "src")
+
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import discoverex.flows.subflows as subflows; "
+                "assert callable(subflows.generate_v1_compat)"
+            ),
+        ],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert proc.returncode == 0, proc.stderr
