@@ -28,3 +28,18 @@ def emit_progress_event(
         flush=True,
     )
 
+
+def parse_progress_event_line(line: str) -> dict[str, Any] | None:
+    candidate = line.strip()
+    if not candidate.startswith(PROGRESS_PREFIX + " "):
+        return None
+    payload = candidate.removeprefix(PROGRESS_PREFIX + " ").strip()
+    if not payload:
+        return None
+    try:
+        decoded = json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(decoded, dict):
+        return None
+    return decoded

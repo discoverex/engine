@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 import discoverex.orchestrator_contract.launcher as launcher
+from discoverex.progress_events import parse_progress_event_line
 
 
 def _job_payload(runtime: dict[str, object] | None = None) -> str:
@@ -219,11 +220,51 @@ def test_run_orchestrator_job_passes_runtime_extra_env_to_discoverex(
     assert discoverex_env["MLFLOW_TRACKING_URI"] == "http://127.0.0.1:15000"
     assert discoverex_env["ARTIFACT_BUCKET"] == "orchestrator-artifacts"
     assert discoverex_env["PREFECT_API_URL"] == ""
+    assert discoverex_env["PREFECT_EVENTS_ENABLED"] == "false"
     assert discoverex_env["PREFECT_SERVER_ALLOW_EPHEMERAL_MODE"] == "true"
     assert discoverex_env["PREFECT_LOGGING_TO_API_ENABLED"] == "false"
     assert "cf_access_client_id" not in discoverex_env
     assert "cf_access_client_secret" not in discoverex_env
     assert "MLFLOW_TRACKING_PROXY_URL" not in discoverex_env
+
+
+def test_run_orchestrator_job_emits_bootstrap_progress(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("ORCH_JOB_INPUTS_JSON", _job_payload())
+    monkeypatch.setattr(
+        "discoverex.orchestrator_contract.launcher.shutil.which",
+        lambda _name: "/usr/bin/uv",
+    )
+
+    def fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str]) -> int:
+        if cmd[0:2] == ["uv", "venv"]:
+            (cwd / ".venv").mkdir(parents=True, exist_ok=True)
+        return 0
+
+    monkeypatch.setattr(launcher, "_run", fake_run)
+
+    code = launcher.run_orchestrator_job(cwd=tmp_path)
+
+    assert code == 0
+    events = [
+        event
+        for event in (
+            parse_progress_event_line(line)
+            for line in capsys.readouterr().err.splitlines()
+        )
+        if event is not None
+    ]
+    assert [event["stage"] for event in events[:6]] == [
+        "launcher_start",
+        "bootstrap_env",
+        "bootstrap_venv",
+        "bootstrap_venv",
+        "bootstrap_sync",
+        "bootstrap_sync",
+    ]
 
 
 def test_run_orchestrator_job_accepts_wrapper_payload_shape(

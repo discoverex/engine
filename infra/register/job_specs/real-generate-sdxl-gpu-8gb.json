@@ -2,7 +2,7 @@
   "run_mode": "repo",
   "engine": "discoverex",
   "repo_url": "https://github.com/discoverex/engine.git",
-  "ref": "codex/discoverex-engine-run-wip",
+  "ref": "feat/engin-worker-observility",
   "entrypoint": [
     "/bin/sh",
     "-lc",

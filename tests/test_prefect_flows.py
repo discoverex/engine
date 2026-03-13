@@ -225,9 +225,9 @@ def test_run_launcher_process_streams_logs_and_progress(
     assert "child stdout line" in execution.stdout
     assert "child stderr line" in execution.stderr
     assert execution.progress_events[-1]["stage"] == "object_inpaint"
-    assert any(msg == "launcher %s: %s" and args[0] == "stdout" for msg, args in logged)
-    assert any(msg == "launcher %s: %s" and args[0] == "stderr" for msg, args in logged)
-    assert any(msg == "engine progress: %s" for msg, _ in logged)
+    assert execution.stage_logs["launcher_start"].startswith("[stdout] child stdout line")
+    assert execution.last_stage == "object_inpaint"
+    assert any(msg == "stage %s %s" and args[0] == "object_inpaint" for msg, args in logged)
 
 
 def test_repo_root_prefect_entrypoint_uploads_worker_artifacts(
@@ -301,6 +301,8 @@ def test_repo_root_prefect_entrypoint_surfaces_launcher_output_on_failure(
                     "region_id": "r-1",
                 }
             ],
+            stage_logs={"object_inpaint": "[stderr] object failed badly"},
+            last_stage="object_inpaint",
         ),
     )
     monkeypatch.setattr(prefect_flow, "get_run_logger", lambda: _FakeLogger([]))
@@ -323,8 +325,8 @@ def test_repo_root_prefect_entrypoint_surfaces_launcher_output_on_failure(
 
     assert "launcher exited with status code 2" in str(exc_info.value)
     assert '"stage": "object_inpaint"' in str(exc_info.value)
-    assert "last stdout line" in str(exc_info.value)
-    assert "last stderr line" in str(exc_info.value)
+    assert "failed stage: object_inpaint" in str(exc_info.value)
+    assert "object failed badly" in str(exc_info.value)
     stderr_text = capsys.readouterr().err
     assert "[discoverex-engine-flow] failure-context" in stderr_text
     assert "Traceback" in stderr_text

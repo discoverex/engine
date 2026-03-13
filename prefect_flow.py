@@ -6,6 +6,7 @@ import sys
 import tempfile
 import threading
 import traceback
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from subprocess import PIPE, Popen
@@ -22,7 +23,8 @@ if str(_SRC_ROOT) not in sys.path:
 _INPUTS_KEYS = ("inputs", "engine_run")
 _ARTIFACT_DIR_ENV = "ORCH_ENGINE_ARTIFACT_DIR"
 _ARTIFACT_MANIFEST_ENV = "ORCH_ENGINE_ARTIFACT_MANIFEST_PATH"
-_PROGRESS_PREFIX = "[discoverex-progress]"
+_DEFAULT_STAGE = "launcher_start"
+_MAX_STAGE_LINES = 400
 
 
 @dataclass
@@ -31,6 +33,24 @@ class LauncherExecution:
     stdout: str
     stderr: str
     progress_events: list[dict[str, Any]] = field(default_factory=list)
+    stage_logs: dict[str, str] = field(default_factory=dict)
+    last_stage: str = _DEFAULT_STAGE
+
+
+def _parse_progress_event(line: str) -> dict[str, Any] | None:
+    candidate = line.strip()
+    if not candidate.startswith("[discoverex-progress] "):
+        return None
+    payload = candidate.removeprefix("[discoverex-progress] ").strip()
+    if not payload:
+        return None
+    try:
+        decoded = json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(decoded, dict):
+        return None
+    return decoded
 
 
 @flow(name="disoverex-engine-flow", retries=0)
@@ -102,6 +122,8 @@ def run_job_flow(
                     progress_event=execution.progress_events[-1]
                     if execution.progress_events
                     else None,
+                    failed_stage=execution.last_stage,
+                    stage_log=execution.stage_logs.get(execution.last_stage, ""),
                 )
             )
         parsed = _parse_json_result(execution.stdout)
@@ -114,6 +136,7 @@ def run_job_flow(
             "outputs_prefix",
             _outputs_prefix(job_spec, flow_run_id=flow_run_id, attempt=attempt),
         )
+        parsed.setdefault("last_stage", execution.last_stage)
         if execution.progress_events:
             parsed.setdefault("progress_last_event", execution.progress_events[-1])
             logger.info(
@@ -170,8 +193,20 @@ def _run_launcher_process(
     stdout_lines: list[str] = []
     stderr_lines: list[str] = []
     progress_events: list[dict[str, Any]] = []
+    stage_logs: dict[str, deque[str]] = {
+        _DEFAULT_STAGE: deque(maxlen=_MAX_STAGE_LINES)
+    }
+    current_stage = _DEFAULT_STAGE
+    stage_lock = threading.Lock()
+
+    def record_stage_line(stage: str, line: str) -> None:
+        text = line.rstrip("\n")
+        if not text:
+            return
+        stage_logs.setdefault(stage, deque(maxlen=_MAX_STAGE_LINES)).append(text)
 
     def consume(stream: Any, *, stream_name: str, target: list[str]) -> None:
+        nonlocal current_stage
         if stream is None:
             return
         for line in iter(stream.readline, ""):
@@ -179,19 +214,19 @@ def _run_launcher_process(
             event = _parse_progress_event(line)
             if event is not None:
                 progress_events.append(event)
+                stage = _string_value(event.get("stage")) or _DEFAULT_STAGE
+                with stage_lock:
+                    current_stage = stage
+                    stage_logs.setdefault(stage, deque(maxlen=_MAX_STAGE_LINES))
                 logger.info(
-                    "engine progress: %s",
-                    json.dumps(
-                        _summarize_progress_event(event),
-                        ensure_ascii=True,
-                        sort_keys=True,
-                    ),
+                    "stage %s %s",
+                    stage,
+                    _string_value(event.get("status")) or "updated",
                 )
                 continue
-            text = line.rstrip("\n")
-            if not text:
-                continue
-            logger.info("launcher %s: %s", stream_name, text)
+            with stage_lock:
+                active_stage = current_stage
+            record_stage_line(active_stage, f"[{stream_name}] {line.rstrip()}")
         stream.close()
 
     stdout_thread = threading.Thread(
@@ -216,23 +251,9 @@ def _run_launcher_process(
         stdout="".join(stdout_lines),
         stderr="".join(stderr_lines),
         progress_events=progress_events,
+        stage_logs={key: "\n".join(value) for key, value in stage_logs.items() if value},
+        last_stage=current_stage,
     )
-
-
-def _parse_progress_event(line: str) -> dict[str, Any] | None:
-    candidate = line.strip()
-    if not candidate.startswith(_PROGRESS_PREFIX + " "):
-        return None
-    payload = candidate.removeprefix(_PROGRESS_PREFIX + " ").strip()
-    if not payload:
-        return None
-    try:
-        decoded = json.loads(payload)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(decoded, dict):
-        return None
-    return decoded
 
 
 def _summarize_progress_event(event: dict[str, Any]) -> dict[str, Any]:
@@ -249,6 +270,7 @@ def _summarize_progress_event(event: dict[str, Any]) -> dict[str, Any]:
         "version_id",
         "passed",
         "total_score",
+        "failed_stage",
     )
     return {key: event[key] for key in keys if key in event}
 
@@ -498,8 +520,12 @@ def _build_launcher_error(
     stderr: str,
     *,
     progress_event: dict[str, Any] | None = None,
+    failed_stage: str = "",
+    stage_log: str = "",
 ) -> str:
     details: list[str] = [f"launcher exited with status code {returncode}"]
+    if failed_stage:
+        details.append(f"failed stage: {failed_stage}")
     if progress_event:
         details.append(
             "last progress event:\n"
@@ -509,12 +535,16 @@ def _build_launcher_error(
                 sort_keys=True,
             )
         )
-    stdout_tail = _tail_text(stdout)
-    stderr_tail = _tail_text(stderr)
-    if stdout_tail:
-        details.append(f"stdout tail:\n{stdout_tail}")
-    if stderr_tail:
-        details.append(f"stderr tail:\n{stderr_tail}")
+    stage_log_tail = _tail_text(stage_log)
+    if stage_log_tail:
+        details.append(f"stage log dump:\n{stage_log_tail}")
+    else:
+        stdout_tail = _tail_text(stdout)
+        stderr_tail = _tail_text(stderr)
+        if stdout_tail:
+            details.append(f"stdout tail:\n{stdout_tail}")
+        if stderr_tail:
+            details.append(f"stderr tail:\n{stderr_tail}")
     return "\n\n".join(details)
 
 
