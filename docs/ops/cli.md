@@ -31,6 +31,8 @@ deployment 이름은 `discoverex-<flow-kind>-<branch>` 규칙을 따릅니다.
 ```
 
 기본 spec 파일은 `infra/register/job_specs/real-generate-sdxl-gpu-8gb.json`입니다.
+메모리 압박이 있으면 `infra/register/job_specs/real-generate-sdxl-gpu-8gb-safe.json`을 사용해
+`sequential` offload와 더 작은 inpaint patch/step 조합으로 제출할 수 있습니다.
 기존 `deploy`/`register` 명령은 `combined` 기본 배포를 위한 호환 별칭으로 유지됩니다.
 
 ### 로그 확인
