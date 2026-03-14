@@ -1,26 +1,62 @@
 from __future__ import annotations
 
+import json
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from infra.prefect.job_spec import (
-    coerce_args,
-    coerce_overrides,
-    config_name,
-    load_run_engine_entry,
-    mapped_command,
     string_value,
 )
 
 
-def dispatch_engine_job(payload: dict[str, Any]) -> dict[str, Any]:
-    run_engine_entry = load_run_engine_entry()
-    return run_engine_entry(
-        command=mapped_command(string_value(payload.get("command"))),
-        args=coerce_args(payload.get("args")),
-        config_name=config_name(payload),
-        config_dir=string_value(payload.get("config_dir")) or "conf",
-        overrides=coerce_overrides(payload.get("overrides")),
+@dataclass
+class DispatchResult:
+    payload: dict[str, Any]
+    stdout: str
+    stderr: str
+
+
+def dispatch_engine_job(payload: dict[str, Any], *, cwd: Path, env: dict[str, str]) -> DispatchResult:
+    python_bin = cwd / ".venv" / "bin" / "python"
+    if not python_bin.exists():
+        raise RuntimeError(f"missing bootstrap python: {python_bin}")
+    proc = subprocess.run(
+        [str(python_bin), "-m", "discoverex.application.flows.launcher_entry"],
+        cwd=cwd,
+        env={**env, "ORCH_JOB_INPUTS_JSON": json.dumps(payload, ensure_ascii=True)},
+        check=False,
+        capture_output=True,
+        text=True,
     )
+    stdout = proc.stdout or ""
+    stderr = proc.stderr or ""
+    if proc.returncode != 0:
+        reason = stderr.strip() or stdout.strip() or f"exit_code={proc.returncode}"
+        raise RuntimeError(
+            "engine subprocess failed"
+            f"\n\nexit_code: {proc.returncode}"
+            f"\n\nstderr:\n{stderr.strip()}"
+            f"\n\nstdout:\n{stdout.strip()}"
+            f"\n\nreason: {reason}"
+        )
+    parsed = _parse_payload_from_stdout(stdout)
+    return DispatchResult(payload=parsed, stdout=stdout, stderr=stderr)
+
+
+def _parse_payload_from_stdout(stdout: str) -> dict[str, Any]:
+    for line in reversed(stdout.splitlines()):
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    raise RuntimeError("engine subprocess did not emit a JSON payload on stdout")
 
 
 def apply_result_defaults(

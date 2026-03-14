@@ -22,14 +22,16 @@ def write_local_artifacts(
     flow_run_id: str,
     attempt: int,
     job_spec: dict[str, Any],
+    stdout_text: str = "",
+    stderr_text: str = "",
 ) -> dict[str, str]:
     artifact_dir = Path(env[ARTIFACT_DIR_ENV]).resolve()
     artifact_dir.mkdir(parents=True, exist_ok=True)
     stdout_path = artifact_dir / "stdout.log"
     stderr_path = artifact_dir / "stderr.log"
     result_path = artifact_dir / "result.json"
-    stdout_path.write_text("", encoding="utf-8")
-    stderr_path.write_text("", encoding="utf-8")
+    stdout_path.write_text(stdout_text, encoding="utf-8")
+    stderr_path.write_text(stderr_text, encoding="utf-8")
     result_payload = {
         "flow_run_id": flow_run_id,
         "attempt": attempt,

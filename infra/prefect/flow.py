@@ -100,7 +100,12 @@ def _run_job_flow(
                 env=env,
                 logger=logger,
             )
-            parsed = prefect_dispatch.dispatch_engine_job(payload)
+            dispatch_result = prefect_dispatch.dispatch_engine_job(
+                payload,
+                cwd=ensure_repo_root(),
+                env=env,
+            )
+            parsed = dispatch_result.payload
         prefect_dispatch.apply_result_defaults(
             parsed=parsed,
             job_spec=job_spec,
@@ -114,6 +119,8 @@ def _run_job_flow(
             flow_run_id=flow_run_id,
             attempt=attempt,
             job_spec=job_spec,
+            stdout_text=dispatch_result.stdout,
+            stderr_text=dispatch_result.stderr,
         )
         parsed.update(
             upload_worker_artifacts(

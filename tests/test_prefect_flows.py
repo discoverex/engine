@@ -12,6 +12,7 @@ from prefect.runtime import flow_run
 
 import infra.prefect.dispatch as prefect_dispatch
 import infra.prefect.flow as prefect_entrypoint
+from infra.prefect.job_spec import coerce_args, coerce_overrides, config_name, mapped_command
 from discoverex.application.flows.run_engine_job import run_engine_job
 
 
@@ -168,8 +169,18 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
 
     monkeypatch.setattr(
         prefect_dispatch,
-        "load_run_engine_entry",
-        lambda: fake_run_engine_entry,
+        "dispatch_engine_job",
+        lambda payload, *, cwd, env: prefect_dispatch.DispatchResult(
+            payload=fake_run_engine_entry(**{
+                "command": mapped_command(str(payload.get("command", ""))),
+                "args": coerce_args(payload.get("args")),
+                "config_name": config_name(payload),
+                "config_dir": str(payload.get("config_dir") or "conf"),
+                "overrides": coerce_overrides(payload.get("overrides")),
+            }),
+            stdout='{"status":"completed"}\n',
+            stderr="",
+        ),
     )
     monkeypatch.setattr(
         prefect_entrypoint, "get_run_logger", lambda: _FakeLogger(logged)
@@ -221,13 +232,15 @@ def test_repo_root_prefect_entrypoint_uploads_worker_artifacts(
 ) -> None:
     monkeypatch.setattr(
         prefect_dispatch,
-        "load_run_engine_entry",
-        lambda: (
-            lambda **kwargs: {
+        "dispatch_engine_job",
+        lambda payload, *, cwd, env: prefect_dispatch.DispatchResult(
+            payload={
                 "status": "completed",
                 "scene_id": "s1",
                 "version_id": "v1",
-            }
+            },
+            stdout='{"status":"completed","scene_id":"s1","version_id":"v1"}\n',
+            stderr="",
         ),
     )
     monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
@@ -281,13 +294,15 @@ def test_repo_root_prefect_entrypoint_raises_on_failed_payload(
     uploaded: list[dict[str, Any]] = []
     monkeypatch.setattr(
         prefect_dispatch,
-        "load_run_engine_entry",
-        lambda: (
-            lambda **kwargs: {
+        "dispatch_engine_job",
+        lambda payload, *, cwd, env: prefect_dispatch.DispatchResult(
+            payload={
                 "status": "failed",
                 "failure_reason": "boom",
                 "scene_json": "",
-            }
+            },
+            stdout='{"status":"failed","failure_reason":"boom","scene_json":""}\n',
+            stderr="stderr boom\n",
         ),
     )
     monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
