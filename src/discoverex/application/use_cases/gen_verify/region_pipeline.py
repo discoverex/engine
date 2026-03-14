@@ -120,7 +120,10 @@ def generate_regions(
             total=total_regions,
             bbox=bbox_payload(region),
         )
-        with track_stage_vram(context, "object_inpaint"):
+        with track_stage_vram(
+            context,
+            _object_inpaint_vram_stage(index=index, region_id=region.region_id),
+        ):
             details = context.inpaint_model.predict(
                 inpaint_handle,
                 InpaintRequest(
@@ -179,3 +182,8 @@ def generate_regions(
         )
         inpainted_regions.append(updated)
     return inpainted_regions, prompt_records
+
+
+def _object_inpaint_vram_stage(*, index: int, region_id: str) -> str:
+    safe_region_id = region_id.replace("/", "_")
+    return f"object_inpaint_{index:02d}_{safe_region_id}"
