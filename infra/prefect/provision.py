@@ -29,9 +29,9 @@ def provision_runtime_dependencies(
         sys.executable,
     )
     if mode == "uv":
-        _bootstrap_with_uv(cwd=cwd, env=env, extras=extras)
+        _bootstrap_with_uv(cwd=cwd, env=env, extras=extras, logger=logger)
     else:
-        _bootstrap_with_pip(cwd=cwd, env=env, extras=extras)
+        _bootstrap_with_pip(cwd=cwd, env=env, extras=extras, logger=logger)
     importlib.invalidate_caches()
 
 
@@ -69,34 +69,76 @@ def _pick_mode(mode: BootstrapModeName) -> BootstrapModeName:
     return "pip"
 
 
-def _bootstrap_with_uv(*, cwd: Path, env: dict[str, str], extras: list[str]) -> None:
+def _bootstrap_with_uv(
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    extras: list[str],
+    logger: Any,
+) -> None:
     if not shutil.which("uv"):
         raise RuntimeError("bootstrap_mode=uv requested but uv is not installed")
-    cmd = ["uv", "sync", "--active"]
+    cmd = ["uv", "sync"]
     if (cwd / "uv.lock").exists():
         cmd.append("--frozen")
     for extra in extras:
         cmd.extend(["--extra", extra])
     install_env = _install_env(env, cwd)
-    result = subprocess.run(cmd, cwd=cwd, env=install_env, check=False)
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        env=install_env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
     if result.returncode != 0:
-        raise RuntimeError("uv sync --active failed")
+        _log_subprocess_failure(logger, cmd=cmd, result=result)
+        raise RuntimeError(f"{' '.join(cmd)} failed")
 
 
-def _bootstrap_with_pip(*, cwd: Path, env: dict[str, str], extras: list[str]) -> None:
+def _bootstrap_with_pip(
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    extras: list[str],
+    logger: Any,
+) -> None:
     spec = "."
     if extras:
         spec = f".[{','.join(extras)}]"
     cmd = [sys.executable, "-m", "pip", "install", "-e", spec]
-    result = subprocess.run(cmd, cwd=cwd, env=_install_env(env, cwd), check=False)
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        env=_install_env(env, cwd),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
     if result.returncode != 0:
-        raise RuntimeError("pip install -e failed")
+        _log_subprocess_failure(logger, cmd=cmd, result=result)
+        raise RuntimeError(f"{' '.join(cmd)} failed")
 
 
 def _install_env(env: dict[str, str], cwd: Path) -> dict[str, str]:
     install_env = env.copy()
     install_env.setdefault("UV_CACHE_DIR", str(cwd / ".cache" / "uv"))
-    install_env["VIRTUAL_ENV"] = sys.prefix
-    install_env["UV_PROJECT_ENVIRONMENT"] = sys.prefix
+    install_env.pop("VIRTUAL_ENV", None)
+    install_env["UV_PROJECT_ENVIRONMENT"] = str(cwd / ".venv")
     Path(install_env["UV_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
     return install_env
+
+
+def _log_subprocess_failure(logger: Any, *, cmd: list[str], result: Any) -> None:
+    stdout = str(getattr(result, "stdout", "") or "").strip()
+    stderr = str(getattr(result, "stderr", "") or "").strip()
+    logger.error(
+        "dependency bootstrap command failed: %s (exit_code=%s)",
+        " ".join(cmd),
+        getattr(result, "returncode", ""),
+    )
+    if stdout:
+        logger.error("dependency bootstrap stdout:\n%s", stdout)
+    if stderr:
+        logger.error("dependency bootstrap stderr:\n%s", stderr)

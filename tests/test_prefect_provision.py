@@ -17,11 +17,21 @@ def test_provision_runtime_dependencies_uses_uv_sync_active(
     (tmp_path / "uv.lock").write_text("", encoding="utf-8")
     monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/uv")
 
-    def fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str], check: bool) -> object:
+    def fake_run(
+        cmd: list[str],
+        *,
+        cwd: Path,
+        env: dict[str, str],
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> object:
         calls.append((cmd, env.copy()))
         assert cwd == tmp_path
         assert check is False
-        return type("Result", (), {"returncode": 0})()
+        assert capture_output is True
+        assert text is True
+        return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -38,18 +48,9 @@ def test_provision_runtime_dependencies_uses_uv_sync_active(
         logger=_FakeLogger(),
     )
 
-    assert calls[0][0] == [
-        "uv",
-        "sync",
-        "--active",
-        "--frozen",
-        "--extra",
-        "tracking",
-        "--extra",
-        "storage",
-    ]
-    assert calls[0][1]["VIRTUAL_ENV"] == sys.prefix
-    assert calls[0][1]["UV_PROJECT_ENVIRONMENT"] == sys.prefix
+    assert calls[0][0] == ["uv", "sync", "--frozen", "--extra", "tracking", "--extra", "storage"]
+    assert "VIRTUAL_ENV" not in calls[0][1]
+    assert calls[0][1]["UV_PROJECT_ENVIRONMENT"] == str(tmp_path / ".venv")
 
 
 def test_provision_runtime_dependencies_falls_back_to_pip(
@@ -58,11 +59,21 @@ def test_provision_runtime_dependencies_falls_back_to_pip(
     calls: list[list[str]] = []
     monkeypatch.setattr(shutil, "which", lambda name: None)
 
-    def fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str], check: bool) -> object:
+    def fake_run(
+        cmd: list[str],
+        *,
+        cwd: Path,
+        env: dict[str, str],
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> object:
         calls.append(cmd)
         assert cwd == tmp_path
         assert check is False
-        return type("Result", (), {"returncode": 0})()
+        assert capture_output is True
+        assert text is True
+        return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -100,5 +111,60 @@ def test_provision_runtime_dependencies_skips_non_worker_mode(
 
 
 class _FakeLogger:
+    def __init__(self) -> None:
+        self.errors: list[tuple[str, tuple[object, ...]]] = []
+
     def info(self, message: str, *args: object) -> None:
         return None
+
+    def error(self, message: str, *args: object) -> None:
+        self.errors.append((message, args))
+
+
+def test_provision_runtime_dependencies_logs_uv_failure_details(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/uv")
+    logger = _FakeLogger()
+
+    def fake_run(
+        cmd: list[str],
+        *,
+        cwd: Path,
+        env: dict[str, str],
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> object:
+        _ = (cmd, cwd, env, check, capture_output, text)
+        return type(
+            "Result",
+            (),
+            {
+                "returncode": 1,
+                "stdout": "Prepared 98 packages in 1m 25s",
+                "stderr": "error: failed to remove file `/opt/venv/lib/python3.11/site-packages/argon2/__init__.py`: Permission denied",
+            },
+        )()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="uv sync --extra tracking failed"):
+        provision.provision_runtime_dependencies(
+            payload={
+                "runtime": {
+                    "mode": "worker",
+                    "bootstrap_mode": "uv",
+                    "extras": ["tracking"],
+                }
+            },
+            cwd=tmp_path,
+            env={},
+            logger=logger,
+        )
+
+    assert logger.errors[0][0] == "dependency bootstrap command failed: %s (exit_code=%s)"
+    assert logger.errors[1][0] == "dependency bootstrap stdout:\n%s"
+    assert "Prepared 98 packages" in str(logger.errors[1][1][0])
+    assert logger.errors[2][0] == "dependency bootstrap stderr:\n%s"
+    assert "Permission denied" in str(logger.errors[2][1][0])
