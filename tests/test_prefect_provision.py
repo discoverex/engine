@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -13,7 +15,7 @@ def test_provision_runtime_dependencies_uses_uv_sync_active(
 ) -> None:
     calls: list[tuple[list[str], dict[str, str]]] = []
     (tmp_path / "uv.lock").write_text("", encoding="utf-8")
-    monkeypatch.setattr(provision.shutil, "which", lambda name: "/usr/bin/uv")
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/uv")
 
     def fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str], check: bool) -> object:
         calls.append((cmd, env.copy()))
@@ -21,7 +23,7 @@ def test_provision_runtime_dependencies_uses_uv_sync_active(
         assert check is False
         return type("Result", (), {"returncode": 0})()
 
-    monkeypatch.setattr(provision.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
     provision.provision_runtime_dependencies(
         payload={
@@ -54,7 +56,7 @@ def test_provision_runtime_dependencies_falls_back_to_pip(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     calls: list[list[str]] = []
-    monkeypatch.setattr(provision.shutil, "which", lambda name: None)
+    monkeypatch.setattr(shutil, "which", lambda name: None)
 
     def fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str], check: bool) -> object:
         calls.append(cmd)
@@ -62,7 +64,7 @@ def test_provision_runtime_dependencies_falls_back_to_pip(
         assert check is False
         return type("Result", (), {"returncode": 0})()
 
-    monkeypatch.setattr(provision.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
     provision.provision_runtime_dependencies(
         payload={
@@ -84,7 +86,7 @@ def test_provision_runtime_dependencies_skips_non_worker_mode(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(
-        provision.subprocess,
+        subprocess,
         "run",
         lambda *args, **kwargs: pytest.fail("subprocess.run should not be called"),
     )

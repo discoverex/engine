@@ -7,18 +7,21 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
+
+import pytest
 
 import discoverex.application.flows.engine_entry as engine
 
 
 def test_engine_entry_module_import_is_lazy_for_hydra(
-    monkeypatch,
-) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     original_import = builtins.__import__
     prior_hydra = sys.modules.pop("hydra", None)
     prior_omegaconf = sys.modules.pop("omegaconf", None)
 
-    def guarded_import(name, *args, **kwargs):  # type: ignore[no-untyped-def]
+    def guarded_import(name: str, *args: Any, **kwargs: Any) -> Any:
         if name.startswith("hydra") or name.startswith("omegaconf"):
             raise AssertionError(f"unexpected eager import: {name}")
         return original_import(name, *args, **kwargs)
@@ -38,7 +41,9 @@ def test_engine_entry_module_import_is_lazy_for_hydra(
             sys.modules["omegaconf"] = prior_omegaconf
 
 
-def test_engine_entry_flow_returns_canonical_error_payload(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_engine_entry_flow_returns_canonical_error_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake_cfg = SimpleNamespace(
         flows=SimpleNamespace(),
         runtime=SimpleNamespace(artifacts_root="artifacts/test-engine"),
@@ -62,10 +67,10 @@ def test_engine_entry_flow_returns_canonical_error_payload(monkeypatch) -> None:
         },
     )
 
-    def _fake_load_pipeline_config(**_kwargs):  # type: ignore[no-untyped-def]
+    def _fake_load_pipeline_config(**_kwargs: Any) -> object:
         return fake_cfg
 
-    def _failing_subflow(**_kwargs):  # type: ignore[no-untyped-def]
+    def _failing_subflow(**_kwargs: Any) -> object:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(engine, "load_pipeline_config", _fake_load_pipeline_config)

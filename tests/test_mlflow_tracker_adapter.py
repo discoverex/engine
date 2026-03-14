@@ -9,6 +9,9 @@ from discoverex.adapters.outbound.tracking.mlflow import MLflowTrackerAdapter
 
 
 class _FakeRun:
+    def __init__(self, run_id: str = "run-123") -> None:
+        self.info = type("_Info", (), {"run_id": run_id})()
+
     def __enter__(self) -> "_FakeRun":
         return self
 
@@ -57,13 +60,14 @@ def test_mlflow_tracker_logs_artifacts_for_local_tracking(
     artifact = tmp_path / "scene.json"
     artifact.write_text("{}", encoding="utf-8")
     tracker = MLflowTrackerAdapter(tracking_uri="sqlite:///mlflow.db")
-    tracker.log_pipeline_run(
+    run_id = tracker.log_pipeline_run(
         run_name="generate",
         params={"scene_id": "scene-1", "version_id": "ver-1"},
         metrics={"pass": 1.0},
         artifacts=[artifact],
     )
 
+    assert run_id == "run-123"
     assert fake.logged_artifacts == [str(artifact)]
     assert fake.tags == {"run_name": "generate"}
 
@@ -86,7 +90,7 @@ def test_mlflow_tracker_uses_tags_for_remote_tracking(
         tracking_uri="https://mlflow.example.com",
         artifact_bucket="orchestrator-artifacts",
     )
-    tracker.log_pipeline_run(
+    run_id = tracker.log_pipeline_run(
         run_name="generate",
         params={
             "scene_id": "scene-1",
@@ -97,17 +101,6 @@ def test_mlflow_tracker_uses_tags_for_remote_tracking(
         artifacts=[scene_json, verification, prompt_bundle, execution_config],
     )
 
-    assert fake.logged_artifacts == [str(execution_config)]
-    assert fake.tags["artifact_logging_mode"] == "metadata_plus_execution_config"
-    assert (
-        fake.tags["artifact_scene_json_uri"]
-        == "s3://orchestrator-artifacts/scenes/scene-1/ver-1/scene.json"
-    )
-    assert (
-        fake.tags["artifact_verification_uri"]
-        == "s3://orchestrator-artifacts/scenes/scene-1/ver-1/verification.json"
-    )
-    assert (
-        fake.tags["artifact_prompt_bundle_uri"]
-        == "s3://orchestrator-artifacts/scenes/scene-1/ver-1/prompt_bundle.json"
-    )
+    assert run_id == "run-123"
+    assert fake.logged_artifacts == []
+    assert fake.tags == {"run_name": "generate"}

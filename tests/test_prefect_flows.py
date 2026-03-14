@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from prefect.runtime import flow_run
 
 import infra.prefect.dispatch as prefect_dispatch
 import infra.prefect.flow as prefect_entrypoint
-import prefect_flow
 from discoverex.application.flows.run_engine_job import run_engine_job
 
 
@@ -115,8 +115,35 @@ def test_repo_root_prefect_entrypoint_exposes_run_job_flow(
     monkeypatch.syspath_prepend(str(repo_root))
     sys.modules.pop("prefect_flow", None)
     module = importlib.import_module("prefect_flow")
-    assert module.run_job_flow.name == "disoverex-engine-flow"
+    assert module.run_job_flow.name == "discoverex-engine-flow"
     assert module.run_job_flow is prefect_entrypoint.run_job_flow
+    assert module.run_generate_job_flow.name == "discoverex-generate-flow"
+    assert module.run_generate_job_flow is prefect_entrypoint.run_generate_job_flow
+    assert module.run_combined_job_flow.name == "discoverex-combined-flow"
+    assert module.run_combined_job_flow is prefect_entrypoint.run_combined_job_flow
+
+
+def test_flow_kind_entrypoint_rejects_mismatched_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
+    monkeypatch.setattr(flow_run, "get_id", lambda: "flow-999")
+
+    with pytest.raises(RuntimeError, match="flow_kind=verify"):
+        prefect_entrypoint.run_verify_job_flow.fn(
+            json.dumps(
+                {
+                    "run_mode": "inline",
+                    "engine": "discoverex",
+                    "inputs": {
+                        "contract_version": "v2",
+                        "command": "generate",
+                        "args": {"background_prompt": "test"},
+                    },
+                },
+                ensure_ascii=True,
+            )
+        )
 
 
 def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
@@ -147,7 +174,7 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
     monkeypatch.setattr(
         prefect_entrypoint, "get_run_logger", lambda: _FakeLogger(logged)
     )
-    monkeypatch.setattr(prefect_entrypoint.flow_run, "get_id", lambda: "flow-123")
+    monkeypatch.setattr(flow_run, "get_id", lambda: "flow-123")
 
     output = prefect_entrypoint.run_job_flow.fn(
         json.dumps(
@@ -204,7 +231,7 @@ def test_repo_root_prefect_entrypoint_uploads_worker_artifacts(
         ),
     )
     monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
-    monkeypatch.setattr(prefect_entrypoint.flow_run, "get_id", lambda: "flow-456")
+    monkeypatch.setattr(flow_run, "get_id", lambda: "flow-456")
     monkeypatch.setattr(
         prefect_entrypoint,
         "upload_worker_artifacts",
@@ -267,7 +294,7 @@ def test_repo_root_prefect_entrypoint_raises_on_failed_payload(
     monkeypatch.setattr(
         prefect_entrypoint,
         "upload_worker_artifacts",
-        lambda **kwargs: uploaded.append(kwargs) or {},
+        lambda **kwargs: _capture_uploaded(kwargs, uploaded),
     )
 
     with pytest.raises(RuntimeError) as exc_info:
@@ -292,3 +319,10 @@ def test_repo_root_prefect_entrypoint_raises_on_failed_payload(
     assert uploaded
     stderr_text = capsys.readouterr().err
     assert "[discoverex-engine-flow] failure-context" in stderr_text
+
+
+def _capture_uploaded(
+    payload: dict[str, Any], uploaded: list[dict[str, Any]]
+) -> dict[str, Any]:
+    uploaded.append(payload)
+    return {}

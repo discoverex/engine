@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 from PIL import Image
 
@@ -9,7 +10,9 @@ from discoverex.adapters.outbound.models.sdxl_final_render import SdxlFinalRende
 from discoverex.models.types import FxRequest, ModelHandle
 
 
-def test_final_render_resizes_source_to_requested_dimensions(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_final_render_resizes_source_to_requested_dimensions(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
     captured: dict[str, object] = {}
     fake_torch = SimpleNamespace(
         Generator=lambda device="cpu": SimpleNamespace(manual_seed=lambda seed: ("seeded", device, seed))
@@ -41,4 +44,4 @@ def test_final_render_resizes_source_to_requested_dimensions(tmp_path: Path, mon
     assert output["output_path"].endswith("final.png")
     assert captured["width"] == 512
     assert captured["height"] == 512
-    assert captured["image"].size == (512, 512)
+    assert cast(Any, captured["image"]).size == (512, 512)

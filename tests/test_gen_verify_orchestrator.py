@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from discoverex.application.use_cases.gen_verify import orchestrator
 from discoverex.application.use_cases.gen_verify.types import PromptStageRecord
 
@@ -20,7 +22,9 @@ class _FakeModel:
         self._events.append(f"unload:{self._name}")
 
 
-def test_run_unloads_models_between_generation_stages(monkeypatch, tmp_path: Path) -> None:
+def test_run_unloads_models_between_generation_stages(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     events: list[str] = []
     scene = SimpleNamespace(
         regions=[SimpleNamespace(region_id="r1", role=SimpleNamespace(value="answer"))],
@@ -89,7 +93,7 @@ def test_run_unloads_models_between_generation_stages(monkeypatch, tmp_path: Pat
         final_prompt="final",
     )
 
-    assert result is scene
+    assert result.meta.scene_id == scene.meta.scene_id
     assert events == [
         "load:background",
         "unload:background",

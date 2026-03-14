@@ -20,7 +20,7 @@ def _run_pipeline_roundtrip(tmp_path: Path, model_group: str) -> None:
 
     run_dir = tmp_path / model_group
     run_dir.mkdir(parents=True, exist_ok=True)
-    tracking_uri = f"file:{run_dir / 'mlruns'}"
+    tracking_uri = f"sqlite:///{(run_dir / 'mlflow.db').resolve()}"
 
     overrides = [
         "models/background_generator=" + model_group,

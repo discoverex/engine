@@ -3,14 +3,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
+
+import pytest
 
 from discoverex.application.use_cases.gen_verify.runtime_metrics import track_stage_vram
 
 
 def test_track_stage_vram_records_snapshot_and_updates_file(
-    monkeypatch, tmp_path: Path
-) -> None:  # type: ignore[no-untyped-def]
-    snapshot = {"runtime_metrics": {}}
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    snapshot: dict[str, Any] = {"runtime_metrics": {}}
     path = tmp_path / "resolved_execution_config.json"
     path.write_text(json.dumps(snapshot), encoding="utf-8")
     context = SimpleNamespace(

@@ -16,7 +16,7 @@ from discoverex.orchestrator_contract.worker_runtime import (
 )
 
 
-def test_normalize_pipeline_config_for_worker_runtime_swaps_remote_adapters(
+def test_normalize_pipeline_config_for_worker_runtime_preserves_selected_adapters(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv(ARTIFACT_DIR_ENV, str(tmp_path / "engine-artifacts"))
@@ -35,16 +35,10 @@ def test_normalize_pipeline_config_for_worker_runtime_swaps_remote_adapters(
     assert normalized.runtime.artifacts_root == str(
         (tmp_path / "engine-artifacts").resolve()
     )
-    assert normalized.adapters.artifact_store.target.endswith(
-        "LocalArtifactStoreAdapter"
-    )
-    assert normalized.adapters.metadata_store.target.endswith(
-        "LocalMetadataStoreAdapter"
-    )
-    assert normalized.adapters.tracker.target.endswith("NoOpTrackerAdapter")
-    assert normalized.adapters.report_writer.target.endswith(
-        "JsonReportWriterAdapter"
-    )
+    assert normalized.adapters.artifact_store.target.endswith("MinioArtifactStoreAdapter")
+    assert normalized.adapters.metadata_store.target.endswith("PostgresMetadataStoreAdapter")
+    assert normalized.adapters.tracker.target.endswith("MLflowTrackerAdapter")
+    assert normalized.adapters.report_writer.target.endswith("JsonReportWriterAdapter")
 
 
 def test_write_worker_artifact_manifest_collects_files_under_worker_root(

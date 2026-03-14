@@ -10,7 +10,7 @@ from discoverex.adapters.outbound.models.pipeline_memory import (
 class _FakeModule:
     def __init__(self) -> None:
         self.layerwise_calls: list[tuple[object, object]] = []
-        self.memory_format = None
+        self.memory_format: object | None = None
 
     def enable_layerwise_casting(
         self, *, storage_dtype: object, compute_dtype: object
@@ -26,13 +26,13 @@ class _FakePipe:
         self.unet = _FakeModule()
         self.vae = _FakeModule()
         self.text_encoder = _FakeModule()
-        self.progress_bar_disabled = None
-        self.attention_slicing = None
+        self.progress_bar_disabled: bool | None = None
+        self.attention_slicing: str | None = None
         self.vae_slicing_enabled = False
         self.vae_tiling_enabled = False
         self.xformers_enabled = False
-        self.offload_mode = None
-        self.sent_to_device = None
+        self.offload_mode: str | None = None
+        self.sent_to_device: str | None = None
 
     def set_progress_bar_config(self, *, disable: bool) -> None:
         self.progress_bar_disabled = disable

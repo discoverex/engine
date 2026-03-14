@@ -108,9 +108,10 @@ def test_prefect_deploy_script_targets_single_engine_job_flow() -> None:
         encoding="utf-8"
     )
     settings_text = Path("infra/register/settings.py").read_text(encoding="utf-8")
-    assert "run_job_flow" in deploy_text
-    assert '"discoverex-engine-job"' in settings_text
-    assert "discoverex-generate--generate" not in deploy_text
+    assert "from_source" in deploy_text
+    assert '"prefect_flow.py:run_combined_job_flow"' in settings_text
+    assert '"discoverex"' in settings_text
+    assert "--flow-kind" in deploy_text
 
 
 def test_use_cases_do_not_write_files_directly() -> None:

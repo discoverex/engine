@@ -32,7 +32,7 @@ def test_submit_job_spec_resolves_deployment_from_inputs(
             return [
                 SimpleNamespace(
                     id="12345678-1234-5678-1234-567812345678",
-                    name="discoverex-engine-job",
+                    name="discoverex-generate-dev",
                 )
             ]
 
@@ -85,7 +85,7 @@ def test_submit_job_spec_resolves_deployment_from_inputs(
         prefect_api_url="http://127.0.0.1:4200/api",
     )
 
-    assert output["deployment"] == "discoverex-engine-job"
+    assert output["deployment"] == "discoverex-generate-dev"
     assert output["deployment_id"] == "12345678-1234-5678-1234-567812345678"
     assert output["flow_run_id"] == "flow-456"
     assert output["flow_run_name"] == "run-789"
