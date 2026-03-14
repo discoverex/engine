@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import subprocess
 from pathlib import Path
+from uuid import UUID
 
 import typer
 
@@ -77,6 +78,47 @@ def _contains_any(args: list[str], options: tuple[str, ...]) -> bool:
         if any(item.startswith(f"{option}=") for option in options):
             return True
     return False
+
+
+def _prefect_client_settings() -> dict[object, object]:
+    from prefect.settings import PREFECT_API_URL, PREFECT_CLIENT_CUSTOM_HEADERS
+
+    from infra.register.settings import SETTINGS
+
+    api_url = SETTINGS.prefect_api_url or "https://prefect-api.discoverex.qzz.io/api"
+    headers: dict[str, str] = {}
+    client_id = (
+        SETTINGS.prefect_cf_access_client_id or SETTINGS.cf_access_client_id
+    ).strip()
+    client_secret = (
+        SETTINGS.prefect_cf_access_client_secret or SETTINGS.cf_access_client_secret
+    ).strip()
+    if client_id and client_secret:
+        headers["CF-Access-Client-Id"] = client_id
+        headers["CF-Access-Client-Secret"] = client_secret
+    return {
+        PREFECT_API_URL: api_url,
+        PREFECT_CLIENT_CUSTOM_HEADERS: headers,
+    }
+
+
+def _build_prefect_log_filter(flow_run_id: str) -> object:
+    from prefect.client.schemas.filters import LogFilter, LogFilterFlowRunId
+
+    return LogFilter(flow_run_id=LogFilterFlowRunId(any_=[UUID(flow_run_id)]))
+
+
+async def _read_prefect_logs(flow_run_id: str, limit: int) -> list[object]:
+    from prefect.client.orchestration import get_client
+    from prefect.settings import temporary_settings
+
+    with temporary_settings(updates=_prefect_client_settings()):
+        async with get_client() as client:
+            logs = await client.read_logs(
+                log_filter=_build_prefect_log_filter(flow_run_id),
+                limit=limit,
+            )
+    return list(logs)
 
 
 @app.command(
@@ -186,35 +228,30 @@ def submit_spec(ctx: typer.Context) -> None:
 
 async def _fetch_logs(flow_run_id: str, limit: int = 1000) -> None:
     try:
-        from prefect.client import get_client
         from prefect.logging.configuration import setup_logging
-        
-        # Ensure logging is set up to avoid unnecessary noise or missing info
-        setup_logging()
-        
-        async with get_client() as client:
-            # We need the UUID or string ID
-            logs = await client.read_logs(flow_run_id=flow_run_id, limit=limit)
-            if not logs:
-                typer.echo(f"No logs found for flow run {flow_run_id}")
-                return
 
-            for log in logs:
-                # Basic formatting
-                color = typer.colors.WHITE
-                if log.level >= 40: # ERROR
-                    color = typer.colors.RED
-                elif log.level >= 30: # WARNING
-                    color = typer.colors.YELLOW
-                elif log.level <= 10: # DEBUG
-                    color = typer.colors.CYAN
-                
-                timestamp = log.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-                typer.echo(
-                    typer.style(f"[{timestamp}] ", fg=typer.colors.BRIGHT_BLACK) +
-                    typer.style(f"{log.name} | {log.level_name.ljust(7)} | ", fg=color) +
-                    f"{log.message}"
-                )
+        setup_logging()
+        logs = await _read_prefect_logs(flow_run_id, limit)
+        if not logs:
+            typer.echo(f"No logs found for flow run {flow_run_id}")
+            return
+
+        for log in logs:
+            color = typer.colors.WHITE
+            if log.level >= 40:
+                color = typer.colors.RED
+            elif log.level >= 30:
+                color = typer.colors.YELLOW
+            elif log.level <= 10:
+                color = typer.colors.CYAN
+            timestamp = log.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            level_name = str(getattr(log, "level_name", getattr(log, "level", "")))
+            logger_name = str(getattr(log, "name", "prefect"))
+            typer.echo(
+                typer.style(f"[{timestamp}] ", fg=typer.colors.BRIGHT_BLACK) +
+                typer.style(f"{logger_name} | {level_name.ljust(7)} | ", fg=color) +
+                f"{log.message}"
+            )
     except ImportError:
         typer.secho("Error: prefect library not found in current environment.", fg=typer.colors.RED)
     except Exception as e:
