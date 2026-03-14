@@ -41,6 +41,7 @@ worker compatibility.
 - The engine does not require MLflow DB credentials.
 - The engine uses `MLFLOW_TRACKING_URI` as provided.
 - The engine does not depend on direct Cloudflare Access headers for MLflow.
+- The engine does not infer uploaded object URIs or write worker-owned MLflow artifact-link tags itself.
 
 ## 6) Durable output expectation
 
@@ -49,6 +50,7 @@ worker compatibility.
 - The engine writes `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH` when durable engine-owned artifacts exist.
 - Manifest paths are relative and stay under the worker-provided artifact directory.
 - MLflow tags are used for metadata linkage, not artifact byte transport.
+- The engine stdout JSON payload includes `mlflow_run_id` when tracking is enabled so the worker can attach post-upload MLflow tags.
 
 ## 7) Deployment routing compatibility
 

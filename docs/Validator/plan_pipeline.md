@@ -428,7 +428,7 @@ defaults:
   - models/visual_verification: yolo_clip
   - adapters/artifact_store: local
   - adapters/metadata_store: local_json
-  - adapters/tracker: mlflow_file
+  - adapters/tracker: mlflow_local
   - runtime/model_runtime: gpu
   - runtime/env: default
 

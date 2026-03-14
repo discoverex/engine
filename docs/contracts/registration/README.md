@@ -78,6 +78,7 @@ For durable engine-owned artifacts, the official storage contract is:
 - engine writes files into `ORCH_ENGINE_ARTIFACT_DIR`
 - engine writes `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`
 - worker uploads those files after execution
+- worker records uploaded object URIs and mirrors selected URIs into MLflow tags
 
 ## 2) Required engine deliverables
 
@@ -175,6 +176,9 @@ Before the engine process starts, the worker injects runtime variables including
 - `ORCH_OUTPUTS_PREFIX`
 - `ORCH_RESOLVED_COMMIT`
 - `ORCH_JOB_INPUTS_JSON`
+- `ORCH_ENGINE_ARTIFACT_DIR`
+- `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`
+- `MLFLOW_TRACKING_URI`
 
 Conditionally injected:
 
@@ -224,6 +228,8 @@ Important boundary rules:
 - the engine should use `MLFLOW_TRACKING_URI` as given
 - the engine should not depend on Cloudflare Access headers directly
 - the engine should not require backend MLflow container addresses
+- the engine should not derive durable object URIs from local filenames or local storage layout assumptions
+- the worker is responsible for linking uploaded object URIs back into MLflow tags
 - the worker strips `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` before
   launching the engine when proxying MLflow
 
@@ -397,78 +403,51 @@ This is enough for:
 - worker-managed final result metadata
 - MLflow-based progress and run metadata tracking
 
-## 5.4 Current gap: engine-owned durable artifacts
+## 5.4 Official durable artifact contract
 
-The current contract does not yet define a first-class engine artifact upload
-path for arbitrary intermediate files, model outputs, bundles, or scene data
-produced during the run.
+Engine-owned durable artifacts are now covered by the worker-managed output
+directory contract.
 
-Today, the worker automatically uploads only:
+Official behavior:
 
-- `stdout.log`
-- `stderr.log`
-- `result.json`
-- `artifacts.json`
+- the worker creates `ORCH_ENGINE_ARTIFACT_DIR`
+- the worker creates `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`
+- the engine writes durable files only under that directory
+- the engine writes a manifest describing those files
+- after process exit, the worker requests presigned URLs through storage-api
+- the worker uploads the declared files and writes `engine-artifacts.json`
+- the worker records returned `object_uri` values in worker-owned manifests
+- the worker mirrors selected uploaded URIs into MLflow tags when `mlflow_tag`
+  is declared in the manifest
 
-That means the following are not fully specified yet:
+This is the only canonical artifact contract for this repository.
 
-- engine-created intermediate artifact files
-- engine-created final output files larger than `result.json`
-- naming/layout rules for engine-owned objects in MinIO
-- how the engine obtains writable object URLs for those files
-- how those object URIs are linked back into MLflow or flow results
+## 5.5 MLflow run linkage contract
 
-## 5.5 Recommended artifact contract to add
+MLflow ownership is split intentionally:
 
-If the goal is to support external engines that store intermediate and final
-artifacts durably on the storage node, one explicit contract still needs to be
-added. The clean options are:
+- the engine writes params, metrics, and run metadata through
+  `MLFLOW_TRACKING_URI`
+- the engine does not infer object URIs or write worker-owned artifact-link tags
+- the engine stdout JSON payload should include `mlflow_run_id`
+- the worker uses that `mlflow_run_id` to attach post-upload artifact URI tags
 
-### Option A: worker-managed artifact directory upload
+The engine must not depend on:
 
-The engine writes files into a declared local output directory, and the worker:
-
-- scans that directory after execution
-- requests presigned URLs itself
-- uploads those files
-- records returned `object_uri` values in `artifacts.json`
-- optionally mirrors those `object_uri` values into MLflow tags
-
-This keeps presign/auth/storage concerns fully out of the engine.
-
-### Option B: engine-facing storage helper contract
-
-The worker exposes a worker-facing helper or environment contract so the engine
-can request presigned URLs indirectly, then upload selected files itself.
-
-If this path is chosen, the contract must define:
-
-- allowed API surface
-- auth model
-- object naming/layout
-- retry behavior
-- required MLflow linkage tags
-
-This is more flexible, but it expands the engine/runtime coupling.
+- direct MinIO credentials
+- storage-api presign routes
+- MLflow backend container addresses
+- worker-side Cloudflare Access headers
 
 ## 5.6 Presign support requirement
 
-For the current minimal integration target, the engine does not need direct
-presign support.
+Direct presign support in the engine is not part of the supported contract.
 
-Direct presign support is unnecessary if the only required durable outputs are:
+The default and preferred model is:
 
-- worker-managed logs
-- `result.json`
-- MLflow metadata
-
-Direct or indirect presign support becomes necessary if the engine must persist
-additional durable artifacts to MinIO during or after the run.
-
-Recommended default:
-
-- do not require presign support in the engine
-- add worker-managed directory upload if durable engine artifacts are required
+- no presign logic in the engine
+- no direct MinIO upload logic in the engine
+- worker-managed upload after engine exit
 
 ## 6) Acceptance checklist for an external engine repo
 
@@ -485,7 +464,7 @@ An engine repo is ready for integration when all of the following are true.
 
 For full durable artifact support beyond logs/result metadata:
 
-9. an explicit engine artifact persistence contract must exist
+9. the engine must follow the worker-managed artifact directory and manifest contract
 
 ## 7) Verification after integration
 

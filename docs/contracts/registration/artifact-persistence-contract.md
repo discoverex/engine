@@ -58,6 +58,7 @@ A fully worker-compatible engine must assume only this durable baseline:
 - logs are durable through worker upload
 - `result.json` is durable through worker upload
 - MLflow metadata is durable through MLflow
+- uploaded engine artifact object URIs, when present, are worker-recorded metadata
 
 The engine must not assume that arbitrary local files become durable
 automatically.
@@ -113,6 +114,9 @@ tag names such as:
 Reference tagging example:
 
 - [scripts/e2e/shell_python_helpers.py](/home/esillileu/discoverex/orchestrator/scripts/e2e/shell_python_helpers.py)
+
+The engine should not guess or precompute these URI values. They are derived by
+the worker after upload.
 
 ## 8) Decision point
 
