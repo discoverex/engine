@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
+from uuid import UUID
 
 from typer.testing import CliRunner
 
 from scripts.cli.prefect import (
     DEFAULT_REGISTER_JOB_SPEC,
+    _build_prefect_log_filter,
     app,
 )
 
@@ -151,3 +154,43 @@ def test_default_register_job_spec_points_to_repo_standard_file() -> None:
         / "job_specs"
         / "real-generate-sdxl-gpu-8gb.json"
     )
+
+
+def test_build_prefect_log_filter_targets_flow_run_id() -> None:
+    flow_run_id = "f7b6ec0c-48e1-4dcc-8e74-1f03b3bbdd9c"
+    log_filter = _build_prefect_log_filter(flow_run_id)
+    assert log_filter.flow_run_id.any_ == [UUID(flow_run_id)]
+
+
+def test_fetch_logs_formats_output(monkeypatch, capsys) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "prefect.logging.configuration",
+        SimpleNamespace(setup_logging=lambda: None),
+    )
+
+    async def _fake_read_prefect_logs(flow_run_id: str, limit: int) -> list[object]:
+        assert flow_run_id == "f7b6ec0c-48e1-4dcc-8e74-1f03b3bbdd9c"
+        assert limit == 25
+        return [
+            SimpleNamespace(
+                level=20,
+                level_name="INFO",
+                name="prefect.flow_runs",
+                message="hello",
+                timestamp=SimpleNamespace(
+                    strftime=lambda fmt: "2026-03-15 01:23:45"
+                ),
+            )
+        ]
+
+    monkeypatch.setattr("scripts.cli.prefect._read_prefect_logs", _fake_read_prefect_logs)
+
+    import asyncio
+
+    flow_run_id = "f7b6ec0c-48e1-4dcc-8e74-1f03b3bbdd9c"
+    asyncio.run(__import__("scripts.cli.prefect", fromlist=["_fetch_logs"])._fetch_logs(flow_run_id, 25))
+
+    output = capsys.readouterr().out
+    assert "hello" in output
+    assert "prefect.flow_runs | INFO" in output
