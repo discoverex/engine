@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from discoverex.adapters.outbound.models.cv_color_edge import compute_visual_similarity
 from discoverex.models.types import (
@@ -53,10 +53,14 @@ class YoloCLIPAdapter:
         self._yolo = YOLO(self._yolo_model_id)
         self._yolo.to(self._device)
 
-        self._clip_model = CLIPModel.from_pretrained(self._clip_model_id).to(
-            self._device
+        self._clip_model = cast(
+            Any,
+            CLIPModel.from_pretrained(self._clip_model_id),
+        ).to(self._device)
+        self._clip_processor = cast(
+            Any,
+            CLIPProcessor.from_pretrained(self._clip_model_id),
         )
-        self._clip_processor = CLIPProcessor.from_pretrained(self._clip_model_id)
         self._clip_model.eval()
 
     def verify(

@@ -53,7 +53,7 @@ def track_run(
     composite_artifact: Path | None,
     prompt_bundle_artifact: Path | None = None,
     extra_params: dict[str, str] | None = None,
-) -> None:
+) -> str | None:
     started = perf_counter()
     execution_snapshot = getattr(context, "execution_snapshot", None)
     execution_snapshot_path = getattr(context, "execution_snapshot_path", None)
@@ -68,7 +68,7 @@ def track_run(
         ],
     )
 
-    context.tracker.log_pipeline_run(
+    tracking_run_id = context.tracker.log_pipeline_run(
         run_name="gen_verify",
         params={
             **build_tracking_params(execution_snapshot),
@@ -95,7 +95,9 @@ def track_run(
         len(artifact_entries),
         format_seconds(started),
     )
+    context.tracking_run_id = tracking_run_id
     write_worker_artifact_manifest(
         artifacts_root=context.artifacts_root,
         artifacts=artifact_entries,
     )
+    return tracking_run_id

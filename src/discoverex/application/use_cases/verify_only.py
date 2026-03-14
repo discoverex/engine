@@ -82,7 +82,7 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
             ("execution_config", context.execution_snapshot_path),
         ],
     )
-    context.tracker.log_pipeline_run(
+    tracking_run_id = context.tracker.log_pipeline_run(
         run_name="verify_only",
         params={
             **build_tracking_params(context.execution_snapshot),
@@ -100,6 +100,7 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
         },
         artifacts=[artifact_path for _, artifact_path in artifact_entries],
     )
+    context.tracking_run_id = tracking_run_id
     write_worker_artifact_manifest(
         artifacts_root=context.artifacts_root,
         artifacts=artifact_entries,

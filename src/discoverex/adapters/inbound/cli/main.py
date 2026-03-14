@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+import sys
 from pathlib import Path
 from time import perf_counter
+from typing import Any, cast
 
 import typer
 
 from discoverex.application.contracts.execution.schema import JobRuntime
-from discoverex.application.flows import build_inline_job_spec, run_engine_job
+from discoverex.application.flows.run_engine_job import (
+    build_inline_job_spec,
+    run_engine_job,
+)
 from discoverex.bootstrap import build_validator_context
 from discoverex.config_loader import load_validator_config
 from discoverex.runtime_logging import configure_logging, format_seconds, get_logger
@@ -18,6 +24,80 @@ logger = get_logger("discoverex.cli")
 
 def _echo_json(payload: dict[str, object]) -> None:
     typer.echo(json.dumps(payload, ensure_ascii=False))
+
+
+def _run_e2e(
+    *,
+    scenario: str,
+    model_group: str,
+    work_dir: str | None,
+    ensure_live_infra: bool,
+) -> dict[str, object]:
+    e2e_module = _load_e2e_module()
+    ensure_e2e_live_infra = e2e_module.ensure_live_infra
+    run_live_services_e2e = e2e_module.run_live_services_e2e
+    run_tracking_artifact_e2e = e2e_module.run_tracking_artifact_e2e
+    run_worker_contract_e2e = e2e_module.run_worker_contract_e2e
+
+    if work_dir:
+        target_dir = Path(work_dir).resolve()
+        target_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        target_dir = Path(".cache/discoverex/e2e").resolve()
+        target_dir.mkdir(parents=True, exist_ok=True)
+    if ensure_live_infra:
+        ensure_e2e_live_infra()
+
+    summaries: dict[str, object] = {}
+    if scenario in {"tracking-artifact", "all"}:
+        summaries["tracking-artifact"] = _e2e_summary_dict(
+            run_tracking_artifact_e2e(work_dir=target_dir, model_group=model_group)
+        )
+    if scenario in {"worker-contract", "all"}:
+        summaries["worker-contract"] = _e2e_summary_dict(
+            run_worker_contract_e2e(work_dir=target_dir, model_group=model_group)
+        )
+    if scenario in {"live-services", "all"}:
+        summaries["live-services"] = _e2e_summary_dict(
+            run_live_services_e2e(work_dir=target_dir, model_group=model_group)
+        )
+    return summaries
+
+
+def _e2e_summary_dict(summary: Any) -> dict[str, object]:
+    return {
+        "scenario": str(summary.scenario),
+        "work_dir": str(summary.work_dir),
+        "scene_id": str(summary.scene_id),
+        "version_id": str(summary.version_id),
+        "scene_json": str(summary.scene_json),
+        "verification_json": str(summary.verification_json),
+        "execution_config": str(summary.execution_config),
+        "extra": cast(dict[str, object], summary.extra),
+    }
+
+
+def _load_e2e_module() -> Any:
+    try:
+        from infra.e2e import engine_runtime_e2e as module
+    except ModuleNotFoundError:
+        repo_root = Path(__file__).resolve().parents[5]
+        module_path = repo_root / "infra" / "e2e" / "engine_runtime_e2e.py"
+        repo_root_text = str(repo_root)
+        if repo_root_text not in sys.path:
+            sys.path.insert(0, repo_root_text)
+        spec = importlib.util.spec_from_file_location(
+            "discoverex_engine_runtime_e2e",
+            module_path,
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError(
+                f"failed to load e2e module: {module_path}"
+            ) from None
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+    return module
 
 
 def _warn_legacy_command(legacy: str, replacement: str) -> None:
@@ -54,7 +134,7 @@ def _run_command(
         overrides=overrides,
         runtime=JobRuntime(mode="local"),
     )
-    return run_engine_job(job_spec)
+    return cast(dict[str, object], run_engine_job(job_spec))
 
 
 @app.command("generate")
@@ -139,6 +219,32 @@ def animate_command(
         config_name=config_name,
         config_dir=config_dir,
         overrides=override,
+    )
+    _echo_json(payload)
+
+
+@app.command("e2e")
+def e2e_command(
+    scenario: str = typer.Option(
+        "all",
+        "--scenario",
+        help="One of: tracking-artifact, worker-contract, live-services, all",
+    ),
+    model_group: str = typer.Option("tiny_torch", "--model-group"),
+    work_dir: str | None = typer.Option(None, "--work-dir"),
+    ensure_live_infra: bool = typer.Option(False, "--ensure-live-infra"),
+    verbose: bool = typer.Option(False, "--verbose"),
+) -> None:
+    if scenario not in {"tracking-artifact", "worker-contract", "live-services", "all"}:
+        raise typer.BadParameter(
+            "scenario must be one of: tracking-artifact, worker-contract, live-services, all"
+        )
+    configure_logging(verbose=verbose)
+    payload = _run_e2e(
+        scenario=scenario,
+        model_group=model_group,
+        work_dir=work_dir,
+        ensure_live_infra=ensure_live_infra,
     )
     _echo_json(payload)
 

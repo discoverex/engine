@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from .pipeline_memory import configure_diffusers_pipeline
+from .pipeline_memory import OffloadMode, configure_diffusers_pipeline
 
 
 def load_inpaint_pipe(
@@ -11,7 +11,7 @@ def load_inpaint_pipe(
     model_id: str,
     revision: str,
     handle: Any,
-    offload_mode: str = "none",
+    offload_mode: OffloadMode = "none",
     enable_attention_slicing: bool = False,
     enable_vae_slicing: bool = False,
     enable_vae_tiling: bool = False,

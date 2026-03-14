@@ -11,6 +11,12 @@ from discoverex.models.types import HiddenRegionRequest, InpaintRequest, ModelHa
 from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 
+from .region_prompts import (
+    bbox_payload,
+    bbox_tuple,
+    build_prompt_record,
+    record_layer_candidate,
+)
 from .runtime_metrics import track_stage_vram
 from .types import RegionPromptRecord
 
@@ -112,12 +118,7 @@ def generate_regions(
             region_id=region.region_id,
             index=index,
             total=total_regions,
-            bbox={
-                "x": region.geometry.bbox.x,
-                "y": region.geometry.bbox.y,
-                "w": region.geometry.bbox.w,
-                "h": region.geometry.bbox.h,
-            },
+            bbox=bbox_payload(region),
         )
         with track_stage_vram(context, "object_inpaint"):
             details = context.inpaint_model.predict(
@@ -125,12 +126,7 @@ def generate_regions(
                 InpaintRequest(
                     image_ref=background.asset_ref,
                     region_id=region.region_id,
-                    bbox=(
-                        region.geometry.bbox.x,
-                        region.geometry.bbox.y,
-                        region.geometry.bbox.w,
-                        region.geometry.bbox.h,
-                    ),
+                    bbox=bbox_tuple(region),
                     output_path=str(output_path),
                     composite_base_ref=background.asset_ref,
                     prompt=object_prompt,
@@ -147,43 +143,20 @@ def generate_regions(
         object_ref = details.get("object_image_ref")
         object_mask_ref = details.get("object_mask_ref")
         patch_ref = details.get("patch_image_ref")
-        layer_ref = (
-            object_ref if isinstance(object_ref, str) and object_ref else patch_ref
+        record_layer_candidate(
+            background=background,
+            region=region,
+            object_ref=object_ref,
+            object_mask_ref=object_mask_ref,
+            patch_ref=patch_ref,
         )
-        if isinstance(layer_ref, str) and layer_ref:
-            candidates = background.metadata.setdefault("inpaint_layer_candidates", [])
-            if isinstance(candidates, list):
-                candidates.append(
-                    {
-                        "region_id": region.region_id,
-                        "object_image_ref": object_ref,
-                        "object_mask_ref": object_mask_ref,
-                        "patch_image_ref": patch_ref,
-                        "layer_image_ref": layer_ref,
-                        "bbox": {
-                            "x": region.geometry.bbox.x,
-                            "y": region.geometry.bbox.y,
-                            "w": region.geometry.bbox.w,
-                            "h": region.geometry.bbox.h,
-                        },
-                    }
-                )
         prompt_records.append(
-            RegionPromptRecord(
-                region_id=region.region_id,
-                prompt=object_prompt,
-                negative_prompt=object_negative_prompt,
+            build_prompt_record(
+                region=region,
+                object_prompt=object_prompt,
+                object_negative_prompt=object_negative_prompt,
                 generation_prompt=generation_prompt,
-                bbox=(
-                    region.geometry.bbox.x,
-                    region.geometry.bbox.y,
-                    region.geometry.bbox.w,
-                    region.geometry.bbox.h,
-                ),
-                patch_image_ref=details.get("patch_image_ref"),
-                object_image_ref=details.get("object_image_ref"),
-                object_mask_ref=details.get("object_mask_ref"),
-                composited_image_ref=details.get("composited_image_ref"),
+                details=details,
             )
         )
         logger.info(

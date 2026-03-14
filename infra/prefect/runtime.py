@@ -3,9 +3,10 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from prefect.context import get_run_context
 
@@ -79,7 +80,8 @@ def patched_environ(updates: dict[str, str]) -> Iterator[None]:
 def flow_attempt() -> int:
     try:
         ctx = get_run_context()
-        return int(getattr(ctx.flow_run, "run_count", None) or 1)
+        flow_run_ctx = getattr(ctx, "flow_run", None)
+        return int(getattr(flow_run_ctx, "run_count", None) or 1)
     except Exception:
         return 1
 

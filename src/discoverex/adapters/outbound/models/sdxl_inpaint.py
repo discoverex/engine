@@ -15,7 +15,6 @@ from .image_patch_ops import (
     save_image,
 )
 from .pipeline_memory import OffloadMode
-from .runtime_cleanup import clear_model_runtime
 from .runtime import (
     apply_seed,
     build_runtime_extra,
@@ -24,6 +23,7 @@ from .runtime import (
     resolve_runtime,
     validate_diffusers_runtime,
 )
+from .runtime_cleanup import clear_model_runtime
 from .sdxl_inpaint_inference import (
     build_full_mask,
     extract_object_rgba,

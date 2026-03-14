@@ -58,6 +58,8 @@ def animate_replay_eval(
     payload = {"report": str(report)}
     if execution_snapshot_path is not None:
         payload["execution_config"] = str(execution_snapshot_path)
+    if getattr(context, "tracking_run_id", None):
+        payload["mlflow_run_id"] = str(context.tracking_run_id)
     return payload
 
 

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 
 def collect_worker_artifacts(
     saved_dir: Path,
-    explicit_artifacts: list[tuple[str, Path | None]],
+    explicit_artifacts: Sequence[tuple[str, Path | None]],
 ) -> list[tuple[str, Path]]:
     collected: list[tuple[str, Path]] = []
     seen_paths: set[str] = set()

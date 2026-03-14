@@ -11,6 +11,7 @@ def build_scene_payload(
     scene: Scene,
     artifacts_root: str,
     execution_config_path: str | None = None,
+    mlflow_run_id: str | None = None,
 ) -> dict[str, str]:
     payload = {
         "scene_id": scene.meta.scene_id,
@@ -20,6 +21,8 @@ def build_scene_payload(
     }
     if execution_config_path:
         payload["execution_config"] = execution_config_path
+    if mlflow_run_id:
+        payload["mlflow_run_id"] = mlflow_run_id
     return payload
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Sequence
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -42,7 +43,7 @@ def manifest_path_from_env() -> Path:
 
 
 def write_engine_artifact_manifest(
-    artifacts: list[EngineArtifact | dict[str, str | None]],
+    artifacts: Sequence[EngineArtifact | dict[str, str | None]],
 ) -> Path | None:
     if not artifacts:
         return None

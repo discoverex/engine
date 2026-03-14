@@ -13,6 +13,7 @@ from discoverex.application.use_cases.gen_verify.background_pipeline import (
     build_background_from_inputs,
 )
 from discoverex.application.use_cases.gen_verify.composite_pipeline import compose_scene
+from discoverex.application.use_cases.gen_verify.model_lifecycle import unload_model
 from discoverex.application.use_cases.gen_verify.persistence import (
     save_scene,
     track_run,
@@ -31,6 +32,7 @@ from discoverex.application.use_cases.gen_verify.types import (
     CompositeResolution,
     PromptBundle,
     PromptStageRecord,
+    RegionPromptRecord,
     RunIds,
 )
 from discoverex.application.use_cases.gen_verify.verification_pipeline import (
@@ -114,7 +116,7 @@ def _generate_regions_stage(
     scene_dir: Path,
     object_prompt: str,
     object_negative_prompt: str,
-) -> tuple[list[Any], list[PromptStageRecord]]:
+) -> tuple[list[Any], list[RegionPromptRecord]]:
     hidden_handle = context.hidden_region_model.load(
         context.model_versions.hidden_region
     )
@@ -192,7 +194,7 @@ def _persist_scene_outputs(
     scene_dir: Path,
     scene: Scene,
     background_prompt_record: PromptStageRecord,
-    region_prompt_records: list[PromptStageRecord],
+    region_prompt_records: list[RegionPromptRecord],
     object_prompt: str,
     object_negative_prompt: str,
     final_prompt: str,
@@ -374,7 +376,7 @@ def run_generate_flow(
     )
 
     scene = _verify_scene_stage(context=context, scene=scene)
-    saved_dir = _persist_scene_outputs(
+    _persist_scene_outputs(
         context=context,
         scene_dir=scene_dir,
         scene=scene,
@@ -398,4 +400,5 @@ def run_generate_flow(
         scene,
         config.runtime.artifacts_root,
         str(execution_snapshot_path) if execution_snapshot_path is not None else None,
+        getattr(context, "tracking_run_id", None),
     )

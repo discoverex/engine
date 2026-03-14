@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Sequence
 from pathlib import Path
 
-from discoverex.config import HydraComponentConfig, PipelineConfig
+from discoverex.config import PipelineConfig
 
 from .artifacts import artifact_root_from_env, write_engine_artifact_manifest
 
@@ -16,18 +17,6 @@ def normalize_pipeline_config_for_worker_runtime(
         return config
     normalized = config.model_copy(deep=True)
     normalized.runtime.artifacts_root = str(artifact_root)
-    normalized.adapters.artifact_store = _component(
-        "discoverex.adapters.outbound.storage.artifact.LocalArtifactStoreAdapter"
-    )
-    normalized.adapters.metadata_store = _component(
-        "discoverex.adapters.outbound.storage.metadata.LocalMetadataStoreAdapter"
-    )
-    normalized.adapters.tracker = _component(
-        "discoverex.adapters.outbound.tracking.noop.NoOpTrackerAdapter"
-    )
-    normalized.adapters.report_writer = _component(
-        "discoverex.adapters.outbound.io.reports.JsonReportWriterAdapter"
-    )
     return normalized
 
 
@@ -41,7 +30,7 @@ def worker_artifact_root() -> Path | None:
 def write_worker_artifact_manifest(
     *,
     artifacts_root: Path,
-    artifacts: list[tuple[str, Path | None]],
+    artifacts: Sequence[tuple[str, Path | None]],
 ) -> Path | None:
     if worker_artifact_root() is None:
         return None
@@ -74,10 +63,6 @@ def write_worker_artifact_manifest(
             }
         )
     return write_engine_artifact_manifest(entries)
-
-
-def _component(target: str) -> HydraComponentConfig:
-    return HydraComponentConfig.model_validate({"_target_": target})
 
 
 def _content_type_for_path(path: Path) -> str | None:

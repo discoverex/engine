@@ -8,8 +8,7 @@ from discoverex.models.types import FxPrediction, FxRequest, ModelHandle
 from discoverex.runtime_logging import format_seconds, get_logger
 
 from .fx_param_parsing import as_float, as_int_or_none, as_positive_int, as_str
-from .pipeline_memory import configure_diffusers_pipeline
-from .runtime_cleanup import clear_model_runtime
+from .pipeline_memory import OffloadMode, configure_diffusers_pipeline
 from .runtime import (
     apply_seed,
     build_runtime_extra,
@@ -18,6 +17,7 @@ from .runtime import (
     resolve_runtime,
     validate_diffusers_runtime,
 )
+from .runtime_cleanup import clear_model_runtime
 
 logger = get_logger("discoverex.models.sdxl_background")
 
@@ -33,7 +33,7 @@ class SdxlBackgroundGenerationModel:
         batch_size: int = 1,
         seed: int | None = None,
         strict_runtime: bool = False,
-        offload_mode: str = "none",
+        offload_mode: OffloadMode = "none",
         enable_attention_slicing: bool = False,
         enable_vae_slicing: bool = False,
         enable_vae_tiling: bool = False,

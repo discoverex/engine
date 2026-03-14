@@ -52,4 +52,5 @@ def run_verify_flow(
         updated,
         config.runtime.artifacts_root,
         str(execution_snapshot_path) if execution_snapshot_path is not None else None,
+        getattr(context, "tracking_run_id", None),
     )

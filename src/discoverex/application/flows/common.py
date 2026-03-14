@@ -1,16 +1,38 @@
 from __future__ import annotations
 
-from typing import Any, Literal
-
-from discoverex.domain.scene import Scene
+from typing import Any, Literal, Protocol
 
 FlowCommand = Literal["generate", "verify", "animate"]
 
 
+class _StatusLike(Protocol):
+    value: str
+
+
+class _MetaLike(Protocol):
+    scene_id: str
+    version_id: str
+    status: _StatusLike
+
+
+class _VerificationFinalLike(Protocol):
+    failure_reason: str | None
+
+
+class _VerificationLike(Protocol):
+    final: _VerificationFinalLike
+
+
+class SceneLike(Protocol):
+    meta: _MetaLike
+    verification: _VerificationLike
+
+
 def build_scene_payload(
-    scene: Scene,
+    scene: SceneLike,
     artifacts_root: str,
     execution_config_path: str | None = None,
+    mlflow_run_id: str | None = None,
 ) -> dict[str, str]:
     payload = {
         "scene_id": scene.meta.scene_id,
@@ -18,11 +40,13 @@ def build_scene_payload(
         "status": scene.meta.status.value,
         "scene_json": f"{artifacts_root}/scenes/{scene.meta.scene_id}/{scene.meta.version_id}/scene.json",
     }
-    failure_reason = scene.verification.final.failure_reason.strip()
-    if failure_reason:
-        payload["failure_reason"] = failure_reason
     if execution_config_path:
         payload["execution_config"] = execution_config_path
+    if mlflow_run_id:
+        payload["mlflow_run_id"] = mlflow_run_id
+    failure_reason = (scene.verification.final.failure_reason or "").strip()
+    if scene.meta.status.value == "failed" and failure_reason:
+        payload["failure_reason"] = failure_reason
     return payload
 
 

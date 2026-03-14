@@ -41,3 +41,4 @@ class AppContextLike(Protocol):
     model_versions: ModelVersionsConfig
     execution_snapshot: dict[str, object] | None
     execution_snapshot_path: Path | None
+    tracking_run_id: str | None

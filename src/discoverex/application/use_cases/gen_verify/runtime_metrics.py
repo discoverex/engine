@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from discoverex.execution_snapshot import update_execution_snapshot
 from discoverex.runtime_logging import get_logger

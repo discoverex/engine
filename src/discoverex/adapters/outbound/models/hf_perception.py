@@ -4,7 +4,6 @@ from pathlib import Path
 
 from discoverex.models.types import ModelHandle, PerceptionRequest
 
-from .runtime_cleanup import clear_model_runtime
 from .runtime import (
     apply_seed,
     build_runtime_extra,
@@ -12,6 +11,7 @@ from .runtime import (
     resolve_device,
     resolve_runtime,
 )
+from .runtime_cleanup import clear_model_runtime
 
 
 class HFPerceptionModel:

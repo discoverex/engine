@@ -6,7 +6,7 @@ defaults:
   - models/fx: dummy
   - adapters/artifact_store: local
   - adapters/metadata_store: local_json
-  - adapters/tracker: mlflow_file
+  - adapters/tracker: mlflow_local
   - adapters/scene_io: json
   - adapters/report_writer: local_json
   - runtime/model_runtime: gpu

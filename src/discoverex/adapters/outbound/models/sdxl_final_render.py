@@ -10,7 +10,6 @@ from discoverex.runtime_logging import format_seconds, get_logger
 from .fx_param_parsing import as_float, as_int_or_none, as_positive_int, as_str
 from .image_patch_ops import load_image_rgb
 from .pipeline_memory import OffloadMode, configure_diffusers_pipeline
-from .runtime_cleanup import clear_model_runtime
 from .runtime import (
     apply_seed,
     build_runtime_extra,
@@ -19,6 +18,7 @@ from .runtime import (
     resolve_runtime,
     validate_diffusers_runtime,
 )
+from .runtime_cleanup import clear_model_runtime
 
 logger = get_logger("discoverex.models.sdxl_final")
 

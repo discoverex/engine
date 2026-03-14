@@ -6,7 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from infra.prefect.job_spec import string_value
-from infra.prefect.runtime import ARTIFACT_DIR_ENV, ARTIFACT_MANIFEST_ENV, outputs_prefix
+from infra.prefect.runtime import (
+    ARTIFACT_DIR_ENV,
+    ARTIFACT_MANIFEST_ENV,
+    outputs_prefix,
+)
 
 FAILED_STATUSES = {"failed", "error"}
 

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import importlib
 import json
-from typing import Any
+from collections.abc import Callable
+from typing import Any, cast
 
 INPUTS_KEYS = ("inputs", "engine_run")
 
@@ -39,9 +40,9 @@ def dispatch_engine_job(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def load_run_engine_entry() -> Any:
+def load_run_engine_entry() -> Callable[..., dict[str, Any]]:
     module = importlib.import_module("discoverex.application.flows.engine_entry")
-    return getattr(module, "run_engine_entry")
+    return cast(Callable[..., dict[str, Any]], module.run_engine_entry)
 
 
 def mapped_command(command: str) -> str:

@@ -48,7 +48,7 @@ def run_replay_eval(
         if isinstance(after_total_score, (int, float)):
             after_scores.append(float(after_total_score))
     avg_after = sum(after_scores) / len(after_scores) if after_scores else 0.0
-    context.tracker.log_pipeline_run(
+    tracking_run_id = context.tracker.log_pipeline_run(
         run_name="replay_eval",
         params={
             **build_tracking_params(context.execution_snapshot),
@@ -64,6 +64,7 @@ def run_replay_eval(
             ),
         ],
     )
+    context.tracking_run_id = tracking_run_id
     write_worker_artifact_manifest(
         artifacts_root=context.artifacts_root,
         artifacts=[

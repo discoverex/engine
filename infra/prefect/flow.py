@@ -3,10 +3,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from infra.prefect.bootstrap import ensure_repo_paths
-
-ensure_repo_paths()
-
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
 
@@ -22,21 +18,59 @@ from infra.prefect.artifacts import (
 from infra.prefect.job_spec import extract_inputs_payload, load_job_spec
 from infra.prefect.provision import provision_runtime_dependencies
 from infra.prefect.reporting import log_failure_summary, log_start_summary
-from infra.prefect.runtime import build_runtime_env, flow_attempt, outputs_prefix, patched_environ
+from infra.prefect.runtime import (
+    build_runtime_env,
+    flow_attempt,
+    outputs_prefix,
+    patched_environ,
+)
+
+FlowKind = str
+_FLOW_KIND_BY_COMMAND: dict[str, FlowKind] = {
+    "gen-verify": "generate",
+    "verify-only": "verify",
+    "replay-eval": "animate",
+    "generate": "generate",
+    "verify": "verify",
+    "animate": "animate",
+}
 
 
-@flow(name="disoverex-engine-flow", retries=0)
-def run_job_flow(
+def _coerce_command_for_deployment(
+    payload: dict[str, Any],
+    *,
+    flow_kind: FlowKind | None,
+) -> dict[str, Any]:
+    if flow_kind is None or flow_kind == "combined":
+        return payload
+    command = str(payload.get("command", "")).strip()
+    if not command:
+        payload["command"] = flow_kind
+        return payload
+    resolved = _FLOW_KIND_BY_COMMAND.get(command)
+    if resolved != flow_kind:
+        raise RuntimeError(
+            f"deployment flow_kind={flow_kind} cannot execute command={command}"
+        )
+    return payload
+
+
+def _run_job_flow(
+    *,
     job_spec_json: str,
-    resume_key: str | None = None,
-    checkpoint_dir: str | None = None,
+    resume_key: str | None,
+    checkpoint_dir: str | None,
+    flow_kind: FlowKind | None,
 ) -> dict[str, Any]:
     logger = get_run_logger()
     flow_run_id = flow_run.get_id() or "unknown-flow-run"
     attempt = flow_attempt()
     try:
         job_spec = load_job_spec(job_spec_json)
-        payload = extract_inputs_payload(job_spec)
+        payload = _coerce_command_for_deployment(
+            extract_inputs_payload(job_spec),
+            flow_kind=flow_kind,
+        )
         output_prefix = outputs_prefix(
             job_spec,
             flow_run_id=flow_run_id,
@@ -107,7 +141,83 @@ def run_job_flow(
         raise
 
 
-__all__ = ["run_job_flow"]
+@flow(name="discoverex-engine-flow", retries=0)
+def run_job_flow(
+    job_spec_json: str,
+    resume_key: str | None = None,
+    checkpoint_dir: str | None = None,
+) -> dict[str, Any]:
+    return _run_job_flow(
+        job_spec_json=job_spec_json,
+        resume_key=resume_key,
+        checkpoint_dir=checkpoint_dir,
+        flow_kind=None,
+    )
+
+
+@flow(name="discoverex-generate-flow", retries=0)
+def run_generate_job_flow(
+    job_spec_json: str,
+    resume_key: str | None = None,
+    checkpoint_dir: str | None = None,
+) -> dict[str, Any]:
+    return _run_job_flow(
+        job_spec_json=job_spec_json,
+        resume_key=resume_key,
+        checkpoint_dir=checkpoint_dir,
+        flow_kind="generate",
+    )
+
+
+@flow(name="discoverex-verify-flow", retries=0)
+def run_verify_job_flow(
+    job_spec_json: str,
+    resume_key: str | None = None,
+    checkpoint_dir: str | None = None,
+) -> dict[str, Any]:
+    return _run_job_flow(
+        job_spec_json=job_spec_json,
+        resume_key=resume_key,
+        checkpoint_dir=checkpoint_dir,
+        flow_kind="verify",
+    )
+
+
+@flow(name="discoverex-animate-flow", retries=0)
+def run_animate_job_flow(
+    job_spec_json: str,
+    resume_key: str | None = None,
+    checkpoint_dir: str | None = None,
+) -> dict[str, Any]:
+    return _run_job_flow(
+        job_spec_json=job_spec_json,
+        resume_key=resume_key,
+        checkpoint_dir=checkpoint_dir,
+        flow_kind="animate",
+    )
+
+
+@flow(name="discoverex-combined-flow", retries=0)
+def run_combined_job_flow(
+    job_spec_json: str,
+    resume_key: str | None = None,
+    checkpoint_dir: str | None = None,
+) -> dict[str, Any]:
+    return _run_job_flow(
+        job_spec_json=job_spec_json,
+        resume_key=resume_key,
+        checkpoint_dir=checkpoint_dir,
+        flow_kind="combined",
+    )
+
+
+__all__ = [
+    "run_job_flow",
+    "run_generate_job_flow",
+    "run_verify_job_flow",
+    "run_animate_job_flow",
+    "run_combined_job_flow",
+]
 
 
 def ensure_repo_root() -> Any:

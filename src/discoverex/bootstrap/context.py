@@ -27,3 +27,4 @@ class AppContext(BaseModel):
     model_versions: ModelVersionsConfig
     execution_snapshot: dict[str, object] | None = None
     execution_snapshot_path: Path | None = None
+    tracking_run_id: str | None = None
