@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import shutil
 import subprocess
 import sys
@@ -32,6 +33,7 @@ def provision_runtime_dependencies(
         _bootstrap_with_uv(cwd=cwd, env=env, extras=extras, logger=logger)
     else:
         _bootstrap_with_pip(cwd=cwd, env=env, extras=extras, logger=logger)
+    _activate_repo_environment(cwd=cwd, logger=logger)
     importlib.invalidate_caches()
 
 
@@ -128,6 +130,29 @@ def _install_env(env: dict[str, str], cwd: Path) -> dict[str, str]:
     install_env["UV_PROJECT_ENVIRONMENT"] = str(cwd / ".venv")
     Path(install_env["UV_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
     return install_env
+
+
+def _activate_repo_environment(*, cwd: Path, logger: Any) -> None:
+    inserted: list[str] = []
+    src_dir = cwd / "src"
+    if src_dir.exists():
+        _prepend_sys_path(src_dir, inserted)
+    for site_packages in sorted((cwd / ".venv" / "lib").glob("python*/site-packages")):
+        if site_packages.exists():
+            _prepend_sys_path(site_packages, inserted)
+    if inserted:
+        logger.info("activated repo runtime paths: %s", inserted)
+    os.environ["PYTHONPATH"] = ":".join(
+        [str(src_dir), os.environ.get("PYTHONPATH", "").strip()]
+    ).rstrip(":")
+
+
+def _prepend_sys_path(path: Path, inserted: list[str]) -> None:
+    text = str(path)
+    if text in sys.path:
+        return
+    sys.path.insert(0, text)
+    inserted.append(text)
 
 
 def _log_subprocess_failure(logger: Any, *, cmd: list[str], result: Any) -> None:
