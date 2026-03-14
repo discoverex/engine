@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from branch_deployments import DEFAULT_FLOW_KIND, deployment_name_for_branch
 from prefect.client.orchestration import SyncPrefectClient, get_client
 from prefect.client.schemas.filters import DeploymentFilter, DeploymentFilterName
 from prefect.settings import PREFECT_API_URL, temporary_settings
@@ -52,6 +53,17 @@ def _default_config_name(command: str) -> str:
 def _mapped_command(command: str) -> str:
     return {
         "gen-verify": "generate",
+        "verify-only": "verify",
+        "replay-eval": "animate",
+        "generate": "generate",
+        "verify": "verify",
+        "animate": "animate",
+    }[command]
+
+
+def _flow_kind_for_command(command: str) -> str:
+    return {
+        "gen-verify": DEFAULT_FLOW_KIND,
         "verify-only": "verify",
         "replay-eval": "animate",
         "generate": "generate",
@@ -157,7 +169,7 @@ def _build_parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
-    parser.add_argument("--deployment", default=SETTINGS.prefect_deployment)
+    parser.add_argument("--deployment", default=None)
     parser.add_argument("--engine", default="discoverex")
     parser.add_argument("--run-mode", choices=("repo", "inline"), default="repo")
     parser.add_argument("--repo-url", default=SETTINGS.engine_repo_url)
@@ -387,7 +399,10 @@ def _resolved_deployment_name(args: argparse.Namespace) -> str:
     explicit = str(args.deployment or "").strip()
     if explicit:
         return explicit
-    return "discoverex-engine-job"
+    return deployment_name_for_branch(
+        SETTINGS.register_flow_ref or "dev",
+        flow_kind=_flow_kind_for_command(args.command),
+    )
 
 
 def _resolved_job_name(args: argparse.Namespace) -> str:
@@ -407,8 +422,16 @@ def _resolved_deployment_name_from_job_spec(
     explicit = str(explicit_deployment or "").strip()
     if explicit:
         return explicit
-    _ = job_spec
-    return "discoverex-engine-job"
+    command = (
+        str(job_spec.get("inputs", {}).get("command", "")).strip()
+        or str(job_spec.get("engine_run", {}).get("command", "")).strip()
+    )
+    if not command:
+        return deployment_name_for_branch(SETTINGS.register_flow_ref or "dev")
+    return deployment_name_for_branch(
+        SETTINGS.register_flow_ref or "dev",
+        flow_kind=_flow_kind_for_command(command),
+    )
 
 
 def submit_job_spec(

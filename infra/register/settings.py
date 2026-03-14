@@ -9,18 +9,13 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 class RegisterSettings(BaseSettings):
+    engine_name: str = "discoverex"
     prefect_api_url: str = ""
-    prefect_deployment: str = "discoverex-engine-job"
+    prefect_deployment_prefix: str = "discoverex-engine"
+    prefect_project_name: str = "discoverex-engine"
     prefect_work_pool: str = "local-process"
     prefect_work_queue: str = "gpu-fixed"
-    prefect_colab_deployment: str = "discoverex-engine-job-colab"
-    prefect_colab_work_queue: str = "gpu-colab"
-    prefect_compat_deployment: str = "engine-job"
-    prefect_compat_work_queue: str = "gpu-fixed"
-    prefect_compat_colab_deployment: str = "engine-job-colab"
-    prefect_compat_colab_work_queue: str = "gpu-colab"
-    register_flow_source: str = "/app"
-    register_flow_entrypoint: str = "infra/prefect/flow.py:run_job_flow"
+    register_flow_entrypoint: str = "prefect_flow.py:run_combined_job_flow"
     register_flow_ref: str = "dev"
     register_deployment_version: str = ""
 

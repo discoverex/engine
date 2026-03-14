@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from branch_deployments import DEFAULT_FLOW_KIND, deployment_name_for_branch
 from settings import SETTINGS
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -33,6 +34,17 @@ def _default_ref() -> str:
     return SETTINGS.engine_repo_ref or _git_output("branch", "--show-current")
 
 
+def _flow_kind_for_command(command: str) -> str:
+    return {
+        "gen-verify": DEFAULT_FLOW_KIND,
+        "verify-only": "verify",
+        "replay-eval": "animate",
+        "generate": "generate",
+        "verify": "verify",
+        "animate": "animate",
+    }[command]
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -42,7 +54,7 @@ def _build_parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
-    parser.add_argument("--deployment", default=SETTINGS.prefect_deployment)
+    parser.add_argument("--deployment", default=None)
     parser.add_argument("--engine", default="discoverex")
     parser.add_argument("--run-mode", choices=("repo", "inline"), default="repo")
     parser.add_argument("--repo-url", default=_default_repo_url())
@@ -112,11 +124,15 @@ def _append_option(argv: list[str], name: str, value: str | None) -> None:
 
 
 def _build_forward_argv(args: argparse.Namespace) -> list[str]:
+    deployment = str(args.deployment or "").strip() or deployment_name_for_branch(
+        SETTINGS.register_flow_ref or "dev",
+        flow_kind=_flow_kind_for_command(args.command),
+    )
     argv = [
         sys.executable,
         str(LOW_LEVEL_SCRIPT),
         "--deployment",
-        args.deployment,
+        deployment,
         "--engine",
         args.engine,
         "--run-mode",

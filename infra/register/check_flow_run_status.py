@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-import sys
-import json
-from pathlib import Path
-from prefect.client.orchestration import get_client
-from prefect.settings import PREFECT_API_URL, temporary_settings, PREFECT_CLIENT_CUSTOM_HEADERS
-from prefect.client.schemas.filters import LogFilter, LogFilterFlowRunId
 import asyncio
+import sys
+from pathlib import Path
+
+from prefect.client.orchestration import get_client
+from prefect.client.schemas.filters import LogFilter, LogFilterFlowRunId
+from prefect.settings import (
+    PREFECT_API_URL,
+    PREFECT_CLIENT_CUSTOM_HEADERS,
+    temporary_settings,
+)
 
 sys.path.append(str(Path(__file__).resolve().parent))
-from settings import SETTINGS
 from register_orchestrator_job import _extra_headers
+from settings import SETTINGS
+
 
 async def check_status(flow_run_id_str: str):
     headers = _extra_headers()

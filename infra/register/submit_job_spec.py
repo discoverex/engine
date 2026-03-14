@@ -15,10 +15,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Submit an existing job spec JSON to a Prefect deployment."
     )
     parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
-    parser.add_argument(
-        "--deployment",
-        default=SETTINGS.prefect_deployment or "discoverex-engine-job",
-    )
+    parser.add_argument("--deployment", default=None)
     parser.add_argument("--job-spec-file", default=None)
     parser.add_argument("--job-spec-json", default=None)
     parser.add_argument("--job-name", default=None)

@@ -2,166 +2,187 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
-import inspect
 import json
-import sys
-from pathlib import Path
-from typing import Any, cast
+import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 
-from prefect.deployments.runner import RunnerDeployment
-from prefect.runner.storage import GitRepository
-from prefect.settings import (
-    PREFECT_API_URL,
-    PREFECT_CLIENT_CUSTOM_HEADERS,
-    temporary_settings,
+from branch_deployments import (
+    DEFAULT_FLOW_KIND,
+    SUPPORTED_FLOW_KINDS,
+    deployment_name_for_branch,
+    flow_entrypoint_for_kind,
 )
-from register_orchestrator_job import _extra_headers
+from prefect import flow
+from prefect.runner.storage import GitRepository
+from prefect.settings import PREFECT_API_URL, temporary_settings
+from register_orchestrator_job import _extra_headers, _normalize_api_url
 from settings import SETTINGS, default_deployment_version
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from infra.prefect.flow import run_job_flow
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Compatibility helper for registering the engine flow into Prefect. "
-            "The public operator contract is the flow entrypoint, not this script."
+            "Register a remote-source Prefect deployment for an engine flow kind."
         )
     )
+    parser.add_argument("--engine", default=SETTINGS.engine_name)
+    parser.add_argument("--branch", required=True)
+    parser.add_argument("--flow-kind", choices=SUPPORTED_FLOW_KINDS, default=DEFAULT_FLOW_KIND)
     parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
     parser.add_argument("--work-pool-name", default=SETTINGS.prefect_work_pool)
-    parser.add_argument("--flow-source", default=SETTINGS.register_flow_source)
-    parser.add_argument("--flow-entrypoint", default=SETTINGS.register_flow_entrypoint)
-    parser.add_argument("--flow-ref", default=SETTINGS.register_flow_ref)
+    parser.add_argument("--flow-entrypoint", default=None)
+    parser.add_argument("--repo-url", default=SETTINGS.engine_repo_url)
+    parser.add_argument("--ref", default=None)
     parser.add_argument(
         "--deployment-version",
         default=default_deployment_version(),
     )
-    parser.add_argument("--primary-name", default=SETTINGS.prefect_deployment)
-    parser.add_argument("--primary-queue", default=SETTINGS.prefect_work_queue)
-    parser.add_argument("--register-colab", action="store_true")
-    parser.add_argument("--colab-name", default=SETTINGS.prefect_colab_deployment)
-    parser.add_argument("--colab-queue", default=SETTINGS.prefect_colab_work_queue)
-    parser.add_argument("--register-compat-aliases", action="store_true")
-    parser.add_argument(
-        "--compat-fixed-name", default=SETTINGS.prefect_compat_deployment
-    )
-    parser.add_argument(
-        "--compat-fixed-queue", default=SETTINGS.prefect_compat_work_queue
-    )
-    parser.add_argument(
-        "--compat-colab-name", default=SETTINGS.prefect_compat_colab_deployment
-    )
-    parser.add_argument(
-        "--compat-colab-queue", default=SETTINGS.prefect_compat_colab_work_queue
-    )
+    parser.add_argument("--work-queue-name", default=SETTINGS.prefect_work_queue)
+    parser.add_argument("--dry-run", action="store_true")
     return parser
 
 
-def _apply_deployments(
+def _resolved_entrypoint(flow_kind: str, cli_value: str | None) -> str:
+    explicit = str(cli_value or "").strip()
+    if explicit:
+        return explicit
+    return flow_entrypoint_for_kind(flow_kind)
+
+
+def _is_commit_sha(value: str) -> bool:
+    text = value.strip().lower()
+    if len(text) != 40:
+        return False
+    return all(ch in "0123456789abcdef" for ch in text)
+
+
+def _flow_source(repo_url: str, ref: str) -> GitRepository:
+    kwargs: dict[str, object] = {
+        "url": repo_url,
+        "pull_interval": None,
+    }
+    if _is_commit_sha(ref):
+        kwargs["commit_sha"] = ref
+    else:
+        kwargs["branch"] = ref
+    return GitRepository(**kwargs)
+
+
+def _deployment_metadata(
     *,
-    work_pool_name: str,
-    flow_source: str,
+    engine: str,
+    flow_kind: str,
+    branch: str,
+    repo_url: str,
+    ref: str,
     flow_entrypoint: str,
-    flow_ref: str,
+    work_pool_name: str,
+    work_queue_name: str,
     deployment_version: str,
-    primary_name: str,
-    primary_queue: str,
-    register_colab: bool,
-    colab_name: str,
-    colab_queue: str,
-    register_compat_aliases: bool,
-    compat_fixed_name: str,
-    compat_fixed_queue: str,
-    compat_colab_name: str,
-    compat_colab_queue: str,
 ) -> dict[str, str]:
-    registration_flow = _load_registration_flow(
-        flow_source=flow_source,
-        flow_entrypoint=flow_entrypoint,
-        flow_ref=flow_ref,
-    )
-    deployments: list[tuple[str, str]] = [(primary_name, primary_queue)]
-    if register_colab:
-        deployments.append((colab_name, colab_queue))
-    if register_compat_aliases:
-        deployments.append((compat_fixed_name, compat_fixed_queue))
-        if register_colab:
-            deployments.append((compat_colab_name, compat_colab_queue))
     return {
-        name: str(
-            _to_runner_deployment(
-                registration_flow.to_deployment(
-                    name=name,
-                    version=deployment_version,
-                    work_pool_name=work_pool_name,
-                    work_queue_name=queue_name,
-                )
-            ).apply(work_pool_name=work_pool_name)
-        )
-        for name, queue_name in deployments
+        "deployment_name": deployment_name_for_branch(
+            branch,
+            flow_kind=flow_kind,
+            engine=engine,
+        ),
+        "engine": engine,
+        "flow_kind": flow_kind,
+        "branch": branch,
+        "repo_url": repo_url,
+        "ref": ref,
+        "entrypoint": flow_entrypoint,
+        "work_pool_name": work_pool_name,
+        "work_queue_name": work_queue_name,
+        "deployment_version": deployment_version,
     }
 
 
-def _load_registration_flow(
-    *, flow_source: str, flow_entrypoint: str, flow_ref: str
-) -> Any:
-    source: str | GitRepository
-    if "://" in flow_source or flow_source.startswith("git@"):
-        source = GitRepository(url=flow_source, branch=flow_ref or None)
-    else:
-        source = flow_source
-    loaded = run_job_flow.from_source(source=source, entrypoint=flow_entrypoint)
-    if inspect.isawaitable(loaded):
-        return asyncio.run(cast(Any, loaded))
-    return loaded
+def _resolved_ref(branch: str, ref: str | None) -> str:
+    explicit = str(ref or "").strip()
+    if explicit:
+        return explicit
+    return branch
 
 
-def _to_runner_deployment(
-    deployment: RunnerDeployment | object,
-) -> RunnerDeployment:
-    if inspect.isawaitable(deployment):
-        resolved: Any = asyncio.run(cast(Any, deployment))
-    else:
-        resolved = deployment
-    if not isinstance(resolved, RunnerDeployment):
-        raise TypeError("to_deployment() did not return a RunnerDeployment")
-    return resolved
+@contextmanager
+def _prefect_settings(prefect_api_url: str) -> Iterator[None]:
+    api_url = _normalize_api_url(prefect_api_url)
+    previous_headers = os.environ.get("PREFECT_CLIENT_CUSTOM_HEADERS")
+    os.environ["PREFECT_CLIENT_CUSTOM_HEADERS"] = json.dumps(_extra_headers())
+    try:
+        with temporary_settings(updates={PREFECT_API_URL: api_url}):
+            yield None
+    finally:
+        if previous_headers is None:
+            os.environ.pop("PREFECT_CLIENT_CUSTOM_HEADERS", None)
+        else:
+            os.environ["PREFECT_CLIENT_CUSTOM_HEADERS"] = previous_headers
+
+
+def _deploy_remote_flow(
+    *,
+    engine: str,
+    flow_kind: str,
+    branch: str,
+    repo_url: str,
+    ref: str,
+    flow_entrypoint: str,
+    work_pool_name: str,
+    work_queue_name: str,
+    deployment_version: str,
+) -> str:
+    remote_flow = flow.from_source(
+        source=_flow_source(repo_url, ref),
+        entrypoint=flow_entrypoint,
+    )
+    deployment_id = remote_flow.deploy(
+        name=deployment_name_for_branch(branch, flow_kind=flow_kind, engine=engine),
+        work_pool_name=work_pool_name,
+        work_queue_name=work_queue_name,
+        job_variables={},
+        build=False,
+        push=False,
+        description=f"Execute the {flow_kind} flow for branch {branch!r}.",
+        tags=[engine, flow_kind, branch],
+        version=deployment_version,
+        print_next_steps=False,
+    )
+    return str(deployment_id)
 
 
 def main() -> int:
     args = _build_parser().parse_args()
     if not args.prefect_api_url:
         raise SystemExit("--prefect-api-url is required unless PREFECT_API_URL is set")
-    with temporary_settings(
-        updates={
-            PREFECT_API_URL: args.prefect_api_url,
-            PREFECT_CLIENT_CUSTOM_HEADERS: _extra_headers(),
-        }
-    ):
-        output = _apply_deployments(
+    deployment = _deployment_metadata(
+        engine=args.engine,
+        flow_kind=args.flow_kind,
+        branch=args.branch,
+        repo_url=args.repo_url,
+        ref=_resolved_ref(args.branch, args.ref),
+        flow_entrypoint=_resolved_entrypoint(args.flow_kind, args.flow_entrypoint),
+        work_pool_name=args.work_pool_name,
+        work_queue_name=args.work_queue_name,
+        deployment_version=args.deployment_version,
+    )
+    if args.dry_run:
+        print(json.dumps(deployment, ensure_ascii=True))
+        return 0
+    with _prefect_settings(args.prefect_api_url):
+        deployment["deployment_id"] = _deploy_remote_flow(
+            engine=args.engine,
+            flow_kind=args.flow_kind,
+            branch=args.branch,
+            repo_url=args.repo_url,
+            ref=deployment["ref"],
+            flow_entrypoint=deployment["entrypoint"],
             work_pool_name=args.work_pool_name,
-            flow_source=args.flow_source,
-            flow_entrypoint=args.flow_entrypoint,
-            flow_ref=args.flow_ref,
+            work_queue_name=args.work_queue_name,
             deployment_version=args.deployment_version,
-            primary_name=args.primary_name,
-            primary_queue=args.primary_queue,
-            register_colab=args.register_colab,
-            colab_name=args.colab_name,
-            colab_queue=args.colab_queue,
-            register_compat_aliases=args.register_compat_aliases,
-            compat_fixed_name=args.compat_fixed_name,
-            compat_fixed_queue=args.compat_fixed_queue,
-            compat_colab_name=args.compat_colab_name,
-            compat_colab_queue=args.compat_colab_queue,
         )
-    print(json.dumps(output, ensure_ascii=True, indent=2))
+    print(json.dumps(deployment, ensure_ascii=True))
     return 0
 
 
