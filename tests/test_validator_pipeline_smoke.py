@@ -94,4 +94,4 @@ class TestValidatorOrchestratorStructure:
 
         assert "answer_obj_count" in bundle.logical.signals
         assert "sigma_threshold_map" in bundle.perception.signals
-        assert "detail_retention_rate_map" in bundle.perception.signals
+        assert "drr_slope_map" in bundle.perception.signals

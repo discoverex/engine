@@ -11,6 +11,7 @@ from .runtime import (
     resolve_device,
     resolve_runtime,
 )
+from .runtime_cleanup import clear_model_runtime
 
 
 class HFPerceptionModel:
@@ -121,6 +122,10 @@ class HFPerceptionModel:
         if isinstance(score, float):
             return max(0.0, min(1.0, score))
         return None
+
+    def unload(self) -> None:
+        clear_model_runtime(self._pipeline)
+        self._pipeline = None
 
     def _predict_fallback(self, request: PerceptionRequest) -> float:
         region_factor = min(0.45, 0.08 * request.region_count)

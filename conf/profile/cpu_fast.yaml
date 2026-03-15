@@ -1,5 +1,6 @@
 # @package _global_
 defaults:
+  - override /models/background_generator: tiny_sd_cpu
   - override /models/hidden_region: hf_cpu_fast
   - override /models/inpaint: hf_cpu_fast
   - override /models/perception: hf_cpu_fast

@@ -12,7 +12,13 @@ from discoverex.domain import (
 )
 from discoverex.domain.scene import Scene
 from discoverex.domain.verification import VerificationBundle, VerificationResult
+from discoverex.execution_snapshot import build_tracking_params
 from discoverex.models.types import PerceptionRequest
+from discoverex.orchestrator_contract.worker_runtime import (
+    write_worker_artifact_manifest,
+)
+
+from .worker_artifacts import collect_worker_artifacts
 
 
 def _run_perception_verification(
@@ -67,9 +73,19 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
     context.report_writer.write_verification_report(saved_dir=saved_dir, scene=scene)
 
     scene_artifact = Path(scene.composite.final_image_ref)
-    context.tracker.log_pipeline_run(
+    artifact_entries = collect_worker_artifacts(
+        saved_dir,
+        [
+            ("scene", saved_dir / "scene.json"),
+            ("verification", saved_dir / "verification.json"),
+            ("final_image", scene_artifact if scene_artifact.exists() else None),
+            ("execution_config", context.execution_snapshot_path),
+        ],
+    )
+    tracking_run_id = context.tracker.log_pipeline_run(
         run_name="verify_only",
         params={
+            **build_tracking_params(context.execution_snapshot),
             "scene_id": scene.meta.scene_id,
             "version_id": scene.meta.version_id,
             "pipeline_run_id": scene.meta.pipeline_run_id,
@@ -82,10 +98,11 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
             "total_score": scene.verification.final.total_score,
             "pass": 1.0 if scene.verification.final.pass_ else 0.0,
         },
-        artifacts=[
-            saved_dir / "scene.json",
-            saved_dir / "verification.json",
-            scene_artifact,
-        ],
+        artifacts=[artifact_path for _, artifact_path in artifact_entries],
+    )
+    context.tracking_run_id = tracking_run_id
+    write_worker_artifact_manifest(
+        artifacts_root=context.artifacts_root,
+        artifacts=artifact_entries,
     )
     return scene

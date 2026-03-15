@@ -37,8 +37,12 @@ class TinyHFInpaintModel:
 
         if self.seed is not None:
             torch.manual_seed(self.seed)
-        cfg = BertConfig(hidden_size=32, num_hidden_layers=1, num_attention_heads=2)
-        model = BertModel(cfg).eval()
+        cfg = BertConfig(  # type: ignore[no-untyped-call]
+            hidden_size=32,
+            num_hidden_layers=1,
+            num_attention_heads=2,
+        )
+        model = BertModel(cfg).eval()  # type: ignore[no-untyped-call]
         _ = (
             model(input_ids=torch.ones((1, 8), dtype=torch.long))
             .last_hidden_state.mean()

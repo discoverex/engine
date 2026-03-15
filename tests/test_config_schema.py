@@ -11,6 +11,25 @@ def test_hydra_config_loads_into_pipeline_config() -> None:
     assert isinstance(cfg, PipelineConfig)
     assert cfg.runtime.width == 1024
     assert cfg.runtime.model_runtime.device in {"cpu", "cuda"}
+    assert cfg.models.background_generator.target
+    assert cfg.model_versions.background_generator == "background-generator-v0"
+
+
+def test_generator_sdxl_gpu_profile_loads_dedicated_generator_stack() -> None:
+    cfg = load_pipeline_config(
+        config_name="gen_verify",
+        config_dir="conf",
+        overrides=["profile=generator_sdxl_gpu"],
+    )
+    assert cfg.models.background_generator.target.endswith(
+        "SdxlBackgroundGenerationModel"
+    )
+    assert cfg.models.inpaint.target.endswith("SdxlInpaintModel")
+    assert cfg.models.fx.target.endswith("CopyImageFxModel")
+    assert cfg.runtime.width == 512
+    assert cfg.runtime.height == 512
+    assert cfg.runtime.model_runtime.offload_mode == "model"
+    assert cfg.runtime.model_runtime.enable_fp8_layerwise_casting is False
 
 
 def test_pipeline_config_rejects_invalid_threshold() -> None:

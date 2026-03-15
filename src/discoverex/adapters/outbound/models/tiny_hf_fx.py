@@ -9,14 +9,20 @@ class TinyHFFxModel:
     def __init__(
         self,
         model_id: str = "tiny-hf-fx",
+        revision: str = "main",
         device: str = "cpu",
         dtype: str = "float32",
+        precision: str = "fp32",
+        batch_size: int = 1,
         seed: int | None = 29,
         strict_runtime: bool = True,
     ) -> None:
         self.model_id = model_id
+        self.revision = revision
         self.device = device
         self.dtype = dtype
+        self.precision = precision
+        self.batch_size = batch_size
         self.seed = seed
         self.strict_runtime = strict_runtime
 
@@ -39,8 +45,13 @@ class TinyHFFxModel:
 
         if self.seed is not None:
             torch.manual_seed(self.seed)
-        cfg = GPT2Config(n_embd=32, n_layer=1, n_head=2, vocab_size=100)
-        model = GPT2Model(cfg).eval()
+        cfg = GPT2Config(  # type: ignore[no-untyped-call]
+            n_embd=32,
+            n_layer=1,
+            n_head=2,
+            vocab_size=100,
+        )
+        model = GPT2Model(cfg).eval()  # type: ignore[no-untyped-call]
         _ = (
             model(input_ids=torch.ones((1, 8), dtype=torch.long))
             .last_hidden_state.mean()

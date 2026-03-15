@@ -1,3 +1,11 @@
-from discoverex.flows.engine import run_engine_entry
+from discoverex.application.flows import (
+    build_inline_job_spec,
+    run_engine_entry,
+    run_engine_job,
+)
 
-__all__ = ["run_engine_entry"]
+__all__ = [
+    "build_inline_job_spec",
+    "run_engine_entry",
+    "run_engine_job",
+]

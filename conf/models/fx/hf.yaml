@@ -1,5 +1,5 @@
 # @package models.fx
-_target_: discoverex.adapters.outbound.models.hf_fx.HFFxModel
+_target_: discoverex.adapters.outbound.models.fx_tiny_sd.TinySDFxModel
 model_id: runwayml/stable-diffusion-v1-5
 revision: main
 device: ${runtime.model_runtime.device}
@@ -8,3 +8,7 @@ precision: ${runtime.model_runtime.precision}
 batch_size: ${runtime.model_runtime.batch_size}
 seed: ${runtime.model_runtime.seed}
 strict_runtime: false
+default_prompt: "hidden object puzzle scene"
+default_negative_prompt: "blurry, low quality, artifact"
+default_num_inference_steps: 20
+default_guidance_scale: 7.5

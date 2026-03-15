@@ -1,0 +1,2 @@
+# @package models.fx
+_target_: discoverex.adapters.outbound.models.copy_fx.CopyImageFxModel

@@ -11,6 +11,7 @@ from discoverex.config import ModelVersionsConfig, RuntimeConfig, ThresholdsConf
 class AppContext(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    background_generator_model: Any
     hidden_region_model: Any
     inpaint_model: Any
     perception_model: Any
@@ -24,3 +25,6 @@ class AppContext(BaseModel):
     runtime: RuntimeConfig
     thresholds: ThresholdsConfig
     model_versions: ModelVersionsConfig
+    execution_snapshot: dict[str, object] | None = None
+    execution_snapshot_path: Path | None = None
+    tracking_run_id: str | None = None

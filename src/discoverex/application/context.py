@@ -5,6 +5,7 @@ from typing import Protocol
 
 from discoverex.application.ports.io import SceneIOPort
 from discoverex.application.ports.models import (
+    BackgroundGenerationPort,
     FxPort,
     HiddenRegionPort,
     InpaintPort,
@@ -24,6 +25,7 @@ from discoverex.config import (
 
 
 class AppContextLike(Protocol):
+    background_generator_model: BackgroundGenerationPort
     hidden_region_model: HiddenRegionPort
     inpaint_model: InpaintPort
     perception_model: PerceptionPort
@@ -37,3 +39,6 @@ class AppContextLike(Protocol):
     runtime: RuntimeConfig
     thresholds: ThresholdsConfig
     model_versions: ModelVersionsConfig
+    execution_snapshot: dict[str, object] | None
+    execution_snapshot_path: Path | None
+    tracking_run_id: str | None

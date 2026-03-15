@@ -23,9 +23,11 @@
 │                                                                   │
 │   → YAML에서 수동으로 값을 바꾸면 파이프라인 전체에 반영됨       │
 ├─────────────────────────────────────────────────────────────────┤
-│ 미학습 고정 (difficulty_* 6개)                                    │
-│   난이도 진단용 가중치 — 학습 필요 시 init_weights 로 초기화 후  │
-│   WeightFitter 확장 가능 (현재는 init_weights 값 그대로 유지)    │
+│ A군 후보 / 현재 동결 (difficulty_* 6개)                          │
+│   D(obj) 난이도 진단용. total_score 에 미관여하므로 현재          │
+│   hinge loss 로는 학습 gradient signal 없음.                     │
+│   D(obj) 분포 기반 loss 도입 시 _SCORED_KEYS 편입 가능.          │
+│   difficulty_interaction (w_ix): A군 승격 1순위 후보.            │
 └─────────────────────────────────────────────────────────────────┘
 
 학습 대상

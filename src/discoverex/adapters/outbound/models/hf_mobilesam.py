@@ -12,7 +12,7 @@ class MobileSAMAdapter:
     Phase 1: Physical metadata extraction using MobileSAM.
 
     VRAM lifecycle: load() → extract() → unload()
-    Pre-processing (pixel comparison for z_index / occlusion) is pure CPU
+    Pre-processing (z_index / z_depth_hop / cluster_density) is pure CPU
     and runs before the SAM model is invoked.
     """
 
@@ -52,11 +52,10 @@ class MobileSAMAdapter:
         composite = np.array(Image.open(composite_image).convert("RGBA"))
 
         # ------------------------------------------------------------------
-        # Pre-processing (pure CPU): occlusion, z_index, z_depth_hop
+        # Pre-processing (pure CPU): z_index, z_depth_hop, alpha_degree
         # ------------------------------------------------------------------
         layer_arrays = [np.array(Image.open(p).convert("RGBA")) for p in object_layers]
 
-        occlusion_map: dict[str, float] = {}
         z_index_map: dict[str, int] = {}
         z_depth_hop_map: dict[str, int] = {}
 
@@ -64,22 +63,11 @@ class MobileSAMAdapter:
             zip(layer_arrays, object_layers, strict=False)
         ):
             obj_id = layer_path.stem
-            alpha = layer[:, :, 3] > 0
-            total_pixels = int(alpha.sum())
-            if total_pixels == 0:
-                occlusion_map[obj_id] = 0.0
-                z_index_map[obj_id] = i
-                z_depth_hop_map[obj_id] = 0
-                continue
-
-            # Pixels where layer is non-transparent but composite differs → occluded
-            comp_alpha = composite[:, :, 3] > 0
-            visible = alpha & comp_alpha
-            visible_count = int(visible.sum())
-            occlusion_map[obj_id] = max(0.0, 1.0 - visible_count / total_pixels)
             z_index_map[obj_id] = i
+            if layer[:, :, 3].sum() == 0:
+                z_depth_hop_map[obj_id] = 0
 
-        # Compute z_depth_hop via pixel-overlap Z-occlusion graph (BFS shortest path)
+        # Compute z_depth_hop via pixel-overlap Z graph (BFS shortest path)
         # Edge j→i: layer j (higher Z) overlaps layer i (lower Z) in alpha pixels
         import networkx as nx
 
@@ -105,6 +93,14 @@ class MobileSAMAdapter:
                 except nx.NetworkXNoPath:
                     pass
             z_depth_hop_map[obj_id] = max(hops, default=0)
+
+        # Alpha-overlap graph degree (undirected: predecessors + successors)
+        alpha_degree_map: dict[str, int] = {}
+        for layer_path in object_layers:
+            obj_id = layer_path.stem
+            alpha_degree_map[obj_id] = len(list(g.predecessors(obj_id))) + len(
+                list(g.successors(obj_id))
+            )
 
         # ------------------------------------------------------------------
         # SAM segmentation: generate precise masks and bounding boxes
@@ -155,11 +151,11 @@ class MobileSAMAdapter:
 
         return PhysicalMetadata(
             regions=regions,
-            occlusion_map=occlusion_map,
             z_index_map=z_index_map,
             z_depth_hop_map=z_depth_hop_map,
             cluster_density_map=cluster_density_map,
             euclidean_distance_map=euclidean_distance_map,
+            alpha_degree_map=alpha_degree_map,
         )
 
     def unload(self) -> None:

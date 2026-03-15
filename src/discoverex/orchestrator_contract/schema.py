@@ -1,83 +1,35 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from discoverex.application.contracts.execution.schema import (
+    EngineJob,
+    EngineJobV1,
+    EngineJobV2,
+    EngineRunSpec,
+    EngineRunSpecV1,
+    EngineRunSpecV2,
+    JobRuntime,
+    JobSpec,
+)
+from discoverex.application.contracts.execution.schema import (
+    ExecutionInputs as OrchestratorInputs,
+)
+from discoverex.application.contracts.execution.schema import (
+    ExecutionInputsV1 as OrchestratorInputsV1,
+)
+from discoverex.application.contracts.execution.schema import (
+    ExecutionInputsV2 as OrchestratorInputsV2,
+)
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-
-EngineCommandV1 = Literal["gen-verify", "verify-only", "replay-eval"]
-EngineCommandV2 = Literal["generate", "verify", "animate"]
-RuntimeMode = Literal["worker", "local_debug"]
-BootstrapMode = Literal["auto", "uv", "pip"]
-
-
-class JobRuntime(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    mode: RuntimeMode = "worker"
-    bootstrap_mode: BootstrapMode = "auto"
-    extras: list[str] = Field(default_factory=lambda: ["tracking", "storage"])
-    extra_env: dict[str, str] = Field(default_factory=dict)
-
-    @model_validator(mode="after")
-    def validate_extras(self) -> "JobRuntime":
-        cleaned = [item.strip() for item in self.extras if item.strip()]
-        self.extras = list(dict.fromkeys(cleaned))
-        return self
-
-
-class EngineJobV1(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    contract_version: Literal["v1"]
-    command: EngineCommandV1
-    args: dict[str, Any] = Field(default_factory=dict)
-    overrides: list[str] = Field(default_factory=list)
-    runtime: JobRuntime = Field(default_factory=JobRuntime)
-
-    @model_validator(mode="after")
-    def validate_required_args(self) -> "EngineJobV1":
-        required_by_command: dict[str, tuple[str, ...]] = {
-            "gen-verify": ("background_asset_ref",),
-            "verify-only": ("scene_json",),
-            "replay-eval": ("scene_jsons",),
-        }
-        required = required_by_command[self.command]
-        missing = [key for key in required if key not in self.args]
-        if missing:
-            missing_str = ", ".join(missing)
-            raise ValueError(
-                f"missing required args for command={self.command}: {missing_str}"
-            )
-        return self
-
-
-class EngineJobV2(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    contract_version: Literal["v2"]
-    command: EngineCommandV2
-    args: dict[str, Any] = Field(default_factory=dict)
-    overrides: list[str] = Field(default_factory=list)
-    runtime: JobRuntime = Field(default_factory=JobRuntime)
-
-    @model_validator(mode="after")
-    def validate_required_args(self) -> "EngineJobV2":
-        required_by_command: dict[str, tuple[str, ...]] = {
-            "generate": ("background_asset_ref",),
-            "verify": ("scene_json",),
-            "animate": (),
-        }
-        required = required_by_command[self.command]
-        missing = [key for key in required if key not in self.args]
-        if missing:
-            missing_str = ", ".join(missing)
-            raise ValueError(
-                f"missing required args for command={self.command}: {missing_str}"
-            )
-        return self
-
-
-EngineJob = EngineJobV1 | EngineJobV2
-OrchestratorInputs = EngineJob
-OrchestratorInputsV1 = EngineJobV1
-OrchestratorInputsV2 = EngineJobV2
+__all__ = [
+    "EngineJob",
+    "EngineJobV1",
+    "EngineJobV2",
+    "EngineRunSpec",
+    "EngineRunSpecV1",
+    "EngineRunSpecV2",
+    "JobRuntime",
+    "JobSpec",
+    "OrchestratorInputs",
+    "OrchestratorInputsV1",
+    "OrchestratorInputsV2",
+]

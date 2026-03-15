@@ -6,6 +6,10 @@ from pathlib import Path
 
 from discoverex.application.context import AppContextLike
 from discoverex.application.use_cases.verify_only import run_verify_only
+from discoverex.execution_snapshot import build_tracking_params
+from discoverex.orchestrator_contract.worker_runtime import (
+    write_worker_artifact_manifest,
+)
 
 
 def run_replay_eval(
@@ -44,10 +48,28 @@ def run_replay_eval(
         if isinstance(after_total_score, (int, float)):
             after_scores.append(float(after_total_score))
     avg_after = sum(after_scores) / len(after_scores) if after_scores else 0.0
-    context.tracker.log_pipeline_run(
+    tracking_run_id = context.tracker.log_pipeline_run(
         run_name="replay_eval",
-        params={"input_scene_count": len(scene_json_paths)},
+        params={
+            **build_tracking_params(context.execution_snapshot),
+            "input_scene_count": len(scene_json_paths),
+        },
         metrics={"avg_after_total_score": avg_after},
-        artifacts=[report_path],
+        artifacts=[
+            report_path,
+            *(
+                [context.execution_snapshot_path]
+                if context.execution_snapshot_path is not None
+                else []
+            ),
+        ],
+    )
+    context.tracking_run_id = tracking_run_id
+    write_worker_artifact_manifest(
+        artifacts_root=context.artifacts_root,
+        artifacts=[
+            ("replay_eval_report", report_path),
+            ("execution_config", context.execution_snapshot_path),
+        ],
     )
     return report_path

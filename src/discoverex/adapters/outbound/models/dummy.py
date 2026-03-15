@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from discoverex.models.types import (
+    ColorEdgeMetadata,
     FxPrediction,
     FxRequest,
     HiddenRegionRequest,
@@ -138,11 +139,11 @@ class DummyPhysicalExtraction:
         obj_ids = [f"obj_{i}" for i in range(len(object_layers))] or ["obj_0", "obj_1"]
         return PhysicalMetadata(
             regions=[{"obj_id": oid, "bbox": [0.1, 0.1, 0.2, 0.2]} for oid in obj_ids],
-            occlusion_map={oid: 0.45 for oid in obj_ids},
             z_index_map={oid: i for i, oid in enumerate(obj_ids)},
             z_depth_hop_map={oid: 2 for oid in obj_ids},
             cluster_density_map={oid: 3 for oid in obj_ids},
             euclidean_distance_map={oid: [50.0, 80.0] for oid in obj_ids},
+            alpha_degree_map={oid: 2 for oid in obj_ids},
         )
 
     def unload(self) -> None:
@@ -160,7 +161,7 @@ class DummyLogicalExtraction:
         composite_image: Path,
         physical: PhysicalMetadata,  # noqa: ARG002
     ) -> LogicalStructure:
-        obj_ids = list(physical.occlusion_map.keys()) or ["obj_0", "obj_1"]
+        obj_ids = list(physical.alpha_degree_map.keys()) or ["obj_0", "obj_1"]
         return LogicalStructure(
             relations=[
                 {"subject": obj_ids[0], "predicate": "near", "object": obj_ids[-1]}
@@ -174,8 +175,31 @@ class DummyLogicalExtraction:
         pass
 
 
+class DummyColorEdgeExtraction:
+    """Dummy Phase 2: returns zeroed color contrast and edge strength values."""
+
+    def load(self, handle: ModelHandle) -> None:  # noqa: ARG002
+        pass
+
+    def extract(
+        self,
+        composite_image: Path,  # noqa: ARG002
+        object_layers: list[Path],
+    ) -> ColorEdgeMetadata:
+        obj_ids = [p.stem for p in object_layers] or ["obj_0", "obj_1"]
+        return ColorEdgeMetadata(
+            color_contrast_map={oid: 50.0 for oid in obj_ids},
+            edge_strength_map={oid: 20.0 for oid in obj_ids},
+            obj_color_map={oid: [128.0, 0.0, 0.0] for oid in obj_ids},
+            hu_moments_map={oid: [0.0] * 7 for oid in obj_ids},
+        )
+
+    def unload(self) -> None:
+        pass
+
+
 class DummyVisualVerification:
-    """Dummy Phase 3: returns fixed sigma threshold and DRR values."""
+    """Dummy Phase 4: returns fixed sigma threshold and DRR slope values."""
 
     def load(self, handle: ModelHandle) -> None:  # noqa: ARG002
         pass
@@ -184,12 +208,17 @@ class DummyVisualVerification:
         self,
         composite_image: Path,
         sigma_levels: list[float],  # noqa: ARG002
+        color_edge: ColorEdgeMetadata | None = None,  # noqa: ARG002
+        physical: PhysicalMetadata | None = None,  # noqa: ARG002
     ) -> VisualVerification:
         # Use deterministic obj IDs — orchestrator unifies by intersection of maps
         obj_ids = ["obj_0", "obj_1"]
         return VisualVerification(
             sigma_threshold_map={oid: 4.0 for oid in obj_ids},
-            detail_retention_rate_map={oid: 0.55 for oid in obj_ids},
+            drr_slope_map={oid: 0.15 for oid in obj_ids},
+            similar_count_map={oid: 1 for oid in obj_ids},
+            similar_distance_map={oid: 80.0 for oid in obj_ids},
+            object_count_map={oid: 1 for oid in obj_ids},
         )
 
     def unload(self) -> None:

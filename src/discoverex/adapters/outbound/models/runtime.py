@@ -23,6 +23,23 @@ def resolve_runtime() -> RuntimeResolution:
     return RuntimeResolution(available=True, torch=torch, transformers=transformers)
 
 
+def validate_diffusers_runtime(runtime: RuntimeResolution) -> None:
+    if not runtime.available:
+        raise RuntimeError(
+            "torch/transformers runtime unavailable. "
+            "Install with ml-gpu or ml-cpu extra."
+        )
+    transformers_mod = runtime.transformers
+    version = str(getattr(transformers_mod, "__version__", "unknown"))
+    has_mt5 = bool(getattr(transformers_mod, "MT5Tokenizer", None))
+    if version.startswith("5.") or not has_mt5:
+        raise RuntimeError(
+            "incompatible diffusers runtime: installed transformers="
+            f"{version}. Use transformers>=4.46,<5.0 and rerun "
+            "`uv sync --extra tracking --extra ml-cpu`."
+        )
+
+
 def normalize_dtype(dtype: str, torch_mod: Any | None) -> Any:
     if torch_mod is None:
         return dtype

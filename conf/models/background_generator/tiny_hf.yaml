@@ -1,0 +1,10 @@
+# @package models.background_generator
+_target_: discoverex.adapters.outbound.models.tiny_hf_fx.TinyHFFxModel
+model_id: hf-internal-testing/tiny-stable-diffusion-pipe
+revision: main
+device: cpu
+dtype: float32
+precision: fp32
+batch_size: 1
+seed: 7
+strict_runtime: false

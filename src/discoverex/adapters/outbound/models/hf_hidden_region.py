@@ -11,6 +11,7 @@ from .runtime import (
     resolve_device,
     resolve_runtime,
 )
+from .runtime_cleanup import clear_model_runtime
 
 
 class HFHiddenRegionModel:
@@ -142,3 +143,7 @@ class HFHiddenRegionModel:
             h = max(1.0, min(ymax, float(height)) - y)
             boxes.append((x, y, w, h))
         return boxes or None
+
+    def unload(self) -> None:
+        clear_model_runtime(self._detector)
+        self._detector = None

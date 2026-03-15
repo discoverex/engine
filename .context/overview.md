@@ -1,27 +1,20 @@
 # Discoverex Context Index
 
-이 문서는 `.context` 탐색 시작점입니다. 상세는 아래 문서를 우선 참고합니다.
+이 문서는 `.context` 탐색 시작점입니다. 기술적 상세 정의와 아키텍처 결정을 담고 있습니다.
 
-## Primary Documents
-- Canonical spec and architecture baseline:
-  - `./canon.md`
-- Current handoff and implementation status:
-  - `./HANDOFF.md`
-- Prefect migration status and decision log:
-  - `./prefect-migration-assessment.md`
-  - `./prefect-migration-task-breakdown.md`
+## 1. 핵심 기술 문서 (Primary Documents)
 
-## Document Roles
-- `canon.md`: 제품/아키텍처의 기준 계약(SSOT)
-- `HANDOFF.md`: 현재 구현 상태, 검증 결과, 후속 작업
-- `prefect-migration-assessment.md`: Prefect 전환 평가/리스크/운영 권고
-- `prefect-migration-task-breakdown.md`: 실행 단위 작업 분해와 완료 기준
+- [Scene Canonical Spec v1](canon.md): 제품/아키텍처의 기준 계약 (SSOT).
+- [Architecture & Organization](architecture.md): 시스템 설계 원칙 및 모듈 레이어링 가이드.
+- [Capabilities & Specs](capabilities.md): 현재 실행 능력, 생성 파이프라인 명세, 제약 사항.
 
-## Usage Rule
-1. 계약/아키텍처 판단은 `canon.md`를 우선 확인합니다.
-2. 현재 코드 기준 상태/검증 근거는 `HANDOFF.md`를 확인합니다.
-3. Prefect 전환 범위/잔여 작업은 `prefect-migration-*` 문서를 확인합니다.
+## 2. 문서 사용 규칙
 
-## Scope
-- 이 파일에는 긴 실행 로그/상세 절차를 기록하지 않습니다.
-- 상세 내용은 각 원문 문서에만 유지합니다.
+1. **규약 및 설계**: 아키텍처적 판단이나 데이터 규약은 `canon.md`와 `architecture.md`를 최우선으로 참고합니다.
+2. **실행 가능성**: 현재 엔진이 무엇을 할 수 있는지, 생성 품질의 한계가 어디인지 파악하려면 `capabilities.md`를 확인합니다.
+3. **개발 상태**: 최신 구현 현황과 후속 작업은 `docs/dev/handoff.md`에서 관리합니다.
+
+## 3. 관련 링크 (Internal)
+
+- [Git Conventions](git-conventions.md): 프로젝트 Git 사용 및 커밋 규칙.
+- [Project Documentation Root](../README.md): 프로젝트 전체 문서 지도.

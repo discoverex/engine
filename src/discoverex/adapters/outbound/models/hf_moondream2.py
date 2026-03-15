@@ -10,12 +10,14 @@ from discoverex.models.types import LogicalStructure, ModelHandle, PhysicalMetad
 
 class Moondream2Adapter:
     """
-    Phase 2: Logical scene graph extraction using Moondream2 (4-bit quantized VLM).
+    Phase 3: Logical scene graph extraction using Moondream2 (4-bit quantized VLM).
 
     VRAM lifecycle: load() → extract() → unload()
     Context-Aware Prompting: Phase 1 coordinates are injected into the prompt
     so the model anchors its spatial reasoning to known object positions.
-    Graph metrics (degree, hop, diameter) are computed via NetworkX on CPU.
+    Graph metrics (hop, diameter, degree) are computed via NetworkX on CPU.
+    degree_map = undirected degree of Moondream2 scene graph (logical_degree).
+    visual_degree (alpha_degree_map) is separate — sourced from Phase 1.
     """
 
     def __init__(
@@ -40,12 +42,12 @@ class Moondream2Adapter:
 
         quant_cfg = None
         if self._quantization == "4bit":
-            quant_cfg = BitsAndBytesConfig(
+            quant_cfg = BitsAndBytesConfig(  # type: ignore[no-untyped-call]
                 load_in_4bit=True,
                 bnb_4bit_compute_dtype=torch.float16,
             )
 
-        self._tokenizer = AutoTokenizer.from_pretrained(
+        self._tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[no-untyped-call]
             self._model_id, trust_remote_code=True
         )
         self._model = AutoModelForCausalLM.from_pretrained(
@@ -128,9 +130,7 @@ class Moondream2Adapter:
             if subj and obj and subj in obj_ids and obj in obj_ids:
                 g.add_edge(subj, obj, predicate=rel.get("predicate", ""))
 
-        degree_map = {n: g.degree(n) for n in g.nodes}
-
-        # Hop from root = longest shortest path from any source node (degree == 0)
+        # Hop from root = longest shortest path from any source node (in_degree == 0)
         root_candidates = [n for n in g.nodes if g.in_degree(n) == 0] or list(g.nodes)[
             :1
         ]
@@ -155,6 +155,9 @@ class Moondream2Adapter:
             diameter = float(
                 max(len(c) for c in nx.connected_components(ug)) if ug else 1
             )
+
+        # logical_degree = Moondream2 scene graph의 undirected 연결 차수
+        degree_map: dict[str, int] = {node: ug.degree(node) for node in ug.nodes}
 
         return LogicalStructure(
             relations=relations,

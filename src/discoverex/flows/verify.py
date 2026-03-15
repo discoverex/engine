@@ -19,8 +19,16 @@ def _load_scene(scene_json: str) -> Scene:
 
 
 @task(name="discoverex-verify-context", persist_result=False)
-def _build_context(config: PipelineConfig) -> Any:
-    return build_context(config=config)
+def _build_context(
+    config: PipelineConfig,
+    execution_snapshot: dict[str, Any] | None = None,
+    execution_snapshot_path: Path | None = None,
+) -> Any:
+    return build_context(
+        config=config,
+        execution_snapshot=execution_snapshot,
+        execution_snapshot_path=execution_snapshot_path,
+    )
 
 
 @task(name="discoverex-verify-usecase", persist_result=False)
@@ -29,9 +37,20 @@ def _run_verify_only(scene: Scene, context: Any) -> Scene:
 
 
 @flow(name="discoverex-verify-pipeline", persist_result=False)
-def run_verify_flow(*, args: dict[str, Any], config: PipelineConfig) -> dict[str, str]:
+def run_verify_flow(
+    *,
+    args: dict[str, Any],
+    config: PipelineConfig,
+    execution_snapshot: dict[str, Any] | None = None,
+    execution_snapshot_path: Path | None = None,
+) -> dict[str, str]:
     scene_json = str(args["scene_json"])
     scene = _load_scene(scene_json)
-    context = _build_context(config)
+    context = _build_context(config, execution_snapshot, execution_snapshot_path)
     updated = _run_verify_only(scene, context)
-    return build_scene_payload(updated, config.runtime.artifacts_root)
+    return build_scene_payload(
+        updated,
+        config.runtime.artifacts_root,
+        str(execution_snapshot_path) if execution_snapshot_path is not None else None,
+        getattr(context, "tracking_run_id", None),
+    )

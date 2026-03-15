@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REGISTER_WRAPPER="${ROOT_DIR}/infra/register/register_prefect_job.py"
+REGISTER_RAW="${ROOT_DIR}/infra/register/register_orchestrator_job.py"
+BUILD_SPEC="${ROOT_DIR}/infra/register/build_job_spec.py"
+SUBMIT_SPEC="${ROOT_DIR}/infra/register/submit_job_spec.py"
+DEPLOY_FLOWS="${ROOT_DIR}/infra/register/deploy_prefect_flows.py"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./bin/project register [infra/register/register_prefect_job.py args...]
+  ./bin/project register-raw [infra/register/register_orchestrator_job.py args...]
+  ./bin/project build-job-spec [infra/register/build_job_spec.py args...]
+  ./bin/project submit-job-spec [infra/register/submit_job_spec.py args...]
+  ./bin/project deploy-flows [infra/register/deploy_prefect_flows.py args...]
+
+Notes:
+  - Official operator-facing registration surface:
+    src/discoverex/flows/engine_run_flow.py:run_job_flow
+  - Commands below are compatibility/helpers for local testing and integration.
+
+Examples:
+  ./bin/project register --dry-run --command generate --background-asset-ref bg://dummy
+  ./bin/project build-job-spec --command generate --background-asset-ref bg://dummy
+  ./bin/project submit-job-spec --job-spec-file infra/register/job_specs/job.json
+  ./bin/project deploy-flows --work-pool-name local-process
+  ./bin/project register --command generate --execution-profile generator-sdxl-gpu \
+    --background-prompt "stormy harbor at dusk" \
+    --object-prompt "hidden golden compass" \
+    --final-prompt "polished playable hidden object scene"
+EOF
+}
+
+COMMAND="${1:-}"
+shift || true
+
+case "${COMMAND}" in
+  register)
+    exec python3 "${REGISTER_WRAPPER}" "$@"
+    ;;
+  register-raw)
+    exec python3 "${REGISTER_RAW}" "$@"
+    ;;
+  build-job-spec)
+    exec python3 "${BUILD_SPEC}" "$@"
+    ;;
+  submit-job-spec)
+    exec python3 "${SUBMIT_SPEC}" "$@"
+    ;;
+  deploy-flows)
+    exec python3 "${DEPLOY_FLOWS}" "$@"
+    ;;
+  ""|-h|--help|help)
+    usage
+    ;;
+  *)
+    echo "unknown command: ${COMMAND}" >&2
+    usage
+    exit 1
+    ;;
+esac

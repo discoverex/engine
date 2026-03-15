@@ -6,9 +6,15 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "hydra-core>=1.3.2",
+    "networkx>=3.6.1",
+    "opencv-python-headless>=4.13.0.92",
+    "pillow>=12.1.1",
     "prefect>=3.6.20",
     "pydantic>=2.12.5",
-    "typer>=0.24.1"
+    "typer>=0.24.1",
+    "pydantic-settings>=2.13.1",
+    "pyyaml>=6.0.3",
+    "typer>=0.24.1",
 ]
 
 [project.optional-dependencies]
@@ -25,7 +31,7 @@ ml-cpu = [
     "pillow>=11.3.0",
     "safetensors>=0.6.2",
     "torch>=2.10.0",
-    "transformers>=5.2.0",
+    "transformers>=4.46,<5.0",
 ]
 ml-gpu = [
     "accelerate>=1.12.0",
@@ -33,7 +39,7 @@ ml-gpu = [
     "pillow>=11.3.0",
     "safetensors>=0.6.2",
     "torch>=2.10.0",
-    "transformers>=5.2.0",
+    "transformers>=4.46,<5.0",
 ]
 validator = [
     "bitsandbytes>=0.49.2",
@@ -61,6 +67,7 @@ packages = ["src/discoverex"]
 [project.scripts]
 discoverex = "discoverex.adapters.inbound.cli.main:app"
 discoverex-orch-launcher = "discoverex.orchestrator_contract.launcher:main"
+discoverex-execution-launcher = "discoverex.adapters.outbound.execution.launcher:main"
 
 [tool.uv]
 index-url = "https://pypi.org/simple"
@@ -96,7 +103,7 @@ warn_unused_configs = true
 warn_unused_ignores = false
 plugins = ["pydantic.mypy"]
 mypy_path = ["src"]
-files = ["src", "scripts", "tests"]
+files = ["src", "infra/register", "tests"]
 exclude = ["^src/sample/", "^src/ML/"]
 
 [[tool.mypy.overrides]]
@@ -118,3 +125,8 @@ module = [
     "ultralytics",
 ]
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]

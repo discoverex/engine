@@ -42,5 +42,5 @@ Use one of the following prefixes only:
 1. Create branch from `dev`.
 2. Add empty intro commit.
 3. Commit by category (`feat`/`ops`/`docs`/`test`).
-4. Validate (`make lint`, `make typecheck`, `make test`).
+4. Validate (`just lint`, `just typecheck`, `just test`).
 5. Merge into `dev` with `--no-ff`.

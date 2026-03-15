@@ -4,7 +4,7 @@ defaults:
   - models/visual_verification: yolo_clip
   - adapters/artifact_store: local
   - adapters/metadata_store: local_json
-  - adapters/tracker: mlflow_file
+  - adapters/tracker: mlflow_local
   - adapters/scene_io: json
   - adapters/report_writer: local_json
   - runtime/model_runtime: gpu
@@ -22,16 +22,28 @@ weights_path: null
 # null 이면 저장하지 않음. label 필드는 null 로 저장되어 나중에 채울 수 있음.
 bundle_store_dir: "engine/src/ML/data"
 
+# ScoringWeights 가중치 — 합계 기준:
+#   difficulty_* 합계 = 1.00 (D(obj) ∈ [0,1] 스케일 유지)
+#   total_perception + total_logical = 1.00
 weights:
+  # integrate_verification_v2 — perception sub-score
   perception_sigma: 0.50
   perception_drr: 0.50
+  # integrate_verification_v2 — logical sub-score
   logical_hop: 0.55
   logical_degree: 0.45
+  # integrate_verification_v2 — total 집계
   total_perception: 0.45
   total_logical: 0.55
-  difficulty_occlusion: 0.25
-  difficulty_sigma: 0.20
-  difficulty_hop: 0.20
-  difficulty_degree: 0.15
-  difficulty_drr: 0.20
-  difficulty_interaction: 0.10
+  # compute_difficulty D(obj) 항별 가중치 (합계 = 1.00)
+  difficulty_degree: 0.14        # alpha_degree (logical)
+  difficulty_cluster: 0.12       # cluster_density
+  difficulty_hop: 0.14           # hop / diameter
+  difficulty_drr: 0.14           # DRR slope
+  difficulty_sigma: 0.12         # 1 / sigma_threshold
+  difficulty_similar_count: 0.11  # similar_count_norm
+  difficulty_similar_dist: 0.09   # 1 / (1 + similar_distance)
+  difficulty_color_contrast: 0.07  # 1 / (1 + color_contrast)
+  difficulty_edge_strength: 0.07   # 1 / (1 + edge_strength)
+  # resolve_answer 최소 조건 수 (ScoringWeights에 포함)
+  is_hidden_min_conditions: 2

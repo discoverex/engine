@@ -21,8 +21,11 @@ wheels/
 artifacts/
 mlruns/
 mlflow.db
+.prefect-engine-artifacts/
 
 # Tooling / editor
 .DS_Store
 .idea/
 .vscode/
+
+*.log
