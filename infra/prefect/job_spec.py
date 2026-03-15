@@ -1,20 +1,21 @@
 from __future__ import annotations
 
 import importlib
-import json
 from collections.abc import Callable
 from typing import Any, cast
+
+import yaml
 
 INPUTS_KEYS = ("inputs", "engine_run")
 
 
-def load_job_spec(job_spec_json: str) -> dict[str, Any]:
+def load_job_spec(job_spec_raw: str) -> dict[str, Any]:
     try:
-        payload = json.loads(job_spec_json)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"invalid job_spec_json: {exc}") from exc
+        payload = yaml.safe_load(job_spec_raw)
+    except yaml.YAMLError as exc:
+        raise RuntimeError(f"invalid job_spec_raw (YAML/JSON): {exc}") from exc
     if not isinstance(payload, dict):
-        raise RuntimeError("job_spec_json must decode to a JSON object")
+        raise RuntimeError("job_spec must decode to a YAML/JSON object")
     return payload
 
 

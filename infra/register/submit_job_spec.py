@@ -6,13 +6,15 @@ import json
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from register_orchestrator_job import submit_job_spec
 from settings import SETTINGS
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Submit an existing job spec JSON to a Prefect deployment."
+        description="Submit an existing job spec YAML/JSON to a Prefect deployment."
     )
     parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
     parser.add_argument("--deployment", default=None)
@@ -32,11 +34,11 @@ def _load_job_spec(args: argparse.Namespace) -> dict[str, Any]:
     else:
         raw = str(args.job_spec_json)
     try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"invalid job spec JSON: {exc}") from exc
+        payload = yaml.safe_load(raw)
+    except yaml.YAMLError as exc:
+        raise SystemExit(f"invalid job spec (YAML/JSON): {exc}") from exc
     if not isinstance(payload, dict):
-        raise SystemExit("job spec must decode to a JSON object")
+        raise SystemExit("job spec must decode to an object")
     return payload
 
 

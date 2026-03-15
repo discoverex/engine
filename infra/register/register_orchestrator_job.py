@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+import yaml
+
 from branch_deployments import DEFAULT_FLOW_KIND, deployment_name_for_branch
 from prefect.client.orchestration import SyncPrefectClient, get_client
 from prefect.client.schemas.filters import DeploymentFilter, DeploymentFilterName
@@ -491,11 +493,11 @@ def write_job_spec(
         Path(output_file)
         if output_file
         else DEFAULT_JOB_SPEC_DIR
-        / (f"{str(job_spec.get('job_name', '')).strip() or 'job'}.json")
+        / (f"{str(job_spec.get('job_name', '')).strip() or 'job'}.yaml")
     )
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        json.dumps(job_spec, ensure_ascii=True, indent=2) + "\n",
+        yaml.safe_dump(job_spec, sort_keys=False) + "\n",
         encoding="utf-8",
     )
     return target
@@ -506,7 +508,7 @@ def main() -> int:
     job_spec = _build_job_spec(args)
 
     if args.dry_run:
-        print(json.dumps(job_spec, ensure_ascii=True, indent=2))
+        print(yaml.safe_dump(job_spec, sort_keys=False))
         return 0
 
     output = submit_job_spec(
