@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import subprocess
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from prefect import get_run_logger
 
 from infra.prefect.job_spec import (
     string_value,
@@ -18,25 +21,75 @@ class DispatchResult:
     stderr: str
 
 
-def dispatch_engine_job(payload: dict[str, Any], *, cwd: Path, env: dict[str, str]) -> DispatchResult:
+def dispatch_engine_job(
+    payload: dict[str, Any],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+) -> DispatchResult:
+    logger = get_run_logger()
     python_bin = cwd / ".venv" / "bin" / "python"
     if not python_bin.exists():
         raise RuntimeError(f"missing bootstrap python: {python_bin}")
-    proc = subprocess.run(
+
+    # Inject parent flow run context to link the sub-process flow in Prefect UI
+    from prefect.context import FlowRunContext
+
+    child_env = {**env, "ORCH_JOB_INPUTS_JSON": json.dumps(payload, ensure_ascii=True)}
+    
+    flow_run_ctx = FlowRunContext.get()
+    if flow_run_ctx and flow_run_ctx.flow_run:
+        child_env["PREFECT_PARENT_FLOW_RUN_ID"] = str(flow_run_ctx.flow_run.id)
+
+    proc = subprocess.Popen(
         [str(python_bin), "-m", "discoverex.application.flows.launcher_entry"],
         cwd=cwd,
-        env={**env, "ORCH_JOB_INPUTS_JSON": json.dumps(payload, ensure_ascii=True)},
-        check=False,
-        capture_output=True,
+        env=child_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
+        bufsize=1,
     )
-    stdout = proc.stdout or ""
-    stderr = proc.stderr or ""
-    if proc.returncode != 0:
-        reason = stderr.strip() or stdout.strip() or f"exit_code={proc.returncode}"
+
+    stdout_lines: list[str] = []
+    stderr_lines: list[str] = []
+
+    def stream_stdout() -> None:
+        if proc.stdout is None:
+            return
+        for line in iter(proc.stdout.readline, ""):
+            stripped = line.rstrip()
+            stdout_lines.append(stripped)
+            logger.info(stripped)
+        proc.stdout.close()
+
+    def stream_stderr() -> None:
+        if proc.stderr is None:
+            return
+        for line in iter(proc.stderr.readline, ""):
+            stripped = line.rstrip()
+            stderr_lines.append(stripped)
+            logger.error(f"[stderr] {stripped}")
+        proc.stderr.close()
+
+    t_out = threading.Thread(target=stream_stdout, daemon=True)
+    t_err = threading.Thread(target=stream_stderr, daemon=True)
+
+    t_out.start()
+    t_err.start()
+
+    return_code = proc.wait()
+    t_out.join()
+    t_err.join()
+
+    stdout = "\n".join(stdout_lines)
+    stderr = "\n".join(stderr_lines)
+
+    if return_code != 0:
+        reason = stderr.strip() or stdout.strip() or f"exit_code={return_code}"
         raise RuntimeError(
             "engine subprocess failed"
-            f"\n\nexit_code: {proc.returncode}"
+            f"\n\nexit_code: {return_code}"
             f"\n\nstderr:\n{stderr.strip()}"
             f"\n\nstdout:\n{stdout.strip()}"
             f"\n\nreason: {reason}"
