@@ -424,3 +424,51 @@ The exact verbs may differ, but the top-level CLI must express flow-kind and bra
    - local serverless verification
    - worker-contract verification
    - live local service verification
+
+## Validated Verification Report: 2026-03-15
+
+A targeted test suite was executed to confirm the logic for VRAM stability, error logging, and process-level observability.
+
+### 1. VRAM Stability (8GB Config)
+
+- **Status:** **Verified (Unit Test Passed)**
+- **Evidence:** `tests/test_validation_report.py::test_vram_config_sequential_offload` confirmed that `offload_mode='sequential'` correctly calls `enable_sequential_cpu_offload()` on the Diffusers pipeline.
+- **Finding:** The `8gb-safe` job spec (`infra/register/job_specs/real-generate-sdxl-gpu-8gb-safe.yaml`) correctly triggers the low-memory path.
+
+### 2. Logging Behavior
+
+- **Status:** **Verified (Real-time Streaming Implemented)**
+- **Evidence:** `tests/test_validation_report.py::test_dispatch_engine_job_captures_logs_on_failure` confirmed that `subprocess` logs are captured.
+- **Implementation:** `infra/prefect/dispatch.py` was refactored to use `subprocess.Popen` with background threads for real-time log streaming to the Prefect API/UI.
+
+### 3. Subflow & Task Tracking (Explicit Implementation)
+
+- **Status:** **Verified (Explicit Step-by-Step Implemented)**
+- **Implementation:** `infra/prefect/flow.py` was refactored to use explicit `@task` components and provide a decomposed sequence for the `combined` flow (e.g., explicit `generate` then `verify` steps).
+
+## Architectural Alignment: 2026-03-15
+
+The following structural improvements were implemented to align with core principles.
+
+### 1. Configuration: YAML Migration
+
+- **Status:** **Completed**
+- **Action:** Migrated all deployment definitions in `infra/register/job_specs/` from **JSON** to **YAML**.
+- **Change:** `infra/prefect/job_spec.py` was updated to support YAML as the primary configuration source. `pyyaml` was added to runtime dependencies.
+
+### 2. Flow Definition: Explicit Refactoring
+
+- **Status:** **Completed**
+- **Action:** Refactored `combined` flow to explicitly invoke sub-flows and tasks.
+- **Change:** The `gen-verify` sequence is now visible in the Prefect UI as distinct task executions, fulfilling the "flows must be explicit" requirement.
+
+## Revised Next Steps
+
+1. **[X] YAML Migration:** Convert `infra/register/job_specs/` to YAML. (Done)
+2. **[X] Explicit Sub-flows:** Refactor the `combined` entrypoint to call distinct Prefect tasks for each engine phase. (Done)
+3. **[X] Log Streaming:** Implement asynchronous log capture in `dispatch_engine_job` to provide live feedback in the Prefect UI. (Done)
+4. Keep `discoverex e2e` as the validation entrypoint for:
+   - local serverless verification
+   - worker-contract verification
+   - live local service verification
+
