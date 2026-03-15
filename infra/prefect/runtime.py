@@ -142,6 +142,7 @@ def summarize_run_request(
 
 
 def redact_resolved_config(payload: dict[str, Any]) -> Any:
+    _ensure_repo_src_on_syspath()
     from discoverex.config_loader import resolve_pipeline_config
     from discoverex.execution_snapshot import redact_for_logging
 
@@ -153,6 +154,13 @@ def redact_resolved_config(payload: dict[str, Any]) -> Any:
             overrides=coerce_overrides(payload.get("overrides")),
         ).model_dump(mode="python")
     return redact_for_logging(resolved_config)
+
+
+def _ensure_repo_src_on_syspath() -> None:
+    src_dir = repo_root() / "src"
+    src_path = str(src_dir)
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
 
 
 def set_if_value(env: dict[str, str], key: str, value: object) -> None:
