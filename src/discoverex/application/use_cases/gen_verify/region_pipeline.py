@@ -50,46 +50,11 @@ def generate_regions(
     context: AppContextLike,
     background: Background,
     scene_dir: Path,
-    hidden_handle: ModelHandle,
+    regions: list[Region],
     inpaint_handle: ModelHandle,
     object_prompt: str = "",
     object_negative_prompt: str = "",
 ) -> tuple[list[Region], list[RegionPromptRecord]]:
-    hidden_started = perf_counter()
-    logger.info(
-        "hidden region detection started image=%s size=%sx%s",
-        background.asset_ref,
-        background.width,
-        background.height,
-    )
-    emit_progress_event(
-        stage="hidden_region_detection",
-        status="started",
-        image_ref=background.asset_ref,
-        width=background.width,
-        height=background.height,
-    )
-    with track_stage_vram(context, "hidden_region_detection"):
-        boxes = context.hidden_region_model.predict(
-            hidden_handle,
-            HiddenRegionRequest(
-                image_ref=background.asset_ref,
-                width=background.width,
-                height=background.height,
-            ),
-        )
-    regions = build_candidate_regions(boxes)
-    logger.info(
-        "hidden region detection completed candidates=%d duration=%s",
-        len(regions),
-        format_seconds(hidden_started),
-    )
-    emit_progress_event(
-        stage="hidden_region_detection",
-        status="completed",
-        candidate_count=len(regions),
-    )
-
     inpainted_regions: list[Region] = []
     prompt_records: list[RegionPromptRecord] = []
     total_regions = len(regions)

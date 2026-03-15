@@ -7,6 +7,7 @@ from time import perf_counter
 
 from discoverex.application.context import AppContextLike
 from discoverex.domain.scene import LayerBBox, LayerItem, LayerType, Scene
+from discoverex.models.types import HiddenRegionRequest
 from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 
@@ -15,7 +16,7 @@ from .composite_pipeline import compose_scene
 from .model_lifecycle import unload_model
 from .persistence import save_scene, track_run, write_verification_report
 from .prompt_bundle import build_prompt_tracking_params, save_prompt_bundle
-from .region_pipeline import generate_regions
+from .region_pipeline import build_candidate_regions, generate_regions
 from .scene_builder import build_scene, generate_run_ids
 from .types import PromptBundle, PromptStageRecord
 from .verification_pipeline import verify_scene
@@ -63,21 +64,37 @@ def run(
         unload_model(context.background_generator_model)
     _materialize_background_asset(background=background, scene_dir=scene_dir)
     logger.info("background ready asset_ref=%s", background.asset_ref)
+
+    # 1. Detect hidden regions (load hidden model only)
     hidden_handle = context.hidden_region_model.load(model_versions.hidden_region)
+    try:
+        candidate_boxes = context.hidden_region_model.predict(
+            hidden_handle,
+            HiddenRegionRequest(
+                image_ref=background.asset_ref,
+                width=background.width,
+                height=background.height,
+            ),
+        )
+        regions_to_process = build_candidate_regions(candidate_boxes)
+    finally:
+        unload_model(context.hidden_region_model)
+
+    # 2. Inpaint regions (load inpaint model only)
     inpaint_handle = context.inpaint_model.load(model_versions.inpaint)
     try:
         regions, region_prompt_records = generate_regions(
             context=context,
             background=background,
             scene_dir=scene_dir,
-            hidden_handle=hidden_handle,
+            regions=regions_to_process,
             inpaint_handle=inpaint_handle,
             object_prompt=(object_prompt or "").strip(),
             object_negative_prompt=(object_negative_prompt or "").strip(),
         )
     finally:
-        unload_model(context.hidden_region_model)
         unload_model(context.inpaint_model)
+
     scene = build_scene(
         background=background,
         regions=regions,
