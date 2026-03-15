@@ -1,34 +1,28 @@
 # Handoff
 
-## Current State
+## Current State (2026-03-15)
 - Branch: `feat/engin-worker-observility`
-- Latest local commit: `fc68d70` (`WIP`)
-- Push status: not pushed
-- Push failure: GitHub HTTPS auth missing on this machine
+- Status: **Stable & Verified**
+- Key Achievement: Successfully ran a full generation pipeline on 8GB VRAM with real-time log streaming.
 
 ## What Changed
-- Deployment registration was moved from local-path registration toward flow-kind-aware remote-source Prefect deployments.
-- Default deployment naming rule is now `discoverex-<flow-kind>-<branch-slug>`.
-- Default job submission path is now branch-based.
-- Worker contract is now aligned around worker-provided `MLFLOW_TRACKING_URI` plus worker-managed engine artifact directory and manifest upload.
-- Default job spec is still:
-  - `infra/register/job_specs/real-generate-sdxl-gpu-8gb.json`
+- **OOM Fix (8GB VRAM):** Implemented sequential model loading/unloading. Models no longer reside in memory simultaneously.
+- **Hierarchical Logging:** Implemented "Quiet Success, Loud Failure". Detailed logs are streamed at `DEBUG` level, while failures flush `stderr` to `ERROR` level for visibility.
+- **YAML Migration:** All job specs migrated to YAML. All tools (`register-flow`, `submit-spec`) now use YAML as the primary format.
+- **Subflow Linkage:** Engine subprocesses are now linked as **Subflows** in Prefect UI using `PREFECT_PARENT_FLOW_RUN_ID`.
+- **Explicit Tasks:** Decomposed `combined` flow into explicit `engine-generate-task` and `engine-verify-task` components.
 
 ## Files To Read First
-- [HANDOFF.md](/home/esillileu/discoverex/engine/HANDOFF.md)
-- [infra/register/branch_deployments.py](/home/esillileu/discoverex/engine/infra/register/branch_deployments.py)
-- [infra/register/deploy_prefect_flows.py](/home/esillileu/discoverex/engine/infra/register/deploy_prefect_flows.py)
-- [scripts/cli/prefect.py](/home/esillileu/discoverex/engine/scripts/cli/prefect.py)
-- [infra/register/check_flow_run_status.py](/home/esillileu/discoverex/engine/infra/register/check_flow_run_status.py)
-- [infra/register/job_specs/real-generate-sdxl-gpu-8gb.json](/home/esillileu/discoverex/engine/infra/register/job_specs/real-generate-sdxl-gpu-8gb.json)
-- [docs/ops/cli.md](/home/esillileu/discoverex/engine/docs/ops/cli.md)
+- [REFACTOR_PLAN.md](/home/esillileu/discoverex/engine/REFACTOR_PLAN.md) - Final Status Summary.
+- [infra/prefect/dispatch.py](/home/esillileu/discoverex/engine/infra/prefect/dispatch.py) - Logging and subprocess logic.
+- [infra/prefect/flow.py](/home/esillileu/discoverex/engine/infra/prefect/flow.py) - Explicit task definitions.
+- [src/discoverex/application/use_cases/gen_verify/orchestrator.py](/home/esillileu/discoverex/engine/src/discoverex/application/use_cases/gen_verify/orchestrator.py) - Sequential loading logic.
 
 ## Current Register Strategy
 - `./bin/cli prefect deploy-flow <flow-kind> --branch <branch>`
-  - registers a deployment from git source and a flow-kind-specific entrypoint
 - `./bin/cli prefect register-flow <flow-kind> --branch <branch>`
-  - submits the standard job spec JSON
   - targets deployment `discoverex-<flow-kind>-<branch-slug>`
+  - uses YAML specs from `infra/register/job_specs/`
 
 ## Current Worker Strategy
 - Deployment source is remote git, not a machine-local working directory

@@ -25,13 +25,13 @@ deployment 이름은 `discoverex-<flow-kind>-<branch>` 규칙을 따릅니다.
 필요하면 `--ref <branch|tag|sha>`로 실행 ref를 이름용 branch와 분리할 수 있습니다.
 
 ### 작업 등록 (Registration)
-표준 job spec을 브랜치별 deployment에 제출합니다. `--branch`는 필수입니다.
+표준 job spec을 브랜치별 deployment에 제출합니다. `--branch`는 필수입니다. 모든 설정은 YAML 형식을 지원합니다.
 ```bash
 ./bin/cli prefect register-flow generate --branch dev
 ```
 
-기본 spec 파일은 `infra/register/job_specs/real-generate-sdxl-gpu-8gb.json`입니다.
-메모리 압박이 있으면 `infra/register/job_specs/real-generate-sdxl-gpu-8gb-safe.json`을 사용해
+기본 spec 파일은 `infra/register/job_specs/real-generate-sdxl-gpu-8gb.yaml`입니다.
+메모리 압박이 있으면 `infra/register/job_specs/real-generate-sdxl-gpu-8gb-safe.yaml`을 사용해
 `sequential` offload와 더 작은 inpaint patch/step 조합으로 제출할 수 있습니다.
 기존 `deploy`/`register` 명령은 `combined` 기본 배포를 위한 호환 별칭으로 유지됩니다.
 
