@@ -23,7 +23,11 @@ from discoverex.application.use_cases.gen_verify.prompt_bundle import (
     build_prompt_tracking_params,
     save_prompt_bundle,
 )
-from discoverex.application.use_cases.gen_verify.region_pipeline import generate_regions
+from discoverex.application.use_cases.gen_verify.region_pipeline import (
+    build_candidate_regions,
+    generate_regions,
+)
+from discoverex.models.types import HiddenRegionRequest
 from discoverex.application.use_cases.gen_verify.scene_builder import (
     build_scene,
     generate_run_ids,
@@ -117,22 +121,36 @@ def _generate_regions_stage(
     object_prompt: str,
     object_negative_prompt: str,
 ) -> tuple[list[Any], list[RegionPromptRecord]]:
+    # 1. Detect regions (sequential load)
     hidden_handle = context.hidden_region_model.load(
         context.model_versions.hidden_region
     )
+    try:
+        boxes = context.hidden_region_model.predict(
+            hidden_handle,
+            HiddenRegionRequest(
+                image_ref=background.asset_ref,
+                width=background.width,
+                height=background.height,
+            ),
+        )
+        regions_to_process = build_candidate_regions(boxes)
+    finally:
+        unload_model(context.hidden_region_model)
+
+    # 2. Inpaint regions (sequential load)
     inpaint_handle = context.inpaint_model.load(context.model_versions.inpaint)
     try:
         return generate_regions(
             context=context,
             background=background,
             scene_dir=scene_dir,
-            hidden_handle=hidden_handle,
+            regions=regions_to_process,
             inpaint_handle=inpaint_handle,
             object_prompt=object_prompt,
             object_negative_prompt=object_negative_prompt,
         )
     finally:
-        unload_model(context.hidden_region_model)
         unload_model(context.inpaint_model)
 
 
