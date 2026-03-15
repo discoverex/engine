@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+from discoverex.config_loader import load_pipeline_config
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "infra" / "register"
 if str(SCRIPTS_DIR) not in sys.path:
@@ -100,6 +103,9 @@ def test_submit_job_spec_resolves_deployment_from_inputs(
             "CF-Access-Client-Secret": "cf-secret",
         }
     }
+    submitted = json.loads(str(captured["parameters"]["job_spec_json"]))
+    assert "resolved_config" in submitted["inputs"]
+    assert submitted["inputs"]["resolved_config"]["runtime"]["width"] == 1024
 
 
 def test_submit_job_spec_falls_back_to_worker_cf_tokens_for_prefect_headers(
@@ -121,3 +127,70 @@ def test_submit_job_spec_falls_back_to_worker_cf_tokens_for_prefect_headers(
             "CF-Access-Client-Secret": "worker-secret",
         }
     }
+
+
+def test_submit_job_spec_preserves_explicit_resolved_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    explicit = load_pipeline_config(config_name="generate", config_dir="conf").model_dump(
+        mode="python"
+    )
+    explicit["runtime"]["width"] = 2048
+
+    class _FakeClient:
+        def __enter__(self) -> "_FakeClient":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:  # type: ignore[no-untyped-def]
+            _ = (exc_type, exc, tb)
+
+        def read_deployments(self, *, deployment_filter, limit):  # type: ignore[no-untyped-def]
+            _ = (deployment_filter, limit)
+            return [
+                SimpleNamespace(
+                    id="12345678-1234-5678-1234-567812345678",
+                    name="discoverex-generate-dev",
+                )
+            ]
+
+        def create_flow_run_from_deployment(self, deployment_id, *, parameters, name):  # type: ignore[no-untyped-def]
+            _ = (deployment_id, name)
+            captured["parameters"] = parameters
+            return SimpleNamespace(id="flow-456", name="run-789")
+
+    @contextmanager
+    def _fake_temporary_settings(*, updates):  # type: ignore[no-untyped-def]
+        _ = updates
+        yield None
+
+    def _fake_get_client(*, sync_client, httpx_settings):  # type: ignore[no-untyped-def]
+        _ = (sync_client, httpx_settings)
+        return _FakeClient()
+
+    monkeypatch.setattr(register_job, "temporary_settings", _fake_temporary_settings)
+    monkeypatch.setattr(register_job, "get_client", _fake_get_client)
+
+    register_job.submit_job_spec(
+        job_spec={
+            "run_mode": "inline",
+            "engine": "discoverex",
+            "entrypoint": ["/bin/sh", "-lc", "python -m discoverex.adapters.outbound.execution.launcher"],
+            "inputs": {
+                "contract_version": "v2",
+                "command": "generate",
+                "config_name": "generate",
+                "config_dir": "conf",
+                "resolved_config": explicit,
+                "args": {"background_asset_ref": "bg://dummy"},
+                "overrides": [],
+                "runtime": {"extras": ["tracking"]},
+            },
+            "env": {},
+            "outputs_prefix": None,
+        },
+        prefect_api_url="http://127.0.0.1:4200/api",
+    )
+
+    submitted = json.loads(str(captured["parameters"]["job_spec_json"]))
+    assert submitted["inputs"]["resolved_config"]["runtime"]["width"] == 2048
