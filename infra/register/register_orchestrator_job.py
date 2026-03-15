@@ -10,7 +10,6 @@ from typing import Any
 from uuid import UUID
 
 import yaml
-
 from branch_deployments import DEFAULT_FLOW_KIND, deployment_name_for_branch
 from prefect.client.orchestration import SyncPrefectClient, get_client
 from prefect.client.schemas.filters import DeploymentFilter, DeploymentFilterName
@@ -32,6 +31,10 @@ EXECUTION_PROFILES = (
     "generator-sdxl-gpu",
 )
 SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parents[1]
+SRC_DIR = REPO_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 DEFAULT_JOB_SPEC_DIR = SCRIPT_DIR / "job_specs"
 
 
@@ -436,6 +439,39 @@ def _resolved_deployment_name_from_job_spec(
     )
 
 
+def _extract_job_inputs(job_spec: dict[str, Any]) -> dict[str, Any]:
+    payload = job_spec.get("inputs")
+    if isinstance(payload, dict):
+        return payload
+    payload = job_spec.get("engine_run")
+    if isinstance(payload, dict):
+        return payload
+    raise SystemExit("job spec requires inputs")
+
+
+def _resolve_job_spec_config(job_spec: dict[str, Any]) -> dict[str, Any]:
+    from discoverex.config_loader import resolve_pipeline_config
+
+    inputs = _extract_job_inputs(job_spec)
+    resolved = resolve_pipeline_config(
+        config_name=str(inputs.get("config_name") or "").strip()
+        or _default_config_name(str(inputs.get("command") or "").strip()),
+        config_dir=str(inputs.get("config_dir") or "conf"),
+        overrides=[str(item) for item in inputs.get("overrides", [])],
+        resolved_config=inputs.get("resolved_config"),
+    )
+    return resolved.model_dump(mode="python")
+
+
+def _enrich_job_spec_with_resolved_config(job_spec: dict[str, Any]) -> dict[str, Any]:
+    enriched = dict(job_spec)
+    inputs = dict(_extract_job_inputs(job_spec))
+    if inputs.get("resolved_config") is None:
+        inputs["resolved_config"] = _resolve_job_spec_config(job_spec)
+    enriched["inputs"] = inputs
+    return enriched
+
+
 def submit_job_spec(
     *,
     job_spec: dict[str, Any],
@@ -448,9 +484,12 @@ def submit_job_spec(
     if not prefect_api_url:
         raise SystemExit("--prefect-api-url is required unless PREFECT_API_URL is set")
     api_url = _normalize_api_url(prefect_api_url)
-    deployment_name = _resolved_deployment_name_from_job_spec(job_spec, deployment)
+    enriched_job_spec = _enrich_job_spec_with_resolved_config(job_spec)
+    deployment_name = _resolved_deployment_name_from_job_spec(
+        enriched_job_spec, deployment
+    )
     params: dict[str, Any] = {
-        "job_spec_json": json.dumps(job_spec, ensure_ascii=True),
+        "job_spec_json": json.dumps(enriched_job_spec, ensure_ascii=True),
         "resume_key": resume_key,
         "checkpoint_dir": checkpoint_dir,
     }
@@ -466,7 +505,9 @@ def submit_job_spec(
                     client,
                     deployment_id,
                     params,
-                    job_name or str(job_spec.get("job_name", "")).strip() or None,
+                    job_name
+                    or str(enriched_job_spec.get("job_name", "")).strip()
+                    or None,
                 )
             except json.JSONDecodeError as exc:
                 _emit_prefect_diagnostics(api_url, deployment_name)
@@ -480,8 +521,8 @@ def submit_job_spec(
         "deployment_id": str(deployment_id),
         "flow_run_id": str(getattr(created, "id", "")),
         "flow_run_name": getattr(created, "name", None),
-        "engine": job_spec["engine"],
-        "run_mode": job_spec["run_mode"],
+        "engine": enriched_job_spec["engine"],
+        "run_mode": enriched_job_spec["run_mode"],
     }
 
 

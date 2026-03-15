@@ -21,13 +21,17 @@ def load_pipeline_config(
     config_name: str,
     config_dir: str = "conf",
     overrides: list[str] | None = None,
+    resolved_config: object | None = None,
 ) -> "PipelineConfig":
-    from discoverex.config_loader import load_pipeline_config as _load_pipeline_config
+    from discoverex.config_loader import (
+        resolve_pipeline_config as _resolve_pipeline_config,
+    )
 
-    return _load_pipeline_config(
+    return _resolve_pipeline_config(
         config_name=config_name,
         config_dir=config_dir,
         overrides=overrides,
+        resolved_config=resolved_config,
     )
 
 
@@ -73,6 +77,7 @@ def engine_entry_flow(
     config_name: str,
     config_dir: str = "conf",
     overrides: list[str] | None = None,
+    resolved_config: object | None = None,
 ) -> dict[str, Any]:
     started = perf_counter()
     logger.info(
@@ -85,6 +90,7 @@ def engine_entry_flow(
         config_name=config_name,
         config_dir=config_dir,
         overrides=overrides or [],
+        resolved_config=resolved_config,
     )
     cfg = normalize_pipeline_config_for_worker_runtime(cfg)
     execution_snapshot = build_execution_snapshot(
@@ -144,6 +150,7 @@ def run_engine_entry(
     config_name: str,
     config_dir: str = "conf",
     overrides: list[str] | None = None,
+    resolved_config: object | None = None,
 ) -> dict[str, Any]:
     return engine_entry_flow(
         command=command,
@@ -151,4 +158,5 @@ def run_engine_entry(
         config_name=config_name,
         config_dir=config_dir,
         overrides=overrides,
+        resolved_config=resolved_config,
     )

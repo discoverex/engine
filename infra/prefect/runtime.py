@@ -109,6 +109,7 @@ def summarize_run_request(
 ) -> dict[str, Any]:
     runtime = payload.get("runtime", {})
     runtime_env = runtime.get("extra_env", {}) if isinstance(runtime, dict) else {}
+    resolved_config = redact_resolved_config(payload)
     env_presence = {
         "artifact_dir": bool(env.get(ARTIFACT_DIR_ENV, "").strip()),
         "artifact_manifest": bool(env.get(ARTIFACT_MANIFEST_ENV, "").strip()),
@@ -134,9 +135,24 @@ def summarize_run_request(
         "runtime_extras": (
             runtime.get("extras", []) if isinstance(runtime, dict) else []
         ),
+        "resolved_config": resolved_config,
         "override_count": len(coerce_overrides(payload.get("overrides"))),
         "env_presence": env_presence,
     }
+
+
+def redact_resolved_config(payload: dict[str, Any]) -> Any:
+    from discoverex.config_loader import resolve_pipeline_config
+    from discoverex.execution_snapshot import redact_for_logging
+
+    resolved_config = payload.get("resolved_config")
+    if resolved_config is None:
+        resolved_config = resolve_pipeline_config(
+            config_name=config_name(payload),
+            config_dir=string_value(payload.get("config_dir")) or "conf",
+            overrides=coerce_overrides(payload.get("overrides")),
+        ).model_dump(mode="python")
+    return redact_for_logging(resolved_config)
 
 
 def set_if_value(env: dict[str, str], key: str, value: object) -> None:

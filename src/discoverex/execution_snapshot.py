@@ -52,6 +52,10 @@ def build_execution_snapshot(
     return cast(dict[str, Any], _redact(snapshot))
 
 
+def redact_for_logging(value: Any) -> Any:
+    return _redact(value)
+
+
 def write_execution_snapshot(
     *,
     artifacts_root: Path,

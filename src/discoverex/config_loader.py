@@ -22,6 +22,28 @@ def load_pipeline_config(
     return PipelineConfig.model_validate(data)
 
 
+def coerce_pipeline_config(config: object) -> PipelineConfig:
+    if not isinstance(config, dict):
+        raise ValueError("resolved_config must be a dict")
+    return PipelineConfig.model_validate(config)
+
+
+def resolve_pipeline_config(
+    *,
+    config_name: str,
+    config_dir: str | Path = "conf",
+    overrides: list[str] | None = None,
+    resolved_config: object | None = None,
+) -> PipelineConfig:
+    if resolved_config is not None:
+        return coerce_pipeline_config(resolved_config)
+    return load_pipeline_config(
+        config_name=config_name,
+        config_dir=config_dir,
+        overrides=overrides,
+    )
+
+
 def load_validator_config(
     config_name: str = "validator",
     config_dir: str | Path = "conf",
