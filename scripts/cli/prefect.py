@@ -22,7 +22,7 @@ app = typer.Typer(
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INFRA_DIR = REPO_ROOT / "infra" / "register"
 DEFAULT_REGISTER_JOB_SPEC = (
-    INFRA_DIR / "job_specs" / "real-generate-sdxl-gpu-8gb.json"
+    INFRA_DIR / "job_specs" / "real-generate-sdxl-gpu-8gb.yaml"
 )
 
 
@@ -226,7 +226,7 @@ def submit_spec(ctx: typer.Context) -> None:
     raise typer.Exit(exit_code)
 
 
-async def _fetch_logs(flow_run_id: str, limit: int = 1000) -> None:
+async def _fetch_logs(flow_run_id: str, limit: int = 200) -> None:
     try:
         from prefect.logging.configuration import setup_logging
 
@@ -261,6 +261,6 @@ async def _fetch_logs(flow_run_id: str, limit: int = 1000) -> None:
 @app.command(help="Fetch and display logs for a specific Prefect flow run ID.")
 def check_logs(
     flow_run_id: str = typer.Argument(..., help="The UUID of the flow run"),
-    limit: int = typer.Option(1000, help="Maximum number of log entries to fetch"),
+    limit: int = typer.Option(200, help="Maximum number of log entries to fetch"),
 ) -> None:
     asyncio.run(_fetch_logs(flow_run_id, limit))
