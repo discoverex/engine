@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from hydra import compose, initialize_config_dir
-from omegaconf import OmegaConf
-
 from discoverex.config import PipelineConfig, ValidatorPipelineConfig
 
 
@@ -13,6 +10,9 @@ def load_pipeline_config(
     config_dir: str | Path = "conf",
     overrides: list[str] | None = None,
 ) -> PipelineConfig:
+    from hydra import compose, initialize_config_dir
+    from omegaconf import OmegaConf
+
     cfg_dir = Path(config_dir).resolve()
     with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
         cfg = compose(config_name=config_name, overrides=overrides or [])
@@ -49,6 +49,9 @@ def load_validator_config(
     config_dir: str | Path = "conf",
     overrides: list[str] | None = None,
 ) -> ValidatorPipelineConfig:
+    from hydra import compose, initialize_config_dir
+    from omegaconf import OmegaConf
+
     cfg_dir = Path(config_dir).resolve()
     with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
         cfg = compose(config_name=config_name, overrides=overrides or [])
