@@ -34,6 +34,23 @@ def crop_bbox(image: Any, bbox: tuple[int, int, int, int]) -> Any:
     return image.crop(bbox)
 
 
+def expand_bbox(
+    bbox: tuple[int, int, int, int],
+    *,
+    padding: int,
+    width: int,
+    height: int,
+) -> tuple[int, int, int, int]:
+    left, top, right, bottom = bbox
+    pad = max(0, int(padding))
+    return (
+        max(0, left - pad),
+        max(0, top - pad),
+        min(width, right + pad),
+        min(height, bottom + pad),
+    )
+
+
 def resize_image(image: Any, size: tuple[int, int]) -> Any:
     return image.resize(size)
 
