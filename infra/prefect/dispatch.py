@@ -60,7 +60,8 @@ def dispatch_engine_job(
         for line in iter(proc.stdout.readline, ""):
             stripped = line.rstrip()
             stdout_lines.append(stripped)
-            logger.info(stripped)
+            # Log to DEBUG to keep it in the API but hidden from the default INFO UI
+            logger.debug(stripped)
         proc.stdout.close()
 
     def stream_stderr() -> None:
@@ -69,7 +70,8 @@ def dispatch_engine_job(
         for line in iter(proc.stderr.readline, ""):
             stripped = line.rstrip()
             stderr_lines.append(stripped)
-            logger.error(f"[stderr] {stripped}")
+            # Log to DEBUG to keep diagnostics quiet during success
+            logger.debug(f"[diag] {stripped}")
         proc.stderr.close()
 
     t_out = threading.Thread(target=stream_stdout, daemon=True)
@@ -86,14 +88,18 @@ def dispatch_engine_job(
     stderr = "\n".join(stderr_lines)
 
     if return_code != 0:
+        # LOUD FAILURE: Flush stderr to ERROR level for immediate visibility in the UI
+        if stderr.strip():
+            logger.error(f"Engine process failed. Captured stderr:\n{stderr.strip()}")
+        
         reason = stderr.strip() or stdout.strip() or f"exit_code={return_code}"
         raise RuntimeError(
             "engine subprocess failed"
             f"\n\nexit_code: {return_code}"
-            f"\n\nstderr:\n{stderr.strip()}"
-            f"\n\nstdout:\n{stdout.strip()}"
             f"\n\nreason: {reason}"
         )
+    
+    # QUIET SUCCESS: Only a summary is logged at INFO level (handled by flow.py)
     parsed = _parse_payload_from_stdout(stdout)
     return DispatchResult(payload=parsed, stdout=stdout, stderr=stderr)
 
