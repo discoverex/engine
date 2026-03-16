@@ -73,6 +73,13 @@ class SdxlInpaintModel:
         similarity_color_weight: float = 0.7,
         similarity_edge_weight: float = 0.3,
         placement_overlap_threshold: float = 0.35,
+        independent_object_generation: bool = False,
+        object_generation_background: str = "average",
+        final_inpaint_strength: float | None = None,
+        final_inpaint_steps: int | None = None,
+        final_inpaint_guidance_scale: float | None = None,
+        final_inpaint_only_masked: bool = False,
+        final_mask_blur: int | None = None,
     ) -> None:
         self.model_id = model_id
         self.revision = revision
@@ -107,6 +114,13 @@ class SdxlInpaintModel:
         self.similarity_color_weight = similarity_color_weight
         self.similarity_edge_weight = similarity_edge_weight
         self.placement_overlap_threshold = placement_overlap_threshold
+        self.independent_object_generation = independent_object_generation
+        self.object_generation_background = object_generation_background
+        self.final_inpaint_strength = final_inpaint_strength
+        self.final_inpaint_steps = final_inpaint_steps
+        self.final_inpaint_guidance_scale = final_inpaint_guidance_scale
+        self.final_inpaint_only_masked = final_inpaint_only_masked
+        self.final_mask_blur = final_mask_blur
         self._pipe: Any | None = None
 
     def load(self, model_ref_or_version: str) -> ModelHandle:
@@ -206,11 +220,23 @@ class SdxlInpaintModel:
         try:
             image = load_image_rgb(source)
             bbox = sanitize_bbox(request.bbox, image.width, image.height)
+            initial_source = image
+            initial_force_full_mask = False
+            if (
+                self.inpaint_mode == "similarity_overlay_v2"
+                and self.independent_object_generation
+            ):
+                initial_source = self._build_object_generation_canvas(
+                    image=image,
+                    bbox=bbox,
+                )
+                initial_force_full_mask = True
             initial_stage = self._run_inpaint_stage(
                 handle=handle,
-                source_image=image,
+                source_image=initial_source,
                 target_bbox=bbox,
                 request=request,
+                force_full_mask=initial_force_full_mask,
             )
             output = Path(output_path)
             if not has_meaningful_mask(initial_stage["object_mask"]):
@@ -273,7 +299,43 @@ class SdxlInpaintModel:
             handle=handle,
             source_image=precomposited,
             target_bbox=placement_bbox,
-            request=request,
+            request=request.model_copy(
+                update={
+                    "generation_strength": (
+                        self.final_inpaint_strength
+                        if self.final_inpaint_strength is not None
+                        else min(
+                            float(request.generation_strength or self.generation_strength),
+                            0.18,
+                        )
+                    ),
+                    "generation_steps": (
+                        self.final_inpaint_steps
+                        if self.final_inpaint_steps is not None
+                        else max(
+                            4,
+                            min(int(request.generation_steps or self.generation_steps), 6),
+                        )
+                    ),
+                    "generation_guidance_scale": (
+                        self.final_inpaint_guidance_scale
+                        if self.final_inpaint_guidance_scale is not None
+                        else min(
+                            float(
+                                request.generation_guidance_scale
+                                or self.generation_guidance_scale
+                            ),
+                            2.0,
+                        )
+                    ),
+                    "inpaint_only_masked": self.final_inpaint_only_masked,
+                    "mask_blur": (
+                        self.final_mask_blur
+                        if self.final_mask_blur is not None
+                        else int(request.mask_blur or self.mask_blur)
+                    ),
+                }
+            ),
         )
         use_stage = (
             final_stage
@@ -303,13 +365,21 @@ class SdxlInpaintModel:
         source_image: Any,
         target_bbox: tuple[int, int, int, int],
         request: InpaintRequest,
+        force_full_mask: bool = False,
     ) -> dict[str, Any]:
+        request_inpaint_only_masked = (
+            request.inpaint_only_masked
+            if request.inpaint_only_masked is not None
+            else self.inpaint_only_masked
+        )
         crop_bbox_with_padding = expand_bbox(
             target_bbox,
-            padding=(request.masked_area_padding if request.inpaint_only_masked else 0),
+            padding=(request.masked_area_padding if request_inpaint_only_masked else 0),
             width=source_image.width,
             height=source_image.height,
         )
+        if force_full_mask:
+            crop_bbox_with_padding = (0, 0, source_image.width, source_image.height)
         original_patch = crop_bbox(source_image, crop_bbox_with_padding)
         working_patch, working_size = resize_patch_to_long_side(
             original_patch, self.patch_target_long_side
@@ -319,6 +389,7 @@ class SdxlInpaintModel:
             target_bbox=target_bbox,
             working_size=working_size,
             request=request,
+            force_full_mask=force_full_mask,
         )
         generated_patch = self._generate_image(
             handle=handle,
@@ -332,18 +403,10 @@ class SdxlInpaintModel:
                 request.generation_guidance_scale or self.generation_guidance_scale
             ),
             mask_blur=int(request.mask_blur or self.mask_blur),
-            inpaint_only_masked=bool(
-                request.inpaint_only_masked
-                if request.inpaint_only_masked is not None
-                else self.inpaint_only_masked
-            ),
+            inpaint_only_masked=bool(request_inpaint_only_masked),
             padding_mask_crop=(
                 int(request.masked_area_padding or self.masked_area_padding)
-                if (
-                    request.inpaint_only_masked
-                    if request.inpaint_only_masked is not None
-                    else self.inpaint_only_masked
-                )
+                if request_inpaint_only_masked
                 else None
             ),
         )
@@ -498,6 +561,22 @@ class SdxlInpaintModel:
         union = first_area + second_area - intersection
         return intersection / union if union > 0 else 0.0
 
+    def _build_object_generation_canvas(
+        self,
+        *,
+        image: Any,
+        bbox: tuple[int, int, int, int],
+    ) -> Any:
+        from PIL import Image
+
+        if self.object_generation_background == "gray":
+            return Image.new("RGB", image.size, color=(127, 127, 127))
+        if self.object_generation_background == "black":
+            return Image.new("RGB", image.size, color=(0, 0, 0))
+        crop = crop_bbox(image, bbox).convert("RGB")
+        avg = crop.resize((1, 1)).getpixel((0, 0))
+        return Image.new("RGB", image.size, color=avg)
+
     def _build_generation_mask(
         self,
         *,
@@ -505,8 +584,9 @@ class SdxlInpaintModel:
         target_bbox: tuple[int, int, int, int],
         working_size: tuple[int, int],
         request: InpaintRequest,
+        force_full_mask: bool = False,
     ) -> Any:
-        if not request.inpaint_only_masked:
+        if force_full_mask:
             return build_full_mask(*working_size)
         crop_left, crop_top, crop_right, crop_bottom = crop_bbox
         crop_width = max(1, crop_right - crop_left)

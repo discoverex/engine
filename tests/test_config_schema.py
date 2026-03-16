@@ -52,4 +52,10 @@ def test_generator_sdxl_gpu_v2_8gb_profile_loads_v2_stack() -> None:
         "similarity_overlay_v2"
     )
     assert cfg.models.inpaint.model_dump(mode="python")["overlay_alpha"] == 0.5
+    assert cfg.models.inpaint.model_dump(mode="python")[
+        "independent_object_generation"
+    ] is True
+    assert cfg.models.inpaint.model_dump(mode="python")[
+        "final_inpaint_only_masked"
+    ] is False
     assert cfg.runtime.model_runtime.offload_mode == "sequential"

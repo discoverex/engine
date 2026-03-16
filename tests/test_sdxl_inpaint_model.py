@@ -209,6 +209,11 @@ def test_sdxl_inpaint_v2_selects_similarity_bbox_and_writes_precomposite(
         overlay_alpha=0.5,
         placement_grid_stride=8,
         placement_downscale_factor=1,
+        independent_object_generation=True,
+        final_inpaint_strength=0.18,
+        final_inpaint_steps=6,
+        final_inpaint_guidance_scale=2.0,
+        final_inpaint_only_masked=False,
     )
     monkeypatch.setattr(
         "discoverex.adapters.outbound.models.sdxl_inpaint.resolve_runtime",
@@ -227,9 +232,11 @@ def test_sdxl_inpaint_v2_selects_similarity_bbox_and_writes_precomposite(
     ImageDraw.Draw(base).rectangle((56, 24, 72, 40), fill=(32, 96, 196))
     base.save(source)
     calls = {"count": 0}
+    captured: list[dict[str, object]] = []
 
     def _fake_generate_image(**kwargs):  # type: ignore[no-untyped-def]
         calls["count"] += 1
+        captured.append(dict(kwargs))
         image = kwargs["image"]
         generated = image.copy()
         draw = ImageDraw.Draw(generated)
@@ -265,3 +272,8 @@ def test_sdxl_inpaint_v2_selects_similarity_bbox_and_writes_precomposite(
     assert selected["x"] >= 48
     assert selected["y"] >= 16
     assert pred["placement_score"] >= 0.0
+    assert len(captured) == 2
+    assert captured[0]["mask"].getbbox() == (0, 0, 128, 128)
+    assert captured[1]["inpaint_only_masked"] is False
+    assert captured[1]["strength"] == pytest.approx(0.18)
+    assert captured[1]["padding_mask_crop"] is None

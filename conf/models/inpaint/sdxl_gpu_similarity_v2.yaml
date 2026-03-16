@@ -30,3 +30,10 @@ placement_grid_stride: 24
 placement_downscale_factor: 2
 similarity_color_weight: 0.7
 similarity_edge_weight: 0.3
+independent_object_generation: true
+object_generation_background: average
+final_inpaint_strength: 0.18
+final_inpaint_steps: 6
+final_inpaint_guidance_scale: 2.0
+final_inpaint_only_masked: false
+final_mask_blur: 4
