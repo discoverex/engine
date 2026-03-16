@@ -54,16 +54,20 @@ def test_prefect_wrapper_dry_run_defaults_to_remote_worker_profile() -> None:
     assert payload["entrypoint"][2] == (
         "PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher"
     )
-    assert payload["job_name"] == "generate--generate--generator-sdxl-gpu"
+    assert payload["job_name"] == "generate--generate--generator-pixart-gpu"
     assert payload["inputs"]["overrides"] == [
+        "profile=generator_pixart_gpu_v2_8gb",
         "runtime/model_runtime=gpu",
-        "runtime.width=512",
-        "runtime.height=512",
-        "models/background_generator=sdxl_gpu",
+        "flows/generate=v2",
+        "runtime.width=1024",
+        "runtime.height=1024",
+        "models/background_generator=pixart_sigma_8gb",
+        "models/object_generator=layerdiffuse",
         "models/hidden_region=hf",
-        "models/inpaint=sdxl_gpu",
+        "models/inpaint=sdxl_gpu_similarity_v2",
         "models/perception=hf",
         "models/fx=copy_image",
+        "runtime.model_runtime.offload_mode=sequential",
     ]
     assert payload["inputs"]["runtime"]["extra_env"] == {}
     assert payload["inputs"]["runtime"]["extras"] == [
@@ -174,7 +178,7 @@ def test_prefect_wrapper_forwards_config_selection() -> None:
     payload = json.loads(proc.stdout)
     assert payload["inputs"]["config_name"] == "verify_prod"
     assert payload["inputs"]["config_dir"] == "/srv/conf"
-    assert payload["job_name"] == "verify--verify_prod--generator-sdxl-gpu"
+    assert payload["job_name"] == "verify--verify_prod--generator-pixart-gpu"
 
 
 def test_prefect_wrapper_help_marks_script_as_compatibility_helper() -> None:

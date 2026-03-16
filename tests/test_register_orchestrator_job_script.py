@@ -308,6 +308,56 @@ def test_register_script_generator_sdxl_gpu_profile_sets_dedicated_models() -> N
     ]
 
 
+def test_register_script_generator_pixart_gpu_profile_sets_dedicated_models() -> None:
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--dry-run",
+            "--execution-profile",
+            "generator-pixart-gpu",
+            "--command",
+            "generate",
+            "--repo-url",
+            "https://github.com/example/engine.git",
+            "--ref",
+            "main",
+            "--background-prompt",
+            "rainy neon alley",
+            "--object-prompt",
+            "hidden silver coin",
+            "--final-prompt",
+            "polished puzzle render",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["inputs"]["args"]["final_prompt"] == "polished puzzle render"
+    assert payload["job_name"] == "generate--generate--generator-pixart-gpu"
+    assert payload["inputs"]["overrides"] == [
+        "profile=generator_pixart_gpu_v2_8gb",
+        "runtime/model_runtime=gpu",
+        "flows/generate=v2",
+        "runtime.width=1024",
+        "runtime.height=1024",
+        "models/background_generator=pixart_sigma_8gb",
+        "models/object_generator=layerdiffuse",
+        "models/hidden_region=hf",
+        "models/inpaint=sdxl_gpu_similarity_v2",
+        "models/perception=hf",
+        "models/fx=copy_image",
+        "runtime.model_runtime.offload_mode=sequential",
+    ]
+    assert payload["inputs"]["runtime"]["extras"] == [
+        "tracking",
+        "storage",
+        "ml-gpu",
+    ]
+
+
 def test_register_script_allows_explicit_config_name_and_dir() -> None:
     proc = subprocess.run(
         [
