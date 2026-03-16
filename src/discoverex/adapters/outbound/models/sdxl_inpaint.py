@@ -73,6 +73,7 @@ class SdxlInpaintModel:
         similarity_color_weight: float = 0.7,
         similarity_edge_weight: float = 0.3,
         placement_overlap_threshold: float = 0.35,
+        final_context_size: int = 512,
         independent_object_generation: bool = False,
         object_generation_background: str = "average",
         final_inpaint_strength: float | None = None,
@@ -114,6 +115,7 @@ class SdxlInpaintModel:
         self.similarity_color_weight = similarity_color_weight
         self.similarity_edge_weight = similarity_edge_weight
         self.placement_overlap_threshold = placement_overlap_threshold
+        self.final_context_size = final_context_size
         self.independent_object_generation = independent_object_generation
         self.object_generation_background = object_generation_background
         self.final_inpaint_strength = final_inpaint_strength
@@ -518,15 +520,17 @@ class SdxlInpaintModel:
         request: InpaintRequest,
     ) -> dict[str, Any]:
         crop_bbox_with_padding = expand_bbox(
-            target_bbox,
-            padding=int(request.masked_area_padding or self.masked_area_padding),
+            self._build_context_crop_bbox(
+                image=source_image,
+                target_bbox=target_bbox,
+            ),
+            padding=0,
             width=source_image.width,
             height=source_image.height,
         )
         original_patch = crop_bbox(source_image, crop_bbox_with_padding)
-        working_patch, working_size = resize_patch_to_long_side(
-            original_patch, self.patch_target_long_side
-        )
+        working_patch = original_patch
+        working_size = original_patch.size
         blend_mask = self._build_blend_mask(
             crop_bbox=crop_bbox_with_padding,
             target_bbox=target_bbox,
@@ -581,6 +585,26 @@ class SdxlInpaintModel:
             ImageFilter.GaussianBlur(radius=max(1, int(self.final_mask_blur or 4)))
         )
         return localized_mask
+
+    def _build_context_crop_bbox(
+        self,
+        *,
+        image: Any,
+        target_bbox: tuple[int, int, int, int],
+    ) -> tuple[int, int, int, int]:
+        crop_size = min(
+            max(1, int(self.final_context_size)),
+            image.width,
+            image.height,
+        )
+        target_left, target_top, target_right, target_bottom = target_bbox
+        center_x = (target_left + target_right) / 2.0
+        center_y = (target_top + target_bottom) / 2.0
+        left = int(round(center_x - crop_size / 2.0))
+        top = int(round(center_y - crop_size / 2.0))
+        left = min(max(0, left), max(0, image.width - crop_size))
+        top = min(max(0, top), max(0, image.height - crop_size))
+        return (left, top, left + crop_size, top + crop_size)
 
     def _localize_object_mask(
         self,

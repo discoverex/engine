@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from time import perf_counter
+from typing import Any
 
 from discoverex.application.context import AppContextLike
 from discoverex.domain.scene import Background
@@ -82,14 +83,20 @@ def build_background_from_inputs(
             bool(fallback_ref and resolved.image_ref == fallback_ref),
             format_seconds(started),
         )
+        background = build_background(resolved.image_ref, context.runtime)
+        background = _upscale_background_if_needed(
+            background=background,
+            context=context,
+            scene_dir=scene_dir,
+        )
         return (
-            build_background(resolved.image_ref, context.runtime),
+            background,
             PromptStageRecord(
                 mode="prompt",
                 prompt=prompt,
                 negative_prompt=negative_prompt,
                 source_ref=fallback_ref or None,
-                output_ref=resolved.image_ref,
+                output_ref=background.asset_ref,
                 used_fallback=bool(fallback_ref and resolved.image_ref == fallback_ref),
             ),
         )
@@ -106,11 +113,67 @@ def build_background_from_inputs(
         image_ref=asset_ref,
     )
     logger.info("background selection mode=asset_ref source=%s", asset_ref)
+    background = build_background(asset_ref, context.runtime)
+    background = _upscale_background_if_needed(
+        background=background,
+        context=context,
+        scene_dir=scene_dir,
+    )
     return (
-        build_background(asset_ref, context.runtime),
+        background,
         PromptStageRecord(
             mode="asset_ref",
             source_ref=asset_ref,
-            output_ref=asset_ref,
+            output_ref=background.asset_ref,
         ),
     )
+
+
+def _upscale_background_if_needed(
+    *,
+    background: Background,
+    context: AppContextLike,
+    scene_dir: Path,
+) -> Background:
+    factor = max(1, int(context.runtime.background_upscale_factor))
+    if factor <= 1:
+        return background
+    source_path = Path(background.asset_ref)
+    if not source_path.exists():
+        return background
+    output_path = scene_dir / "layers" / "base" / "generated-background.upscaled.png"
+    upscaled = _upscale_background_image(
+        image_path=source_path,
+        output_path=output_path,
+        factor=factor,
+    )
+    background.metadata["base_background_ref"] = background.asset_ref
+    background.metadata["background_upscale_factor"] = factor
+    background.asset_ref = str(upscaled["path"])
+    background.width = int(upscaled["width"])
+    background.height = int(upscaled["height"])
+    context.runtime.width = int(upscaled["width"])
+    context.runtime.height = int(upscaled["height"])
+    return background
+
+
+def _upscale_background_image(
+    *,
+    image_path: Path,
+    output_path: Path,
+    factor: int,
+) -> dict[str, Any]:
+    from PIL import Image  # type: ignore
+
+    with Image.open(image_path).convert("RGB") as image:
+        upscaled = image.resize(
+            (max(1, image.width * factor), max(1, image.height * factor)),
+            Image.Resampling.LANCZOS,
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        upscaled.save(output_path)
+        return {
+            "path": output_path,
+            "width": upscaled.width,
+            "height": upscaled.height,
+        }

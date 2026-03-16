@@ -69,6 +69,8 @@ def test_generator_sdxl_gpu_v2_8gb_profile_loads_v2_stack() -> None:
         "default_guidance_scale"
     ] == 5.0
     assert cfg.models.object_generator.model_dump(mode="python")["offload_mode"] == "model"
+    assert cfg.models.inpaint.model_dump(mode="python")["final_context_size"] == 512
     assert cfg.runtime.width == 640
     assert cfg.runtime.height == 480
+    assert cfg.runtime.background_upscale_factor == 2
     assert cfg.runtime.model_runtime.offload_mode == "sequential"

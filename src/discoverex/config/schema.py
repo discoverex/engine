@@ -71,16 +71,17 @@ class RuntimeEnvConfig(BaseModel):
 class RuntimeConfig(BaseModel):
     width: int = 1024
     height: int = 768
+    background_upscale_factor: int = 1
     config_version: str = "config-v1"
     artifacts_root: str = "artifacts"
     model_runtime: RuntimeModelConfig = Field(default_factory=RuntimeModelConfig)
     env: RuntimeEnvConfig = Field(default_factory=RuntimeEnvConfig)
 
-    @field_validator("width", "height")
+    @field_validator("width", "height", "background_upscale_factor")
     @classmethod
     def validate_dimensions(cls, value: int) -> int:
         if value < 1:
-            raise ValueError("width/height must be >= 1")
+            raise ValueError("width/height/background_upscale_factor must be >= 1")
         return value
 
 

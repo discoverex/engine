@@ -12,5 +12,6 @@ defaults:
 runtime:
   width: 640
   height: 480
+  background_upscale_factor: 2
   model_runtime:
     offload_mode: sequential
