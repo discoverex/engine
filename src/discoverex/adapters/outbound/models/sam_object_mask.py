@@ -18,10 +18,17 @@ class SamObjectMaskExtractor:
         image_path: str | Path,
         output_prefix: str | Path,
     ) -> dict[str, Path]:
-        image = self._load_image(image_path)
-        mask = self._predict_mask(image)
-        object_rgba = image.convert("RGBA")
-        object_rgba.putalpha(mask)
+        loaded = self._load_image(image_path)
+        image = loaded["rgb"]
+        alpha = loaded.get("alpha")
+        if alpha is not None and alpha.getbbox() is not None:
+            mask = alpha
+            object_rgba = image.convert("RGBA")
+            object_rgba.putalpha(mask)
+        else:
+            mask = self._predict_mask(image)
+            object_rgba = image.convert("RGBA")
+            object_rgba.putalpha(mask)
         prefix = Path(output_prefix)
         object_path = save_image(object_rgba, prefix.with_suffix(".object.png"))
         mask_path = save_image(mask, prefix.with_suffix(".mask.png"))
@@ -30,10 +37,16 @@ class SamObjectMaskExtractor:
     def unload(self) -> None:
         self._predictor = None
 
-    def _load_image(self, image_path: str | Path) -> Any:
+    def _load_image(self, image_path: str | Path) -> dict[str, Any]:
         from PIL import Image  # type: ignore
 
-        return Image.open(image_path).convert("RGB")
+        with Image.open(image_path) as loaded:
+            rgba = loaded.convert("RGBA")
+            alpha = rgba.getchannel("A")
+            return {
+                "rgb": rgba.convert("RGB"),
+                "alpha": alpha if alpha.getbbox() is not None else None,
+            }
 
     def _predict_mask(self, image: Any) -> Any:
         try:

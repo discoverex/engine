@@ -1,7 +1,6 @@
 # @package models.object_generator
-_target_: discoverex.adapters.outbound.models.sdxl_background_generation.SdxlBackgroundGenerationModel
-model_id: stabilityai/sdxl-turbo
-refiner_model_id: null
+_target_: discoverex.adapters.outbound.models.layerdiffuse_object_generation.LayerDiffuseObjectGenerationModel
+model_id: SG161222/RealVisXL_V4.0
 revision: main
 device: ${runtime.model_runtime.device}
 dtype: ${runtime.model_runtime.dtype}
@@ -16,8 +15,8 @@ enable_xformers_memory_efficient_attention: ${runtime.model_runtime.enable_xform
 enable_fp8_layerwise_casting: ${runtime.model_runtime.enable_fp8_layerwise_casting}
 enable_channels_last: ${runtime.model_runtime.enable_channels_last}
 strict_runtime: true
-default_prompt: "isolated single object on a plain neutral backdrop"
-default_negative_prompt: "busy scene, environment, multiple objects, shadow, floor, wall, clutter, blurry, low quality, artifact"
+default_prompt: "isolated single object on a transparent background"
+default_negative_prompt: "busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact"
 default_num_inference_steps: 30
 default_guidance_scale: 5.0
-default_refiner_strength: 0.0
+weights_cache_dir: .cache/layerdiffuse
