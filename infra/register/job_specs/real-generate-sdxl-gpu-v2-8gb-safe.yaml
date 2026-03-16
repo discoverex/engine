@@ -16,7 +16,7 @@ inputs:
   args:
     background_prompt: stormy harbor at dusk, cinematic hidden object puzzle background
     background_negative_prompt: blurry, low quality, artifact
-    object_prompt: hidden golden compass
+    object_prompt: banana
     object_negative_prompt: blurry, low quality, artifact
     final_prompt: polished playable hidden object scene
     final_negative_prompt: blurry, low quality, artifact
@@ -24,8 +24,8 @@ inputs:
     - profile=generator_sdxl_gpu_v2_8gb
     - runtime/model_runtime=gpu
     - flows/generate=v2
-    - runtime.width=640
-    - runtime.height=480
+    - runtime.width=256
+    - runtime.height=256
     - models/background_generator=sdxl_gpu
     - models/object_generator=layerdiffuse
     - models/hidden_region=hf

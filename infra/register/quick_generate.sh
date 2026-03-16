@@ -24,7 +24,7 @@ python3 infra/register/register_prefect_job.py \
   --ref "${ENGINE_REF}" \
   --background-prompt "stormy harbor at dusk, cinematic hidden object puzzle background" \
   --background-negative-prompt "blurry, low quality, artifact" \
-  --object-prompt "hidden golden compass" \
+  --object-prompt "banana" \
   --object-negative-prompt "blurry, low quality, artifact" \
   --final-prompt "polished playable hidden object scene" \
   --final-negative-prompt "blurry, low quality, artifact" \
