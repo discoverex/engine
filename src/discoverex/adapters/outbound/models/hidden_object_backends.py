@@ -20,6 +20,8 @@ class BackendRuntime:
     enable_channels_last: bool
 
 
+
+
 class Rmbg20MaskRefiner:
     def __init__(
         self,
@@ -32,55 +34,173 @@ class Rmbg20MaskRefiner:
         self._model: Any | None = None
         self._image_processor: Any | None = None
 
-    def refine(self, *, image: Any, fallback_mask: Any) -> Any:
-        if not self.model_id.strip():
-            raise RuntimeError("RMBG 2.0 model_id is required")
+    def _lazy_load(self) -> None:
         try:
             import torch  # type: ignore
-            from PIL import Image  # type: ignore
-            from torchvision import transforms  # type: ignore
             from transformers import (  # type: ignore
                 AutoImageProcessor,
                 AutoModelForImageSegmentation,
             )
         except Exception as exc:
+            raise RuntimeError("RMBG 2.0 runtime unavailable during model load") from exc
+
+        if self._image_processor is None:
+            try:
+                self._image_processor = AutoImageProcessor.from_pretrained(self.model_id)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Failed to load RMBG 2.0 image processor: {self.model_id}"
+                ) from exc
+
+        if self._model is None:
+            device_str = str(self.runtime.device)
+            if device_str.startswith("cpu"):
+                torch_dtype = torch.float32
+            else:
+                torch_dtype = normalize_dtype(self.runtime.dtype, torch)
+
+            try:
+                model = AutoModelForImageSegmentation.from_pretrained(
+                    self.model_id,
+                    trust_remote_code=True,
+                    torch_dtype=torch_dtype,
+                )
+            except Exception as exc:
+                raise RuntimeError(f"Failed to load RMBG 2.0 model: {self.model_id}") from exc
+
+            try:
+                model = model.to(self.runtime.device)
+                if device_str.startswith("cpu"):
+                    model = model.float()
+                model.eval()
+            except Exception as exc:
+                raise RuntimeError("Failed to move RMBG 2.0 model to target device") from exc
+
+            self._model = model
+
+    def _extract_prediction(self, outputs: Any) -> Any:
+        pred = getattr(outputs, "predicted_alpha", None)
+        if pred is not None:
+            return pred
+
+        pred = getattr(outputs, "logits", None)
+        if pred is not None:
+            return pred
+
+        if isinstance(outputs, (tuple, list)) and len(outputs) > 0:
+            return outputs[0]
+
+        if hasattr(outputs, "preds"):
+            pred = getattr(outputs, "preds")
+            if pred is not None:
+                return pred
+
+        raise RuntimeError("RMBG 2.0 returned no usable alpha prediction")
+
+    def _normalize_alpha(self, pred: Any) -> Any:
+        import torch  # type: ignore
+
+        if not isinstance(pred, torch.Tensor):
+            raise RuntimeError("RMBG 2.0 prediction is not a tensor")
+
+        if pred.ndim == 4:
+            # expected: [B, C, H, W]
+            alpha = pred[0]
+            if alpha.shape[0] == 1:
+                alpha = alpha[0]
+            else:
+                alpha = alpha[0]
+        elif pred.ndim == 3:
+            # expected: [B, H, W] or [C, H, W]
+            alpha = pred[0]
+        elif pred.ndim == 2:
+            alpha = pred
+        else:
+            raise RuntimeError(f"Unexpected RMBG 2.0 prediction shape: {tuple(pred.shape)}")
+
+        alpha = alpha.squeeze()
+        if alpha.ndim != 2:
+            raise RuntimeError(f"Unexpected RMBG 2.0 alpha shape after squeeze: {tuple(alpha.shape)}")
+
+        return alpha.detach().float().cpu().clamp(0, 1)
+
+    def refine(self, *, image: Any, fallback_mask: Any) -> Any:
+        if not self.model_id.strip():
+            raise RuntimeError("RMBG 2.0 model_id is required")
+
+        try:
+            import numpy as np  # type: ignore
+            import torch  # type: ignore
+            from PIL import Image  # type: ignore
+            from torchvision.transforms.functional import to_pil_image  # type: ignore
+        except Exception as exc:
             raise RuntimeError("RMBG 2.0 runtime unavailable") from exc
 
-        runtime = resolve_runtime()
-        validate_diffusers_runtime(runtime)
-        if self._image_processor is None:
-            self._image_processor = AutoImageProcessor.from_pretrained(self.model_id)
-        if self._model is None:
-            torch_dtype = normalize_dtype(self.runtime.dtype, torch)
-            self._model = AutoModelForImageSegmentation.from_pretrained(
-                self.model_id,
-                trust_remote_code=True,
-                torch_dtype=torch_dtype,
-            ).to(self.runtime.device)
+        validate_diffusers_runtime(self.runtime)
+
+        if not isinstance(image, Image.Image):
+            raise TypeError("image must be a PIL.Image.Image")
+
+        if not hasattr(fallback_mask, "size"):
+            raise TypeError("fallback_mask must be a PIL.Image.Image-compatible object")
+
+        self._lazy_load()
 
         processor = self._image_processor
         model = self._model
-        inputs = processor(images=image, return_tensors="pt")
-        inputs = {
-            key: value.to(self.runtime.device) if hasattr(value, "to") else value
-            for key, value in inputs.items()
-        }
-        with torch.no_grad():
-            outputs = model(inputs["pixel_values"])
-        pred = getattr(outputs, "predicted_alpha", None)
-        if pred is None:
-            pred = getattr(outputs, "logits", None)
-        if pred is None:
-            raise RuntimeError("RMBG 2.0 returned no alpha prediction")
-        alpha = pred[0]
-        if alpha.ndim == 3:
-            alpha = alpha[0]
-        alpha = alpha.detach().float().cpu().clamp(0, 1)
-        to_pil = transforms.ToPILImage()
-        mask = to_pil(alpha)
-        mask = mask.resize(image.size, Image.LANCZOS).convert("L")
+
+        if processor is None or model is None:
+            raise RuntimeError("RMBG 2.0 model initialization failed")
+
+        try:
+            inputs = processor(images=image, return_tensors="pt")
+        except Exception as exc:
+            raise RuntimeError("RMBG 2.0 preprocessing failed") from exc
+
+        pixel_values = inputs.get("pixel_values")
+        if pixel_values is None:
+            raise RuntimeError("RMBG 2.0 processor did not return pixel_values")
+
+        try:
+            model_param = next(model.parameters())
+        except StopIteration as exc:
+            raise RuntimeError("RMBG 2.0 model has no parameters") from exc
+
+        model_device = model_param.device
+        model_dtype = model_param.dtype
+
+        try:
+            pixel_values = pixel_values.to(
+                device=model_device,
+                dtype=model_dtype,
+                non_blocking=model_device.type == "cuda",
+            )
+        except Exception as exc:
+            raise RuntimeError("Failed to move RMBG 2.0 inputs to model device") from exc
+
+        try:
+            with torch.inference_mode():
+                outputs = model(pixel_values)
+        except Exception as exc:
+            raise RuntimeError("RMBG 2.0 inference failed") from exc
+
+        pred = self._extract_prediction(outputs)
+        alpha = self._normalize_alpha(pred)
+
+        try:
+            mask = to_pil_image(alpha)
+            mask = mask.resize(image.size, Image.LANCZOS).convert("L")
+        except Exception as exc:
+            raise RuntimeError("RMBG 2.0 postprocessing failed") from exc
+
         if mask.getbbox() is None:
             return fallback_mask
+
+        mask_np = np.asarray(mask, dtype=np.uint8)
+        positive_area = int((mask_np > 8).sum())
+        if positive_area < 32:
+            return fallback_mask
+
         return mask
 
 
