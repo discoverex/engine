@@ -10,7 +10,8 @@ from prefect import flow, task
 
 from discoverex.application.context import AppContextLike
 from discoverex.application.use_cases.gen_verify.background_pipeline import (
-    apply_background_hires_fix_if_needed,
+    apply_background_canvas_upscale_if_needed,
+    apply_background_detail_reconstruction_if_needed,
     build_background_from_inputs,
 )
 from discoverex.application.use_cases.gen_verify.composite_pipeline import compose_scene
@@ -116,8 +117,8 @@ def _build_background_stage(
         unload_model(context.background_generator_model)
 
 
-@task(name="discoverex-generate-background-hires-fix", persist_result=False)
-def _background_hires_fix_stage(
+@task(name="discoverex-generate-background-canvas-upscale", persist_result=False)
+def _background_canvas_upscale_stage(
     *,
     context: AppContextLike,
     scene_dir: Path,
@@ -129,7 +130,32 @@ def _background_hires_fix_stage(
         context.model_versions.background_generator
     )
     try:
-        return apply_background_hires_fix_if_needed(
+        return apply_background_canvas_upscale_if_needed(
+            background=background,
+            context=context,
+            scene_dir=scene_dir,
+            fx_handle=handle,
+            prompt=(background_prompt or "").strip(),
+            negative_prompt=(background_negative_prompt or "").strip(),
+        )
+    finally:
+        unload_model(context.background_generator_model)
+
+
+@task(name="discoverex-generate-background-detail-reconstruct", persist_result=False)
+def _background_detail_reconstruct_stage(
+    *,
+    context: AppContextLike,
+    scene_dir: Path,
+    background: Background,
+    background_prompt: str | None,
+    background_negative_prompt: str | None,
+) -> Background:
+    handle = context.background_generator_model.load(
+        context.model_versions.background_generator
+    )
+    try:
+        return apply_background_detail_reconstruction_if_needed(
             background=background,
             context=context,
             scene_dir=scene_dir,
@@ -402,7 +428,14 @@ def run_generate_flow(
         background_prompt=background_prompt or None,
         background_negative_prompt=background_negative_prompt or None,
     )
-    background = _background_hires_fix_stage(
+    background = _background_canvas_upscale_stage(
+        context=context,
+        scene_dir=scene_dir,
+        background=background,
+        background_prompt=background_prompt or None,
+        background_negative_prompt=background_negative_prompt or None,
+    )
+    background = _background_detail_reconstruct_stage(
         context=context,
         scene_dir=scene_dir,
         background=background,
