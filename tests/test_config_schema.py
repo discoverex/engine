@@ -53,6 +53,9 @@ def test_generator_sdxl_gpu_v2_8gb_profile_loads_v2_stack() -> None:
     )
     assert cfg.flows is not None
     assert cfg.flows.generate.target.endswith("generate_v2_compat")
+    assert cfg.models.background_generator.target.endswith(
+        "PixArtSigmaBackgroundGenerationModel"
+    )
     assert cfg.models.inpaint.model_dump(mode="python")["inpaint_mode"] == (
         "similarity_overlay_v2"
     )
@@ -70,7 +73,8 @@ def test_generator_sdxl_gpu_v2_8gb_profile_loads_v2_stack() -> None:
     ] == 5.0
     assert cfg.models.object_generator.model_dump(mode="python")["offload_mode"] == "model"
     assert cfg.models.inpaint.model_dump(mode="python")["final_context_size"] == 512
-    assert cfg.runtime.width == 256
-    assert cfg.runtime.height == 256
-    assert cfg.runtime.background_upscale_factor == 4
+    assert cfg.runtime.width == 1024
+    assert cfg.runtime.height == 1024
+    assert cfg.runtime.background_upscale_factor == 2
     assert cfg.runtime.model_runtime.offload_mode == "sequential"
+    assert cfg.runtime.model_runtime.enable_xformers_memory_efficient_attention is True
