@@ -245,6 +245,11 @@ class Sam2MaskRefiner:
             return fallback_mask
         return mask
 
+from __future__ import annotations
+
+from typing import Any
+import logging
+
 
 class IcLightRelighter:
     def __init__(
@@ -252,10 +257,146 @@ class IcLightRelighter:
         *,
         model_id: str,
         runtime: BackendRuntime,
+        base_model_id: str | None = None,
+        strict: bool = False,
+        flat_background_rgba: tuple[int, int, int, int] = (127, 127, 127, 255),
     ) -> None:
-        self.model_id = model_id
+        self.model_id = model_id.strip()
         self.runtime = runtime
+        self.base_model_id = (base_model_id or "").strip()
+        self.strict = strict
+        self.flat_background_rgba = flat_background_rgba
+
         self._pipe: Any | None = None
+        self._logger = logging.getLogger(__name__)
+
+    def _raise_or_log(self, message: str, *, exc: Exception | None = None) -> None:
+        if self.strict:
+            if exc is None:
+                raise RuntimeError(message)
+            raise RuntimeError(message) from exc
+
+        if exc is None:
+            self._logger.warning(message)
+        else:
+            self._logger.warning("%s: %s", message, exc)
+
+    def _validate_runtime(self) -> None:
+        required_attrs = (
+            "device",
+            "dtype",
+            "offload_mode",
+            "enable_attention_slicing",
+            "enable_vae_slicing",
+            "enable_vae_tiling",
+            "enable_xformers_memory_efficient_attention",
+            "enable_fp8_layerwise_casting",
+            "enable_channels_last",
+        )
+        for attr_name in required_attrs:
+            if not hasattr(self.runtime, attr_name):
+                raise RuntimeError(f"Backend runtime missing required field: {attr_name}")
+
+    def _resolve_torch_dtype(self, torch: Any) -> Any:
+        device_str = str(self.runtime.device)
+        if device_str.startswith("cpu"):
+            return torch.float32
+        return normalize_dtype(self.runtime.dtype, torch)
+
+    def _configure_pipe(self, pipe: Any) -> Any:
+        return configure_diffusers_pipeline(
+            pipe,
+            handle=_RuntimeHandle(self.runtime),
+            offload_mode=self.runtime.offload_mode,
+            enable_attention_slicing=self.runtime.enable_attention_slicing,
+            enable_vae_slicing=self.runtime.enable_vae_slicing,
+            enable_vae_tiling=self.runtime.enable_vae_tiling,
+            enable_xformers_memory_efficient_attention=self.runtime.enable_xformers_memory_efficient_attention,
+            enable_fp8_layerwise_casting=self.runtime.enable_fp8_layerwise_casting,
+            enable_channels_last=self.runtime.enable_channels_last,
+        )
+
+    def _maybe_attach_ic_light_weights(self, pipe: Any) -> Any:
+        """
+        Extension point.
+
+        `self.base_model_id` should be a valid diffusers img2img pipeline repo.
+        `self.model_id` is treated as an IC-Light weights source or config source.
+
+        If you later implement actual IC-Light injection logic, do it here.
+        Right now this method is intentionally a no-op unless model_id is empty
+        or identical to base_model_id.
+        """
+        if not self.model_id:
+            return pipe
+
+        if self.model_id == self.base_model_id:
+            return pipe
+
+        self._raise_or_log(
+            "IC-Light weights injection is not implemented yet. "
+            "Using the base img2img pipeline without IC-Light weights."
+        )
+        return pipe
+
+    def _load_pipe(self) -> Any | None:
+        if self._pipe is not None:
+            return self._pipe
+
+        try:
+            import torch  # type: ignore
+            from diffusers import AutoPipelineForImage2Image  # type: ignore
+        except Exception as exc:
+            self._raise_or_log("IC-Light runtime unavailable", exc=exc)
+            return None
+
+        try:
+            self._validate_runtime()
+        except Exception as exc:
+            self._raise_or_log("Invalid backend runtime for IC-Light relighter", exc=exc)
+            return None
+
+        if not self.base_model_id:
+            self._raise_or_log(
+                "IC-Light relighter requires `base_model_id` for a valid diffusers "
+                "image-to-image pipeline. Returning original image."
+            )
+            return None
+
+        torch_dtype = self._resolve_torch_dtype(torch)
+
+        try:
+            pipe = AutoPipelineForImage2Image.from_pretrained(
+                self.base_model_id,
+                torch_dtype=torch_dtype,
+            )
+        except Exception as exc:
+            self._raise_or_log(
+                f"Failed to load base img2img pipeline: {self.base_model_id}",
+                exc=exc,
+            )
+            return None
+
+        try:
+            pipe = self._configure_pipe(pipe)
+        except Exception as exc:
+            self._raise_or_log(
+                "Failed to configure base img2img pipeline for relighting",
+                exc=exc,
+            )
+            return None
+
+        try:
+            pipe = self._maybe_attach_ic_light_weights(pipe)
+        except Exception as exc:
+            self._raise_or_log(
+                "Failed while applying IC-Light customization to the base pipeline",
+                exc=exc,
+            )
+            return None
+
+        self._pipe = pipe
+        return self._pipe
 
     def relight(
         self,
@@ -264,49 +405,80 @@ class IcLightRelighter:
         prompt: str,
         negative_prompt: str,
         strength: float = 0.18,
+        num_inference_steps: int = 20,
+        guidance_scale: float = 5.0,
+        seed: int | None = None,
     ) -> Any:
-        if not self.model_id.strip():
-            raise RuntimeError("IC-Light model_id is required")
         try:
             import torch  # type: ignore
-            from diffusers import AutoPipelineForImage2Image  # type: ignore
             from PIL import Image  # type: ignore
         except Exception as exc:
-            raise RuntimeError("IC-Light runtime unavailable") from exc
+            self._raise_or_log("IC-Light runtime unavailable during relight", exc=exc)
+            return rgba_object
 
-        runtime = resolve_runtime()
-        validate_diffusers_runtime(runtime)
-        if self._pipe is None:
-            torch_dtype = normalize_dtype(self.runtime.dtype, torch)
-            pipe = AutoPipelineForImage2Image.from_pretrained(
-                self.model_id,
-                torch_dtype=torch_dtype,
-            )
-            pipe = configure_diffusers_pipeline(
-                pipe,
-                handle=_RuntimeHandle(self.runtime),
-                offload_mode=self.runtime.offload_mode,
-                enable_attention_slicing=self.runtime.enable_attention_slicing,
-                enable_vae_slicing=self.runtime.enable_vae_slicing,
-                enable_vae_tiling=self.runtime.enable_vae_tiling,
-                enable_xformers_memory_efficient_attention=self.runtime.enable_xformers_memory_efficient_attention,
-                enable_fp8_layerwise_casting=self.runtime.enable_fp8_layerwise_casting,
-                enable_channels_last=self.runtime.enable_channels_last,
-            )
-            self._pipe = pipe
-        pipe = self._pipe
-        background = Image.new("RGBA", rgba_object.size, color=(127, 127, 127, 255))
-        flat = Image.alpha_composite(background, rgba_object.convert("RGBA")).convert("RGB")
-        relit = pipe(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            image=flat,
-            strength=max(0.01, min(0.99, float(strength))),
-        ).images[0]
-        relit_rgba = relit.convert("RGBA")
-        relit_rgba.putalpha(rgba_object.getchannel("A"))
-        return relit_rgba
+        if not isinstance(rgba_object, Image.Image):
+            self._raise_or_log("rgba_object must be a PIL.Image.Image")
+            return rgba_object
 
+        rgba = rgba_object.convert("RGBA")
+        pipe = self._load_pipe()
+        if pipe is None:
+            return rgba
+
+        safe_strength = max(0.01, min(0.99, float(strength)))
+        safe_steps = max(1, int(num_inference_steps))
+        safe_guidance = float(guidance_scale)
+
+        background = Image.new("RGBA", rgba.size, color=self.flat_background_rgba)
+        flat = Image.alpha_composite(background, rgba).convert("RGB")
+
+        generator = None
+        if seed is not None:
+            try:
+                device_for_generator = "cuda" if str(self.runtime.device).startswith("cuda") else "cpu"
+                generator = torch.Generator(device=device_for_generator).manual_seed(int(seed))
+            except Exception as exc:
+                self._raise_or_log("Failed to create deterministic generator for relight", exc=exc)
+                generator = None
+
+        kwargs: dict[str, Any] = {
+            "prompt": prompt or "",
+            "negative_prompt": negative_prompt or "",
+            "image": flat,
+            "strength": safe_strength,
+            "num_inference_steps": safe_steps,
+            "guidance_scale": safe_guidance,
+        }
+        if generator is not None:
+            kwargs["generator"] = generator
+
+        try:
+            with torch.inference_mode():
+                result = pipe(**kwargs)
+        except Exception as exc:
+            self._raise_or_log("IC-Light relight inference failed", exc=exc)
+            return rgba
+
+        images = getattr(result, "images", None)
+        if not images:
+            self._raise_or_log("IC-Light relight pipeline returned no images")
+            return rgba
+
+        relit = images[0]
+        if not isinstance(relit, Image.Image):
+            self._raise_or_log("IC-Light relight output is not a PIL image")
+            return rgba
+
+        try:
+            relit_rgba = relit.convert("RGBA")
+            relit_rgba.putalpha(rgba.getchannel("A"))
+            return relit_rgba
+        except Exception as exc:
+            self._raise_or_log("Failed to rebuild RGBA output after relight", exc=exc)
+            return rgba
+
+    def clear(self) -> None:
+        self._pipe = None
 
 class DiffusionObjectBlendBackend:
     def __init__(
