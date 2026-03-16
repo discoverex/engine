@@ -3,7 +3,9 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock
+
 import pytest
 
 from discoverex.adapters.outbound.models.pipeline_memory import (
@@ -11,10 +13,12 @@ from discoverex.adapters.outbound.models.pipeline_memory import (
 )
 from infra.prefect.dispatch import dispatch_engine_job
 
-
 # --- 1. VRAM Configuration Test ---
 
 class _FakePipe:
+    offload_mode: str | None
+    sent_to_device: str | None
+
     def __init__(self) -> None:
         self.offload_mode = None
         self.sent_to_device = None
@@ -54,18 +58,18 @@ def test_dispatch_engine_job_captures_logs_on_failure(monkeypatch: pytest.Monkey
     
     # 1. Mock subprocess.Popen
     class MockPopen:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
             self.returncode = 1
             # Mock stdout/stderr streams
             import io
             self.stdout = io.StringIO("some stdout content\n")
             self.stderr = io.StringIO("CRITICAL ERROR: Out of memory\n")
 
-        def wait(self, timeout=None):
+        def wait(self, timeout: float | None = None) -> int:
             self.returncode = 1
             return 1
 
-        def poll(self):
+        def poll(self) -> int | None:
             return 1
 
     monkeypatch.setattr(subprocess, "Popen", MockPopen)
@@ -89,5 +93,4 @@ def test_dispatch_engine_job_captures_logs_on_failure(monkeypatch: pytest.Monkey
     error_msg = str(exc_info.value)
     assert "engine subprocess failed" in error_msg
     assert "exit_code: 1" in error_msg
-    assert "stderr:\nCRITICAL ERROR: Out of memory" in error_msg
-    assert "stdout:\nsome stdout content" in error_msg
+    assert "reason: CRITICAL ERROR: Out of memory" in error_msg

@@ -7,7 +7,7 @@ from uuid import uuid4
 from discoverex.application.context import AppContextLike
 from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
 from discoverex.domain.scene import Background
-from discoverex.models.types import HiddenRegionRequest, InpaintRequest, ModelHandle
+from discoverex.models.types import InpaintRequest, ModelHandle
 from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 

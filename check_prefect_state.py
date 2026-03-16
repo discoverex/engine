@@ -2,16 +2,22 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-from pathlib import Path
-from prefect.client.orchestration import get_client
-from prefect.settings import PREFECT_API_URL, PREFECT_CLIENT_CUSTOM_HEADERS, temporary_settings
 
 # Add src to sys.path to import local modules
 import sys
+from pathlib import Path
+
+from prefect.client.orchestration import get_client
+from prefect.settings import (
+    PREFECT_API_URL,
+    PREFECT_CLIENT_CUSTOM_HEADERS,
+    temporary_settings,
+)
+
 sys.path.append(str(Path.cwd()))
 
 from infra.register.settings import SETTINGS
+
 
 def _extra_headers() -> dict[str, str]:
     headers = {}

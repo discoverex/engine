@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import json
-import os
 import sys
-import threading
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -11,8 +8,8 @@ from unittest.mock import MagicMock
 sys.path.append(str(Path.cwd() / "src"))
 sys.path.append(str(Path.cwd()))
 
-import pytest
 from infra.prefect.dispatch import dispatch_engine_job
+
 
 def test_real_log_streaming():
     print("\n--- Starting Real-time Log Streaming Verification ---")

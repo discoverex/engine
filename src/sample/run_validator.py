@@ -41,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from discoverex.adapters.outbound.models.cv_color_edge import CvColorEdgeAdapter
 from discoverex.application.use_cases.validator import ValidatorOrchestrator
+from discoverex.domain.services.hidden import θ_AI, θ_HUMAN
 from discoverex.domain.services.verification import ScoringWeights
 from discoverex.models.types import ModelHandle
 from sample.test_samples import (
@@ -140,6 +141,58 @@ def _print_phase2(color_edge_result, layer_files: list[Path]) -> None:
         print(f"  {path.name:<20} {cc:>15.3f} {es:>14.3f}")
 
 
+def _print_is_hidden(bundle, layer_files: list[Path]) -> None:
+    """설계안 §1 — is_hidden 판정 결과 (human_field / ai_field)."""
+    _section("IS_HIDDEN 판정 (설계안 §1 — human_field / ai_field)")
+
+    hidden_map = {h.obj_id: h for h in bundle.hidden_objects}
+    cc_map = bundle.perception.signals.get("color_contrast_map", {})
+    es_map = bundle.perception.signals.get("edge_strength_map", {})
+
+    header = (
+        f"  {'파일명':<20} {'cc':>7} {'es':>8}"
+        f" {'hf':>7} {'af':>7} {'hidden':>8}  근거"
+    )
+    print(header)
+    print("  " + BAR_THIN)
+
+    hidden_count = 0
+    all_obj_ids = sorted(
+        set(bundle.logical.signals.get("alpha_degree_map", {}).keys())
+        | {h.obj_id for h in bundle.hidden_objects}
+    )
+    # layer_files 기준으로 순서 유지, 나머지는 뒤에 추가
+    ordered = [p for p in layer_files if p.stem in all_obj_ids]
+    # extra = [oid for oid in all_obj_ids if not any(p.stem == oid for p in layer_files)]
+
+    for path in ordered:
+        oid = path.stem
+        fname = path.name
+        cc = cc_map.get(oid, 0.0)
+        es = es_map.get(oid, 0.0)
+        if oid in hidden_map:
+            hm = hidden_map[oid]
+            hf, af = hm.human_field, hm.ai_field
+            reason = []
+            if hf >= θ_HUMAN:
+                reason.append(f"hf≥{θ_HUMAN}")
+            if af >= θ_AI:
+                reason.append(f"af≥{θ_AI}")
+            hidden_count += 1
+            print(
+                f"  {fname:<20} {cc:>7.1f} {es:>8.1f}"
+                f" {hf:>7.3f} {af:>7.3f} {'True':>8}  {' & '.join(reason)}"
+            )
+        else:
+            print(
+                f"  {fname:<20} {cc:>7.1f} {es:>8.1f}"
+                f" {'—':>7} {'—':>7} {'False':>8}  미충족"
+            )
+
+    print()
+    print(f"  → 숨은 객체 {hidden_count}개 선별 → Phase 5(난이도·판정) 대상")
+
+
 def _print_result(bundle, layer_files: list[Path]) -> None:
     sigs = bundle.logical.signals
     psigs = bundle.perception.signals
@@ -159,7 +212,7 @@ def _print_result(bundle, layer_files: list[Path]) -> None:
     print(
         f"  answer_obj_count : {sigs['answer_obj_count']}  (숨어있다고 판단된 오브젝트)"
     )
-    print(f"  scene_difficulty : {sigs['scene_difficulty']:.4f}")
+    print(f"  scene_difficulty : {bundle.scene_difficulty:.4f}")
     print(f"  diameter         : {sigs.get('diameter', '-')}")
 
     print()
@@ -231,10 +284,22 @@ def main() -> None:
         "예: --layer-order 쥐구멍.png MARS.png 고양이1.png",
     )
     parser.add_argument(
-        "--threshold",
+        "--difficulty-min",
         type=float,
-        default=0.23,
-        help="pass 기준 점수 (기본 0.23)",
+        default=0.1,
+        help="난이도 하한 (기본 0.1)",
+    )
+    parser.add_argument(
+        "--difficulty-max",
+        type=float,
+        default=0.9,
+        help="난이도 상한 (기본 0.9)",
+    )
+    parser.add_argument(
+        "--hidden-obj-min",
+        type=int,
+        default=3,
+        help="최소 숨은 객체 수 (기본 3)",
     )
     args = parser.parse_args()
 
@@ -294,13 +359,15 @@ def main() -> None:
         color_edge_handle=handle,
         logical_handle=handle,
         visual_handle=handle,
-        pass_threshold=args.threshold,
+        difficulty_min=args.difficulty_min,
+        difficulty_max=args.difficulty_max,
+        hidden_obj_min=args.hidden_obj_min,
         scoring_weights=ScoringWeights(),
     )
 
     print()
     print(f"  런타임         : {runtime}")
-    print(f"  pass_threshold : {args.threshold}")
+    print(f"  difficulty     : [{args.difficulty_min}, {args.difficulty_max}]  hidden_min={args.hidden_obj_min}")
     if runtime == "GPU":
         print("  실계산 항목    : 전 항목 (MobileSAM / Moondream2 / YOLO+CLIP)")
     else:
@@ -324,6 +391,7 @@ def main() -> None:
     )
     if color_edge.last_result is not None:
         _print_phase2(color_edge.last_result, layer_files)
+    _print_is_hidden(bundle, layer_files)
     _print_result(bundle, layer_files)
 
     print()

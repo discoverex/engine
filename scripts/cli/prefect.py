@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+from collections.abc import Mapping
+from datetime import datetime
 from pathlib import Path
+from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
 import typer
@@ -12,6 +15,15 @@ from infra.register.branch_deployments import (
     SUPPORTED_FLOW_KINDS,
     deployment_name_for_branch,
 )
+
+
+@runtime_checkable
+class PrefectLog(Protocol):
+    level: int
+    message: str
+    timestamp: datetime
+    name: str
+
 
 app = typer.Typer(
     help="Prefect flow management and job registration",
@@ -80,8 +92,11 @@ def _contains_any(args: list[str], options: tuple[str, ...]) -> bool:
     return False
 
 
-def _prefect_client_settings() -> dict[object, object]:
-    from prefect.settings import PREFECT_API_URL, PREFECT_CLIENT_CUSTOM_HEADERS
+def _prefect_client_settings() -> Mapping[Any, Any]:
+    from prefect.settings import (
+        PREFECT_API_URL,
+        PREFECT_CLIENT_CUSTOM_HEADERS,
+    )
 
     from infra.register.settings import SETTINGS
 
@@ -102,23 +117,26 @@ def _prefect_client_settings() -> dict[object, object]:
     }
 
 
-def _build_prefect_log_filter(flow_run_id: str) -> object:
+def _build_prefect_log_filter(flow_run_id: str) -> Any:
     from prefect.client.schemas.filters import LogFilter, LogFilterFlowRunId
 
     return LogFilter(flow_run_id=LogFilterFlowRunId(any_=[UUID(flow_run_id)]))
 
 
-async def _read_prefect_logs(flow_run_id: str, limit: int) -> list[object]:
+async def _read_prefect_logs(flow_run_id: str, limit: int) -> list[PrefectLog]:
     from prefect.client.orchestration import get_client
     from prefect.settings import temporary_settings
 
+    # Using Any for settings mapping as PREFECT_API_URL/PREFECT_CLIENT_CUSTOM_HEADERS 
+    # are complex objects not easily typed here.
     with temporary_settings(updates=_prefect_client_settings()):
         async with get_client() as client:
             logs = await client.read_logs(
                 log_filter=_build_prefect_log_filter(flow_run_id),
                 limit=limit,
             )
-    return list(logs)
+    # Prefect Log objects usually satisfy PrefectLog protocol
+    return list(logs)  # type: ignore
 
 
 @app.command(
@@ -246,7 +264,7 @@ async def _fetch_logs(flow_run_id: str, limit: int = 200) -> None:
                 color = typer.colors.CYAN
             timestamp = log.timestamp.strftime("%Y-%m-%d %H:%M:%S")
             level_name = str(getattr(log, "level_name", getattr(log, "level", "")))
-            logger_name = str(getattr(log, "name", "prefect"))
+            logger_name = log.name
             typer.echo(
                 typer.style(f"[{timestamp}] ", fg=typer.colors.BRIGHT_BLACK) +
                 typer.style(f"{logger_name} | {level_name.ljust(7)} | ", fg=color) +

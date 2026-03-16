@@ -27,7 +27,6 @@ from discoverex.application.use_cases.gen_verify.region_pipeline import (
     build_candidate_regions,
     generate_regions,
 )
-from discoverex.models.types import HiddenRegionRequest
 from discoverex.application.use_cases.gen_verify.scene_builder import (
     build_scene,
     generate_run_ids,
@@ -45,6 +44,7 @@ from discoverex.application.use_cases.gen_verify.verification_pipeline import (
 from discoverex.bootstrap import build_context
 from discoverex.config import PipelineConfig
 from discoverex.domain.scene import Background, LayerBBox, LayerItem, LayerType, Scene
+from discoverex.models.types import HiddenRegionRequest
 from discoverex.runtime_logging import format_seconds, get_logger
 
 from .common import build_scene_payload

@@ -111,14 +111,15 @@ class ValidatorModelsConfig(BaseModel):
 
 
 class ValidatorThresholdsConfig(BaseModel):
-    is_hidden_min_conditions: int = 2
-    pass_threshold: float = 0.35
+    difficulty_min: float = 0.1   # 설계안 §3 MVP 변수
+    difficulty_max: float = 0.9   # 설계안 §3 MVP 변수
+    hidden_obj_min: int = 3       # 설계안 §3 — is_hidden() 통과 객체 수 기준
 
-    @field_validator("pass_threshold")
+    @field_validator("difficulty_min", "difficulty_max")
     @classmethod
-    def validate_positive(cls, value: float) -> float:
-        if value < 0.0:
-            raise ValueError("value must be >= 0.0")
+    def validate_range(cls, value: float) -> float:
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("value must be in [0.0, 1.0]")
         return value
 
 
@@ -129,18 +130,25 @@ class ValidatorWeightsConfig(BaseModel):
     factory.py 에서 ScoringWeights(**cfg.weights.model_dump()) 로 변환된다.
     """
 
+    # integrate_verification_v2 — perception sub-score
     perception_sigma: float = Field(0.50, ge=0.0)
     perception_drr: float = Field(0.50, ge=0.0)
+    # integrate_verification_v2 — logical sub-score
     logical_hop: float = Field(0.55, ge=0.0)
     logical_degree: float = Field(0.45, ge=0.0)
+    # integrate_verification_v2 — total 집계
     total_perception: float = Field(0.45, ge=0.0)
     total_logical: float = Field(0.55, ge=0.0)
-    difficulty_occlusion: float = Field(0.25, ge=0.0)
-    difficulty_sigma: float = Field(0.20, ge=0.0)
-    difficulty_hop: float = Field(0.20, ge=0.0)
-    difficulty_degree: float = Field(0.15, ge=0.0)
-    difficulty_drr: float = Field(0.20, ge=0.0)
-    difficulty_interaction: float = Field(0.10, ge=0.0)
+    # compute_difficulty D(obj) 항별 가중치 (합계 = 1.00)
+    difficulty_degree: float = Field(0.14, ge=0.0)
+    difficulty_cluster: float = Field(0.12, ge=0.0)
+    difficulty_hop: float = Field(0.14, ge=0.0)
+    difficulty_drr: float = Field(0.14, ge=0.0)
+    difficulty_sigma: float = Field(0.12, ge=0.0)
+    difficulty_similar_count: float = Field(0.11, ge=0.0)
+    difficulty_similar_dist: float = Field(0.09, ge=0.0)
+    difficulty_color_contrast: float = Field(0.07, ge=0.0)
+    difficulty_edge_strength: float = Field(0.07, ge=0.0)
 
 
 class ValidatorPipelineConfig(BaseModel):
