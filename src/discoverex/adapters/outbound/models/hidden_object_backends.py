@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -244,12 +245,6 @@ class Sam2MaskRefiner:
         if mask.getbbox() is None:
             return fallback_mask
         return mask
-
-from __future__ import annotations
-
-from typing import Any
-import logging
-
 
 class IcLightRelighter:
     def __init__(
