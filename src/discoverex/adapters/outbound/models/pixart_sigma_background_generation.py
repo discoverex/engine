@@ -543,12 +543,17 @@ class PixArtSigmaBackgroundGenerationModel:
                 DPMSolverMultistepScheduler,
                 PixArtSigmaPipeline,
             )
+            from transformers import T5Tokenizer  # type: ignore
         except Exception as exc:
             runtime = resolve_runtime()
             validate_diffusers_runtime(runtime)
             raise RuntimeError(
                 "diffusers pixart runtime unavailable. Install compatible ml-gpu dependencies."
             ) from exc
+        try:
+            T5Tokenizer.from_pretrained("t5-3b")
+        except Exception as exc:
+            logger.warning("prefetching pixart tokenizer failed: %s", exc)
         torch_dtype = torch.float32 if "32" in handle.dtype else torch.float16
         pipe = PixArtSigmaPipeline.from_pretrained(
             self.model_id,
