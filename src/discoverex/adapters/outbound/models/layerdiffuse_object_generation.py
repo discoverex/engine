@@ -172,6 +172,7 @@ class LayerDiffuseObjectGenerationModel:
         import torch  # type: ignore
 
         pipe = self._load_pipeline(handle)
+        execution_device = getattr(pipe, "_execution_device", handle.device)
         generator = None
         if seed is not None:
             generator = torch.Generator(device="cpu").manual_seed(seed)
@@ -188,8 +189,12 @@ class LayerDiffuseObjectGenerationModel:
         latents = result.images
         decoder = self._load_transparent_decoder(handle)
         vae = pipe.vae
-        decoder = decoder.to(device=vae.device, dtype=vae.dtype)
-        latents = latents.to(device=vae.device, dtype=vae.dtype) / vae.config.scaling_factor
+        vae = vae.to(device=execution_device, dtype=vae.dtype)
+        decoder = decoder.to(device=execution_device, dtype=vae.dtype)
+        latents = (
+            latents.to(device=execution_device, dtype=vae.dtype)
+            / vae.config.scaling_factor
+        )
         rgba_images, _ = decoder(vae, latents)
         return Image.fromarray(rgba_images[0], mode="RGBA")
 
