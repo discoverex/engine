@@ -38,3 +38,18 @@ def test_pipeline_config_rejects_invalid_threshold() -> None:
     data["thresholds"]["logical_pass"] = 1.5
     with pytest.raises(ValueError):
         PipelineConfig.model_validate(data)
+
+
+def test_generator_sdxl_gpu_v2_8gb_profile_loads_v2_stack() -> None:
+    cfg = load_pipeline_config(
+        config_name="gen_verify",
+        config_dir="conf",
+        overrides=["profile=generator_sdxl_gpu_v2_8gb"],
+    )
+    assert cfg.flows is not None
+    assert cfg.flows.generate.target.endswith("generate_v2_compat")
+    assert cfg.models.inpaint.model_dump(mode="python")["inpaint_mode"] == (
+        "similarity_overlay_v2"
+    )
+    assert cfg.models.inpaint.model_dump(mode="python")["overlay_alpha"] == 0.5
+    assert cfg.runtime.model_runtime.offload_mode == "sequential"

@@ -103,7 +103,8 @@ def test_subflows_import_without_repo_root_on_syspath(tmp_path: Path) -> None:
             "-c",
             (
                 "import discoverex.flows.subflows as subflows; "
-                "assert callable(subflows.generate_v1_compat)"
+                "assert callable(subflows.generate_v1_compat); "
+                "assert callable(subflows.generate_v2_compat)"
             ),
         ],
         cwd=tmp_path,

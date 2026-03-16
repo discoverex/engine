@@ -104,6 +104,17 @@ def generate_regions(
             )
         updated = region.model_copy(deep=True)
         updated.source = RegionSource.INPAINT
+        selected_bbox = details.get("selected_bbox")
+        if isinstance(selected_bbox, dict):
+            try:
+                updated.geometry.bbox = BBox(
+                    x=float(selected_bbox["x"]),
+                    y=float(selected_bbox["y"]),
+                    w=float(selected_bbox["w"]),
+                    h=float(selected_bbox["h"]),
+                )
+            except (KeyError, TypeError, ValueError):
+                pass
         updated.attributes.update(details)
         composited_ref = details.get("composited_image_ref")
         if isinstance(composited_ref, str) and composited_ref:
@@ -113,14 +124,14 @@ def generate_regions(
         patch_ref = details.get("patch_image_ref")
         record_layer_candidate(
             background=background,
-            region=region,
+            region=updated,
             object_ref=object_ref,
             object_mask_ref=object_mask_ref,
             patch_ref=patch_ref,
         )
         prompt_records.append(
             build_prompt_record(
-                region=region,
+                region=updated,
                 object_prompt=object_prompt,
                 object_negative_prompt=object_negative_prompt,
                 generation_prompt=generation_prompt,

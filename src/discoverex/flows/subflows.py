@@ -26,6 +26,21 @@ def generate_v1_compat(
     )
 
 
+def generate_v2_compat(
+    *,
+    args: dict[str, Any],
+    config: PipelineConfig,
+    execution_snapshot: dict[str, Any] | None = None,
+    execution_snapshot_path: Path | None = None,
+) -> dict[str, str]:
+    return run_generate_flow(
+        args=args,
+        config=config,
+        execution_snapshot=execution_snapshot,
+        execution_snapshot_path=execution_snapshot_path,
+    )
+
+
 def verify_v1_compat(
     *,
     args: dict[str, Any],

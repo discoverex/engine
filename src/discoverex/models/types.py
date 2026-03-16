@@ -78,10 +78,14 @@ class InpaintPrediction(TypedDict, total=False):
     quality_score: float
     model_id: str
     patch_image_ref: str
+    candidate_image_ref: str
     object_image_ref: str
     object_mask_ref: str
     composited_image_ref: str
+    precomposited_image_ref: str
     inpaint_mode: str
+    placement_score: float
+    selected_bbox: dict[str, float]
 
 
 # ---------------------------------------------------------------------------
