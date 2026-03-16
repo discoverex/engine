@@ -24,10 +24,10 @@ inputs:
     - profile=generator_sdxl_gpu_v2_8gb
     - runtime/model_runtime=gpu
     - flows/generate=v2
-    - runtime.width=512
-    - runtime.height=384
+    - runtime.width=640
+    - runtime.height=480
     - models/background_generator=sdxl_gpu
-    - models/object_generator=sdxl_gpu
+    - models/object_generator=layerdiffuse
     - models/hidden_region=hf
     - models/inpaint=sdxl_gpu_similarity_v2
     - models/perception=hf
