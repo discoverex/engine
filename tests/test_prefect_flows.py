@@ -14,41 +14,13 @@ from prefect.runtime import flow_run
 import infra.prefect.dispatch as prefect_dispatch
 import infra.prefect.flow as prefect_entrypoint
 from discoverex.application.flows.run_engine_job import run_engine_job
+from discoverex.config_loader import load_pipeline_config
 from infra.prefect.job_spec import (
     coerce_args,
     coerce_overrides,
     config_name,
     mapped_command,
 )
-
-
-@pytest.fixture(autouse=True)
-def mock_prefect_infra(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Mock Prefect infrastructure to prevent real API calls and Pydantic validation errors."""
-    
-    # 1. Mock the client context manager
-    mock_client = MagicMock()
-    mock_client.api_version.return_value = "3.0.0"
-    
-    class MockClientContext:
-        def __init__(self) -> None:
-            self.client = mock_client
-        def __enter__(self) -> Any: return mock_client
-        def __exit__(self, *args: Any) -> None: pass
-        async def __aenter__(self) -> Any: return mock_client
-        async def __aexit__(self, *args: Any) -> None: pass
-
-    monkeypatch.setattr("prefect.client.orchestration.get_client", lambda **_: MockClientContext())
-    
-    # 2. CRITICAL: Mock the task itself to prevent TaskRunContext initialization
-    # We make engine_job_task behave like a regular function instead of a Prefect task
-    def mock_task_fn(payload: Any, cwd: Path, env: dict[str, str]) -> Any:
-        return prefect_dispatch.dispatch_engine_job(payload, cwd=cwd, env=env)
-    
-    # Prefect tasks have a .fn attribute which is the original function
-    monkeypatch.setattr(prefect_entrypoint.engine_job_task, "fn", mock_task_fn)
-    # Also mock the task call itself if it's being called directly
-    monkeypatch.setattr(prefect_entrypoint, "engine_job_task", mock_task_fn)
 
 
 class _FakeLogger:
@@ -144,6 +116,58 @@ def test_run_engine_job_accepts_bare_engine_payload(
     assert payload["run_mode"] == "inline"
 
 
+def test_run_engine_job_prefers_inline_resolved_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, object] = {}
+    repo_root = Path(__file__).resolve().parents[1]
+    monkeypatch.chdir(tmp_path)
+    resolved = load_pipeline_config(
+        config_name="generate",
+        config_dir=repo_root / "conf",
+    ).model_dump(mode="python")
+
+    def fake_run_engine_entry(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"ok": True}
+
+    run_engine_job_module = importlib.import_module(
+        "discoverex.application.flows.run_engine_job"
+    )
+    monkeypatch.setattr(
+        run_engine_job_module,
+        "run_engine_entry",
+        fake_run_engine_entry,
+    )
+
+    payload = run_engine_job(
+        {
+            "run_mode": "inline",
+            "engine": "discoverex",
+            "entrypoint": [
+                "/bin/sh",
+                "-lc",
+                (
+                    "PYTHONPATH=src python -m "
+                    "discoverex.adapters.outbound.execution.launcher"
+                ),
+            ],
+            "inputs": {
+                "contract_version": "v2",
+                "command": "generate",
+                "config_name": "ignored",
+                "config_dir": "missing-conf-dir",
+                "resolved_config": resolved,
+                "args": {"background_asset_ref": "bg://dummy"},
+            },
+        },
+        cwd=tmp_path,
+    )
+
+    assert captured["resolved_config"] == resolved
+    assert payload["ok"] is True
+
+
 def test_repo_root_prefect_entrypoint_exposes_run_job_flow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -188,6 +212,10 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
 ) -> None:
     captured: dict[str, Any] = {}
     logged: list[tuple[str, tuple[Any, ...]]] = []
+    resolved = load_pipeline_config(
+        config_name="gen_verify",
+        config_dir="conf",
+    ).model_dump(mode="python")
 
     def fake_run_engine_entry(**kwargs: Any) -> dict[str, Any]:
         captured["kwargs"] = kwargs
@@ -203,14 +231,15 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
         return {"status": "completed", "scene_id": "scene-1", "version_id": "v1"}
 
     monkeypatch.setattr(
-        prefect_dispatch,
-        "dispatch_engine_job",
-        lambda payload, *, cwd, env: prefect_dispatch.DispatchResult(
+        prefect_entrypoint,
+        "engine_job_task",
+        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
             payload=fake_run_engine_entry(**{
                 "command": mapped_command(str(payload.get("command", ""))),
                 "args": coerce_args(payload.get("args")),
                 "config_name": config_name(payload),
                 "config_dir": str(payload.get("config_dir") or "conf"),
+                "resolved_config": payload.get("resolved_config"),
                 "overrides": coerce_overrides(payload.get("overrides")),
             }),
             stdout='{"status":"completed"}\n',
@@ -231,6 +260,7 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
                 "inputs": {
                     "contract_version": "v1",
                     "command": "gen-verify",
+                    "resolved_config": resolved,
                     "args": {"background_asset_ref": "bg://dummy"},
                 },
                 "env": {"X_TEST_ENV": "1"},
@@ -244,6 +274,7 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
         "args": {"background_asset_ref": "bg://dummy"},
         "config_name": "gen_verify",
         "config_dir": "conf",
+        "resolved_config": resolved,
         "overrides": [],
     }
     assert captured["env"]["ORCH_FLOW_RUN_ID"] == "flow-123"
@@ -259,6 +290,8 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
     assert output["outputs_prefix"] == "jobs/flow-123/attempt-1/"
     assert logged[0][0] == "engine flow start: %s"
     assert logged[-1][0] == "engine payload summary: %s"
+    start_summary = json.loads(str(logged[0][1][0]))
+    assert start_summary["resolved_config"]["runtime"]["env"]["tracking_uri"] == "***REDACTED***"
     assert "[discoverex-engine-flow] start" in capsys.readouterr().err
 
 
@@ -266,9 +299,9 @@ def test_repo_root_prefect_entrypoint_uploads_worker_artifacts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        prefect_dispatch,
-        "dispatch_engine_job",
-        lambda payload, *, cwd, env: prefect_dispatch.DispatchResult(
+        prefect_entrypoint,
+        "engine_job_task",
+        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
             payload={
                 "status": "completed",
                 "scene_id": "s1",
@@ -328,9 +361,9 @@ def test_repo_root_prefect_entrypoint_raises_on_failed_payload(
 ) -> None:
     uploaded: list[dict[str, Any]] = []
     monkeypatch.setattr(
-        prefect_dispatch,
-        "dispatch_engine_job",
-        lambda payload, *, cwd, env: prefect_dispatch.DispatchResult(
+        prefect_entrypoint,
+        "engine_job_task",
+        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
             payload={
                 "status": "failed",
                 "failure_reason": "boom",

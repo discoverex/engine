@@ -20,4 +20,7 @@ default_negative_prompt: "blurry, low quality, artifact"
 generation_strength: 0.5
 generation_steps: 12
 generation_guidance_scale: 3.0
+mask_blur: 8
+inpaint_only_masked: true
+masked_area_padding: 32
 patch_target_long_side: 96

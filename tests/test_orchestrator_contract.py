@@ -125,3 +125,33 @@ def test_job_spec_requires_canonical_inputs() -> None:
     assert job_spec.inputs is not None
     assert job_spec.inputs.command == "generate"
     assert job_spec.engine_run.command == "generate"
+
+
+def test_engine_job_v2_accepts_inline_resolved_config() -> None:
+    job = EngineJobV2.model_validate(
+        {
+            "contract_version": "v2",
+            "command": "generate",
+            "resolved_config": {
+                "models": {
+                    "background_generator": {"_target_": "pkg.Background"},
+                    "hidden_region": {"_target_": "pkg.Hidden"},
+                    "inpaint": {"_target_": "pkg.Inpaint"},
+                    "perception": {"_target_": "pkg.Perception"},
+                    "fx": {"_target_": "pkg.Fx"},
+                },
+                "adapters": {
+                    "artifact_store": {"_target_": "pkg.Artifacts"},
+                    "metadata_store": {"_target_": "pkg.Metadata"},
+                    "tracker": {"_target_": "pkg.Tracker"},
+                    "scene_io": {"_target_": "pkg.SceneIo"},
+                    "report_writer": {"_target_": "pkg.ReportWriter"},
+                },
+                "runtime": {},
+                "thresholds": {},
+                "model_versions": {},
+            },
+            "args": {"background_prompt": "a beach at dawn"},
+        }
+    )
+    assert job.resolved_config is not None

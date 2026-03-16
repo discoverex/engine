@@ -42,6 +42,7 @@ class EngineRunSpecV1(BaseModel):
     command: EngineCommandV1
     config_name: str | None = None
     config_dir: str | None = None
+    resolved_config: dict[str, Any] | None = None
     args: dict[str, Any] = Field(default_factory=dict)
     overrides: list[str] = Field(default_factory=list)
     runtime: JobRuntime = Field(default_factory=JobRuntime)
@@ -66,6 +67,7 @@ class EngineRunSpecV2(BaseModel):
     command: EngineCommandV2
     config_name: str | None = None
     config_dir: str | None = None
+    resolved_config: dict[str, Any] | None = None
     args: dict[str, Any] = Field(default_factory=dict)
     overrides: list[str] = Field(default_factory=list)
     runtime: JobRuntime = Field(default_factory=JobRuntime)

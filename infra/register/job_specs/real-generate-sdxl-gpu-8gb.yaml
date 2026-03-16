@@ -1,7 +1,7 @@
 run_mode: repo
 engine: discoverex
 repo_url: https://github.com/discoverex/engine.git
-ref: feat/engin-worker-observility
+ref: feat/inline-resolved-config-registration
 entrypoint:
   - /bin/sh
   - -lc
@@ -26,6 +26,12 @@ inputs:
     - runtime.height=384
     - models/background_generator=sdxl_gpu
     - models/hidden_region=hf
+    - models.inpaint.generation_strength=0.65
+    - models.inpaint.generation_steps=40
+    - models.inpaint.generation_guidance_scale=7.0
+    - models.inpaint.mask_blur=8
+    - models.inpaint.inpaint_only_masked=true
+    - models.inpaint.masked_area_padding=32
     - models/inpaint=sdxl_gpu
     - models/perception=hf
     - models/fx=copy_image

@@ -56,6 +56,22 @@ def build_full_mask(width: int, height: int) -> Any:
     return mask
 
 
+def build_bbox_mask(
+    *,
+    crop_size: tuple[int, int],
+    mask_bbox: tuple[int, int, int, int],
+    blur_radius: int = 0,
+) -> Any:
+    from PIL import Image, ImageDraw, ImageFilter  # type: ignore
+
+    mask = Image.new("L", crop_size, color=0)
+    ImageDraw.Draw(mask).rectangle(mask_bbox, fill=255)
+    radius = max(0, int(blur_radius))
+    if radius > 0:
+        mask = mask.filter(ImageFilter.GaussianBlur(radius=radius))
+    return mask
+
+
 def resize_patch_to_long_side(
     patch: Any, target_long_side: int
 ) -> tuple[Any, tuple[int, int]]:

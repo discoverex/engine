@@ -47,6 +47,9 @@ class InpaintRequest(BaseModel):
     generation_strength: float = 0.45
     generation_steps: int = 6
     generation_guidance_scale: float = 2.5
+    mask_blur: int = 4
+    inpaint_only_masked: bool = True
+    masked_area_padding: int = 32
 
 
 class PerceptionRequest(BaseModel):
