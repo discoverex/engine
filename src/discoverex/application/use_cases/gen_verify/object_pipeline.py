@@ -31,6 +31,9 @@ class GeneratedObjectAsset:
     object_mask_ref: str
     width: int
     height: int
+    raw_alpha_mask_ref: str | None = None
+    mask_source: str = "unknown"
+    tight_bbox: tuple[int, int, int, int] | None = None
 
 
 def generate_region_objects(
@@ -88,18 +91,22 @@ def generate_region_objects(
                 image_path=generated_ref,
                 output_prefix=output_prefix,
             )
-            resized = _resize_object_assets(
+            placement_assets = _build_placement_assets(
+                context=context,
                 object_path=Path(str(masked["object"])),
                 mask_path=Path(str(masked["mask"])),
-                size=_PLACEMENT_OBJECT_SIZE,
+                raw_alpha_path=Path(str(masked.get("raw_alpha_mask", masked["mask"]))),
             )
             generated[region.region_id] = GeneratedObjectAsset(
                 region_id=region.region_id,
                 candidate_ref=generated_ref,
-                object_ref=str(resized["object"]),
-                object_mask_ref=str(resized["mask"]),
-                width=_PLACEMENT_OBJECT_SIZE,
-                height=_PLACEMENT_OBJECT_SIZE,
+                object_ref=str(placement_assets["object"]),
+                object_mask_ref=str(placement_assets["mask"]),
+                width=int(placement_assets["width"]),
+                height=int(placement_assets["height"]),
+                raw_alpha_mask_ref=str(masked.get("raw_alpha_mask", masked["mask"])),
+                mask_source=str(masked.get("mask_source", "unknown")),
+                tight_bbox=placement_assets.get("tight_bbox"),
             )
             emit_progress_event(
                 stage="object_generation",
@@ -108,14 +115,14 @@ def generate_region_objects(
                 index=index,
                 total=total_regions,
                 candidate_image_ref=generated_ref,
-                object_image_ref=str(resized["object"]),
-                object_mask_ref=str(resized["mask"]),
+                object_image_ref=str(placement_assets["object"]),
+                object_mask_ref=str(placement_assets["mask"]),
             )
             logger.info(
                 "object generation completed region=%s candidate=%s object=%s duration=%s",
                 region.region_id,
                 generated_ref,
-                resized["object"],
+                placement_assets["object"],
                 format_seconds(started),
             )
     finally:
@@ -169,6 +176,42 @@ def _resize_object_assets(
     return {
         "object": resized_object,
         "mask": resized_mask,
+    }
+
+
+def _build_placement_assets(
+    *,
+    context: AppContextLike,
+    object_path: Path,
+    mask_path: Path,
+    raw_alpha_path: Path,
+) -> dict[str, Any]:
+    inpaint_mode = str(getattr(context.inpaint_model, "inpaint_mode", ""))
+    if inpaint_mode == "layerdiffuse_hidden_object_v1":
+        from PIL import Image  # type: ignore
+
+        with Image.open(mask_path).convert("L") as mask_image:
+            tight_bbox = mask_image.getbbox() or (0, 0, mask_image.width, mask_image.height)
+        return {
+            "object": object_path,
+            "mask": mask_path,
+            "raw_alpha_mask": raw_alpha_path,
+            "width": max(1, tight_bbox[2] - tight_bbox[0]),
+            "height": max(1, tight_bbox[3] - tight_bbox[1]),
+            "tight_bbox": tight_bbox,
+        }
+    resized = _resize_object_assets(
+        object_path=object_path,
+        mask_path=mask_path,
+        size=_PLACEMENT_OBJECT_SIZE,
+    )
+    return {
+        "object": resized["object"],
+        "mask": resized["mask"],
+        "raw_alpha_mask": raw_alpha_path,
+        "width": _PLACEMENT_OBJECT_SIZE,
+        "height": _PLACEMENT_OBJECT_SIZE,
+        "tight_bbox": None,
     }
 
 

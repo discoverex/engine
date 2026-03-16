@@ -87,6 +87,15 @@ class InpaintPrediction(TypedDict, total=False):
     composited_image_ref: str
     precomposited_image_ref: str
     blend_mask_ref: str
+    edge_mask_ref: str
+    core_mask_ref: str
+    shadow_ref: str
+    edge_blend_ref: str
+    core_blend_ref: str
+    final_polish_ref: str
+    variant_manifest_ref: str
+    placement_variant_id: str
+    mask_source: str
     inpaint_mode: str
     placement_score: float
     selected_bbox: dict[str, float]

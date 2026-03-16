@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -7,6 +8,13 @@ from typing import Any
 from discoverex.models.types import InpaintPrediction, InpaintRequest, ModelHandle
 from discoverex.runtime_logging import format_seconds, get_logger
 
+from .hidden_object_backends import (
+    BackendRuntime,
+    DiffusionObjectBlendBackend,
+    IcLightRelighter,
+    Rmbg20MaskRefiner,
+    Sam2MaskRefiner,
+)
 from .image_patch_ops import (
     apply_alpha_patch,
     apply_alpha_patch_with_opacity,
@@ -81,6 +89,36 @@ class SdxlInpaintModel:
         final_inpaint_guidance_scale: float | None = None,
         final_inpaint_only_masked: bool = False,
         final_mask_blur: int | None = None,
+        pre_match_scale_ratio: tuple[float, float] = (0.04, 0.18),
+        pre_match_rotation_deg: tuple[float, float] = (-25.0, 25.0),
+        pre_match_saturation_mul: tuple[float, float] = (0.85, 0.97),
+        pre_match_contrast_mul: tuple[float, float] = (0.90, 0.98),
+        pre_match_sharpness_mul: tuple[float, float] = (0.85, 0.95),
+        pre_match_variant_count: int = 5,
+        composite_feather_px: int = 2,
+        edge_blend_steps: int = 20,
+        edge_blend_cfg: float = 4.5,
+        edge_blend_strength: float = 0.18,
+        edge_blend_ring_dilate_px: int = 10,
+        core_blend_steps: int = 24,
+        core_blend_cfg: float = 5.0,
+        core_blend_strength: float = 0.35,
+        shadow_blur_px: int = 12,
+        shadow_opacity: float = 0.14,
+        final_polish_steps: int = 14,
+        final_polish_cfg: float = 4.0,
+        final_polish_strength: float = 0.12,
+        relight_method: str = "",
+        edge_blend_backend: str = "",
+        core_blend_backend: str = "",
+        final_polish_backend: str = "",
+        mask_refine_backend: str = "",
+        rmbg_model_id: str = "",
+        sam2_model_id: str = "",
+        ic_light_model_id: str = "",
+        edge_blend_model_id: str = "",
+        core_blend_model_id: str = "",
+        final_polish_model_id: str = "",
     ) -> None:
         self.model_id = model_id
         self.revision = revision
@@ -123,7 +161,43 @@ class SdxlInpaintModel:
         self.final_inpaint_guidance_scale = final_inpaint_guidance_scale
         self.final_inpaint_only_masked = final_inpaint_only_masked
         self.final_mask_blur = final_mask_blur
+        self.pre_match_scale_ratio = pre_match_scale_ratio
+        self.pre_match_rotation_deg = pre_match_rotation_deg
+        self.pre_match_saturation_mul = pre_match_saturation_mul
+        self.pre_match_contrast_mul = pre_match_contrast_mul
+        self.pre_match_sharpness_mul = pre_match_sharpness_mul
+        self.pre_match_variant_count = pre_match_variant_count
+        self.composite_feather_px = composite_feather_px
+        self.edge_blend_steps = edge_blend_steps
+        self.edge_blend_cfg = edge_blend_cfg
+        self.edge_blend_strength = edge_blend_strength
+        self.edge_blend_ring_dilate_px = edge_blend_ring_dilate_px
+        self.core_blend_steps = core_blend_steps
+        self.core_blend_cfg = core_blend_cfg
+        self.core_blend_strength = core_blend_strength
+        self.shadow_blur_px = shadow_blur_px
+        self.shadow_opacity = shadow_opacity
+        self.final_polish_steps = final_polish_steps
+        self.final_polish_cfg = final_polish_cfg
+        self.final_polish_strength = final_polish_strength
+        self.relight_method = relight_method
+        self.edge_blend_backend = edge_blend_backend
+        self.core_blend_backend = core_blend_backend
+        self.final_polish_backend = final_polish_backend
+        self.mask_refine_backend = mask_refine_backend
+        self.rmbg_model_id = rmbg_model_id
+        self.sam2_model_id = sam2_model_id
+        self.ic_light_model_id = ic_light_model_id
+        self.edge_blend_model_id = edge_blend_model_id
+        self.core_blend_model_id = core_blend_model_id
+        self.final_polish_model_id = final_polish_model_id
         self._pipe: Any | None = None
+        self._rmbg_refiner: Rmbg20MaskRefiner | None = None
+        self._sam2_refiner: Sam2MaskRefiner | None = None
+        self._ic_light_relighter: IcLightRelighter | None = None
+        self._edge_blend_pipe: DiffusionObjectBlendBackend | None = None
+        self._core_blend_pipe: DiffusionObjectBlendBackend | None = None
+        self._final_polish_pipe: DiffusionObjectBlendBackend | None = None
 
     def load(self, model_ref_or_version: str) -> ModelHandle:
         logger.info(
@@ -189,6 +263,24 @@ class SdxlInpaintModel:
                 )
             if "blend_mask" in composited_ref:
                 result["blend_mask_ref"] = str(composited_ref["blend_mask"])
+            if "edge_mask" in composited_ref:
+                result["edge_mask_ref"] = str(composited_ref["edge_mask"])
+            if "core_mask" in composited_ref:
+                result["core_mask_ref"] = str(composited_ref["core_mask"])
+            if "shadow" in composited_ref:
+                result["shadow_ref"] = str(composited_ref["shadow"])
+            if "edge_blend" in composited_ref:
+                result["edge_blend_ref"] = str(composited_ref["edge_blend"])
+            if "core_blend" in composited_ref:
+                result["core_blend_ref"] = str(composited_ref["core_blend"])
+            if "final_polish" in composited_ref:
+                result["final_polish_ref"] = str(composited_ref["final_polish"])
+            if "variant_manifest" in composited_ref:
+                result["variant_manifest_ref"] = str(composited_ref["variant_manifest"])
+            if "placement_variant_id" in composited_ref:
+                result["placement_variant_id"] = str(composited_ref["placement_variant_id"])
+            if "mask_source" in composited_ref:
+                result["mask_source"] = str(composited_ref["mask_source"])
             if "selected_bbox" in composited_ref:
                 left, top, right, bottom = composited_ref["selected_bbox"]
                 result["selected_bbox"] = {
@@ -230,6 +322,18 @@ class SdxlInpaintModel:
                 and request.object_mask_ref is not None
             ):
                 return self._predict_with_generated_object_v2(
+                    image=image,
+                    bbox=bbox,
+                    handle=handle,
+                    output=Path(output_path),
+                    request=request,
+                )
+            if (
+                self.inpaint_mode == "layerdiffuse_hidden_object_v1"
+                and request.object_image_ref is not None
+                and request.object_mask_ref is not None
+            ):
+                return self._predict_with_layerdiffuse_hidden_object_v1(
                     image=image,
                     bbox=bbox,
                     handle=handle,
@@ -336,6 +440,167 @@ class SdxlInpaintModel:
             "blend_mask": blend_mask_path,
             "selected_bbox": placement_bbox,
             "placement_score": placement_score,
+        }
+
+    def _predict_with_layerdiffuse_hidden_object_v1(
+        self,
+        *,
+        image: Any,
+        bbox: tuple[int, int, int, int],
+        handle: ModelHandle,
+        output: Path,
+        request: InpaintRequest,
+    ) -> dict[str, Any]:
+        self._validate_hidden_object_backends()
+        object_image, object_mask = self._load_object_assets(request=request)
+        refined_mask = self._refine_hidden_object_mask(
+            image=object_image.convert("RGB"),
+            fallback_mask=object_mask,
+        )
+        object_image = object_image.convert("RGBA")
+        object_image.putalpha(refined_mask)
+        refined_object_path = save_image(
+            object_image, output.with_suffix(".object.png")
+        )
+        refined_mask_path = save_image(
+            refined_mask, output.with_suffix(".mask.png")
+        )
+        variants = self._build_pre_match_variants(
+            image=image,
+            bbox=bbox,
+            object_image=object_image,
+            object_mask=refined_mask,
+        )
+        selected_variant, placement_bbox, placement_score = self._select_best_variant(
+            image=image,
+            bbox=bbox,
+            variants=variants,
+        )
+        variant_manifest_path = output.with_suffix(".variants.json")
+        variant_manifest_path.write_text(
+            json.dumps(
+                {
+                    "selected_variant_id": selected_variant["id"],
+                    "variants": [
+                        {
+                            "id": variant["id"],
+                            "score": round(float(variant.get("score", 0.0)), 6),
+                            "scale_ratio": variant["scale_ratio"],
+                            "rotation_deg": variant["rotation_deg"],
+                            "saturation_mul": variant["saturation_mul"],
+                            "contrast_mul": variant["contrast_mul"],
+                            "sharpness_mul": variant["sharpness_mul"],
+                            "placement_bbox": list(variant.get("placement_bbox", bbox)),
+                        }
+                        for variant in variants
+                    ],
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        precomposited, blend_mask = self._opaque_composite_object(
+            image=image,
+            object_image=selected_variant["object_image"],
+            object_mask=selected_variant["object_mask"],
+            target_bbox=placement_bbox,
+        )
+        precomposited_path = save_image(
+            precomposited, output.with_suffix(".precomposite.png")
+        )
+        edge_mask = self._build_ring_mask(
+            mask=selected_variant["object_mask"],
+            dilation_px=self.edge_blend_ring_dilate_px,
+            inner_feather_px=1,
+        )
+        edge_stage = self._run_object_blend_pass(
+            handle=handle,
+            source_image=precomposited,
+            target_bbox=placement_bbox,
+            localized_mask=edge_mask,
+            prompt=(
+                "blend the object's outer contour into the surrounding scene while "
+                "preserving silhouette and object identity"
+            ),
+            negative_prompt=request.negative_prompt or self.default_negative_prompt,
+            strength=self.edge_blend_strength,
+            num_inference_steps=self.edge_blend_steps,
+            guidance_scale=self.edge_blend_cfg,
+            backend_kind="edge",
+        )
+        core_stage = self._run_object_blend_pass(
+            handle=handle,
+            source_image=edge_stage["composited"],
+            target_bbox=placement_bbox,
+            localized_mask=selected_variant["object_mask"],
+            prompt=(
+                "harmonize the pasted object's texture, tone, and lighting with the "
+                "surrounding scene while preserving object shape"
+            ),
+            negative_prompt=request.negative_prompt or self.default_negative_prompt,
+            strength=self.core_blend_strength,
+            num_inference_steps=self.core_blend_steps,
+            guidance_scale=self.core_blend_cfg,
+            backend_kind="core",
+        )
+        shadowed = self._apply_direct_shadow(
+            image=core_stage["composited"],
+            object_mask=selected_variant["object_mask"],
+            target_bbox=placement_bbox,
+        )
+        shadow_path = save_image(shadowed, output.with_suffix(".shadow.png"))
+        final_stage = self._run_object_blend_pass(
+            handle=handle,
+            source_image=shadowed,
+            target_bbox=placement_bbox,
+            localized_mask=selected_variant["object_mask"],
+            prompt=(
+                "perform a light final polish so the hidden object feels embedded in "
+                "the scene without changing its identity"
+            ),
+            negative_prompt=request.negative_prompt or self.default_negative_prompt,
+            strength=self.final_polish_strength,
+            num_inference_steps=self.final_polish_steps,
+            guidance_scale=self.final_polish_cfg,
+            backend_kind="final",
+        )
+        composited_path = save_image(final_stage["composited"], output)
+        patch_path = save_image(
+            final_stage["generated_patch"], output.with_suffix(".patch.png")
+        )
+        edge_mask_path = save_image(edge_stage["blend_mask"], output.with_suffix(".edge-mask.png"))
+        core_mask_path = save_image(core_stage["blend_mask"], output.with_suffix(".core-mask.png"))
+        edge_patch_path = save_image(
+            edge_stage["generated_patch"], output.with_suffix(".edge-blend.png")
+        )
+        core_patch_path = save_image(
+            core_stage["generated_patch"], output.with_suffix(".core-blend.png")
+        )
+        final_patch_path = save_image(
+            final_stage["generated_patch"], output.with_suffix(".final-polish.png")
+        )
+        candidate_ref = request.object_candidate_ref or request.object_image_ref
+        if candidate_ref is None:
+            raise ValueError("generated object candidate ref is required")
+        return {
+            "patch": patch_path,
+            "candidate": Path(str(candidate_ref)),
+            "object": refined_object_path,
+            "mask": refined_mask_path,
+            "composited": composited_path,
+            "precomposited": precomposited_path,
+            "blend_mask": core_mask_path,
+            "edge_mask": edge_mask_path,
+            "core_mask": core_mask_path,
+            "edge_blend": edge_patch_path,
+            "core_blend": core_patch_path,
+            "final_polish": final_patch_path,
+            "shadow": shadow_path,
+            "variant_manifest": variant_manifest_path,
+            "selected_bbox": placement_bbox,
+            "placement_score": placement_score,
+            "placement_variant_id": selected_variant["id"],
+            "mask_source": self.mask_refine_backend or "layerdiffuse_alpha_first",
         }
 
     def _predict_with_similarity_overlay_v2(
@@ -488,6 +753,352 @@ class SdxlInpaintModel:
             "object_image": object_image,
             "object_mask": object_mask,
         }
+
+    def _validate_hidden_object_backends(self) -> None:
+        required = {
+            "relight_method": self.relight_method,
+            "edge_blend_backend": self.edge_blend_backend,
+            "core_blend_backend": self.core_blend_backend,
+            "final_polish_backend": self.final_polish_backend,
+        }
+        missing = [name for name, value in required.items() if not str(value).strip()]
+        if missing:
+            raise RuntimeError(
+                "layerdiffuse_hidden_object_v1 requires configured backends: "
+                + ", ".join(sorted(missing))
+            )
+        if self.mask_refine_backend == "rmbg_2_0" and not self.rmbg_model_id.strip():
+            raise RuntimeError("layerdiffuse_hidden_object_v1 requires rmbg_model_id")
+        if self.mask_refine_backend == "sam2" and not self.sam2_model_id.strip():
+            raise RuntimeError("layerdiffuse_hidden_object_v1 requires sam2_model_id")
+        if self.relight_method == "ic_light" and not self.ic_light_model_id.strip():
+            raise RuntimeError("layerdiffuse_hidden_object_v1 requires ic_light_model_id")
+        if self.edge_blend_backend and not self.edge_blend_model_id.strip():
+            raise RuntimeError("layerdiffuse_hidden_object_v1 requires edge_blend_model_id")
+        if self.core_blend_backend and not self.core_blend_model_id.strip():
+            raise RuntimeError("layerdiffuse_hidden_object_v1 requires core_blend_model_id")
+        if self.final_polish_backend and not self.final_polish_model_id.strip():
+            raise RuntimeError("layerdiffuse_hidden_object_v1 requires final_polish_model_id")
+
+    def _backend_runtime(self) -> BackendRuntime:
+        return BackendRuntime(
+            device=self.device,
+            dtype=self.dtype,
+            offload_mode=self.offload_mode,
+            enable_attention_slicing=self.enable_attention_slicing,
+            enable_vae_slicing=self.enable_vae_slicing,
+            enable_vae_tiling=self.enable_vae_tiling,
+            enable_xformers_memory_efficient_attention=self.enable_xformers_memory_efficient_attention,
+            enable_fp8_layerwise_casting=self.enable_fp8_layerwise_casting,
+            enable_channels_last=self.enable_channels_last,
+        )
+
+    def _refine_hidden_object_mask(self, *, image: Any, fallback_mask: Any) -> Any:
+        if self.mask_refine_backend == "rmbg_2_0":
+            if self._rmbg_refiner is None:
+                self._rmbg_refiner = Rmbg20MaskRefiner(
+                    model_id=self.rmbg_model_id,
+                    runtime=self._backend_runtime(),
+                )
+            return self._rmbg_refiner.refine(image=image, fallback_mask=fallback_mask)
+        if self.mask_refine_backend == "sam2":
+            if self._sam2_refiner is None:
+                self._sam2_refiner = Sam2MaskRefiner(
+                    model_id=self.sam2_model_id,
+                    runtime=self._backend_runtime(),
+                )
+            return self._sam2_refiner.refine(image=image, fallback_mask=fallback_mask)
+        return fallback_mask
+
+    def _get_object_blend_backend(self, backend_kind: str) -> DiffusionObjectBlendBackend:
+        if backend_kind == "edge":
+            if self._edge_blend_pipe is None:
+                self._edge_blend_pipe = DiffusionObjectBlendBackend(
+                    backend_name=self.edge_blend_backend,
+                    model_id=self.edge_blend_model_id,
+                    runtime=self._backend_runtime(),
+                )
+            return self._edge_blend_pipe
+        if backend_kind == "core":
+            if self._core_blend_pipe is None:
+                self._core_blend_pipe = DiffusionObjectBlendBackend(
+                    backend_name=self.core_blend_backend,
+                    model_id=self.core_blend_model_id,
+                    runtime=self._backend_runtime(),
+                )
+            return self._core_blend_pipe
+        if self._final_polish_pipe is None:
+            self._final_polish_pipe = DiffusionObjectBlendBackend(
+                backend_name=self.final_polish_backend,
+                model_id=self.final_polish_model_id,
+                runtime=self._backend_runtime(),
+            )
+        return self._final_polish_pipe
+
+    def _build_pre_match_variants(
+        self,
+        *,
+        image: Any,
+        bbox: tuple[int, int, int, int],
+        object_image: Any,
+        object_mask: Any,
+    ) -> list[dict[str, Any]]:
+        variants: list[dict[str, Any]] = []
+        count = max(1, int(self.pre_match_variant_count))
+        for index in range(count):
+            fraction = 0.0 if count == 1 else index / float(count - 1)
+            variant = self._transform_object_variant(
+                image=image,
+                bbox=bbox,
+                object_image=object_image,
+                object_mask=object_mask,
+                scale_ratio=self._interpolate(self.pre_match_scale_ratio, fraction),
+                rotation_deg=self._interpolate(self.pre_match_rotation_deg, fraction),
+                saturation_mul=self._interpolate(self.pre_match_saturation_mul, fraction),
+                contrast_mul=self._interpolate(self.pre_match_contrast_mul, fraction),
+                sharpness_mul=self._interpolate(self.pre_match_sharpness_mul, fraction),
+                index=index,
+            )
+            variants.append(variant)
+        return variants
+
+    def _select_best_variant(
+        self,
+        *,
+        image: Any,
+        bbox: tuple[int, int, int, int],
+        variants: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], tuple[int, int, int, int], float]:
+        best_variant = variants[0]
+        best_bbox = bbox
+        best_score = -1.0
+        for variant in variants:
+            placement_bbox, score = self._find_similarity_placement(
+                image=image,
+                patch=variant["object_image"],
+                mask=variant["object_mask"],
+                fallback_bbox=bbox,
+            )
+            variant["placement_bbox"] = placement_bbox
+            variant["score"] = score
+            if score > best_score:
+                best_variant = variant
+                best_bbox = placement_bbox
+                best_score = score
+        return best_variant, best_bbox, max(0.0, best_score)
+
+    def _transform_object_variant(
+        self,
+        *,
+        image: Any,
+        bbox: tuple[int, int, int, int],
+        object_image: Any,
+        object_mask: Any,
+        scale_ratio: float,
+        rotation_deg: float,
+        saturation_mul: float,
+        contrast_mul: float,
+        sharpness_mul: float,
+        index: int,
+    ) -> dict[str, Any]:
+        from PIL import Image, ImageEnhance  # type: ignore
+
+        canvas_side = max(128, int(self.final_context_size))
+        rgba = object_image.convert("RGBA")
+        mask = object_mask.convert("L")
+        tight_bbox = mask.getbbox() or (0, 0, mask.width, mask.height)
+        rgba = rgba.crop(tight_bbox)
+        mask = mask.crop(tight_bbox)
+        base_region = max(1, max(int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])))
+        target_long_side = max(
+            24,
+            min(
+                canvas_side - 8,
+                int(round(max(image.width, image.height) * float(scale_ratio))),
+            ),
+        )
+        current_long_side = max(1, rgba.width, rgba.height)
+        resize_scale = target_long_side / float(current_long_side)
+        resized_size = (
+            max(1, int(round(rgba.width * resize_scale))),
+            max(1, int(round(rgba.height * resize_scale))),
+        )
+        rgba = rgba.resize(resized_size, Image.LANCZOS)
+        mask = mask.resize(resized_size, Image.LANCZOS)
+        rgba = ImageEnhance.Color(rgba).enhance(float(saturation_mul))
+        rgba = ImageEnhance.Contrast(rgba).enhance(float(contrast_mul))
+        rgba = ImageEnhance.Sharpness(rgba).enhance(float(sharpness_mul))
+        rgba = rgba.rotate(float(rotation_deg), resample=Image.BICUBIC, expand=True)
+        alpha = mask.rotate(float(rotation_deg), resample=Image.BICUBIC, expand=True)
+        if alpha.getbbox() is None:
+            alpha = mask
+        rgba.putalpha(alpha)
+        rgba = self._apply_relight_hint(rgba)
+        canvas = Image.new("RGBA", (canvas_side, canvas_side), color=(0, 0, 0, 0))
+        paste_left = max(0, (canvas_side - rgba.width) // 2)
+        paste_top = max(0, (canvas_side - rgba.height) // 2)
+        canvas.paste(rgba, (paste_left, paste_top), rgba)
+        alpha_canvas = Image.new("L", (canvas_side, canvas_side), color=0)
+        alpha_canvas.paste(alpha, (paste_left, paste_top), alpha)
+        return {
+            "id": f"variant-{index:02d}",
+            "object_image": canvas,
+            "object_mask": alpha_canvas,
+            "scale_ratio": scale_ratio,
+            "rotation_deg": rotation_deg,
+            "saturation_mul": saturation_mul,
+            "contrast_mul": contrast_mul,
+            "sharpness_mul": sharpness_mul,
+            "target_long_side": min(target_long_side, base_region),
+        }
+
+    def _apply_relight_hint(self, image: Any) -> Any:
+        from PIL import ImageEnhance  # type: ignore
+
+        if self.relight_method == "ic_light":
+            if self._ic_light_relighter is None:
+                self._ic_light_relighter = IcLightRelighter(
+                    model_id=self.ic_light_model_id,
+                    runtime=self._backend_runtime(),
+                )
+            return self._ic_light_relighter.relight(
+                rgba_object=image,
+                prompt="hidden object harmonized lighting",
+                negative_prompt=self.default_negative_prompt,
+                strength=0.18,
+            )
+        image = ImageEnhance.Brightness(image).enhance(0.96)
+        return ImageEnhance.Contrast(image).enhance(0.97)
+
+    def _opaque_composite_object(
+        self,
+        *,
+        image: Any,
+        object_image: Any,
+        object_mask: Any,
+        target_bbox: tuple[int, int, int, int],
+    ) -> tuple[Any, Any]:
+        from PIL import ImageFilter  # type: ignore
+
+        opaque = object_image.copy().convert("RGBA")
+        opaque.putalpha(object_mask.convert("L"))
+        if self.composite_feather_px > 0:
+            feathered = object_mask.convert("L").filter(
+                ImageFilter.GaussianBlur(radius=max(1, int(self.composite_feather_px)))
+            )
+        else:
+            feathered = object_mask.convert("L")
+        opaque.putalpha(feathered)
+        composited = apply_alpha_patch(image, opaque, target_bbox)
+        return composited, feathered
+
+    def _build_ring_mask(
+        self,
+        *,
+        mask: Any,
+        dilation_px: int,
+        inner_feather_px: int,
+    ) -> Any:
+        from PIL import ImageChops, ImageFilter  # type: ignore
+
+        outer = mask.convert("L")
+        for _ in range(max(1, int(dilation_px))):
+            outer = outer.filter(ImageFilter.MaxFilter(3))
+        inner = mask.convert("L")
+        if inner_feather_px > 0:
+            inner = inner.filter(ImageFilter.GaussianBlur(radius=inner_feather_px))
+        ring = ImageChops.subtract(outer, inner)
+        return ring
+
+    def _run_object_blend_pass(
+        self,
+        *,
+        handle: ModelHandle,
+        source_image: Any,
+        target_bbox: tuple[int, int, int, int],
+        localized_mask: Any,
+        prompt: str,
+        negative_prompt: str,
+        strength: float,
+        num_inference_steps: int,
+        guidance_scale: float,
+        backend_kind: str,
+    ) -> dict[str, Any]:
+        crop_bbox_with_padding = self._build_context_crop_bbox(
+            image=source_image,
+            target_bbox=target_bbox,
+        )
+        original_patch = crop_bbox(source_image, crop_bbox_with_padding)
+        blend_mask = self._localize_object_mask(
+            crop_bbox=crop_bbox_with_padding,
+            target_bbox=target_bbox,
+            working_size=original_patch.size,
+            object_mask=localized_mask,
+        )
+        backend = self._get_object_blend_backend(backend_kind)
+        generated_patch = backend.generate(
+            image=original_patch,
+            mask=blend_mask,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            strength=float(strength),
+            num_inference_steps=int(num_inference_steps),
+            guidance_scale=float(guidance_scale),
+        )
+        generated_patch = normalize_generated_patch(generated_patch, original_patch.size)
+        composited = self._apply_patch_to_crop(
+            image=source_image,
+            patch=generated_patch,
+            crop_bbox=crop_bbox_with_padding,
+        )
+        return {
+            "generated_patch": generated_patch,
+            "composited": composited,
+            "blend_mask": blend_mask,
+        }
+
+    def _apply_direct_shadow(
+        self,
+        *,
+        image: Any,
+        object_mask: Any,
+        target_bbox: tuple[int, int, int, int],
+    ) -> Any:
+        from PIL import Image, ImageFilter  # type: ignore
+
+        crop_bbox_with_padding = self._build_context_crop_bbox(
+            image=image,
+            target_bbox=target_bbox,
+        )
+        localized_mask = self._localize_object_mask(
+            crop_bbox=crop_bbox_with_padding,
+            target_bbox=target_bbox,
+            working_size=(crop_bbox_with_padding[2] - crop_bbox_with_padding[0], crop_bbox_with_padding[3] - crop_bbox_with_padding[1]),
+            object_mask=object_mask,
+        )
+        shadow_mask = localized_mask.filter(
+            ImageFilter.GaussianBlur(radius=max(1, int(self.shadow_blur_px)))
+        )
+        shadow_mask = shadow_mask.point(
+            lambda value: int(max(0, min(255, value * float(self.shadow_opacity))))
+        )
+        crop = crop_bbox(image, crop_bbox_with_padding).convert("RGBA")
+        shadow = Image.new("RGBA", crop.size, color=(0, 0, 0, 0))
+        shadow.paste(
+            Image.new("RGBA", crop.size, color=(0, 0, 0, 255)),
+            (0, 0),
+            shadow_mask,
+        )
+        composited_crop = Image.alpha_composite(crop, shadow)
+        return self._apply_patch_to_crop(
+            image=image,
+            patch=composited_crop.convert("RGB"),
+            crop_bbox=crop_bbox_with_padding,
+        )
+
+    def _interpolate(self, bounds: tuple[float, float], fraction: float) -> float:
+        low, high = bounds
+        return float(low + (high - low) * fraction)
 
     def _save_stage_outputs(
         self,
@@ -676,9 +1287,16 @@ class SdxlInpaintModel:
         except Exception:
             return fallback_bbox, 0.0
 
+        tight_bbox = mask.convert("L").getbbox()
+        if tight_bbox is not None:
+            patch = patch.crop(tight_bbox)
+            mask = mask.crop(tight_bbox)
         left, top, right, bottom = fallback_bbox
-        region_w = max(1, right - left)
-        region_h = max(1, bottom - top)
+        region_w = patch.width
+        region_h = patch.height
+        if region_w < 1 or region_h < 1:
+            region_w = max(1, right - left)
+            region_h = max(1, bottom - top)
         scale = max(1, int(self.placement_downscale_factor))
         stride = max(1, int(self.placement_grid_stride))
         scaled_w = max(1, region_w // scale)

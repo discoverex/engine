@@ -17,22 +17,32 @@ class SamObjectMaskExtractor:
         *,
         image_path: str | Path,
         output_prefix: str | Path,
-    ) -> dict[str, Path]:
+    ) -> dict[str, str | Path]:
         loaded = self._load_image(image_path)
         image = loaded["rgb"]
         alpha = loaded.get("alpha")
+        raw_alpha_path: Path | None = None
         if alpha is not None and alpha.getbbox() is not None:
             mask = alpha
             object_rgba = image.convert("RGBA")
             object_rgba.putalpha(mask)
+            mask_source = "layerdiffuse_alpha"
         else:
             mask = self._predict_mask(image)
             object_rgba = image.convert("RGBA")
             object_rgba.putalpha(mask)
+            mask_source = "mask_extractor"
         prefix = Path(output_prefix)
         object_path = save_image(object_rgba, prefix.with_suffix(".object.png"))
         mask_path = save_image(mask, prefix.with_suffix(".mask.png"))
-        return {"object": object_path, "mask": mask_path}
+        if alpha is not None and alpha.getbbox() is not None:
+            raw_alpha_path = save_image(alpha, prefix.with_suffix(".raw-alpha-mask.png"))
+        return {
+            "object": object_path,
+            "mask": mask_path,
+            "raw_alpha_mask": raw_alpha_path or mask_path,
+            "mask_source": mask_source,
+        }
 
     def unload(self) -> None:
         self._predictor = None

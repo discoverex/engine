@@ -31,11 +31,15 @@ def validate_diffusers_runtime(runtime: RuntimeResolution) -> None:
         )
     transformers_mod = runtime.transformers
     version = str(getattr(transformers_mod, "__version__", "unknown"))
-    has_mt5 = bool(getattr(transformers_mod, "MT5Tokenizer", None))
-    if version.startswith("5.") or not has_mt5:
+    has_t5_family = bool(
+        getattr(transformers_mod, "MT5Tokenizer", None)
+        or getattr(transformers_mod, "T5Tokenizer", None)
+        or getattr(transformers_mod, "AutoTokenizer", None)
+    )
+    if not has_t5_family:
         raise RuntimeError(
             "incompatible diffusers runtime: installed transformers="
-            f"{version}. Use transformers>=4.46,<5.0 and rerun "
+            f"{version}. Install a transformers build with T5 tokenizer support and rerun "
             "`uv sync --extra tracking --extra ml-cpu`."
         )
 

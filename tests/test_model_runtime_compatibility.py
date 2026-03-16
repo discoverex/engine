@@ -10,13 +10,29 @@ from discoverex.adapters.outbound.models.runtime import (
 
 class _TransformersV5:
     __version__ = "5.2.0"
+    T5Tokenizer = object()
 
 
-def test_validate_diffusers_runtime_rejects_transformers_v5() -> None:
+def test_validate_diffusers_runtime_allows_transformers_v5_with_t5_support() -> None:
     runtime = RuntimeResolution(
         available=True,
         torch=object(),
         transformers=_TransformersV5(),
+        reason="",
+    )
+
+    validate_diffusers_runtime(runtime)
+
+
+class _TransformersBroken:
+    __version__ = "5.2.0"
+
+
+def test_validate_diffusers_runtime_rejects_missing_t5_support() -> None:
+    runtime = RuntimeResolution(
+        available=True,
+        torch=object(),
+        transformers=_TransformersBroken(),
         reason="",
     )
 

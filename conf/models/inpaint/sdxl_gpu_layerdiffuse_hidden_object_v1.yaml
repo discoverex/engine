@@ -1,0 +1,58 @@
+# @package models.inpaint
+_target_: discoverex.adapters.outbound.models.sdxl_inpaint.SdxlInpaintModel
+model_id: diffusers/stable-diffusion-xl-1.0-inpainting-0.1
+revision: main
+device: ${runtime.model_runtime.device}
+dtype: ${runtime.model_runtime.dtype}
+precision: ${runtime.model_runtime.precision}
+batch_size: ${runtime.model_runtime.batch_size}
+seed: ${runtime.model_runtime.seed}
+offload_mode: ${runtime.model_runtime.offload_mode}
+enable_attention_slicing: ${runtime.model_runtime.enable_attention_slicing}
+enable_vae_slicing: ${runtime.model_runtime.enable_vae_slicing}
+enable_vae_tiling: ${runtime.model_runtime.enable_vae_tiling}
+enable_xformers_memory_efficient_attention: ${runtime.model_runtime.enable_xformers_memory_efficient_attention}
+enable_fp8_layerwise_casting: ${runtime.model_runtime.enable_fp8_layerwise_casting}
+enable_channels_last: ${runtime.model_runtime.enable_channels_last}
+strict_runtime: true
+default_prompt: "place a hidden object that remains coherent in the selected region"
+default_negative_prompt: "blurry, low quality, artifact"
+generation_strength: 0.45
+generation_steps: 8
+generation_guidance_scale: 2.5
+mask_blur: 6
+inpaint_only_masked: true
+masked_area_padding: 24
+patch_target_long_side: 128
+inpaint_mode: layerdiffuse_hidden_object_v1
+final_context_size: 512
+pre_match_scale_ratio: [0.04, 0.18]
+pre_match_rotation_deg: [-25.0, 25.0]
+pre_match_saturation_mul: [0.85, 0.97]
+pre_match_contrast_mul: [0.90, 0.98]
+pre_match_sharpness_mul: [0.85, 0.95]
+pre_match_variant_count: 5
+composite_feather_px: 2
+edge_blend_steps: 20
+edge_blend_cfg: 4.5
+edge_blend_strength: 0.18
+edge_blend_ring_dilate_px: 10
+core_blend_steps: 24
+core_blend_cfg: 5.0
+core_blend_strength: 0.35
+shadow_blur_px: 12
+shadow_opacity: 0.14
+final_polish_steps: 14
+final_polish_cfg: 4.0
+final_polish_strength: 0.12
+relight_method: ic_light
+edge_blend_backend: powerpaint_v2_sd15
+core_blend_backend: powerpaint_v2_sd15
+final_polish_backend: brushnet
+mask_refine_backend: rmbg_2_0
+rmbg_model_id: briaai/RMBG-2.0
+sam2_model_id: facebook/sam2-hiera-large
+ic_light_model_id: lllyasviel/ic-light
+edge_blend_model_id: Sanster/PowerPaint_v2
+core_blend_model_id: Sanster/PowerPaint_v2
+final_polish_model_id: Kijai/BrushNet-fp16
