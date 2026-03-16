@@ -27,6 +27,7 @@ inputs:
     - runtime.width=512
     - runtime.height=384
     - models/background_generator=sdxl_gpu
+    - models/object_generator=sdxl_gpu
     - models/hidden_region=hf
     - models/inpaint=sdxl_gpu_similarity_v2
     - models/perception=hf
@@ -39,6 +40,7 @@ inputs:
       - tracking
       - storage
       - ml-gpu
+      - validator
     extra_env: {}
 env: {}
 outputs_prefix: null

@@ -14,6 +14,7 @@ from discoverex.runtime_logging import format_seconds, get_logger
 from .background_pipeline import build_background_from_inputs
 from .composite_pipeline import compose_scene
 from .model_lifecycle import unload_model
+from .object_pipeline import generate_region_objects
 from .persistence import save_scene, track_run, write_verification_report
 from .prompt_bundle import build_prompt_tracking_params, save_prompt_bundle
 from .region_pipeline import build_candidate_regions, generate_regions
@@ -80,7 +81,20 @@ def run(
     finally:
         unload_model(context.hidden_region_model)
 
-    # 2. Inpaint regions (load inpaint model only)
+    object_handle = context.object_generator_model.load(model_versions.object_generator)
+    try:
+        generated_objects = generate_region_objects(
+            context=context,
+            scene_dir=scene_dir,
+            regions=regions_to_process,
+            object_handle=object_handle,
+            object_prompt=(object_prompt or "").strip(),
+            object_negative_prompt=(object_negative_prompt or "").strip(),
+        )
+    finally:
+        unload_model(context.object_generator_model)
+
+    # 2. Blend generated objects into selected regions (load inpaint model only)
     inpaint_handle = context.inpaint_model.load(model_versions.inpaint)
     try:
         regions, region_prompt_records = generate_regions(
@@ -88,6 +102,7 @@ def run(
             background=background,
             scene_dir=scene_dir,
             regions=regions_to_process,
+            generated_objects=generated_objects,
             inpaint_handle=inpaint_handle,
             object_prompt=(object_prompt or "").strip(),
             object_negative_prompt=(object_negative_prompt or "").strip(),

@@ -62,8 +62,10 @@ def build_prompt_record(
         negative_prompt=object_negative_prompt,
         generation_prompt=generation_prompt,
         bbox=bbox_tuple(region),
+        candidate_image_ref=details.get("candidate_image_ref"),
         patch_image_ref=details.get("patch_image_ref"),
         object_image_ref=details.get("object_image_ref"),
         object_mask_ref=details.get("object_mask_ref"),
+        blend_mask_ref=details.get("blend_mask_ref"),
         composited_image_ref=details.get("composited_image_ref"),
     )

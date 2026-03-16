@@ -11,6 +11,7 @@ from discoverex.models.types import InpaintRequest, ModelHandle
 from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 
+from .object_pipeline import GeneratedObjectAsset
 from .region_prompts import (
     bbox_payload,
     bbox_tuple,
@@ -51,6 +52,7 @@ def generate_regions(
     background: Background,
     scene_dir: Path,
     regions: list[Region],
+    generated_objects: dict[str, GeneratedObjectAsset],
     inpaint_handle: ModelHandle,
     object_prompt: str = "",
     object_negative_prompt: str = "",
@@ -89,12 +91,18 @@ def generate_regions(
             context,
             _object_inpaint_vram_stage(index=index, region_id=region.region_id),
         ):
+            object_asset = generated_objects.get(region.region_id)
+            if object_asset is None:
+                raise ValueError(f"missing generated object for region {region.region_id}")
             details = context.inpaint_model.predict(
                 inpaint_handle,
                 InpaintRequest(
                     image_ref=background.asset_ref,
                     region_id=region.region_id,
                     bbox=bbox_tuple(region),
+                    object_image_ref=object_asset.object_ref,
+                    object_mask_ref=object_asset.object_mask_ref,
+                    object_candidate_ref=object_asset.candidate_ref,
                     output_path=str(output_path),
                     composite_base_ref=background.asset_ref,
                     prompt=object_prompt,

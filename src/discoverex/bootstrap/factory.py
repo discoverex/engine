@@ -44,6 +44,7 @@ def build_context(
     background_generator_model = instantiate(
         cfg.models.background_generator.as_kwargs()
     )
+    object_generator_model = instantiate(cfg.models.object_generator.as_kwargs())
     hidden_region_model = instantiate(cfg.models.hidden_region.as_kwargs())
     inpaint_model = instantiate(cfg.models.inpaint.as_kwargs())
     perception_model = instantiate(cfg.models.perception.as_kwargs())
@@ -61,6 +62,7 @@ def build_context(
 
     return AppContext(
         background_generator_model=background_generator_model,
+        object_generator_model=object_generator_model,
         hidden_region_model=hidden_region_model,
         inpaint_model=inpaint_model,
         perception_model=perception_model,

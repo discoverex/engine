@@ -209,11 +209,9 @@ def test_sdxl_inpaint_v2_selects_similarity_bbox_and_writes_precomposite(
         overlay_alpha=0.5,
         placement_grid_stride=8,
         placement_downscale_factor=1,
-        independent_object_generation=True,
         final_inpaint_strength=0.18,
         final_inpaint_steps=6,
         final_inpaint_guidance_scale=2.0,
-        final_inpaint_only_masked=False,
     )
     monkeypatch.setattr(
         "discoverex.adapters.outbound.models.sdxl_inpaint.resolve_runtime",
@@ -231,17 +229,24 @@ def test_sdxl_inpaint_v2_selects_similarity_bbox_and_writes_precomposite(
     base = Image.new("RGB", (96, 96), color=(220, 220, 220))
     ImageDraw.Draw(base).rectangle((56, 24, 72, 40), fill=(32, 96, 196))
     base.save(source)
-    calls = {"count": 0}
+    candidate = tmp_path / "candidate.png"
+    object_path = tmp_path / "object.png"
+    mask_path = tmp_path / "mask.png"
+    candidate_image = Image.new("RGB", (32, 32), color=(245, 245, 245))
+    ImageDraw.Draw(candidate_image).rectangle((8, 8, 24, 24), fill=(32, 96, 196))
+    candidate_image.save(candidate)
+    object_image = Image.new("RGBA", (32, 32), color=(0, 0, 0, 0))
+    ImageDraw.Draw(object_image).rectangle((8, 8, 24, 24), fill=(32, 96, 196, 255))
+    object_image.save(object_path)
+    object_mask = Image.new("L", (32, 32), color=0)
+    ImageDraw.Draw(object_mask).rectangle((8, 8, 24, 24), fill=255)
+    object_mask.save(mask_path)
     captured: list[dict[str, object]] = []
 
     def _fake_generate_image(**kwargs):  # type: ignore[no-untyped-def]
-        calls["count"] += 1
         captured.append(dict(kwargs))
         image = kwargs["image"]
-        generated = image.copy()
-        draw = ImageDraw.Draw(generated)
-        draw.rectangle((8, 8, 24, 24), fill=(32, 96, 196))
-        return generated
+        return image.copy()
 
     monkeypatch.setattr(model, "_generate_image", _fake_generate_image)
     monkeypatch.setattr(
@@ -259,21 +264,24 @@ def test_sdxl_inpaint_v2_selects_similarity_bbox_and_writes_precomposite(
             image_ref=str(source),
             region_id="r-v2",
             bbox=(8, 8, 16, 16),
+            object_candidate_ref=str(candidate),
+            object_image_ref=str(object_path),
+            object_mask_ref=str(mask_path),
             output_path=str(tmp_path / "out-v2.png"),
             generation_prompt="hidden marker",
         ),
     )
 
-    assert calls["count"] == 2
-    assert Path(pred["candidate_image_ref"]).exists()
+    assert Path(pred["candidate_image_ref"]) == candidate
     assert Path(pred["precomposited_image_ref"]).exists()
+    assert Path(pred["blend_mask_ref"]).exists()
     assert pred["inpaint_mode"] == "similarity_overlay_v2"
     selected = pred["selected_bbox"]
     assert selected["x"] >= 48
     assert selected["y"] >= 16
     assert pred["placement_score"] >= 0.0
-    assert len(captured) == 2
-    assert captured[0]["mask"].getbbox() == (0, 0, 128, 128)
-    assert captured[1]["inpaint_only_masked"] is False
-    assert captured[1]["strength"] == pytest.approx(0.18)
-    assert captured[1]["padding_mask_crop"] is None
+    assert len(captured) == 1
+    assert captured[0]["inpaint_only_masked"] is True
+    assert captured[0]["strength"] == pytest.approx(0.18)
+    assert captured[0]["padding_mask_crop"] is None
+    assert captured[0]["mask"].getbbox() is not None

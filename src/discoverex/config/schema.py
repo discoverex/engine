@@ -16,6 +16,7 @@ class HydraComponentConfig(BaseModel):
 
 class ModelsConfig(BaseModel):
     background_generator: HydraComponentConfig
+    object_generator: HydraComponentConfig
     hidden_region: HydraComponentConfig
     inpaint: HydraComponentConfig
     perception: HydraComponentConfig
@@ -98,6 +99,7 @@ class ThresholdsConfig(BaseModel):
 
 class ModelVersionsConfig(BaseModel):
     background_generator: str = "background-generator-v0"
+    object_generator: str = "object-generator-v0"
     hidden_region: str = "hidden-region-v0"
     inpaint: str = "inpaint-v0"
     perception: str = "perception-v0"

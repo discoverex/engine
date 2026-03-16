@@ -52,6 +52,17 @@ def test_run_unloads_models_between_generation_stages(
     )
     monkeypatch.setattr(
         orchestrator,
+        "generate_region_objects",
+        lambda **_: {
+            "r1": SimpleNamespace(
+                candidate_ref=str(tmp_path / "candidate.png"),
+                object_ref=str(tmp_path / "object.png"),
+                object_mask_ref=str(tmp_path / "mask.png"),
+            )
+        },
+    )
+    monkeypatch.setattr(
+        orchestrator,
         "generate_regions",
         lambda **_: (scene.regions, []),
     )
@@ -74,6 +85,7 @@ def test_run_unloads_models_between_generation_stages(
         runtime=SimpleNamespace(width=512, height=512),
         model_versions=SimpleNamespace(
             background_generator="bg-v1",
+            object_generator="object-v1",
             hidden_region="hidden-v1",
             inpaint="inpaint-v1",
             perception="perception-v1",
@@ -82,6 +94,7 @@ def test_run_unloads_models_between_generation_stages(
         ),
         artifacts_root=tmp_path,
         background_generator_model=_FakeModel("background", events),
+        object_generator_model=_FakeModel("object", events),
         hidden_region_model=_FakeModel("hidden", events),
         inpaint_model=_FakeModel("inpaint", events),
         fx_model=_FakeModel("fx", events),
@@ -103,6 +116,8 @@ def test_run_unloads_models_between_generation_stages(
         "unload:background",
         "load:hidden",
         "unload:hidden",
+        "load:object",
+        "unload:object",
         "load:inpaint",
         "unload:inpaint",
         "load:fx",

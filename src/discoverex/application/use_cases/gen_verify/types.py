@@ -35,9 +35,11 @@ class RegionPromptRecord(BaseModel):
     negative_prompt: str = ""
     generation_prompt: str = ""
     bbox: tuple[float, float, float, float]
+    candidate_image_ref: str | None = None
     patch_image_ref: str | None = None
     object_image_ref: str | None = None
     object_mask_ref: str | None = None
+    blend_mask_ref: str | None = None
     composited_image_ref: str | None = None
 
 

@@ -1,5 +1,6 @@
 defaults:
   - models/background_generator: dummy
+  - models/object_generator: dummy
   - models/hidden_region: dummy
   - models/inpaint: dummy
   - models/perception: dummy
@@ -30,6 +31,7 @@ thresholds:
 
 model_versions:
   background_generator: background-generator-v0
+  object_generator: object-generator-v0
   hidden_region: hidden-region-v0
   inpaint: inpaint-v0
   perception: perception-v0

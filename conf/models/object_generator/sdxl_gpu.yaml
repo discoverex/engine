@@ -1,6 +1,7 @@
-# @package models.inpaint
-_target_: discoverex.adapters.outbound.models.sdxl_inpaint.SdxlInpaintModel
-model_id: diffusers/stable-diffusion-xl-1.0-inpainting-0.1
+# @package models.object_generator
+_target_: discoverex.adapters.outbound.models.sdxl_background_generation.SdxlBackgroundGenerationModel
+model_id: stabilityai/sdxl-turbo
+refiner_model_id: null
 revision: main
 device: ${runtime.model_runtime.device}
 dtype: ${runtime.model_runtime.dtype}
@@ -15,22 +16,8 @@ enable_xformers_memory_efficient_attention: ${runtime.model_runtime.enable_xform
 enable_fp8_layerwise_casting: ${runtime.model_runtime.enable_fp8_layerwise_casting}
 enable_channels_last: ${runtime.model_runtime.enable_channels_last}
 strict_runtime: true
-default_prompt: "place a visually coherent hidden object in the selected region"
-default_negative_prompt: "blurry, low quality, artifact"
-generation_strength: 0.45
-generation_steps: 8
-generation_guidance_scale: 2.5
-mask_blur: 6
-inpaint_only_masked: true
-masked_area_padding: 24
-patch_target_long_side: 80
-inpaint_mode: similarity_overlay_v2
-overlay_alpha: 0.5
-placement_grid_stride: 24
-placement_downscale_factor: 2
-similarity_color_weight: 0.7
-similarity_edge_weight: 0.3
-final_inpaint_strength: 0.18
-final_inpaint_steps: 6
-final_inpaint_guidance_scale: 2.0
-final_mask_blur: 4
+default_prompt: "isolated single object on a plain neutral backdrop"
+default_negative_prompt: "busy scene, environment, multiple objects, shadow, floor, wall, clutter, blurry, low quality, artifact"
+default_num_inference_steps: 4
+default_guidance_scale: 0.0
+default_refiner_strength: 0.0

@@ -6,6 +6,9 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 from discoverex.application.use_cases import run_gen_verify
+from discoverex.application.use_cases.gen_verify.object_pipeline import (
+    GeneratedObjectAsset,
+)
 from discoverex.config import ModelVersionsConfig, RuntimeConfig, ThresholdsConfig
 from discoverex.domain.scene import Scene
 from discoverex.models.types import ModelHandle
@@ -65,6 +68,10 @@ class _FxModel:
         return {"output_path": str(output_path)}
 
 
+class _ObjectGeneratorModel(_FxModel):
+    pass
+
+
 class _ArtifactStore:
     def save_scene_bundle(self, scene: Scene) -> Path:
         base = Path(scene.composite.final_image_ref).parent
@@ -121,14 +128,52 @@ class _ReportWriter:
         return path
 
 
+def _fake_generated_objects(
+    *,
+    regions: list[object],
+    candidate_path: Path,
+    object_path: Path,
+    mask_path: Path,
+) -> dict[str, GeneratedObjectAsset]:
+    region = regions[0]
+    return {
+        region.region_id: GeneratedObjectAsset(
+            region_id=region.region_id,
+            candidate_ref=str(candidate_path),
+            object_ref=str(object_path),
+            object_mask_ref=str(mask_path),
+            width=64,
+            height=64,
+        )
+    }
+
+
 def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     fx_model = _FxModel()
+    object_model = _ObjectGeneratorModel()
     inpaint_model = _InpaintModel()
     tracker = _Tracker()
+    candidate_path = tmp_path / "generated-object.candidate.png"
+    object_path = tmp_path / "generated-object.object.png"
+    mask_path = tmp_path / "generated-object.mask.png"
+    candidate_path.write_bytes(b"candidate")
+    object_path.write_bytes(b"object")
+    mask_path.write_bytes(b"mask")
+    monkeypatch.setattr(
+        "discoverex.application.use_cases.gen_verify.orchestrator.generate_region_objects",
+        lambda **kwargs: _fake_generated_objects(
+            regions=kwargs["regions"],
+            candidate_path=candidate_path,
+            object_path=object_path,
+            mask_path=mask_path,
+        ),
+    )
     context = SimpleNamespace(
         background_generator_model=fx_model,
+        object_generator_model=object_model,
         hidden_region_model=_HiddenRegionModel(),
         inpaint_model=inpaint_model,
         perception_model=_PerceptionModel(),
@@ -180,3 +225,5 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     inpaint_request = cast(SimpleNamespace, inpaint_model.requests[0])
     assert fx_request.mode == "background"
     assert inpaint_request.generation_prompt == "hidden brass key"
+    assert str(inpaint_request.object_image_ref) == str(object_path)
+    assert str(inpaint_request.object_mask_ref) == str(mask_path)

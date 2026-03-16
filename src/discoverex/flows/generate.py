@@ -14,6 +14,9 @@ from discoverex.application.use_cases.gen_verify.background_pipeline import (
 )
 from discoverex.application.use_cases.gen_verify.composite_pipeline import compose_scene
 from discoverex.application.use_cases.gen_verify.model_lifecycle import unload_model
+from discoverex.application.use_cases.gen_verify.object_pipeline import (
+    generate_region_objects,
+)
 from discoverex.application.use_cases.gen_verify.persistence import (
     save_scene,
     track_run,
@@ -138,7 +141,22 @@ def _generate_regions_stage(
     finally:
         unload_model(context.hidden_region_model)
 
-    # 2. Inpaint regions (sequential load)
+    object_handle = context.object_generator_model.load(
+        context.model_versions.object_generator
+    )
+    try:
+        generated_objects = generate_region_objects(
+            context=context,
+            scene_dir=scene_dir,
+            regions=regions_to_process,
+            object_handle=object_handle,
+            object_prompt=object_prompt,
+            object_negative_prompt=object_negative_prompt,
+        )
+    finally:
+        unload_model(context.object_generator_model)
+
+    # 2. Blend generated objects into regions (sequential load)
     inpaint_handle = context.inpaint_model.load(context.model_versions.inpaint)
     try:
         return generate_regions(
@@ -146,6 +164,7 @@ def _generate_regions_stage(
             background=background,
             scene_dir=scene_dir,
             regions=regions_to_process,
+            generated_objects=generated_objects,
             inpaint_handle=inpaint_handle,
             object_prompt=object_prompt,
             object_negative_prompt=object_negative_prompt,

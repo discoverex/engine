@@ -185,6 +185,8 @@ class SdxlInpaintModel:
                 result["precomposited_image_ref"] = str(
                     composited_ref["precomposited"]
                 )
+            if "blend_mask" in composited_ref:
+                result["blend_mask_ref"] = str(composited_ref["blend_mask"])
             if "selected_bbox" in composited_ref:
                 left, top, right, bottom = composited_ref["selected_bbox"]
                 result["selected_bbox"] = {
@@ -220,6 +222,18 @@ class SdxlInpaintModel:
         try:
             image = load_image_rgb(source)
             bbox = sanitize_bbox(request.bbox, image.width, image.height)
+            if (
+                self.inpaint_mode == "similarity_overlay_v2"
+                and request.object_image_ref is not None
+                and request.object_mask_ref is not None
+            ):
+                return self._predict_with_generated_object_v2(
+                    image=image,
+                    bbox=bbox,
+                    handle=handle,
+                    output=Path(output_path),
+                    request=request,
+                )
             initial_source = image
             initial_force_full_mask = False
             if (
@@ -266,6 +280,60 @@ class SdxlInpaintModel:
             if self.strict_runtime:
                 raise
             return None
+
+    def _predict_with_generated_object_v2(
+        self,
+        *,
+        image: Any,
+        bbox: tuple[int, int, int, int],
+        handle: ModelHandle,
+        output: Path,
+        request: InpaintRequest,
+    ) -> dict[str, Any]:
+        object_image, object_mask = self._load_object_assets(request=request)
+        placement_bbox, placement_score = self._find_similarity_placement(
+            image=image,
+            patch=object_image,
+            mask=object_mask,
+            fallback_bbox=bbox,
+        )
+        precomposited = apply_alpha_patch_with_opacity(
+            image,
+            object_image,
+            placement_bbox,
+            opacity=self.overlay_alpha,
+        )
+        precomposited_path = save_image(
+            precomposited, output.with_suffix(".precomposite.png")
+        )
+        blend_stage = self._run_blend_stage(
+            handle=handle,
+            source_image=precomposited,
+            target_bbox=placement_bbox,
+            object_mask=object_mask,
+            request=request,
+        )
+        patch_path = save_image(
+            blend_stage["generated_patch"], output.with_suffix(".patch.png")
+        )
+        composited_path = save_image(blend_stage["composited"], output)
+        blend_mask_path = save_image(
+            blend_stage["blend_mask"], output.with_suffix(".blend-mask.png")
+        )
+        candidate_ref = request.object_candidate_ref or request.object_image_ref
+        if candidate_ref is None:
+            raise ValueError("generated object candidate ref is required")
+        return {
+            "patch": patch_path,
+            "candidate": Path(str(candidate_ref)),
+            "object": Path(str(request.object_image_ref)),
+            "mask": Path(str(request.object_mask_ref)),
+            "composited": composited_path,
+            "precomposited": precomposited_path,
+            "blend_mask": blend_mask_path,
+            "selected_bbox": placement_bbox,
+            "placement_score": placement_score,
+        }
 
     def _predict_with_similarity_overlay_v2(
         self,
@@ -437,6 +505,139 @@ class SdxlInpaintModel:
             "mask": mask_path,
             "composited": composited_path,
         }
+
+    def _run_blend_stage(
+        self,
+        *,
+        handle: ModelHandle,
+        source_image: Any,
+        target_bbox: tuple[int, int, int, int],
+        object_mask: Any,
+        request: InpaintRequest,
+    ) -> dict[str, Any]:
+        crop_bbox_with_padding = expand_bbox(
+            target_bbox,
+            padding=int(request.masked_area_padding or self.masked_area_padding),
+            width=source_image.width,
+            height=source_image.height,
+        )
+        original_patch = crop_bbox(source_image, crop_bbox_with_padding)
+        working_patch, working_size = resize_patch_to_long_side(
+            original_patch, self.patch_target_long_side
+        )
+        blend_mask = self._build_blend_mask(
+            crop_bbox=crop_bbox_with_padding,
+            target_bbox=target_bbox,
+            working_size=working_size,
+            object_mask=object_mask,
+        )
+        generated_patch = self._generate_image(
+            handle=handle,
+            image=working_patch,
+            mask=blend_mask,
+            prompt="blend the pasted object edges naturally into the surrounding scene while preserving the object",
+            negative_prompt=request.negative_prompt or self.default_negative_prompt,
+            strength=float(self.final_inpaint_strength or 0.18),
+            num_inference_steps=int(self.final_inpaint_steps or 6),
+            guidance_scale=float(self.final_inpaint_guidance_scale or 2.0),
+            mask_blur=int(self.final_mask_blur or request.mask_blur or self.mask_blur),
+            inpaint_only_masked=True,
+            padding_mask_crop=None,
+        )
+        generated_patch = normalize_generated_patch(generated_patch, working_size)
+        composited = self._apply_patch_to_crop(
+            image=source_image,
+            patch=generated_patch,
+            crop_bbox=crop_bbox_with_padding,
+        )
+        return {
+            "generated_patch": generated_patch,
+            "composited": composited,
+            "blend_mask": blend_mask,
+        }
+
+    def _build_blend_mask(
+        self,
+        *,
+        crop_bbox: tuple[int, int, int, int],
+        target_bbox: tuple[int, int, int, int],
+        working_size: tuple[int, int],
+        object_mask: Any,
+    ) -> Any:
+        from PIL import ImageChops, ImageFilter  # type: ignore
+
+        localized_mask = self._localize_object_mask(
+            crop_bbox=crop_bbox,
+            target_bbox=target_bbox,
+            working_size=working_size,
+            object_mask=object_mask,
+        )
+        outer = localized_mask.filter(ImageFilter.MaxFilter(9))
+        inner = localized_mask.filter(ImageFilter.MaxFilter(3))
+        ring = ImageChops.subtract(outer, inner)
+        ring = ring.filter(
+            ImageFilter.GaussianBlur(radius=max(1, int(self.final_mask_blur or 4)))
+        )
+        if ring.getbbox() is None:
+            return localized_mask
+        return ring
+
+    def _localize_object_mask(
+        self,
+        *,
+        crop_bbox: tuple[int, int, int, int],
+        target_bbox: tuple[int, int, int, int],
+        working_size: tuple[int, int],
+        object_mask: Any,
+    ) -> Any:
+        from PIL import Image  # type: ignore
+
+        crop_left, crop_top, crop_right, crop_bottom = crop_bbox
+        crop_width = max(1, crop_right - crop_left)
+        crop_height = max(1, crop_bottom - crop_top)
+        target_left, target_top, target_right, target_bottom = target_bbox
+        scale_x = working_size[0] / crop_width
+        scale_y = working_size[1] / crop_height
+        localized_bbox = (
+            max(0, int(round((target_left - crop_left) * scale_x))),
+            max(0, int(round((target_top - crop_top) * scale_y))),
+            min(working_size[0], int(round((target_right - crop_left) * scale_x))),
+            min(working_size[1], int(round((target_bottom - crop_top) * scale_y))),
+        )
+        region_w = max(1, localized_bbox[2] - localized_bbox[0])
+        region_h = max(1, localized_bbox[3] - localized_bbox[1])
+        resized_mask = object_mask.convert("L").resize((region_w, region_h))
+        canvas = Image.new("L", working_size, color=0)
+        canvas.paste(resized_mask, (localized_bbox[0], localized_bbox[1]))
+        return canvas
+
+    def _apply_patch_to_crop(
+        self,
+        *,
+        image: Any,
+        patch: Any,
+        crop_bbox: tuple[int, int, int, int],
+    ) -> Any:
+        composited = image.copy()
+        composited.paste(
+            patch.resize(
+                (
+                    max(1, crop_bbox[2] - crop_bbox[0]),
+                    max(1, crop_bbox[3] - crop_bbox[1]),
+                )
+            ),
+            (crop_bbox[0], crop_bbox[1]),
+        )
+        return composited
+
+    def _load_object_assets(self, *, request: InpaintRequest) -> tuple[Any, Any]:
+        from PIL import Image  # type: ignore
+
+        if request.object_image_ref is None or request.object_mask_ref is None:
+            raise ValueError("generated object refs are required for similarity_overlay_v2")
+        object_image = Image.open(request.object_image_ref).convert("RGBA")
+        object_mask = Image.open(request.object_mask_ref).convert("L")
+        return object_image, object_mask
 
     def _find_similarity_placement(
         self,
