@@ -60,8 +60,8 @@ def test_generator_sdxl_gpu_v2_8gb_profile_loads_v2_stack() -> None:
         "LayerDiffuseObjectGenerationModel"
     )
     assert cfg.models.inpaint.model_dump(mode="python")["overlay_alpha"] == 0.5
-    assert cfg.models.inpaint.model_dump(mode="python")["final_inpaint_strength"] == 0.18
-    assert cfg.models.inpaint.model_dump(mode="python")["final_inpaint_steps"] == 6
+    assert cfg.models.inpaint.model_dump(mode="python")["final_inpaint_strength"] == 0.22
+    assert cfg.models.inpaint.model_dump(mode="python")["final_inpaint_steps"] == 8
     assert cfg.models.object_generator.model_dump(mode="python")[
         "default_num_inference_steps"
     ] == 30
@@ -70,7 +70,7 @@ def test_generator_sdxl_gpu_v2_8gb_profile_loads_v2_stack() -> None:
     ] == 5.0
     assert cfg.models.object_generator.model_dump(mode="python")["offload_mode"] == "model"
     assert cfg.models.inpaint.model_dump(mode="python")["final_context_size"] == 512
-    assert cfg.runtime.width == 640
-    assert cfg.runtime.height == 480
-    assert cfg.runtime.background_upscale_factor == 2
+    assert cfg.runtime.width == 256
+    assert cfg.runtime.height == 256
+    assert cfg.runtime.background_upscale_factor == 4
     assert cfg.runtime.model_runtime.offload_mode == "sequential"
