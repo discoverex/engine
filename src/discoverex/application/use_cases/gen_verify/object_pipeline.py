@@ -145,11 +145,37 @@ def _resize_object_assets(
 
     resized_object = object_path.with_suffix(".object.scaled.png")
     resized_mask = mask_path.with_suffix(".mask.scaled.png")
-    with Image.open(object_path).convert("RGBA") as object_image:
-        object_image.resize((size, size), Image.LANCZOS).save(resized_object)
-    with Image.open(mask_path).convert("L") as mask_image:
-        mask_image.resize((size, size), Image.NEAREST).save(resized_mask)
+    with Image.open(object_path).convert("RGBA") as object_image, Image.open(
+        mask_path
+    ).convert("L") as mask_image:
+        tight_bbox = mask_image.getbbox() or (0, 0, mask_image.width, mask_image.height)
+        object_tight = object_image.crop(tight_bbox)
+        mask_tight = mask_image.crop(tight_bbox)
+        target_w, target_h = _fit_inside(
+            width=object_tight.width,
+            height=object_tight.height,
+            max_side=size,
+        )
+        object_scaled = object_tight.resize((target_w, target_h), Image.LANCZOS)
+        mask_scaled = mask_tight.resize((target_w, target_h), Image.NEAREST)
+        object_canvas = Image.new("RGBA", (size, size), color=(0, 0, 0, 0))
+        mask_canvas = Image.new("L", (size, size), color=0)
+        paste_left = max(0, (size - target_w) // 2)
+        paste_top = max(0, (size - target_h) // 2)
+        object_canvas.paste(object_scaled, (paste_left, paste_top), object_scaled)
+        mask_canvas.paste(mask_scaled, (paste_left, paste_top))
+        object_canvas.save(resized_object)
+        mask_canvas.save(resized_mask)
     return {
         "object": resized_object,
         "mask": resized_mask,
     }
+
+
+def _fit_inside(*, width: int, height: int, max_side: int) -> tuple[int, int]:
+    longest_side = max(1, width, height)
+    scale = min(1.0, max_side / float(longest_side))
+    return (
+        max(1, int(round(width * scale))),
+        max(1, int(round(height * scale))),
+    )

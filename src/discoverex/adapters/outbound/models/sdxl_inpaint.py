@@ -310,6 +310,7 @@ class SdxlInpaintModel:
             handle=handle,
             source_image=precomposited,
             target_bbox=placement_bbox,
+            object_image=object_image,
             object_mask=object_mask,
             request=request,
         )
@@ -512,49 +513,87 @@ class SdxlInpaintModel:
         handle: ModelHandle,
         source_image: Any,
         target_bbox: tuple[int, int, int, int],
+        object_image: Any,
         object_mask: Any,
         request: InpaintRequest,
     ) -> dict[str, Any]:
-        crop_bbox_with_padding = expand_bbox(
-            target_bbox,
-            padding=int(request.masked_area_padding or self.masked_area_padding),
-            width=source_image.width,
-            height=source_image.height,
-        )
-        original_patch = crop_bbox(source_image, crop_bbox_with_padding)
-        working_patch, working_size = resize_patch_to_long_side(
-            original_patch, self.patch_target_long_side
+        del handle, request
+        localized_object = object_image.convert("RGBA").resize(
+            (
+                max(1, target_bbox[2] - target_bbox[0]),
+                max(1, target_bbox[3] - target_bbox[1]),
+            )
         )
         blend_mask = self._build_blend_mask(
-            crop_bbox=crop_bbox_with_padding,
+            crop_bbox=target_bbox,
             target_bbox=target_bbox,
-            working_size=working_size,
+            working_size=localized_object.size,
             object_mask=object_mask,
         )
-        generated_patch = self._generate_image(
-            handle=handle,
-            image=working_patch,
-            mask=blend_mask,
-            prompt="blend the pasted object edges naturally into the surrounding scene while preserving the object",
-            negative_prompt=request.negative_prompt or self.default_negative_prompt,
-            strength=float(self.final_inpaint_strength or 0.18),
-            num_inference_steps=int(self.final_inpaint_steps or 6),
-            guidance_scale=float(self.final_inpaint_guidance_scale or 2.0),
-            mask_blur=int(self.final_mask_blur or request.mask_blur or self.mask_blur),
-            inpaint_only_masked=True,
-            padding_mask_crop=None,
+        generated_patch = self._harmonize_object_layer(
+            background_image=source_image,
+            object_image=localized_object,
+            object_mask=blend_mask,
+            target_bbox=target_bbox,
         )
-        generated_patch = normalize_generated_patch(generated_patch, working_size)
-        composited = self._apply_patch_to_crop(
-            image=source_image,
-            patch=generated_patch,
-            crop_bbox=crop_bbox_with_padding,
+        composited = apply_alpha_patch(
+            source_image,
+            generated_patch,
+            target_bbox,
         )
         return {
             "generated_patch": generated_patch,
             "composited": composited,
             "blend_mask": blend_mask,
         }
+
+    def _harmonize_object_layer(
+        self,
+        *,
+        background_image: Any,
+        object_image: Any,
+        object_mask: Any,
+        target_bbox: tuple[int, int, int, int],
+    ) -> Any:
+        import numpy as np
+        from PIL import Image  # type: ignore
+
+        background_crop = crop_bbox(background_image, target_bbox).convert("RGB")
+        object_rgba = object_image.convert("RGBA")
+        alpha_mask = object_rgba.getchannel("A")
+        if object_mask is not None:
+            alpha_mask = Image.fromarray(
+                np.minimum(
+                    np.asarray(alpha_mask, dtype=np.uint8),
+                    np.asarray(object_mask.convert("L"), dtype=np.uint8),
+                ),
+                mode="L",
+            )
+        object_rgba.putalpha(alpha_mask)
+        obj_arr = np.asarray(object_rgba, dtype=np.float32)
+        bg_arr = np.asarray(background_crop, dtype=np.float32)
+        alpha = obj_arr[..., 3:4] / 255.0
+        if float(alpha.max()) <= 0.0:
+            return object_rgba
+        ring = np.asarray(object_mask.convert("L"), dtype=np.float32)[..., None] / 255.0
+        obj_rgb = obj_arr[..., :3]
+        obj_region = alpha[..., 0] > 0.1
+        bg_mean = bg_arr.mean(axis=(0, 1), keepdims=True)
+        if bool(obj_region.any()):
+            obj_mean = obj_rgb[obj_region].mean(axis=0, keepdims=True).reshape(1, 1, 3)
+        else:
+            obj_mean = obj_rgb.mean(axis=(0, 1), keepdims=True)
+        shifted = np.clip(obj_rgb + (bg_mean - obj_mean) * 0.35, 0.0, 255.0)
+        core = (alpha >= 0.9).astype(np.float32)
+        edge = ring * (alpha > 0.0).astype(np.float32) * (1.0 - core)
+        harmonized_rgb = obj_rgb * (1.0 - edge) + shifted * edge
+        harmonized_rgb = harmonized_rgb * (1.0 - edge * 0.18) + bg_arr * (edge * 0.18)
+        final_alpha = np.clip(alpha * (1.0 - edge * 0.08), 0.0, 1.0)
+        final = np.concatenate(
+            [harmonized_rgb, final_alpha * 255.0],
+            axis=2,
+        ).astype(np.uint8)
+        return Image.fromarray(final, mode="RGBA")
 
     def _build_blend_mask(
         self,

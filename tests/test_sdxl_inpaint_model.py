@@ -241,14 +241,6 @@ def test_sdxl_inpaint_v2_selects_similarity_bbox_and_writes_precomposite(
     object_mask = Image.new("L", (32, 32), color=0)
     ImageDraw.Draw(object_mask).rectangle((8, 8, 24, 24), fill=255)
     object_mask.save(mask_path)
-    captured: list[dict[str, object]] = []
-
-    def _fake_generate_image(**kwargs):  # type: ignore[no-untyped-def]
-        captured.append(dict(kwargs))
-        image = kwargs["image"]
-        return image.copy()
-
-    monkeypatch.setattr(model, "_generate_image", _fake_generate_image)
     monkeypatch.setattr(
         model,
         "_find_similarity_placement",
@@ -280,8 +272,5 @@ def test_sdxl_inpaint_v2_selects_similarity_bbox_and_writes_precomposite(
     assert selected["x"] >= 48
     assert selected["y"] >= 16
     assert pred["placement_score"] >= 0.0
-    assert len(captured) == 1
-    assert captured[0]["inpaint_only_masked"] is True
-    assert captured[0]["strength"] == pytest.approx(0.18)
-    assert captured[0]["padding_mask_crop"] is None
-    assert captured[0]["mask"].getbbox() is not None
+    assert Image.open(pred["patch_image_ref"]).mode == "RGBA"
+    assert Image.open(pred["blend_mask_ref"]).getbbox() is not None
