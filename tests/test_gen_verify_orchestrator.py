@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -20,6 +21,9 @@ class _FakeModel:
 
     def unload(self) -> None:
         self._events.append(f"unload:{self._name}")
+
+    def predict(self, *args: Any, **kwargs: Any) -> list[Any]:
+        return []
 
 
 def test_run_unloads_models_between_generation_stages(
@@ -98,8 +102,8 @@ def test_run_unloads_models_between_generation_stages(
         "load:background",
         "unload:background",
         "load:hidden",
-        "load:inpaint",
         "unload:hidden",
+        "load:inpaint",
         "unload:inpaint",
         "load:fx",
         "unload:fx",

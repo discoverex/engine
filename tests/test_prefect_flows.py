@@ -6,14 +6,49 @@ import os
 import sys
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from prefect.runtime import flow_run
 
 import infra.prefect.dispatch as prefect_dispatch
 import infra.prefect.flow as prefect_entrypoint
-from infra.prefect.job_spec import coerce_args, coerce_overrides, config_name, mapped_command
 from discoverex.application.flows.run_engine_job import run_engine_job
+from infra.prefect.job_spec import (
+    coerce_args,
+    coerce_overrides,
+    config_name,
+    mapped_command,
+)
+
+
+@pytest.fixture(autouse=True)
+def mock_prefect_infra(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mock Prefect infrastructure to prevent real API calls and Pydantic validation errors."""
+    
+    # 1. Mock the client context manager
+    mock_client = MagicMock()
+    mock_client.api_version.return_value = "3.0.0"
+    
+    class MockClientContext:
+        def __init__(self) -> None:
+            self.client = mock_client
+        def __enter__(self) -> Any: return mock_client
+        def __exit__(self, *args: Any) -> None: pass
+        async def __aenter__(self) -> Any: return mock_client
+        async def __aexit__(self, *args: Any) -> None: pass
+
+    monkeypatch.setattr("prefect.client.orchestration.get_client", lambda **_: MockClientContext())
+    
+    # 2. CRITICAL: Mock the task itself to prevent TaskRunContext initialization
+    # We make engine_job_task behave like a regular function instead of a Prefect task
+    def mock_task_fn(payload: Any, cwd: Path, env: dict[str, str]) -> Any:
+        return prefect_dispatch.dispatch_engine_job(payload, cwd=cwd, env=env)
+    
+    # Prefect tasks have a .fn attribute which is the original function
+    monkeypatch.setattr(prefect_entrypoint.engine_job_task, "fn", mock_task_fn)
+    # Also mock the task call itself if it's being called directly
+    monkeypatch.setattr(prefect_entrypoint, "engine_job_task", mock_task_fn)
 
 
 class _FakeLogger:

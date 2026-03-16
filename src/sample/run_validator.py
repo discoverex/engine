@@ -41,7 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from discoverex.adapters.outbound.models.cv_color_edge import CvColorEdgeAdapter
 from discoverex.application.use_cases.validator import ValidatorOrchestrator
-from discoverex.domain.services.hidden import θ_HUMAN, θ_AI
+from discoverex.domain.services.hidden import θ_AI, θ_HUMAN
 from discoverex.domain.services.verification import ScoringWeights
 from discoverex.models.types import ModelHandle
 from sample.test_samples import (
@@ -163,7 +163,7 @@ def _print_is_hidden(bundle, layer_files: list[Path]) -> None:
     )
     # layer_files 기준으로 순서 유지, 나머지는 뒤에 추가
     ordered = [p for p in layer_files if p.stem in all_obj_ids]
-    extra = [oid for oid in all_obj_ids if not any(p.stem == oid for p in layer_files)]
+    # extra = [oid for oid in all_obj_ids if not any(p.stem == oid for p in layer_files)]
 
     for path in ordered:
         oid = path.stem

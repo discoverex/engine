@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, Field
 
 from discoverex.domain.scene import Scene
+from discoverex.domain.services.types import ObjectMetrics
 from discoverex.domain.verification import FinalVerification, VerificationResult
 
 
@@ -84,12 +83,12 @@ def integrate_verification(
 
 # ---------------------------------------------------------------------------
 # Validator pipeline — Phase 5 순수 계산 함수
-# 모든 입력은 dict 로 받아 도메인 레이어가 모델 타입에 의존하지 않도록 한다.
+# 모든 입력은 ObjectMetrics(TypedDict)로 받아 도메인 레이어가 모델 타입에 의존하지 않도록 한다.
 # ---------------------------------------------------------------------------
 
 
 def compute_difficulty(
-    obj_metrics: dict[str, Any],
+    obj_metrics: ObjectMetrics,
     weights: ScoringWeights | None = None,
     answer_obj_count: int = 6,
 ) -> float:
@@ -104,22 +103,18 @@ def compute_difficulty(
            + w_dst  · (1 / (1 + similar_distance))
            + w_col  · (1 / (1 + color_contrast))
            + w_edg  · (1 / (1 + edge_strength))
-
-    obj_metrics 키: degree_norm, cluster_density, hop, diameter,
-                    drr_slope, sigma_threshold, similar_count,
-                    similar_distance, color_contrast, edge_strength
     """
     w = weights or ScoringWeights()
-    hop = float(obj_metrics.get("hop", 0))
-    diameter = max(float(obj_metrics.get("diameter", 1.0)), 1e-6)
-    degree_n = float(obj_metrics.get("degree_norm", 0.0))
-    drr_slope = float(obj_metrics.get("drr_slope", 0.0))
-    sigma = max(float(obj_metrics.get("sigma_threshold", 1.0)), 1e-6)
-    cluster = float(obj_metrics.get("cluster_density", 0))
-    similar_count = float(obj_metrics.get("similar_count", 0))
-    similar_distance = float(obj_metrics.get("similar_distance", 100.0))
-    color_contrast = float(obj_metrics.get("color_contrast", 0.0))
-    edge_strength = float(obj_metrics.get("edge_strength", 0.0))
+    hop = float(obj_metrics["hop"])
+    diameter = max(float(obj_metrics["diameter"]), 1e-6)
+    degree_n = float(obj_metrics["degree_norm"])
+    drr_slope = float(obj_metrics["drr_slope"])
+    sigma = max(float(obj_metrics["sigma_threshold"]), 1e-6)
+    cluster = float(obj_metrics["cluster_density"])
+    similar_count = float(obj_metrics["similar_count"])
+    similar_distance = float(obj_metrics["similar_distance"])
+    color_contrast = float(obj_metrics["color_contrast"])
+    edge_strength = float(obj_metrics["edge_strength"])
 
     # cluster_norm: 정규화 기준 10 (일반적 씬 최대 밀집도)
     cluster_norm = min(cluster / 10.0, 1.0)
@@ -142,7 +137,7 @@ def compute_difficulty(
 
 
 def compute_scene_difficulty(
-    answer_objs: list[dict[str, Any]],
+    answer_objs: list[ObjectMetrics],
     weights: ScoringWeights | None = None,
     answer_obj_count: int | None = None,
 ) -> float:
@@ -157,7 +152,7 @@ def compute_scene_difficulty(
 
 
 def integrate_verification_v2(
-    obj_metrics: dict[str, Any],
+    obj_metrics: ObjectMetrics,
     weights: ScoringWeights | None = None,
     answer_obj_count: int = 6,
 ) -> tuple[float, float, float]:
@@ -178,16 +173,16 @@ def integrate_verification_v2(
     반환: (perception_score, logical_score, total_score)
     """
     w = weights or ScoringWeights()
-    sigma = max(float(obj_metrics.get("sigma_threshold", 1.0)), 1e-6)
-    drr_slope = float(obj_metrics.get("drr_slope", 0.0))
-    similar_count = float(obj_metrics.get("similar_count", 0))
-    similar_distance = float(obj_metrics.get("similar_distance", 100.0))
-    color_contrast = float(obj_metrics.get("color_contrast", 0.0))
-    edge_strength = float(obj_metrics.get("edge_strength", 0.0))
-    hop = float(obj_metrics.get("hop", 0))
-    diameter = max(float(obj_metrics.get("diameter", 1.0)), 1e-6)
-    degree_n = float(obj_metrics.get("degree_norm", 0.0))
-    cluster = float(obj_metrics.get("cluster_density", 0))
+    sigma = max(float(obj_metrics["sigma_threshold"]), 1e-6)
+    drr_slope = float(obj_metrics["drr_slope"])
+    similar_count = float(obj_metrics["similar_count"])
+    similar_distance = float(obj_metrics["similar_distance"])
+    color_contrast = float(obj_metrics["color_contrast"])
+    edge_strength = float(obj_metrics["edge_strength"])
+    hop = float(obj_metrics["hop"])
+    diameter = max(float(obj_metrics["diameter"]), 1e-6)
+    degree_n = float(obj_metrics["degree_norm"])
+    cluster = float(obj_metrics["cluster_density"])
 
     # similar_count_norm: 설계안 §2 — similar_count / (answer_obj_count - 1)
     sim_cnt_norm = min(similar_count / max(answer_obj_count - 1, 1), 1.0)

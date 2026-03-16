@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 
-from typing import Any
+from discoverex.domain.services.types import ObjectMetrics, SceneNorms
 
 # ---------------------------------------------------------------------------
 # 설계안 §1 가중치 상수
@@ -64,8 +64,8 @@ def _safe_div(numerator: float, denominator: float) -> float:
 # ---------------------------------------------------------------------------
 
 def human_field(
-    obj_metrics: dict[str, Any],
-    scene_norms: dict[str, float],
+    obj_metrics: ObjectMetrics,
+    scene_norms: SceneNorms,
 ) -> float:
     """설계안 §1 — 인간 혼동 필드 (가중합).
 
@@ -77,28 +77,18 @@ def human_field(
         w4 · bool(visual_degree ≥ θ)
         w5 · bool(logical_degree ≥ θ)
         w6 · (1/(edge_strength+ε))_norm  ← 실수 정규화 (배경 대비 의미 약해 보조)
-
-    Parameters
-    ----------
-    obj_metrics:
-        단일 객체 메트릭 dict.
-        키: color_contrast, edge_strength, z_depth_hop(또는 hop), cluster_density,
-            visual_degree, logical_degree
-    scene_norms:
-        씬 전체에서 계산한 정규화 기준값.
-        키: max_inv_cc, max_inv_es, max_hop, max_cluster
     """
-    cc = float(obj_metrics.get("color_contrast", 0.0))
-    es = float(obj_metrics.get("edge_strength", 0.0))
-    hop = float(obj_metrics.get("z_depth_hop", obj_metrics.get("hop", 0)))
-    cluster = float(obj_metrics.get("cluster_density", 0))
-    visual_deg = int(obj_metrics.get("visual_degree", 0))
-    logical_deg = int(obj_metrics.get("logical_degree", 0))
+    cc = float(obj_metrics["color_contrast"])
+    es = float(obj_metrics["edge_strength"])
+    hop = float(obj_metrics["z_depth_hop"])
+    cluster = float(obj_metrics["cluster_density"])
+    visual_deg = int(obj_metrics["visual_degree"])
+    logical_deg = int(obj_metrics["logical_degree"])
 
-    max_inv_cc = scene_norms.get("max_inv_cc", 1.0) or 1.0
-    max_inv_es = scene_norms.get("max_inv_es", 1.0) or 1.0
-    max_hop = scene_norms.get("max_hop", 1.0) or 1.0
-    max_cluster = scene_norms.get("max_cluster", 1.0) or 1.0
+    max_inv_cc = scene_norms.get("max_inv_cc", 1.0)
+    max_inv_es = scene_norms.get("max_inv_es", 1.0)
+    max_hop = scene_norms.get("max_hop", 1.0)
+    max_cluster = scene_norms.get("max_cluster", 1.0)
 
     # 필수 3항 정규화
     inv_cc_norm = _safe_div(1.0 / (cc + 1.0), max_inv_cc)
@@ -121,8 +111,8 @@ def human_field(
 
 
 def ai_field(
-    obj_metrics: dict[str, Any],
-    scene_norms: dict[str, float],
+    obj_metrics: ObjectMetrics,
+    scene_norms: SceneNorms,
     similar_count_norm: float,
 ) -> float:
     """설계안 §1 — AI 혼동 필드 (가중합).
@@ -136,21 +126,16 @@ def ai_field(
         w5 · bool(1/σ_threshold ≥ θ)
         w6 · bool(visual_degree ≥ θ)
         w7 · (1/(edge_strength+ε))_norm  ← 실수 정규화 (배경 대비 의미 약해 보조)
-
-    Parameters
-    ----------
-    similar_count_norm:
-        호출자가 계산해서 전달 (순환 방지를 위해 외부 주입).
     """
-    cc = float(obj_metrics.get("color_contrast", 0.0))
-    es = float(obj_metrics.get("edge_strength", 0.0))
-    drr_slope = float(obj_metrics.get("drr_slope", 0.0))
-    sigma = max(float(obj_metrics.get("sigma_threshold", 1.0)), 1e-6)
-    similar_distance = float(obj_metrics.get("similar_distance", 100.0))
-    visual_deg = int(obj_metrics.get("visual_degree", 0))
+    cc = float(obj_metrics["color_contrast"])
+    es = float(obj_metrics["edge_strength"])
+    drr_slope = float(obj_metrics["drr_slope"])
+    sigma = max(float(obj_metrics["sigma_threshold"]), 1e-6)
+    similar_distance = float(obj_metrics["similar_distance"])
+    visual_deg = int(obj_metrics["visual_degree"])
 
-    max_inv_cc = scene_norms.get("max_inv_cc", 1.0) or 1.0
-    max_inv_es = scene_norms.get("max_inv_es", 1.0) or 1.0
+    max_inv_cc = scene_norms.get("max_inv_cc", 1.0)
+    max_inv_es = scene_norms.get("max_inv_es", 1.0)
 
     # 필수 3항 정규화
     inv_cc_norm = _safe_div(1.0 / (cc + 1.0), max_inv_cc)
@@ -174,8 +159,8 @@ def ai_field(
 
 
 def is_hidden(
-    obj_metrics: dict[str, Any],
-    scene_norms: dict[str, float],
+    obj_metrics: ObjectMetrics,
+    scene_norms: SceneNorms,
     similar_count_norm: float,
 ) -> tuple[bool, float, float]:
     """설계안 §1 판정 조건.

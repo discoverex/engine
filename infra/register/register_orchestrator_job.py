@@ -10,8 +10,8 @@ from typing import Any
 from uuid import UUID
 
 import yaml
-
 from branch_deployments import DEFAULT_FLOW_KIND, deployment_name_for_branch
+from job_types import JobSpec, JobSpecInputs
 from prefect.client.orchestration import SyncPrefectClient, get_client
 from prefect.client.schemas.filters import DeploymentFilter, DeploymentFilterName
 from prefect.settings import PREFECT_API_URL, temporary_settings
@@ -351,7 +351,7 @@ def _build_runtime_extras(args: argparse.Namespace) -> list[str]:
     return extras
 
 
-def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
+def _build_job_spec(args: argparse.Namespace) -> JobSpec:
     if args.run_mode == "repo" and (not args.repo_url or not args.ref):
         raise SystemExit("--repo-url and --ref are required when --run-mode=repo")
     _validate_command(args)
@@ -362,7 +362,7 @@ def _build_job_spec(args: argparse.Namespace) -> dict[str, Any]:
     if args.entrypoint_shell_command:
         entrypoint = ["/bin/sh", "-lc", args.entrypoint_shell_command]
 
-    inputs = {
+    inputs: JobSpecInputs = {
         "contract_version": args.contract_version,
         "command": args.command,
         "config_name": _resolved_config_name(args),
@@ -418,16 +418,17 @@ def _resolved_job_name(args: argparse.Namespace) -> str:
 
 
 def _resolved_deployment_name_from_job_spec(
-    job_spec: dict[str, Any],
+    job_spec: JobSpec,
     explicit_deployment: str | None = None,
 ) -> str:
     explicit = str(explicit_deployment or "").strip()
     if explicit:
         return explicit
-    command = (
-        str(job_spec.get("inputs", {}).get("command", "")).strip()
-        or str(job_spec.get("engine_run", {}).get("command", "")).strip()
-    )
+    # job_spec inputs/engine_run are optional, need safe access or assuming presence
+    inputs = job_spec.get("inputs", {})
+    command = str(inputs.get("command", "")).strip()
+    # Fallback to engine_run if inputs missing? JobSpec doesn't have engine_run anymore.
+    
     if not command:
         return deployment_name_for_branch(SETTINGS.register_flow_ref or "dev")
     return deployment_name_for_branch(
@@ -438,7 +439,7 @@ def _resolved_deployment_name_from_job_spec(
 
 def submit_job_spec(
     *,
-    job_spec: dict[str, Any],
+    job_spec: JobSpec,
     prefect_api_url: str,
     deployment: str | None = None,
     job_name: str | None = None,
@@ -480,13 +481,13 @@ def submit_job_spec(
         "deployment_id": str(deployment_id),
         "flow_run_id": str(getattr(created, "id", "")),
         "flow_run_name": getattr(created, "name", None),
-        "engine": job_spec["engine"],
-        "run_mode": job_spec["run_mode"],
+        "engine": job_spec.get("engine"),
+        "run_mode": job_spec.get("run_mode"),
     }
 
 
 def write_job_spec(
-    job_spec: dict[str, Any],
+    job_spec: JobSpec,
     output_file: str | Path | None = None,
 ) -> Path:
     target = (
@@ -508,7 +509,7 @@ def main() -> int:
     job_spec = _build_job_spec(args)
 
     if args.dry_run:
-        print(yaml.safe_dump(job_spec, sort_keys=False))
+        print(json.dumps(job_spec, ensure_ascii=True))
         return 0
 
     output = submit_job_spec(

@@ -152,7 +152,7 @@ def test_default_register_job_spec_points_to_repo_standard_file() -> None:
         / "infra"
         / "register"
         / "job_specs"
-        / "real-generate-sdxl-gpu-8gb.json"
+        / "real-generate-sdxl-gpu-8gb.yaml"
     )
 
 

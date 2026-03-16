@@ -35,7 +35,7 @@ Dummy 어댑터 고정 출력값
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -45,6 +45,7 @@ from discoverex.adapters.outbound.models.dummy import (
     DummyVisualVerification,
 )
 from discoverex.application.use_cases.validator import ValidatorOrchestrator
+from discoverex.domain.services.types import ObjectMetrics
 from discoverex.domain.services.verification import (
     ScoringWeights,
     compute_difficulty,
@@ -63,6 +64,27 @@ from discoverex.models.types import (
 # ---------------------------------------------------------------------------
 # 헬퍼
 # ---------------------------------------------------------------------------
+
+
+def _make_metrics(**kwargs: Any) -> ObjectMetrics:
+    defaults: dict[str, Any] = {
+        "obj_id": "obj_default",
+        "visual_degree": 0.0,
+        "logical_degree": 0.0,
+        "degree_norm": 0.0,
+        "cluster_density": 0.0,
+        "z_depth_hop": 0.0,
+        "hop": 0.0,
+        "diameter": 1.0,
+        "sigma_threshold": 16.0,
+        "drr_slope": 0.0,
+        "similar_count": 0,
+        "similar_distance": 100.0,
+        "color_contrast": 0.0,
+        "edge_strength": 0.0,
+    }
+    defaults.update(kwargs)
+    return cast(ObjectMetrics, defaults)
 
 
 def _make_handle(name: str) -> ModelHandle:
@@ -198,11 +220,11 @@ _LOGI_STD = (
 ) / _L_DENOM  # 0.66
 
 # 설계안 §2: Scene_Difficulty = D(obj) 단순 평균 (두 객체 동일 → avg = D_obj)
-_STD_METRICS = {
-    "degree_norm": 1.0, "cluster_density": 3, "hop": 2, "diameter": 4.0,
-    "drr_slope": 0.15, "sigma_threshold": 4.0, "similar_count": 1,
-    "similar_distance": 80.0, "color_contrast": 0.0, "edge_strength": 0.0,
-}
+_STD_METRICS = _make_metrics(
+    degree_norm=1.0, cluster_density=3, hop=2, diameter=4.0,
+    drr_slope=0.15, sigma_threshold=4.0, similar_count=1,
+    similar_distance=80.0, color_contrast=0.0, edge_strength=0.0,
+)
 _SCENE_DIFF_STD = compute_difficulty(_STD_METRICS, answer_obj_count=_ANSWER_OBJ_COUNT)  # ≈ 0.548111
 
 # 어려운 시나리오 (sigma=1, drr=1, sim_cnt=0, sim_dist=100, hop=4)
@@ -221,11 +243,11 @@ _LOGI_HARD = (
     _W.logical_hop * (4.0 / 4.0) + _W.logical_degree * 1.0**2 + _W.logical_cluster * 0.3
 ) / _L_DENOM  # 0.86
 
-_HARD_METRICS = {
-    "degree_norm": 1.0, "cluster_density": 3, "hop": 4, "diameter": 4.0,
-    "drr_slope": 1.0, "sigma_threshold": 1.0, "similar_count": 0,
-    "similar_distance": 100.0, "color_contrast": 0.0, "edge_strength": 0.0,
-}
+_HARD_METRICS = _make_metrics(
+    degree_norm=1.0, cluster_density=3, hop=4, diameter=4.0,
+    drr_slope=1.0, sigma_threshold=1.0, similar_count=0,
+    similar_distance=100.0, color_contrast=0.0, edge_strength=0.0,
+)
 _SCENE_DIFF_HARD = compute_difficulty(_HARD_METRICS, answer_obj_count=_ANSWER_OBJ_COUNT)  # ≈ 0.716891
 
 # TestE2EPhase5Chain 전용: integrate_verification_v2 직접 호출 기준 (기본 answer_obj_count=6)
@@ -360,11 +382,11 @@ class TestE2EFullPipelineDummy:
         layer = tmp_path / "obj_0.png"
         _make_png(layer)
         # obj_1의 metrics: physical 기본값(degree=0, cluster=0, hop=0), visual 동일
-        _obj1_m = {
-            "degree_norm": 0.0, "cluster_density": 0, "hop": 0, "diameter": 4.0,
-            "drr_slope": 0.15, "sigma_threshold": 4.0, "similar_count": 1,
-            "similar_distance": 80.0, "color_contrast": 0.0, "edge_strength": 0.0,
-        }
+        _obj1_m = _make_metrics(
+            degree_norm=0.0, cluster_density=0, hop=0, diameter=4.0,
+            drr_slope=0.15, sigma_threshold=4.0, similar_count=1,
+            similar_distance=80.0, color_contrast=0.0, edge_strength=0.0,
+        )
         expected_scene_diff = (
             compute_difficulty(_STD_METRICS, answer_obj_count=2)
             + compute_difficulty(_obj1_m, answer_obj_count=2)
@@ -490,21 +512,21 @@ class TestE2EHardScenarioPass:
 
 class TestE2EPhase5Chain:
     def test_integrate_standard_metrics(self) -> None:
-        metrics = {
-            "visual_degree": 2,
-            "logical_degree": 3,
-            "degree_norm": 1.0,
-            "cluster_density": 3,
-            "z_depth_hop": 2,
-            "hop": 2,
-            "diameter": 4.0,
-            "sigma_threshold": 4.0,
-            "drr_slope": 0.15,
-            "similar_count": 1,
-            "similar_distance": 80.0,
-            "color_contrast": 0.0,
-            "edge_strength": 0.0,
-        }
+        metrics = _make_metrics(
+            visual_degree=2,
+            logical_degree=3,
+            degree_norm=1.0,
+            cluster_density=3,
+            z_depth_hop=2,
+            hop=2,
+            diameter=4.0,
+            sigma_threshold=4.0,
+            drr_slope=0.15,
+            similar_count=1,
+            similar_distance=80.0,
+            color_contrast=0.0,
+            edge_strength=0.0,
+        )
         # 이 함수 테스트는 기본 answer_obj_count=6 기준 (_PERC_STD_V2)
         perc, logi, total = integrate_verification_v2(metrics)
         assert perc == pytest.approx(_PERC_STD_V2, rel=1e-4)
@@ -512,64 +534,64 @@ class TestE2EPhase5Chain:
         assert total == pytest.approx(_TOT_STD_V2, rel=1e-4)
 
     def test_difficulty_and_scene_difficulty_chain(self) -> None:
-        obj = {
-            "sigma_threshold": 4.0,
-            "hop": 2,
-            "diameter": 4.0,
-            "degree_norm": 1.0,
-            "drr_slope": 0.15,
-        }
+        obj = _make_metrics(
+            sigma_threshold=4.0,
+            hop=2,
+            diameter=4.0,
+            degree_norm=1.0,
+            drr_slope=0.15,
+        )
         d = compute_difficulty(obj)
         assert d > 0.0
         assert compute_scene_difficulty([obj, obj]) == pytest.approx(d, rel=1e-4)
 
     def test_hard_metrics_full_chain(self) -> None:
-        hard = {
-            "visual_degree": 3,
-            "logical_degree": 4,
-            "degree_norm": 1.0,
-            "cluster_density": 3,
-            "z_depth_hop": 3,
-            "hop": 4,
-            "diameter": 4.0,
-            "sigma_threshold": 1.0,
-            "drr_slope": 1.0,
-            "similar_count": 2,
-            "similar_distance": 40.0,
-            "color_contrast": 10.0,
-            "edge_strength": 200.0,
-        }
+        hard = _make_metrics(
+            visual_degree=3,
+            logical_degree=4,
+            degree_norm=1.0,
+            cluster_density=3,
+            z_depth_hop=3,
+            hop=4,
+            diameter=4.0,
+            sigma_threshold=1.0,
+            drr_slope=1.0,
+            similar_count=2,
+            similar_distance=40.0,
+            color_contrast=10.0,
+            edge_strength=200.0,
+        )
         perc, logi, total = integrate_verification_v2(hard)
         # 어려운 메트릭 → standard 시나리오보다 높은 점수
         assert total > _TOT_STD_V2 * 0.8  # standard 시나리오 대비 최소 80% 이상
 
     def test_easy_metrics_full_chain(self) -> None:
-        easy = {
-            "visual_degree": 0,
-            "logical_degree": 0,
-            "degree_norm": 0.0,
-            "cluster_density": 0,
-            "z_depth_hop": 0,
-            "hop": 0,
-            "diameter": 1.0,
-            "sigma_threshold": 16.0,
-            "drr_slope": 0.0,
-            "similar_count": 0,
-            "similar_distance": 100.0,
-            "color_contrast": 100.0,
-            "edge_strength": 1000.0,
-        }
+        easy = _make_metrics(
+            visual_degree=0,
+            logical_degree=0,
+            degree_norm=0.0,
+            cluster_density=0,
+            z_depth_hop=0,
+            hop=0,
+            diameter=1.0,
+            sigma_threshold=16.0,
+            drr_slope=0.0,
+            similar_count=0,
+            similar_distance=100.0,
+            color_contrast=100.0,
+            edge_strength=1000.0,
+        )
         _, _, total = integrate_verification_v2(easy)
         assert total < 0.10
 
     def test_total_score_is_weighted_sum_of_sub_scores(self) -> None:
-        metrics = {
-            "sigma_threshold": 2.0,
-            "drr_slope": 0.4,
-            "hop": 3,
-            "diameter": 4.0,
-            "degree_norm": 0.6,
-        }
+        metrics = _make_metrics(
+            sigma_threshold=2.0,
+            drr_slope=0.4,
+            hop=3,
+            diameter=4.0,
+            degree_norm=0.6,
+        )
         w = ScoringWeights()
         perc, logi, total = integrate_verification_v2(metrics)
         assert total == pytest.approx(
@@ -577,17 +599,17 @@ class TestE2EPhase5Chain:
         )
 
     def test_all_scores_nonnegative_on_empty_metrics(self) -> None:
-        perc, logi, total = integrate_verification_v2({})
+        perc, logi, total = integrate_verification_v2(_make_metrics())
         assert perc >= 0.0 and logi >= 0.0 and total >= 0.0
 
     def test_custom_weights_alter_score(self) -> None:
-        metrics = {
-            "sigma_threshold": 4.0,
-            "drr_slope": 0.15,
-            "hop": 2,
-            "diameter": 4.0,
-            "degree_norm": 1.0,
-        }
+        metrics = _make_metrics(
+            sigma_threshold=4.0,
+            drr_slope=0.15,
+            hop=2,
+            diameter=4.0,
+            degree_norm=1.0,
+        )
         _, _, total_default = integrate_verification_v2(metrics)
         w_custom = ScoringWeights(
             perception_sigma=0.90,
