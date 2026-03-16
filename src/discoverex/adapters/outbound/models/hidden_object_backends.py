@@ -136,8 +136,6 @@ class Rmbg20MaskRefiner:
         except Exception as exc:
             raise RuntimeError("RMBG 2.0 runtime unavailable") from exc
 
-        validate_diffusers_runtime(self.runtime)
-
         if not isinstance(image, Image.Image):
             raise TypeError("image must be a PIL.Image.Image")
 
