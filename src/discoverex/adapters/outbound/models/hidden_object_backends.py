@@ -66,7 +66,7 @@ class Rmbg20MaskRefiner:
             for key, value in inputs.items()
         }
         with torch.no_grad():
-            outputs = model(**inputs)
+            outputs = model(inputs["pixel_values"])
         pred = getattr(outputs, "predicted_alpha", None)
         if pred is None:
             pred = getattr(outputs, "logits", None)
