@@ -36,7 +36,9 @@ class ValidatorOrchestrator:
         visual_handle: ModelHandle,
         color_edge_port: ColorEdgeExtractionPort | None = None,
         color_edge_handle: ModelHandle | None = None,
-        pass_threshold: float = 0.35,
+        difficulty_min: float = 0.1,
+        difficulty_max: float = 0.9,
+        hidden_obj_min: int = 3,
         scoring_weights: ScoringWeights | None = None,
         sigma_levels: list[float] | None = None,
         bundle_store: BundleStorePort | None = None,
@@ -49,7 +51,9 @@ class ValidatorOrchestrator:
         self._visual_handle = visual_handle
         self._color_edge_port = color_edge_port
         self._color_edge_handle = color_edge_handle or physical_handle
-        self._pass_threshold = pass_threshold
+        self._difficulty_min = difficulty_min
+        self._difficulty_max = difficulty_max
+        self._hidden_obj_min = hidden_obj_min
         self._weights = scoring_weights or ScoringWeights()
         self._sigma_levels = sigma_levels or _DEFAULT_SIGMA_LEVELS
         self._bundle_store = bundle_store
@@ -128,8 +132,10 @@ class ValidatorOrchestrator:
     def _run_phase5(self, data: ValidatorInput) -> VerificationBundle:
         return build_verification_bundle(
             data,
-            pass_threshold=self._pass_threshold,
             weights=self._weights,
+            difficulty_min=self._difficulty_min,
+            difficulty_max=self._difficulty_max,
+            hidden_obj_min=self._hidden_obj_min,
         )
 
 

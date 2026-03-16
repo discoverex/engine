@@ -139,7 +139,9 @@ def build_validator_context(
         physical_handle=physical_handle,
         logical_handle=logical_handle,
         visual_handle=visual_handle,
-        pass_threshold=cfg.thresholds.pass_threshold,
+        difficulty_min=cfg.thresholds.difficulty_min,
+        difficulty_max=cfg.thresholds.difficulty_max,
+        hidden_obj_min=cfg.thresholds.hidden_obj_min,
         scoring_weights=scoring_weights,
         bundle_store=bundle_store,
     )

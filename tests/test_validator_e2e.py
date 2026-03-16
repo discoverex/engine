@@ -12,27 +12,24 @@ Dummy 어댑터 고정 출력값
 --------------------------
   DummyPhysical  : z_depth_hop=2, cluster_density=3, alpha_degree=2
   DummyLogical   : hop=2, diameter=4.0, degree_map={oid: 3}
-  DummyVisual    : sigma=4.0, drr_slope=0.15, similar_count=1, similar_distance=80.0, object_count=1
+  DummyVisual    : sigma=4.0, drr_slope=0.15, similar_count=1, similar_distance=80.0
                    (obj_0, obj_1 고정)
-  DummyColorEdge : color_contrast=0.0, edge_strength=0.0 (기본값)
+  color_edge_port=None → color_contrast=0.0, edge_strength=0.0
 
-Phase 5 수식 (ScoringWeights 기본값 기준 — 정규화 적용):
-  visual_deg=2, logical_deg=3, combined=5
-  max_alpha_degree=2, max_combined=max(2*2,1)=4
-  degree_norm = 5/4 = 1.25
+설계안 §1~§3 수식 (3패스 구조):
+  max_combined = 2+3=5 → degree_norm = 5/5 = 1.0
+  두 객체 모두 is_hidden=True (hf=1.0 ≥ θ_HUMAN=0.135)
+  answer_obj_count = 2 → similar_count_norm = 1/max(2-1,1) = 1.0
 
-  perception (6항):
-    p_denom = 0.10+0.15+0.20+0.15+0.20+0.20 = 1.00
-    = (0.10*(1/4) + 0.15*0.15 + 0.20*(1/5) + 0.15*(1/81) + 0.20*1 + 0.20*1) / 1.0
-    ≈ 0.489352
+  perception (6항, answer_obj_count=2):
+    = (0.10*(1/4) + 0.15*0.15 + 0.20*1.0 + 0.15*(1/81) + 0.20*1 + 0.20*1) / 1.0
+    ≈ 0.649352
 
-  logical (3항):
-    l_denom = 0.40+0.40+0.20 = 1.00
-    cluster_norm = min(3/10, 1) = 0.3
-    = (0.40*(2/4) + 0.40*1.25² + 0.20*0.3) / 1.0
-    = 0.20 + 0.625 + 0.06 = 0.885
+  logical (3항, cluster_norm=3/10=0.3):
+    = (0.40*(2/4) + 0.40*1.0² + 0.20*0.3) / 1.0 = 0.66
 
-  total = 0.489352*0.45 + 0.885*0.55 ≈ 0.706958  → PASS
+  scene_difficulty = D(obj) (설계안 §2, answer_obj_count=2):
+    ≈ 0.548111  → bundle.final.total_score
 """
 
 from __future__ import annotations
@@ -53,7 +50,6 @@ from discoverex.domain.services.verification import (
     compute_difficulty,
     compute_scene_difficulty,
     integrate_verification_v2,
-    resolve_answer,
 )
 from discoverex.domain.verification import VerificationBundle
 from discoverex.models.types import (
@@ -93,7 +89,9 @@ def _make_orchestrator(
     physical_port: Any = None,
     logical_port: Any = None,
     visual_port: Any = None,
-    pass_threshold: float = 0.35,
+    difficulty_min: float = 0.0,   # Dummy 어댑터 2객체 기준 pass 유도 (§3 기본값 아님)
+    difficulty_max: float = 1.0,
+    hidden_obj_min: int = 1,       # Dummy 어댑터 2객체 기준 pass 유도 (§3 기본값 아님)
     scoring_weights: ScoringWeights | None = None,
 ) -> ValidatorOrchestrator:
     return ValidatorOrchestrator(
@@ -103,7 +101,9 @@ def _make_orchestrator(
         physical_handle=_make_handle("physical"),
         logical_handle=_make_handle("logical"),
         visual_handle=_make_handle("visual"),
-        pass_threshold=pass_threshold,
+        difficulty_min=difficulty_min,
+        difficulty_max=difficulty_max,
+        hidden_obj_min=hidden_obj_min,
         scoring_weights=scoring_weights,
         # color_edge_port=None → Phase 2 기본값 ColorEdgeMetadata() 사용
     )
@@ -163,7 +163,7 @@ class _HardLogicalExtraction:
 
 
 # ---------------------------------------------------------------------------
-# 사전 계산된 예상값 (ScoringWeights 기본값 / 정규화 수식 기준)
+# 사전 계산된 예상값 (ScoringWeights 기본값 / 설계안 §1~§3 수식 기준)
 # ---------------------------------------------------------------------------
 
 _W = ScoringWeights()
@@ -177,33 +177,42 @@ _P_DENOM = (
 )  # 1.00
 _L_DENOM = _W.logical_hop + _W.logical_degree + _W.logical_cluster  # 1.00
 
+# Dummy 시나리오에서 두 객체 모두 is_hidden=True → answer_obj_count=2
+_ANSWER_OBJ_COUNT = 2
+
 # 표준 (dummy) 시나리오
-# visual_deg=2, logical_deg=3, combined=5
-# max_visual=2, max_logical=3, max_combined=5 → degree_norm=1.0
-# DummyVisual: sigma=4, drr=0.15, sim_cnt=1, sim_dist=80, color_contrast=0, edge_strength=0
+# visual_deg=2, logical_deg=3, combined=5 → max_combined=5 → degree_norm=1.0
+# DummyVisual: sigma=4, drr=0.15, sim_cnt=1, sim_dist=80, color=0, edge=0
 # DummyPhysical: cluster_density=3
+# answer_obj_count=2 → sim_cnt_norm = 1/max(2-1,1) = 1.0
 _PERC_STD = (
     _W.perception_sigma * (1.0 / 4.0)
     + _W.perception_drr * 0.15
-    + _W.perception_similar_count * (1.0 / 5.0)
+    + _W.perception_similar_count * (1.0 / max(_ANSWER_OBJ_COUNT - 1, 1))  # 1.0
     + _W.perception_similar_dist * (1.0 / 81.0)
     + _W.perception_color_contrast * 1.0
     + _W.perception_edge_strength * 1.0
-) / _P_DENOM  # ≈ 0.489352
+) / _P_DENOM  # ≈ 0.649352
 _LOGI_STD = (
     _W.logical_hop * (2.0 / 4.0) + _W.logical_degree * 1.0**2 + _W.logical_cluster * 0.3
 ) / _L_DENOM  # 0.66
-_TOT_STD = _PERC_STD * _W.total_perception + _LOGI_STD * _W.total_logical  # ≈ 0.583208
 
-# 어려운 시나리오 (sigma=1, drr=1, sim_cnt=0, sim_dist=100, hop=4, diameter=4)
+# 설계안 §2: Scene_Difficulty = D(obj) 단순 평균 (두 객체 동일 → avg = D_obj)
+_STD_METRICS = {
+    "degree_norm": 1.0, "cluster_density": 3, "hop": 2, "diameter": 4.0,
+    "drr_slope": 0.15, "sigma_threshold": 4.0, "similar_count": 1,
+    "similar_distance": 80.0, "color_contrast": 0.0, "edge_strength": 0.0,
+}
+_SCENE_DIFF_STD = compute_difficulty(_STD_METRICS, answer_obj_count=_ANSWER_OBJ_COUNT)  # ≈ 0.548111
+
+# 어려운 시나리오 (sigma=1, drr=1, sim_cnt=0, sim_dist=100, hop=4)
 # _HardLogicalExtraction: degree_map={} → logical_deg=0
-# visual_deg=2, logical_deg=0, combined=2
-# max_visual=2, max_logical=0, max_combined=max(2,1)=2 → degree_norm=1.0
+# visual_deg=2, logical_deg=0, combined=2, max_combined=2 → degree_norm=1.0
 # DummyPhysical: cluster_density=3 → cluster_norm=0.3
 _PERC_HARD = (
     _W.perception_sigma * 1.0
     + _W.perception_drr * 1.0
-    + _W.perception_similar_count * 0.0
+    + _W.perception_similar_count * 0.0  # sim_cnt=0
     + _W.perception_similar_dist * (1.0 / 101.0)
     + _W.perception_color_contrast * 1.0
     + _W.perception_edge_strength * 1.0
@@ -211,9 +220,25 @@ _PERC_HARD = (
 _LOGI_HARD = (
     _W.logical_hop * (4.0 / 4.0) + _W.logical_degree * 1.0**2 + _W.logical_cluster * 0.3
 ) / _L_DENOM  # 0.86
-_TOT_HARD = (
-    _PERC_HARD * _W.total_perception + _LOGI_HARD * _W.total_logical
-)  # ≈ 0.766168
+
+_HARD_METRICS = {
+    "degree_norm": 1.0, "cluster_density": 3, "hop": 4, "diameter": 4.0,
+    "drr_slope": 1.0, "sigma_threshold": 1.0, "similar_count": 0,
+    "similar_distance": 100.0, "color_contrast": 0.0, "edge_strength": 0.0,
+}
+_SCENE_DIFF_HARD = compute_difficulty(_HARD_METRICS, answer_obj_count=_ANSWER_OBJ_COUNT)  # ≈ 0.716891
+
+# TestE2EPhase5Chain 전용: integrate_verification_v2 직접 호출 기준 (기본 answer_obj_count=6)
+# sim_cnt_norm = similar_count / max(6-1, 1) = 1/5 = 0.2
+_PERC_STD_V2 = (
+    _W.perception_sigma * (1.0 / 4.0)
+    + _W.perception_drr * 0.15
+    + _W.perception_similar_count * (1.0 / 5.0)   # answer_obj_count=6 → 1/5
+    + _W.perception_similar_dist * (1.0 / 81.0)
+    + _W.perception_color_contrast * 1.0
+    + _W.perception_edge_strength * 1.0
+) / _P_DENOM  # ≈ 0.489352
+_TOT_STD_V2 = _PERC_STD_V2 * _W.total_perception + _LOGI_STD * _W.total_logical  # ≈ 0.583208
 
 
 # ===========================================================================
@@ -268,7 +293,8 @@ class TestE2EFullPipelineDummy:
         for p in layers:
             _make_png(p)
         bundle = orch.run(composite_image=composite, object_layers=layers)
-        assert bundle.final.total_score == pytest.approx(_TOT_STD, rel=1e-4)
+        # 설계안 §2: bundle.final.total_score = scene_difficulty = D(obj) 단순 평균
+        assert bundle.final.total_score == pytest.approx(_SCENE_DIFF_STD, rel=1e-4)
 
     def test_two_layers_passes_threshold(
         self, orch: ValidatorOrchestrator, composite: Path, tmp_path: Path
@@ -293,29 +319,13 @@ class TestE2EFullPipelineDummy:
     def test_two_layers_scene_difficulty_signal(
         self, orch: ValidatorOrchestrator, composite: Path, tmp_path: Path
     ) -> None:
-        # 실제 실행에서 obj_metrics에 포함되는 값들과 동일하게 구성
-        # visual_deg=2, logical_deg=3, combined=5, max_combined=5 → degree_norm=1.0
-        expected_d = compute_difficulty(
-            {
-                "degree_norm": 1.0,
-                "cluster_density": 3,
-                "hop": 2,
-                "diameter": 4.0,
-                "drr_slope": 0.15,
-                "sigma_threshold": 4.0,
-                "similar_count": 1,
-                "similar_distance": 80.0,
-                "color_contrast": 0.0,  # color_edge_port=None → 0.0
-                "edge_strength": 0.0,
-            }
-        )
+        # 설계안 §2: scene_difficulty = D(obj) 단순 평균 (두 obj 동일 → avg = D_obj)
+        # answer_obj_count=2 → sim_cnt_norm = 1/1 = 1.0
         layers = [tmp_path / f"obj_{i}.png" for i in range(2)]
         for p in layers:
             _make_png(p)
         bundle = orch.run(composite_image=composite, object_layers=layers)
-        assert bundle.logical.signals["scene_difficulty"] == pytest.approx(
-            expected_d, rel=1e-4
-        )
+        assert bundle.scene_difficulty == pytest.approx(_SCENE_DIFF_STD, rel=1e-4)
 
     def test_required_signal_keys_present(
         self, orch: ValidatorOrchestrator, composite: Path, tmp_path: Path
@@ -328,30 +338,40 @@ class TestE2EFullPipelineDummy:
             assert key in bundle.perception.signals
         for key in (
             "answer_obj_count",
-            "scene_difficulty",
             "alpha_degree_map",
             "hop_map",
             "diameter",
         ):
             assert key in bundle.logical.signals
+        # scene_difficulty 는 VerificationBundle 최상위 필드로 이동
+        assert bundle.scene_difficulty >= 0.0
 
     def test_one_layer_total_score(
         self, orch: ValidatorOrchestrator, composite: Path, tmp_path: Path
     ) -> None:
         """
         1개 레이어: obj_0만 physical에 존재, obj_1은 DummyVisual에서 추가.
-        obj_0: visual_deg=2, logical_deg=3, combined=5, max_combined=5, degree_norm=1.0
-        obj_1: visual_deg=0, logical_deg=0, combined=0, degree_norm=0, hop=0
-               logical = 0.0
+        obj_0: visual_deg=2, logical_deg=3, hop=2, cluster=3, degree_norm=1.0
+        obj_1: visual_deg=0, logical_deg=0, hop=0, cluster=0, degree_norm=0.0
+               (DummyVisual: sigma=4, drr=0.15, sim_cnt=1, sim_dist=80 동일)
+        answer_obj_count=2 (두 객체 모두 hf >= θ_HUMAN으로 hidden)
+        bundle.final.total_score = scene_difficulty = (D_obj0 + D_obj1) / 2
         """
         layer = tmp_path / "obj_0.png"
         _make_png(layer)
-        avg_perc = _PERC_STD  # 두 obj 모두 sigma/drr는 visual에서 동일
-        avg_logi = (_LOGI_STD + 0.0) / 2
-        expected_tot = avg_perc * _W.total_perception + avg_logi * _W.total_logical
+        # obj_1의 metrics: physical 기본값(degree=0, cluster=0, hop=0), visual 동일
+        _obj1_m = {
+            "degree_norm": 0.0, "cluster_density": 0, "hop": 0, "diameter": 4.0,
+            "drr_slope": 0.15, "sigma_threshold": 4.0, "similar_count": 1,
+            "similar_distance": 80.0, "color_contrast": 0.0, "edge_strength": 0.0,
+        }
+        expected_scene_diff = (
+            compute_difficulty(_STD_METRICS, answer_obj_count=2)
+            + compute_difficulty(_obj1_m, answer_obj_count=2)
+        ) / 2  # ≈ 0.425111
 
         bundle = orch.run(composite_image=composite, object_layers=[layer])
-        assert bundle.final.total_score == pytest.approx(expected_tot, rel=1e-4)
+        assert bundle.final.total_score == pytest.approx(expected_scene_diff, rel=1e-4)
 
     def test_one_layer_answer_obj_count(
         self, orch: ValidatorOrchestrator, composite: Path, tmp_path: Path
@@ -369,8 +389,9 @@ class TestE2EFullPipelineDummy:
     def test_no_layers_uses_default_objs(
         self, orch: ValidatorOrchestrator, composite: Path
     ) -> None:
+        # layers=[] → DummyPhysical returns ["obj_0","obj_1"] → same as 2-layer case
         bundle = orch.run(composite_image=composite, object_layers=[])
-        assert bundle.final.total_score == pytest.approx(_TOT_STD, rel=1e-4)
+        assert bundle.final.total_score == pytest.approx(_SCENE_DIFF_STD, rel=1e-4)
         assert bundle.final.pass_ is True
 
     def test_pass_field_is_bool(
@@ -387,19 +408,20 @@ class TestE2EFullPipelineDummy:
         assert 0.0 <= bundle.final.total_score <= 1.0
 
     def test_custom_weights_change_score(self, composite: Path, tmp_path: Path) -> None:
-        """ScoringWeights 를 바꾸면 점수가 달라짐을 검증."""
+        """설계안 §2: difficulty_* 가중치 변경 시 scene_difficulty(total_score)가 달라짐.
+
+        bundle.final.total_score = scene_difficulty = D(obj) 단순 평균.
+        D(obj)는 difficulty_* 가중치로 계산되므로 이를 변경해야 score가 달라진다.
+        perception_* / logical_* / total_* 변경은 scene_difficulty에 영향 없음.
+        """
         layers = [tmp_path / f"obj_{i}.png" for i in range(2)]
         for p in layers:
             _make_png(p)
         default_orch = _make_orchestrator()
         biased_orch = _make_orchestrator(
             scoring_weights=ScoringWeights(
-                perception_sigma=0.90,
-                perception_drr=0.10,
-                logical_hop=0.50,
-                logical_degree=0.50,
-                total_perception=0.45,
-                total_logical=0.55,
+                difficulty_sigma=0.50,    # 기본값 0.12 → 0.50 (sigma=4 → 1/4=0.25 기여 증가)
+                difficulty_degree=0.00,   # 기본값 0.14 → 0.00
             )
         )
         s1 = default_orch.run(
@@ -436,9 +458,10 @@ class TestE2EHardScenarioPass:
         layers = [tmp_path / f"obj_{i}.png" for i in range(2)]
         for p in layers:
             _make_png(p)
+        # 설계안 §2: bundle.final.total_score = scene_difficulty = D(obj) 단순 평균
         assert orch.run(
             composite_image=composite, object_layers=layers
-        ).final.total_score == pytest.approx(_TOT_HARD, rel=1e-4)
+        ).final.total_score == pytest.approx(_SCENE_DIFF_HARD, rel=1e-4)
 
     def test_hard_scenario_passes(
         self, orch: ValidatorOrchestrator, composite: Path, tmp_path: Path
@@ -466,9 +489,7 @@ class TestE2EHardScenarioPass:
 
 
 class TestE2EPhase5Chain:
-    def test_resolve_and_score_standard_metrics(self) -> None:
-        # 9조건 중 충분히 충족하는 메트릭 (drr+color_contrast+z_depth_hop+cluster_density)
-        # degree_norm=1.0: max_combined=5(=2+3), combined=5 → 1.0
+    def test_integrate_standard_metrics(self) -> None:
         metrics = {
             "visual_degree": 2,
             "logical_degree": 3,
@@ -484,30 +505,11 @@ class TestE2EPhase5Chain:
             "color_contrast": 0.0,
             "edge_strength": 0.0,
         }
-        assert resolve_answer(metrics) is True
+        # 이 함수 테스트는 기본 answer_obj_count=6 기준 (_PERC_STD_V2)
         perc, logi, total = integrate_verification_v2(metrics)
-        assert perc == pytest.approx(_PERC_STD, rel=1e-4)
+        assert perc == pytest.approx(_PERC_STD_V2, rel=1e-4)
         assert logi == pytest.approx(_LOGI_STD, rel=1e-4)
-        assert total == pytest.approx(_TOT_STD, rel=1e-4)
-
-    def test_resolve_fails_below_two_conditions(self) -> None:
-        # 모든 조건 미충족 → False
-        assert (
-            resolve_answer(
-                {
-                    "drr_slope": 0.0,
-                    "similar_count": 0,
-                    "similar_distance": 100.0,
-                    "color_contrast": 100.0,
-                    "edge_strength": 1000.0,
-                    "visual_degree": 0,
-                    "cluster_density": 0,
-                    "z_depth_hop": 0,
-                    "logical_degree": 0,
-                }
-            )
-            is False
-        )
+        assert total == pytest.approx(_TOT_STD_V2, rel=1e-4)
 
     def test_difficulty_and_scene_difficulty_chain(self) -> None:
         obj = {
@@ -537,11 +539,9 @@ class TestE2EPhase5Chain:
             "color_contrast": 10.0,
             "edge_strength": 200.0,
         }
-        assert resolve_answer(hard) is True
         perc, logi, total = integrate_verification_v2(hard)
-        # 어려운 메트릭 → pass_threshold(0.35) 초과, standard 시나리오보다 높은 점수
-        assert total >= 0.35
-        assert total > _TOT_STD * 0.8  # standard 시나리오 대비 최소 80% 이상
+        # 어려운 메트릭 → standard 시나리오보다 높은 점수
+        assert total > _TOT_STD_V2 * 0.8  # standard 시나리오 대비 최소 80% 이상
 
     def test_easy_metrics_full_chain(self) -> None:
         easy = {
@@ -559,7 +559,6 @@ class TestE2EPhase5Chain:
             "color_contrast": 100.0,
             "edge_strength": 1000.0,
         }
-        assert resolve_answer(easy) is False
         _, _, total = integrate_verification_v2(easy)
         assert total < 0.10
 
