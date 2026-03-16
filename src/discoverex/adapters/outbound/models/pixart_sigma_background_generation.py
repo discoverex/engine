@@ -552,8 +552,28 @@ class PixArtSigmaBackgroundGenerationModel:
             ) from exc
         try:
             T5Tokenizer.from_pretrained("t5-3b")
-        except Exception as exc:
-            logger.warning("prefetching pixart tokenizer failed: %s", exc)
+        except Exception:
+            try:
+                import importlib
+                import subprocess
+                import sys
+
+                subprocess.check_call(
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        "sentencepiece==0.1.99",
+                        "transformers==4.57.6",
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                T5Tokenizer = importlib.reload(T5Tokenizer)
+                T5Tokenizer.from_pretrained("t5-3b")
+            except Exception as exc2:
+                logger.warning("tokenizer install failed: %s", exc2)
         torch_dtype = torch.float32 if "32" in handle.dtype else torch.float16
         pipe = PixArtSigmaPipeline.from_pretrained(
             self.model_id,
