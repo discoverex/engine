@@ -10,6 +10,7 @@ from prefect import flow, task
 
 from discoverex.application.context import AppContextLike
 from discoverex.application.use_cases.gen_verify.background_pipeline import (
+    apply_background_hires_fix_if_needed,
     build_background_from_inputs,
 )
 from discoverex.application.use_cases.gen_verify.composite_pipeline import compose_scene
@@ -110,6 +111,31 @@ def _build_background_stage(
             background_asset_ref=background_asset_ref,
             background_prompt=background_prompt,
             background_negative_prompt=background_negative_prompt,
+        )
+    finally:
+        unload_model(context.background_generator_model)
+
+
+@task(name="discoverex-generate-background-hires-fix", persist_result=False)
+def _background_hires_fix_stage(
+    *,
+    context: AppContextLike,
+    scene_dir: Path,
+    background: Background,
+    background_prompt: str | None,
+    background_negative_prompt: str | None,
+) -> Background:
+    handle = context.background_generator_model.load(
+        context.model_versions.background_generator
+    )
+    try:
+        return apply_background_hires_fix_if_needed(
+            background=background,
+            context=context,
+            scene_dir=scene_dir,
+            fx_handle=handle,
+            prompt=(background_prompt or "").strip(),
+            negative_prompt=(background_negative_prompt or "").strip(),
         )
     finally:
         unload_model(context.background_generator_model)
@@ -373,6 +399,13 @@ def run_generate_flow(
         context=context,
         scene_dir=scene_dir,
         background_asset_ref=background_asset_ref or None,
+        background_prompt=background_prompt or None,
+        background_negative_prompt=background_negative_prompt or None,
+    )
+    background = _background_hires_fix_stage(
+        context=context,
+        scene_dir=scene_dir,
+        background=background,
         background_prompt=background_prompt or None,
         background_negative_prompt=background_negative_prompt or None,
     )

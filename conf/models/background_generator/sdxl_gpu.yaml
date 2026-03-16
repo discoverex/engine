@@ -1,7 +1,7 @@
 # @package models.background_generator
 _target_: discoverex.adapters.outbound.models.sdxl_background_generation.SdxlBackgroundGenerationModel
 model_id: stabilityai/sdxl-turbo
-refiner_model_id: null
+refiner_model_id: stabilityai/stable-diffusion-xl-refiner-1.0
 revision: main
 device: ${runtime.model_runtime.device}
 dtype: ${runtime.model_runtime.dtype}

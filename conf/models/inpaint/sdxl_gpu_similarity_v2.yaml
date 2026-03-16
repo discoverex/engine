@@ -31,7 +31,7 @@ placement_downscale_factor: 2
 similarity_color_weight: 0.7
 similarity_edge_weight: 0.3
 final_context_size: 512
-final_inpaint_strength: 0.18
-final_inpaint_steps: 6
+final_inpaint_strength: 0.22
+final_inpaint_steps: 8
 final_inpaint_guidance_scale: 2.0
 final_mask_blur: 4

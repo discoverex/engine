@@ -11,7 +11,10 @@ from discoverex.models.types import HiddenRegionRequest
 from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 
-from .background_pipeline import build_background_from_inputs
+from .background_pipeline import (
+    apply_background_hires_fix_if_needed,
+    build_background_from_inputs,
+)
 from .composite_pipeline import compose_scene
 from .model_lifecycle import unload_model
 from .object_pipeline import generate_region_objects
@@ -60,6 +63,14 @@ def run(
             background_asset_ref=background_asset_ref,
             background_prompt=background_prompt,
             background_negative_prompt=background_negative_prompt,
+        )
+        background = apply_background_hires_fix_if_needed(
+            background=background,
+            context=context,
+            scene_dir=scene_dir,
+            fx_handle=background_handle,
+            prompt=(background_prompt or "").strip(),
+            negative_prompt=(background_negative_prompt or "").strip(),
         )
     finally:
         unload_model(context.background_generator_model)

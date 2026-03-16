@@ -84,11 +84,6 @@ def build_background_from_inputs(
             format_seconds(started),
         )
         background = build_background(resolved.image_ref, context.runtime)
-        background = _upscale_background_if_needed(
-            background=background,
-            context=context,
-            scene_dir=scene_dir,
-        )
         return (
             background,
             PromptStageRecord(
@@ -114,11 +109,6 @@ def build_background_from_inputs(
     )
     logger.info("background selection mode=asset_ref source=%s", asset_ref)
     background = build_background(asset_ref, context.runtime)
-    background = _upscale_background_if_needed(
-        background=background,
-        context=context,
-        scene_dir=scene_dir,
-    )
     return (
         background,
         PromptStageRecord(
@@ -129,51 +119,92 @@ def build_background_from_inputs(
     )
 
 
-def _upscale_background_if_needed(
+def apply_background_hires_fix_if_needed(
     *,
     background: Background,
     context: AppContextLike,
     scene_dir: Path,
+    fx_handle: ModelHandle,
+    prompt: str,
+    negative_prompt: str,
 ) -> Background:
-    factor = max(1, int(context.runtime.background_upscale_factor))
+    factor = max(1, int(getattr(context.runtime, "background_upscale_factor", 1)))
     if factor <= 1:
         return background
     source_path = Path(background.asset_ref)
     if not source_path.exists():
         return background
-    output_path = scene_dir / "layers" / "base" / "generated-background.upscaled.png"
-    upscaled = _upscale_background_image(
-        image_path=source_path,
-        output_path=output_path,
+    output_path = scene_dir / "layers" / "base" / "generated-background.hiresfix.png"
+    emit_progress_event(
+        stage="background_hires_fix",
+        status="started",
+        image_ref=background.asset_ref,
+        output_path=str(output_path),
         factor=factor,
+        width=int(background.width * factor),
+        height=int(background.height * factor),
     )
+    logger.info(
+        "background hires-fix started source=%s factor=%d size=%sx%s",
+        background.asset_ref,
+        factor,
+        int(background.width * factor),
+        int(background.height * factor),
+    )
+    started = perf_counter()
+    with track_stage_vram(context, "background_hires_fix"):
+        prediction = context.background_generator_model.predict(
+            fx_handle,
+            FxRequest(
+                mode="hires_fix",
+                params={
+                    "output_path": str(output_path),
+                    "image_ref": background.asset_ref,
+                    "width": int(background.width * factor),
+                    "height": int(background.height * factor),
+                    "prompt": prompt or "cinematic hidden object puzzle background",
+                    "negative_prompt": negative_prompt or _DEFAULT_BACKGROUND_NEGATIVE,
+                    "seed": getattr(context.runtime.model_runtime, "seed", None),
+                    "num_inference_steps": 14,
+                    "guidance_scale": 3.0,
+                    "refiner_strength": 0.2,
+                },
+            ),
+        )
+    hires_fix_ref = str(prediction.get("output_path") or output_path)
+    upscaled = _read_background_image_size(image_path=Path(hires_fix_ref))
     background.metadata["base_background_ref"] = background.asset_ref
     background.metadata["background_upscale_factor"] = factor
-    background.asset_ref = str(upscaled["path"])
+    background.asset_ref = hires_fix_ref
     background.width = int(upscaled["width"])
     background.height = int(upscaled["height"])
     context.runtime.width = int(upscaled["width"])
     context.runtime.height = int(upscaled["height"])
+    emit_progress_event(
+        stage="background_hires_fix",
+        status="completed",
+        image_ref=background.asset_ref,
+        factor=factor,
+        width=background.width,
+        height=background.height,
+    )
+    logger.info(
+        "background hires-fix completed output=%s duration=%s",
+        background.asset_ref,
+        format_seconds(started),
+    )
     return background
 
 
-def _upscale_background_image(
+def _read_background_image_size(
     *,
     image_path: Path,
-    output_path: Path,
-    factor: int,
 ) -> dict[str, Any]:
     from PIL import Image  # type: ignore
 
     with Image.open(image_path).convert("RGB") as image:
-        upscaled = image.resize(
-            (max(1, image.width * factor), max(1, image.height * factor)),
-            Image.Resampling.LANCZOS,
-        )
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        upscaled.save(output_path)
         return {
-            "path": output_path,
-            "width": upscaled.width,
-            "height": upscaled.height,
+            "path": image_path,
+            "width": image.width,
+            "height": image.height,
         }

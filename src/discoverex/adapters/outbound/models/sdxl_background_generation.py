@@ -116,6 +116,18 @@ class SdxlBackgroundGenerationModel:
         output_path = request.params.get("output_path")
         if not isinstance(output_path, str) or not output_path:
             raise ValueError("FxRequest.params.output_path is required")
+        if request.mode == "hires_fix":
+            path = self._predict_hires_fix(
+                handle=handle,
+                request=request,
+                output_path=Path(output_path),
+            )
+            logger.info(
+                "background hires-fix image saved path=%s duration=%s",
+                path,
+                format_seconds(started),
+            )
+            return {"fx": "background_hires_fix", "output_path": str(path)}
         width = as_positive_int(request.params.get("width"), fallback=1024)
         height = as_positive_int(request.params.get("height"), fallback=768)
         seed = as_int_or_none(request.params.get("seed"), fallback=self.seed)
@@ -156,6 +168,56 @@ class SdxlBackgroundGenerationModel:
             format_seconds(started),
         )
         return {"fx": request.mode or "background_generation", "output_path": str(path)}
+
+    def _predict_hires_fix(
+        self,
+        *,
+        handle: ModelHandle,
+        request: FxRequest,
+        output_path: Path,
+    ) -> Path:
+        from PIL import Image  # type: ignore
+
+        image_ref = request.params.get("image_ref")
+        if not isinstance(image_ref, (str, Path)) or not str(image_ref):
+            raise ValueError("FxRequest.params.image_ref is required for hires_fix")
+        source_path = Path(str(image_ref))
+        width = as_positive_int(request.params.get("width"), fallback=1024)
+        height = as_positive_int(request.params.get("height"), fallback=768)
+        seed = as_int_or_none(request.params.get("seed"), fallback=self.seed)
+        prompt = as_str(request.params.get("prompt"), fallback=self.default_prompt)
+        negative_prompt = as_str(
+            request.params.get("negative_prompt"),
+            fallback=self.default_negative_prompt,
+        )
+        num_inference_steps = as_positive_int(
+            request.params.get("num_inference_steps"),
+            fallback=max(12, self.default_num_inference_steps),
+        )
+        guidance_scale = as_float(
+            request.params.get("guidance_scale"),
+            fallback=max(2.0, self.default_guidance_scale),
+        )
+        refiner_strength = as_float(
+            request.params.get("refiner_strength"),
+            fallback=max(0.15, self.default_refiner_strength),
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with Image.open(source_path).convert("RGB") as image:
+            upscaled = image.resize((width, height), Image.Resampling.LANCZOS)
+            if self.refiner_model_id and refiner_strength > 0.0:
+                upscaled = self._refine_image(
+                    handle=handle,
+                    image=upscaled,
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    seed=seed,
+                    num_inference_steps=num_inference_steps,
+                    guidance_scale=guidance_scale,
+                    refiner_strength=refiner_strength,
+                )
+            upscaled.save(output_path)
+        return output_path
 
     def _load_base_pipe(self, handle: ModelHandle) -> Any:
         if self._base_pipe is not None:
@@ -256,6 +318,38 @@ class SdxlBackgroundGenerationModel:
         if not images:
             raise RuntimeError("text2image pipeline returned no images")
         image = images[0]
+        return self._refine_image(
+            handle=handle,
+            image=image,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            seed=seed,
+            num_inference_steps=num_inference_steps,
+            guidance_scale=guidance_scale,
+            refiner_strength=refiner_strength,
+        )
+
+    def _refine_image(
+        self,
+        *,
+        handle: ModelHandle,
+        image: Any,
+        prompt: str,
+        negative_prompt: str,
+        seed: int | None,
+        num_inference_steps: int,
+        guidance_scale: float,
+        refiner_strength: float,
+    ) -> Any:
+        try:
+            import torch  # type: ignore
+        except Exception as exc:
+            raise RuntimeError("torch runtime unavailable") from exc
+        if refiner_strength <= 0.0:
+            return image
+        generator = None
+        if seed is not None:
+            generator = torch.Generator(device="cpu").manual_seed(seed)
         refiner = self._load_refiner_pipe(handle)
         if refiner is None:
             return image
