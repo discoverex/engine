@@ -19,7 +19,7 @@ cd "${ENGINE_ROOT}"
 python3 infra/register/register_prefect_job.py \
   --job-name quick-generate-1-https \
   --command generate \
-  --execution-profile generator-sdxl-gpu \
+  --execution-profile generator-pixart-gpu \
   --repo-url https://github.com/discoverex/engine.git \
   --ref "${ENGINE_REF}" \
   --background-prompt "stormy harbor at dusk, cinematic hidden object puzzle background" \
@@ -35,13 +35,13 @@ python3 infra/register/register_prefect_job.py \
   --artifact-bucket "${ARTIFACT_BUCKET}" \
   --cf-access-client-id "${cf_access_client_id}" \
   --cf-access-client-secret "${cf_access_client_secret}" \
-  -o runtime.width=512 \
-  -o runtime.height=384
+  -o runtime.width=1024 \
+  -o runtime.height=1024
 
 python3 infra/register/register_prefect_job.py \
   --job-name quick-generate-2-https \
   --command generate \
-  --execution-profile generator-sdxl-gpu \
+  --execution-profile generator-pixart-gpu \
   --repo-url https://github.com/discoverex/engine.git \
   --ref "${ENGINE_REF}" \
   --background-prompt "ancient observatory interior at night, cinematic hidden object puzzle background" \
@@ -57,5 +57,5 @@ python3 infra/register/register_prefect_job.py \
   --artifact-bucket "${ARTIFACT_BUCKET}" \
   --cf-access-client-id "${cf_access_client_id}" \
   --cf-access-client-secret "${cf_access_client_secret}" \
-  -o runtime.width=512 \
-  -o runtime.height=384
+  -o runtime.width=1024 \
+  -o runtime.height=1024

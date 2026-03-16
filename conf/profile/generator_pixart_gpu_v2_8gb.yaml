@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - override /flows/generate: v2
-  - override /models/background_generator: sdxl_gpu
+  - override /models/background_generator: pixart_sigma_8gb
   - override /models/object_generator: layerdiffuse
   - override /models/hidden_region: hf
   - override /models/inpaint: sdxl_gpu_similarity_v2
@@ -10,8 +10,9 @@ defaults:
   - override /runtime/model_runtime: gpu
 
 runtime:
-  width: 256
-  height: 256
-  background_upscale_factor: 4
+  width: 1024
+  height: 1024
+  background_upscale_factor: 2
   model_runtime:
     offload_mode: sequential
+    enable_xformers_memory_efficient_attention: true
