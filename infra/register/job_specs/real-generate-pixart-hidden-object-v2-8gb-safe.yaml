@@ -24,8 +24,9 @@ inputs:
     - profile=generator_pixart_gpu_v2_hidden_object
     - runtime/model_runtime=gpu
     - flows/generate=v2
-    - runtime.width=1024
-    - runtime.height=1024
+    - runtime.width=768
+    - runtime.height=768
+    - runtime.background_upscale_factor=1
     - models/background_generator=pixart_sigma_8gb
     - models/object_generator=layerdiffuse
     - models/hidden_region=hf
