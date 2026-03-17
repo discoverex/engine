@@ -465,19 +465,15 @@ class SdxlInpaintModel:
         refined_mask_path = save_image(
             refined_mask, output.with_suffix(".mask.png")
         )
-        normalized_bbox = self._ensure_minimum_bbox_size(
-            bbox=bbox,
-            image=image,
-        )
         variants = self._build_pre_match_variants(
             image=image,
-            bbox=normalized_bbox,
+            bbox=bbox,
             object_image=object_image,
             object_mask=refined_mask,
         )
         selected_variant, placement_bbox, placement_score = self._select_best_variant(
             image=image,
-            bbox=normalized_bbox,
+            bbox=bbox,
             variants=variants,
         )
         variant_manifest_path = output.with_suffix(".variants.json")
@@ -494,9 +490,7 @@ class SdxlInpaintModel:
                             "saturation_mul": variant["saturation_mul"],
                             "contrast_mul": variant["contrast_mul"],
                             "sharpness_mul": variant["sharpness_mul"],
-                            "placement_bbox": list(
-                                variant.get("placement_bbox", normalized_bbox)
-                            ),
+                            "placement_bbox": list(variant.get("placement_bbox", bbox)),
                         }
                         for variant in variants
                     ],
@@ -839,7 +833,6 @@ class SdxlInpaintModel:
     ) -> list[dict[str, Any]]:
         variants: list[dict[str, Any]] = []
         count = max(1, int(self.pre_match_variant_count))
-        fixed_scale_ratio = float(self.pre_match_scale_ratio[0])
         for index in range(count):
             fraction = 0.0 if count == 1 else index / float(count - 1)
             variant = self._transform_object_variant(
@@ -847,7 +840,7 @@ class SdxlInpaintModel:
                 bbox=bbox,
                 object_image=object_image,
                 object_mask=object_mask,
-                scale_ratio=fixed_scale_ratio,
+                scale_ratio=self._interpolate(self.pre_match_scale_ratio, fraction),
                 rotation_deg=self._interpolate(self.pre_match_rotation_deg, fraction),
                 saturation_mul=self._interpolate(self.pre_match_saturation_mul, fraction),
                 contrast_mul=self._interpolate(self.pre_match_contrast_mul, fraction),
@@ -905,8 +898,10 @@ class SdxlInpaintModel:
         rgba = rgba.crop(tight_bbox)
         mask = mask.crop(tight_bbox)
         base_region = max(1, max(int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])))
-        minimum_long_side = int(round(max(image.width, image.height) * float(scale_ratio)))
-        target_long_side = max(24, min(canvas_side - 8, max(base_region, minimum_long_side)))
+        target_long_side = max(
+            24,
+            min(canvas_side - 8, int(round(base_region * float(scale_ratio)))),
+        )
         current_long_side = max(1, rgba.width, rgba.height)
         resize_scale = target_long_side / float(current_long_side)
         resized_size = (
@@ -1076,37 +1071,6 @@ class SdxlInpaintModel:
     def _interpolate(self, bounds: tuple[float, float], fraction: float) -> float:
         low, high = bounds
         return float(low + (high - low) * fraction)
-
-    def _ensure_minimum_bbox_size(
-        self,
-        *,
-        bbox: tuple[int, int, int, int],
-        image: Any,
-    ) -> tuple[int, int, int, int]:
-        min_long_side = max(
-            1,
-            int(round(max(image.width, image.height) * float(self.pre_match_scale_ratio[0]))),
-        )
-        left, top, right, bottom = bbox
-        width = max(1, right - left)
-        height = max(1, bottom - top)
-        current_long_side = max(width, height)
-        if current_long_side >= min_long_side:
-            return bbox
-        scale = min_long_side / float(current_long_side)
-        expanded_width = max(1, int(round(width * scale)))
-        expanded_height = max(1, int(round(height * scale)))
-        center_x = (left + right) / 2.0
-        center_y = (top + bottom) / 2.0
-        expanded_left = int(round(center_x - expanded_width / 2.0))
-        expanded_top = int(round(center_y - expanded_height / 2.0))
-        expanded_right = expanded_left + expanded_width
-        expanded_bottom = expanded_top + expanded_height
-        return sanitize_bbox(
-            (expanded_left, expanded_top, expanded_right, expanded_bottom),
-            width=image.width,
-            height=image.height,
-        )
 
     def _save_stage_outputs(
         self,

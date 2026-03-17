@@ -26,7 +26,7 @@ masked_area_padding: 24
 patch_target_long_side: 96
 inpaint_mode: layerdiffuse_hidden_object_v1
 final_context_size: 384
-pre_match_scale_ratio: [0.10, 0.10]
+pre_match_scale_ratio: [0.80, 1.20]
 overlay_alpha: 0.5
 pre_match_rotation_deg: [-25.0, 25.0]
 pre_match_saturation_mul: [0.78, 1.08]
