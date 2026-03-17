@@ -979,7 +979,12 @@ class SdxlInpaintModel:
         else:
             feathered = object_mask.convert("L")
         opaque.putalpha(feathered)
-        composited = apply_alpha_patch(image, opaque, target_bbox)
+        composited = apply_alpha_patch_with_opacity(
+            image,
+            opaque,
+            target_bbox,
+            opacity=self.overlay_alpha,
+        )
         return composited, feathered
 
     def _run_object_blend_pass(
