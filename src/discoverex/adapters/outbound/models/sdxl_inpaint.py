@@ -476,6 +476,10 @@ class SdxlInpaintModel:
             bbox=bbox,
             variants=variants,
         )
+        placement_object_image, placement_object_mask = self._crop_to_mask_bounds(
+            object_image=selected_variant["object_image"],
+            object_mask=selected_variant["object_mask"],
+        )
         variant_manifest_path = output.with_suffix(".variants.json")
         variant_manifest_path.write_text(
             json.dumps(
@@ -501,8 +505,8 @@ class SdxlInpaintModel:
         )
         precomposited, blend_mask = self._opaque_composite_object(
             image=image,
-            object_image=selected_variant["object_image"],
-            object_mask=selected_variant["object_mask"],
+            object_image=placement_object_image,
+            object_mask=placement_object_mask,
             target_bbox=placement_bbox,
         )
         precomposited_path = save_image(
@@ -512,7 +516,7 @@ class SdxlInpaintModel:
             handle=handle,
             source_image=precomposited,
             target_bbox=placement_bbox,
-            localized_mask=selected_variant["object_mask"],
+            localized_mask=placement_object_mask,
             prompt=(
                 "harmonize the pasted object's texture, tone, and lighting with the "
                 "surrounding scene while preserving object shape"
@@ -525,7 +529,7 @@ class SdxlInpaintModel:
         )
         shadowed = self._apply_direct_shadow(
             image=core_stage["composited"],
-            object_mask=selected_variant["object_mask"],
+            object_mask=placement_object_mask,
             target_bbox=placement_bbox,
         )
         shadow_path = save_image(shadowed, output.with_suffix(".shadow.png"))
@@ -533,7 +537,7 @@ class SdxlInpaintModel:
             handle=handle,
             source_image=shadowed,
             target_bbox=placement_bbox,
-            localized_mask=selected_variant["object_mask"],
+            localized_mask=placement_object_mask,
             prompt=(
                 "perform a light final polish so the hidden object feels embedded in "
                 "the scene without changing its identity"
@@ -987,6 +991,20 @@ class SdxlInpaintModel:
             opacity=self.overlay_alpha,
         )
         return composited, feathered
+
+    def _crop_to_mask_bounds(
+        self,
+        *,
+        object_image: Any,
+        object_mask: Any,
+    ) -> tuple[Any, Any]:
+        tight_bbox = object_mask.convert("L").getbbox()
+        if tight_bbox is None:
+            return object_image, object_mask
+        return (
+            object_image.crop(tight_bbox),
+            object_mask.crop(tight_bbox),
+        )
 
     def _run_object_blend_pass(
         self,
