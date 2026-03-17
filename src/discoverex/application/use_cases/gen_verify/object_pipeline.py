@@ -51,8 +51,10 @@ def generate_region_objects(
     )
     generated: dict[str, GeneratedObjectAsset] = {}
     total_regions = len(regions)
+    object_prompts = resolve_object_prompts(object_prompt, total_regions=total_regions)
     try:
         for index, region in enumerate(regions, start=1):
+            region_prompt = object_prompts[index - 1]
             width = _OBJECT_GENERATION_SIZE
             height = _OBJECT_GENERATION_SIZE
             output_prefix = (
@@ -78,7 +80,7 @@ def generate_region_objects(
                         "width": width,
                         "height": height,
                         "seed": context.runtime.model_runtime.seed,
-                        "prompt": _object_generation_prompt(object_prompt),
+                        "prompt": _object_generation_prompt(region_prompt),
                         "negative_prompt": object_negative_prompt
                         or _DEFAULT_OBJECT_NEGATIVE,
                         "num_inference_steps": _OBJECT_GENERATION_STEPS,
@@ -136,6 +138,39 @@ def _object_generation_prompt(object_prompt: str) -> str:
         f"{prompt}, isolated single object, centered composition, "
         "plain neutral backdrop, no environment, no floor"
     )
+
+
+def resolve_object_prompts(object_prompt: str, *, total_regions: int) -> list[str]:
+    prompts = _split_object_prompts(object_prompt)
+    if total_regions <= 0:
+        return []
+    if not prompts:
+        prompts = [_DEFAULT_OBJECT_GENERATION_PROMPT]
+    if len(prompts) >= total_regions:
+        return prompts[:total_regions]
+    padded = list(prompts)
+    padded.extend([prompts[-1]] * (total_regions - len(prompts)))
+    return padded
+
+
+def _split_object_prompts(object_prompt: str) -> list[str]:
+    prompt = object_prompt.strip()
+    if not prompt:
+        return []
+    if prompt.startswith("["):
+        try:
+            import json
+
+            parsed = json.loads(prompt)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, list):
+            return [str(item).strip() for item in parsed if str(item).strip()]
+    separators = ("\n", "|", ";")
+    for separator in separators:
+        if separator in prompt:
+            return [part.strip() for part in prompt.split(separator) if part.strip()]
+    return [prompt]
 
 
 def _round_up_to_multiple_of_8(value: int) -> int:

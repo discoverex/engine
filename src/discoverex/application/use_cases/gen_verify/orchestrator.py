@@ -19,6 +19,7 @@ from .background_pipeline import (
 from .composite_pipeline import compose_scene
 from .model_lifecycle import unload_model
 from .object_pipeline import generate_region_objects
+from .object_pipeline import resolve_object_prompts
 from .persistence import save_scene, track_run, write_verification_report
 from .prompt_bundle import build_prompt_tracking_params, save_prompt_bundle
 from .region_pipeline import build_candidate_regions, generate_regions
@@ -176,7 +177,9 @@ def run(
             update={"output_ref": background.asset_ref}
         ),
         object=PromptStageRecord(
-            mode="shared",
+            mode="per-region"
+            if len(resolve_object_prompts((object_prompt or "").strip(), total_regions=len(regions))) > 1
+            else "shared",
             prompt=(object_prompt or "").strip(),
             negative_prompt=(object_negative_prompt or "").strip(),
         ),
