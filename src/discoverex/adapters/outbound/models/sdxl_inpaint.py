@@ -465,15 +465,19 @@ class SdxlInpaintModel:
         refined_mask_path = save_image(
             refined_mask, output.with_suffix(".mask.png")
         )
+        normalized_bbox = self._ensure_minimum_bbox_size(
+            bbox=bbox,
+            image=image,
+        )
         variants = self._build_pre_match_variants(
             image=image,
-            bbox=bbox,
+            bbox=normalized_bbox,
             object_image=object_image,
             object_mask=refined_mask,
         )
         selected_variant, placement_bbox, placement_score = self._select_best_variant(
             image=image,
-            bbox=bbox,
+            bbox=normalized_bbox,
             variants=variants,
         )
         variant_manifest_path = output.with_suffix(".variants.json")
@@ -490,7 +494,9 @@ class SdxlInpaintModel:
                             "saturation_mul": variant["saturation_mul"],
                             "contrast_mul": variant["contrast_mul"],
                             "sharpness_mul": variant["sharpness_mul"],
-                            "placement_bbox": list(variant.get("placement_bbox", bbox)),
+                            "placement_bbox": list(
+                                variant.get("placement_bbox", normalized_bbox)
+                            ),
                         }
                         for variant in variants
                     ],
@@ -508,29 +514,9 @@ class SdxlInpaintModel:
         precomposited_path = save_image(
             precomposited, output.with_suffix(".precomposite.png")
         )
-        edge_mask = self._build_ring_mask(
-            mask=selected_variant["object_mask"],
-            dilation_px=self.edge_blend_ring_dilate_px,
-            inner_feather_px=1,
-        )
-        edge_stage = self._run_object_blend_pass(
-            handle=handle,
-            source_image=precomposited,
-            target_bbox=placement_bbox,
-            localized_mask=edge_mask,
-            prompt=(
-                "blend the object's outer contour into the surrounding scene while "
-                "preserving silhouette and object identity"
-            ),
-            negative_prompt=request.negative_prompt or self.default_negative_prompt,
-            strength=self.edge_blend_strength,
-            num_inference_steps=self.edge_blend_steps,
-            guidance_scale=self.edge_blend_cfg,
-            backend_kind="edge",
-        )
         core_stage = self._run_object_blend_pass(
             handle=handle,
-            source_image=edge_stage["composited"],
+            source_image=precomposited,
             target_bbox=placement_bbox,
             localized_mask=selected_variant["object_mask"],
             prompt=(
@@ -568,11 +554,7 @@ class SdxlInpaintModel:
         patch_path = save_image(
             final_stage["generated_patch"], output.with_suffix(".patch.png")
         )
-        edge_mask_path = save_image(edge_stage["blend_mask"], output.with_suffix(".edge-mask.png"))
         core_mask_path = save_image(core_stage["blend_mask"], output.with_suffix(".core-mask.png"))
-        edge_patch_path = save_image(
-            edge_stage["generated_patch"], output.with_suffix(".edge-blend.png")
-        )
         core_patch_path = save_image(
             core_stage["generated_patch"], output.with_suffix(".core-blend.png")
         )
@@ -590,9 +572,7 @@ class SdxlInpaintModel:
             "composited": composited_path,
             "precomposited": precomposited_path,
             "blend_mask": core_mask_path,
-            "edge_mask": edge_mask_path,
             "core_mask": core_mask_path,
-            "edge_blend": edge_patch_path,
             "core_blend": core_patch_path,
             "final_polish": final_patch_path,
             "shadow": shadow_path,
@@ -859,6 +839,7 @@ class SdxlInpaintModel:
     ) -> list[dict[str, Any]]:
         variants: list[dict[str, Any]] = []
         count = max(1, int(self.pre_match_variant_count))
+        fixed_scale_ratio = float(self.pre_match_scale_ratio[0])
         for index in range(count):
             fraction = 0.0 if count == 1 else index / float(count - 1)
             variant = self._transform_object_variant(
@@ -866,7 +847,7 @@ class SdxlInpaintModel:
                 bbox=bbox,
                 object_image=object_image,
                 object_mask=object_mask,
-                scale_ratio=self._interpolate(self.pre_match_scale_ratio, fraction),
+                scale_ratio=fixed_scale_ratio,
                 rotation_deg=self._interpolate(self.pre_match_rotation_deg, fraction),
                 saturation_mul=self._interpolate(self.pre_match_saturation_mul, fraction),
                 contrast_mul=self._interpolate(self.pre_match_contrast_mul, fraction),
@@ -924,13 +905,8 @@ class SdxlInpaintModel:
         rgba = rgba.crop(tight_bbox)
         mask = mask.crop(tight_bbox)
         base_region = max(1, max(int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])))
-        target_long_side = max(
-            24,
-            min(
-                canvas_side - 8,
-                int(round(max(image.width, image.height) * float(scale_ratio))),
-            ),
-        )
+        minimum_long_side = int(round(max(image.width, image.height) * float(scale_ratio)))
+        target_long_side = max(24, min(canvas_side - 8, max(base_region, minimum_long_side)))
         current_long_side = max(1, rgba.width, rgba.height)
         resize_scale = target_long_side / float(current_long_side)
         resized_size = (
@@ -1005,24 +981,6 @@ class SdxlInpaintModel:
         opaque.putalpha(feathered)
         composited = apply_alpha_patch(image, opaque, target_bbox)
         return composited, feathered
-
-    def _build_ring_mask(
-        self,
-        *,
-        mask: Any,
-        dilation_px: int,
-        inner_feather_px: int,
-    ) -> Any:
-        from PIL import ImageChops, ImageFilter  # type: ignore
-
-        outer = mask.convert("L")
-        for _ in range(max(1, int(dilation_px))):
-            outer = outer.filter(ImageFilter.MaxFilter(3))
-        inner = mask.convert("L")
-        if inner_feather_px > 0:
-            inner = inner.filter(ImageFilter.GaussianBlur(radius=inner_feather_px))
-        ring = ImageChops.subtract(outer, inner)
-        return ring
 
     def _run_object_blend_pass(
         self,
@@ -1113,6 +1071,37 @@ class SdxlInpaintModel:
     def _interpolate(self, bounds: tuple[float, float], fraction: float) -> float:
         low, high = bounds
         return float(low + (high - low) * fraction)
+
+    def _ensure_minimum_bbox_size(
+        self,
+        *,
+        bbox: tuple[int, int, int, int],
+        image: Any,
+    ) -> tuple[int, int, int, int]:
+        min_long_side = max(
+            1,
+            int(round(max(image.width, image.height) * float(self.pre_match_scale_ratio[0]))),
+        )
+        left, top, right, bottom = bbox
+        width = max(1, right - left)
+        height = max(1, bottom - top)
+        current_long_side = max(width, height)
+        if current_long_side >= min_long_side:
+            return bbox
+        scale = min_long_side / float(current_long_side)
+        expanded_width = max(1, int(round(width * scale)))
+        expanded_height = max(1, int(round(height * scale)))
+        center_x = (left + right) / 2.0
+        center_y = (top + bottom) / 2.0
+        expanded_left = int(round(center_x - expanded_width / 2.0))
+        expanded_top = int(round(center_y - expanded_height / 2.0))
+        expanded_right = expanded_left + expanded_width
+        expanded_bottom = expanded_top + expanded_height
+        return sanitize_bbox(
+            (expanded_left, expanded_top, expanded_right, expanded_bottom),
+            width=image.width,
+            height=image.height,
+        )
 
     def _save_stage_outputs(
         self,
