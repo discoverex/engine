@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 from scripts.cli.prefect import (
     DEFAULT_REGISTER_JOB_SPEC,
+    _build_job_spec_json_for_row,
     _build_prefect_log_filter,
     app,
 )
@@ -160,6 +161,79 @@ def test_build_prefect_log_filter_targets_flow_run_id() -> None:
     flow_run_id = "f7b6ec0c-48e1-4dcc-8e74-1f03b3bbdd9c"
     log_filter = _build_prefect_log_filter(flow_run_id)
     assert log_filter.flow_run_id.any_ == [UUID(flow_run_id)]
+
+
+def test_build_job_spec_json_for_row_overrides_prompts() -> None:
+    payload = _build_job_spec_json_for_row(
+        {
+            "job_name": "template-name",
+            "inputs": {
+                "args": {
+                    "background_prompt": "old-bg",
+                    "background_negative_prompt": "old-bg-neg",
+                    "object_prompt": "old-object",
+                    "object_negative_prompt": "old-object-neg",
+                    "final_prompt": "old-final",
+                    "final_negative_prompt": "old-final-neg",
+                }
+            },
+        },
+        {
+            "job_name": "scene-001",
+            "background_prompt": "harbor",
+            "background_negative_prompt": "",
+            "object_prompt": "banana",
+            "object_negative_prompt": "bad object",
+            "final_prompt": "",
+            "final_negative_prompt": "",
+        },
+        row_index=1,
+    )
+
+    assert '"job_name": "scene-001"' in payload
+    assert '"background_prompt": "harbor"' in payload
+    assert '"background_negative_prompt": "old-bg-neg"' in payload
+    assert '"object_prompt": "banana"' in payload
+    assert '"object_negative_prompt": "bad object"' in payload
+    assert '"final_prompt": "old-final"' in payload
+    assert '"final_negative_prompt": "old-final-neg"' in payload
+
+
+def test_register_batch_submits_one_run_per_csv_row(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: list[list[str]] = []
+    csv_path = tmp_path / "scenes.csv"
+    csv_path.write_text(
+        "job_name,background_prompt,object_prompt,final_prompt\n"
+        "scene-1,harbor,banana,polished harbor\n"
+        "scene-2,attic,key,polished attic\n",
+        encoding="utf-8",
+    )
+
+    def _fake_run(script_name: str, args: list[str]) -> int:
+        assert script_name == "submit_job_spec.py"
+        captured.append(args)
+        return 0
+
+    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
+
+    result = runner.invoke(
+        app,
+        ["register-batch", str(csv_path), "--branch", "dev"],
+    )
+
+    assert result.exit_code == 0
+    assert len(captured) == 2
+    assert captured[0][0:2] == ["--deployment", "discoverex-generate-dev"]
+    assert captured[1][0:2] == ["--deployment", "discoverex-generate-dev"]
+    assert '"job_name": "scene-1"' in captured[0][-1]
+    assert '"background_prompt": "harbor"' in captured[0][-1]
+    assert '"object_prompt": "banana"' in captured[0][-1]
+    assert '"final_prompt": "polished harbor"' in captured[0][-1]
+    assert '"job_name": "scene-2"' in captured[1][-1]
+    assert '"background_prompt": "attic"' in captured[1][-1]
+    assert '"object_prompt": "key"' in captured[1][-1]
+    assert '"final_prompt": "polished attic"' in captured[1][-1]
 
 
 def test_fetch_logs_formats_output(monkeypatch, capsys) -> None:  # type: ignore[no-untyped-def]

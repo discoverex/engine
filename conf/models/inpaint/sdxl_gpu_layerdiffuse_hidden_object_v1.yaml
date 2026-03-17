@@ -28,9 +28,9 @@ inpaint_mode: layerdiffuse_hidden_object_v1
 final_context_size: 384
 pre_match_scale_ratio: [0.04, 0.18]
 pre_match_rotation_deg: [-25.0, 25.0]
-pre_match_saturation_mul: [0.85, 0.97]
-pre_match_contrast_mul: [0.90, 0.98]
-pre_match_sharpness_mul: [0.85, 0.95]
+pre_match_saturation_mul: [0.78, 1.08]
+pre_match_contrast_mul: [0.82, 1.10]
+pre_match_sharpness_mul: [0.82, 1.02]
 pre_match_variant_count: 3
 composite_feather_px: 2
 edge_blend_steps: 12

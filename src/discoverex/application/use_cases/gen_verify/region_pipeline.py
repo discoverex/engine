@@ -60,6 +60,9 @@ def generate_regions(
     inpainted_regions: list[Region] = []
     prompt_records: list[RegionPromptRecord] = []
     total_regions = len(regions)
+    current_composite_ref = str(
+        background.metadata.get("inpaint_composited_ref") or background.asset_ref
+    )
     for index, region in enumerate(regions, start=1):
         region_started = perf_counter()
         output_path = (
@@ -97,14 +100,14 @@ def generate_regions(
             details = context.inpaint_model.predict(
                 inpaint_handle,
                 InpaintRequest(
-                    image_ref=background.asset_ref,
+                    image_ref=current_composite_ref,
                     region_id=region.region_id,
                     bbox=bbox_tuple(region),
                     object_image_ref=object_asset.object_ref,
                     object_mask_ref=object_asset.object_mask_ref,
                     object_candidate_ref=object_asset.candidate_ref,
                     output_path=str(output_path),
-                    composite_base_ref=background.asset_ref,
+                    composite_base_ref=current_composite_ref,
                     prompt=object_prompt,
                     negative_prompt=object_negative_prompt,
                     generation_prompt=generation_prompt,
@@ -127,6 +130,7 @@ def generate_regions(
         composited_ref = details.get("composited_image_ref")
         if isinstance(composited_ref, str) and composited_ref:
             background.metadata["inpaint_composited_ref"] = composited_ref
+            current_composite_ref = composited_ref
         object_ref = details.get("object_image_ref")
         object_mask_ref = details.get("object_mask_ref")
         patch_ref = details.get("patch_image_ref")
