@@ -33,18 +33,18 @@ pre_match_contrast_mul: [0.90, 0.98]
 pre_match_sharpness_mul: [0.85, 0.95]
 pre_match_variant_count: 3
 composite_feather_px: 2
-edge_blend_steps: 8
+edge_blend_steps: 12
 edge_blend_cfg: 3.5
-edge_blend_strength: 0.12
+edge_blend_strength: 0.2
 edge_blend_ring_dilate_px: 6
-core_blend_steps: 10
+core_blend_steps: 12
 core_blend_cfg: 4.0
 core_blend_strength: 0.2
 shadow_blur_px: 12
 shadow_opacity: 0.14
-final_polish_steps: 4
+final_polish_steps: 6
 final_polish_cfg: 3.0
-final_polish_strength: 0.08
+final_polish_strength: 0.12
 relight_method: ic_light
 edge_blend_backend: sdxl_inpaint
 core_blend_backend: sdxl_inpaint
