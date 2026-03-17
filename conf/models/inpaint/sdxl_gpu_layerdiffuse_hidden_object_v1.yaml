@@ -44,7 +44,7 @@ shadow_blur_px: 12
 shadow_opacity: 0.14
 final_polish_steps: 6
 final_polish_cfg: 3.0
-final_polish_strength: 0.12
+final_polish_strength: 0.2
 relight_method: ic_light
 edge_blend_backend: sdxl_inpaint
 core_blend_backend: sdxl_inpaint
