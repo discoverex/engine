@@ -14,11 +14,11 @@ inputs:
   config_name: generate
   config_dir: conf
   args:
-    background_prompt: stormy harbor at dusk, cinematic hidden object puzzle background
+    background_prompt: stormy harbor at dusk, cinematic hidden object puzzle background, painterly realism, moody maritime lighting, weathered textures, cohesive color palette
     background_negative_prompt: blurry, low quality, artifact
-    object_prompt: banana
+    object_prompt: butterfly | antique brass key | crystal wine glass
     object_negative_prompt: blurry, low quality, artifact
-    final_prompt: polished playable hidden object scene
+    final_prompt: polished playable hidden object scene, keep inserted objects matched to the background painting style, lighting direction, palette, texture, and scene atmosphere
     final_negative_prompt: blurry, low quality, artifact
   overrides:
     - profile=generator_pixart_gpu_v2_hidden_object
