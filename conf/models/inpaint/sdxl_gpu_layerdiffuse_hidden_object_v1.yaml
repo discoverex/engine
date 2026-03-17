@@ -29,9 +29,9 @@ final_context_size: 384
 pre_match_scale_ratio: [0.08, 0.12]
 overlay_alpha: 0.5
 pre_match_rotation_deg: [-25.0, 25.0]
-pre_match_saturation_mul: [0.78, 1.08]
-pre_match_contrast_mul: [0.82, 1.10]
-pre_match_sharpness_mul: [0.82, 1.02]
+pre_match_saturation_mul: [0.70, 1.12]
+pre_match_contrast_mul: [0.75, 1.15]
+pre_match_sharpness_mul: [0.78, 1.06]
 pre_match_variant_count: 3
 composite_feather_px: 2
 edge_blend_steps: 12
