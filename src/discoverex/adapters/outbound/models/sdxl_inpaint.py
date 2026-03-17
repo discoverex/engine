@@ -900,7 +900,13 @@ class SdxlInpaintModel:
         base_region = max(1, max(int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])))
         target_long_side = max(
             24,
-            min(canvas_side - 8, int(round(base_region * float(scale_ratio)))),
+            min(
+                canvas_side - 8,
+                max(
+                    min(base_region, canvas_side - 8),
+                    int(round(max(image.width, image.height) * float(scale_ratio))),
+                ),
+            ),
         )
         current_long_side = max(1, rgba.width, rgba.height)
         resize_scale = target_long_side / float(current_long_side)
