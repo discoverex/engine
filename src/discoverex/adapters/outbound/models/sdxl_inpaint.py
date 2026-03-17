@@ -901,15 +901,11 @@ class SdxlInpaintModel:
         tight_bbox = mask.getbbox() or (0, 0, mask.width, mask.height)
         rgba = rgba.crop(tight_bbox)
         mask = mask.crop(tight_bbox)
-        base_region = max(1, max(int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])))
         target_long_side = max(
             24,
             min(
                 canvas_side - 8,
-                max(
-                    min(base_region, canvas_side - 8),
-                    int(round(max(image.width, image.height) * float(scale_ratio))),
-                ),
+                int(round(max(image.width, image.height) * float(scale_ratio))),
             ),
         )
         current_long_side = max(1, rgba.width, rgba.height)
@@ -944,7 +940,7 @@ class SdxlInpaintModel:
             "saturation_mul": saturation_mul,
             "contrast_mul": contrast_mul,
             "sharpness_mul": sharpness_mul,
-            "target_long_side": min(target_long_side, base_region),
+            "target_long_side": target_long_side,
         }
 
     def _apply_relight_hint(self, image: Any) -> Any:
