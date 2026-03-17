@@ -27,9 +27,9 @@ patch_target_long_side: 96
 inpaint_mode: layerdiffuse_hidden_object_v1
 final_context_size: 384
 pre_match_scale_ratio: [0.08, 0.12]
-overlay_alpha: 0.5
-similarity_color_weight: 0.55
-similarity_edge_weight: 0.45
+overlay_alpha: 0.3
+similarity_color_weight: 0.25
+similarity_edge_weight: 0.75
 pre_match_rotation_deg: [-25.0, 25.0]
 pre_match_saturation_mul: [0.70, 1.12]
 pre_match_contrast_mul: [0.75, 1.15]

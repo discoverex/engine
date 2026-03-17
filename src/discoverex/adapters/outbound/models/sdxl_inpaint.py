@@ -524,7 +524,8 @@ class SdxlInpaintModel:
             localized_mask=edge_mask,
             prompt=(
                 "adjust only the immediate surrounding background around the hidden object "
-                "so it naturally conceals the object while preserving object identity"
+                "using nearby scene tones, palette, and texture so the background naturally "
+                "conceals the object while preserving object identity"
             ),
             negative_prompt=request.negative_prompt or self.default_negative_prompt,
             strength=self.edge_blend_strength,
@@ -532,9 +533,16 @@ class SdxlInpaintModel:
             guidance_scale=self.edge_blend_cfg,
             backend_kind="edge",
         )
+        opaque_after_edge, _ = self._opaque_composite_object(
+            image=edge_stage["composited"],
+            object_image=placement_object_image,
+            object_mask=placement_object_mask,
+            target_bbox=placement_bbox,
+            opacity=1.0,
+        )
         core_stage = self._run_object_blend_pass(
             handle=handle,
-            source_image=edge_stage["composited"],
+            source_image=opaque_after_edge,
             target_bbox=placement_bbox,
             localized_mask=placement_object_mask,
             prompt=(
@@ -996,6 +1004,7 @@ class SdxlInpaintModel:
         object_image: Any,
         object_mask: Any,
         target_bbox: tuple[int, int, int, int],
+        opacity: float | None = None,
     ) -> tuple[Any, Any]:
         from PIL import ImageFilter  # type: ignore
 
@@ -1012,7 +1021,7 @@ class SdxlInpaintModel:
             image,
             opaque,
             target_bbox,
-            opacity=self.overlay_alpha,
+            opacity=self.overlay_alpha if opacity is None else float(opacity),
         )
         return composited, feathered
 
