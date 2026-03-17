@@ -512,14 +512,34 @@ class SdxlInpaintModel:
         precomposited_path = save_image(
             precomposited, output.with_suffix(".precomposite.png")
         )
-        core_stage = self._run_object_blend_pass(
+        edge_mask = self._build_ring_mask(
+            mask=placement_object_mask,
+            dilation_px=self.edge_blend_ring_dilate_px,
+            inner_feather_px=1,
+        )
+        edge_stage = self._run_object_blend_pass(
             handle=handle,
             source_image=precomposited,
             target_bbox=placement_bbox,
+            localized_mask=edge_mask,
+            prompt=(
+                "adjust only the immediate surrounding background around the hidden object "
+                "so it naturally conceals the object while preserving object identity"
+            ),
+            negative_prompt=request.negative_prompt or self.default_negative_prompt,
+            strength=self.edge_blend_strength,
+            num_inference_steps=self.edge_blend_steps,
+            guidance_scale=self.edge_blend_cfg,
+            backend_kind="edge",
+        )
+        core_stage = self._run_object_blend_pass(
+            handle=handle,
+            source_image=edge_stage["composited"],
+            target_bbox=placement_bbox,
             localized_mask=placement_object_mask,
             prompt=(
-                "harmonize the pasted object's texture, tone, and lighting with the "
-                "surrounding scene while preserving object shape"
+                "lightly harmonize the hidden object's texture, tone, and lighting with "
+                "the surrounding scene while preserving object shape and details"
             ),
             negative_prompt=request.negative_prompt or self.default_negative_prompt,
             strength=self.core_blend_strength,
@@ -552,7 +572,13 @@ class SdxlInpaintModel:
         patch_path = save_image(
             final_stage["generated_patch"], output.with_suffix(".patch.png")
         )
+        edge_mask_path = save_image(
+            edge_stage["blend_mask"], output.with_suffix(".edge-mask.png")
+        )
         core_mask_path = save_image(core_stage["blend_mask"], output.with_suffix(".core-mask.png"))
+        edge_patch_path = save_image(
+            edge_stage["generated_patch"], output.with_suffix(".edge-blend.png")
+        )
         core_patch_path = save_image(
             core_stage["generated_patch"], output.with_suffix(".core-blend.png")
         )
@@ -570,7 +596,9 @@ class SdxlInpaintModel:
             "composited": composited_path,
             "precomposited": precomposited_path,
             "blend_mask": core_mask_path,
+            "edge_mask": edge_mask_path,
             "core_mask": core_mask_path,
+            "edge_blend": edge_patch_path,
             "core_blend": core_patch_path,
             "final_polish": final_patch_path,
             "shadow": shadow_path,
@@ -1001,6 +1029,23 @@ class SdxlInpaintModel:
             object_image.crop(tight_bbox),
             object_mask.crop(tight_bbox),
         )
+
+    def _build_ring_mask(
+        self,
+        *,
+        mask: Any,
+        dilation_px: int,
+        inner_feather_px: int,
+    ) -> Any:
+        from PIL import ImageChops, ImageFilter  # type: ignore
+
+        outer = mask.convert("L")
+        for _ in range(max(1, int(dilation_px))):
+            outer = outer.filter(ImageFilter.MaxFilter(3))
+        inner = mask.convert("L")
+        if inner_feather_px > 0:
+            inner = inner.filter(ImageFilter.GaussianBlur(radius=inner_feather_px))
+        return ImageChops.subtract(outer, inner)
 
     def _run_object_blend_pass(
         self,
