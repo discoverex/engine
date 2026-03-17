@@ -34,7 +34,7 @@ app = typer.Typer(
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INFRA_DIR = REPO_ROOT / "infra" / "register"
 DEFAULT_REGISTER_JOB_SPEC = (
-    INFRA_DIR / "job_specs" / "real-generate-sdxl-gpu-8gb.yaml"
+    INFRA_DIR / "job_specs" / "real-generate-pixart-hidden-object-v2-8gb-safe.yaml"
 )
 
 

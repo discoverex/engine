@@ -23,8 +23,15 @@ def resolve_runtime() -> RuntimeResolution:
     return RuntimeResolution(available=True, torch=torch, transformers=transformers)
 
 
-def validate_diffusers_runtime(runtime: RuntimeResolution) -> None:
-    if not runtime.available:
+def validate_diffusers_runtime(runtime: RuntimeResolution | Any) -> None:
+    runtime_available = getattr(runtime, "available", None)
+    if runtime_available is None:
+        # Hidden-object helper backends pass a lightweight runtime config that
+        # only carries device/offload settings. In that case, skip the generic
+        # availability contract check and let the actual backend import/load
+        # path raise a more specific error if dependencies are missing.
+        return
+    if not runtime_available:
         raise RuntimeError(
             "torch/transformers runtime unavailable. "
             "Install with ml-gpu or ml-cpu extra."

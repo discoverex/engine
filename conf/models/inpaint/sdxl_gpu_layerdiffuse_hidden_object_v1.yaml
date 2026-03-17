@@ -46,13 +46,13 @@ final_polish_steps: 14
 final_polish_cfg: 4.0
 final_polish_strength: 0.12
 relight_method: ic_light
-edge_blend_backend: powerpaint_v2_sd15
-core_blend_backend: powerpaint_v2_sd15
+edge_blend_backend: sdxl_inpaint
+core_blend_backend: sdxl_inpaint
 final_polish_backend: brushnet
 mask_refine_backend: rmbg_2_0
 rmbg_model_id: briaai/RMBG-2.0
 sam2_model_id: facebook/sam2-hiera-large
 ic_light_model_id: lllyasviel/ic-light
-edge_blend_model_id: Sanster/PowerPaint_v2
-core_blend_model_id: Sanster/PowerPaint_v2
+edge_blend_model_id: diffusers/stable-diffusion-xl-1.0-inpainting-0.1
+core_blend_model_id: diffusers/stable-diffusion-xl-1.0-inpainting-0.1
 final_polish_model_id: Kijai/BrushNet-fp16
