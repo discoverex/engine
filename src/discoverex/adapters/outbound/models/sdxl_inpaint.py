@@ -820,6 +820,13 @@ class SdxlInpaintModel:
                 )
             return self._edge_blend_pipe
         if backend_kind == "core":
+            if (
+                self._core_blend_pipe is None
+                and self._edge_blend_pipe is not None
+                and self.core_blend_backend == self.edge_blend_backend
+                and self.core_blend_model_id == self.edge_blend_model_id
+            ):
+                self._core_blend_pipe = self._edge_blend_pipe
             if self._core_blend_pipe is None:
                 self._core_blend_pipe = DiffusionObjectBlendBackend(
                     backend_name=self.core_blend_backend,
@@ -827,6 +834,13 @@ class SdxlInpaintModel:
                     runtime=self._backend_runtime(),
                 )
             return self._core_blend_pipe
+        if (
+            self._final_polish_pipe is None
+            and self._core_blend_pipe is not None
+            and self.final_polish_backend == self.core_blend_backend
+            and self.final_polish_model_id == self.core_blend_model_id
+        ):
+            self._final_polish_pipe = self._core_blend_pipe
         if self._final_polish_pipe is None:
             self._final_polish_pipe = DiffusionObjectBlendBackend(
                 backend_name=self.final_polish_backend,

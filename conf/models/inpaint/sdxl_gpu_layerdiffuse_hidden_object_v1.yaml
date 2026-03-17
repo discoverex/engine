@@ -23,36 +23,36 @@ generation_guidance_scale: 2.5
 mask_blur: 6
 inpaint_only_masked: true
 masked_area_padding: 24
-patch_target_long_side: 128
+patch_target_long_side: 96
 inpaint_mode: layerdiffuse_hidden_object_v1
-final_context_size: 512
+final_context_size: 384
 pre_match_scale_ratio: [0.04, 0.18]
 pre_match_rotation_deg: [-25.0, 25.0]
 pre_match_saturation_mul: [0.85, 0.97]
 pre_match_contrast_mul: [0.90, 0.98]
 pre_match_sharpness_mul: [0.85, 0.95]
-pre_match_variant_count: 5
+pre_match_variant_count: 3
 composite_feather_px: 2
-edge_blend_steps: 20
-edge_blend_cfg: 4.5
-edge_blend_strength: 0.18
-edge_blend_ring_dilate_px: 10
-core_blend_steps: 24
-core_blend_cfg: 5.0
-core_blend_strength: 0.35
+edge_blend_steps: 8
+edge_blend_cfg: 3.5
+edge_blend_strength: 0.12
+edge_blend_ring_dilate_px: 6
+core_blend_steps: 10
+core_blend_cfg: 4.0
+core_blend_strength: 0.2
 shadow_blur_px: 12
 shadow_opacity: 0.14
-final_polish_steps: 14
-final_polish_cfg: 4.0
-final_polish_strength: 0.12
+final_polish_steps: 4
+final_polish_cfg: 3.0
+final_polish_strength: 0.08
 relight_method: ic_light
 edge_blend_backend: sdxl_inpaint
 core_blend_backend: sdxl_inpaint
-final_polish_backend: brushnet
+final_polish_backend: sdxl_inpaint
 mask_refine_backend: rmbg_2_0
 rmbg_model_id: briaai/RMBG-2.0
 sam2_model_id: facebook/sam2-hiera-large
 ic_light_model_id: lllyasviel/ic-light
 edge_blend_model_id: diffusers/stable-diffusion-xl-1.0-inpainting-0.1
 core_blend_model_id: diffusers/stable-diffusion-xl-1.0-inpainting-0.1
-final_polish_model_id: Kijai/BrushNet-fp16
+final_polish_model_id: diffusers/stable-diffusion-xl-1.0-inpainting-0.1
