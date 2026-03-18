@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from prefect import flow, get_run_logger, task
+from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
 
 from infra.prefect import dispatch as prefect_dispatch
@@ -38,17 +38,9 @@ _FLOW_KIND_BY_COMMAND: dict[str, FlowKind] = {
 }
 
 
-@task
 def engine_job_task(
     payload: dict[str, Any], cwd: Path, env: dict[str, str]
 ) -> prefect_dispatch.DispatchResult:
-    command = payload.get("command", "job")
-    from prefect.context import TaskRunContext
-    
-    ctx = TaskRunContext.get()
-    if ctx and ctx.task_run:
-        ctx.task_run.name = f"engine-{command}-task"
-        
     return prefect_dispatch.dispatch_engine_job(payload, cwd=cwd, env=env)
 
 
@@ -256,12 +248,11 @@ def _run_job_flow_logic(
                 env=env,
                 logger=logger,
             )
-            dispatch_future = engine_job_task.submit(
+            dispatch_result = engine_job_task(
                 payload,
                 cwd=ensure_repo_root(),
                 env=env,
             )
-            dispatch_result = dispatch_future.result()
             parsed = dispatch_result.payload
 
         prefect_dispatch.apply_result_defaults(
