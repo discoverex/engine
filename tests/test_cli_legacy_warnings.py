@@ -15,7 +15,7 @@ def test_gen_verify_legacy_emits_deprecation_warning(monkeypatch) -> None:  # ty
             "scene_id": "s1",
             "version_id": "v1",
             "status": "approved",
-            "scene_json": "artifacts/scenes/s1/v1/scene.json",
+            "scene_json": "artifacts/scenes/s1/v1/metadata/scene.json",
         }
 
     monkeypatch.setattr(
@@ -36,7 +36,7 @@ def test_verify_only_legacy_emits_deprecation_warning(monkeypatch) -> None:  # t
             "scene_id": "s1",
             "version_id": "v1",
             "status": "approved",
-            "scene_json": "artifacts/scenes/s1/v1/scene.json",
+            "scene_json": "artifacts/scenes/s1/v1/metadata/scene.json",
         }
 
     monkeypatch.setattr(
@@ -59,7 +59,7 @@ def test_generate_accepts_background_prompt_and_object_prompt(monkeypatch) -> No
             "scene_id": "s1",
             "version_id": "v1",
             "status": "approved",
-            "scene_json": "artifacts/scenes/s1/v1/scene.json",
+            "scene_json": "artifacts/scenes/s1/v1/metadata/scene.json",
         }
 
     monkeypatch.setattr(
@@ -94,7 +94,7 @@ def test_generate_accepts_final_prompt(monkeypatch) -> None:  # type: ignore[no-
             "scene_id": "s1",
             "version_id": "v1",
             "status": "approved",
-            "scene_json": "artifacts/scenes/s1/v1/scene.json",
+            "scene_json": "artifacts/scenes/s1/v1/metadata/scene.json",
         }
 
     monkeypatch.setattr(

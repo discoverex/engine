@@ -5,6 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+from PIL import Image
+
 from discoverex.application.use_cases import run_gen_verify
 from discoverex.application.use_cases.gen_verify.object_pipeline import (
     GeneratedObjectAsset,
@@ -36,8 +38,8 @@ class _InpaintModel:
         output_path = Path(str(request.output_path))
         output_path.parent.mkdir(parents=True, exist_ok=True)
         patch_path = output_path.with_suffix(".patch.png")
-        patch_path.write_bytes(b"patch")
-        output_path.write_bytes(b"composite")
+        Image.new("RGBA", (64, 64), color=(255, 0, 0, 255)).save(patch_path)
+        Image.new("RGBA", (64, 64), color=(0, 128, 255, 255)).save(output_path)
         return {
             "region_id": request.region_id,
             "patch_image_ref": str(patch_path),
@@ -64,7 +66,7 @@ class _FxModel:
         self.requests.append(request)
         output_path = Path(str(request.params["output_path"]))
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_bytes(b"img")
+        Image.new("RGBA", (64, 64), color=(0, 0, 0, 255)).save(output_path)
         return {"output_path": str(output_path)}
 
 
@@ -74,13 +76,18 @@ class _ObjectGeneratorModel(_FxModel):
 
 class _ArtifactStore:
     def save_scene_bundle(self, scene: Scene) -> Path:
-        base = Path(scene.composite.final_image_ref).parent
-        (base / "scene.json").write_text(
+        scene_root = Path(scene.composite.final_image_ref).parent.parent
+        metadata_dir = scene_root / "metadata"
+        outputs_dir = scene_root / "outputs"
+        metadata_dir.mkdir(parents=True, exist_ok=True)
+        outputs_dir.mkdir(parents=True, exist_ok=True)
+        (metadata_dir / "scene.json").write_text(
             scene.model_dump_json(by_alias=True),
             encoding="utf-8",
         )
-        (base / "verification.json").write_text("{}", encoding="utf-8")
-        return base
+        (metadata_dir / "verification.json").write_text("{}", encoding="utf-8")
+        (outputs_dir / "manifest.json").write_text("{}", encoding="utf-8")
+        return metadata_dir
 
 
 class _MetadataStore:
@@ -123,7 +130,7 @@ class _SceneIO:
 
 class _ReportWriter:
     def write_verification_report(self, saved_dir: Path, scene: Scene) -> Path:  # noqa: ARG002
-        path = saved_dir / "report.json"
+        path = saved_dir / "verification.json"
         path.write_text("{}", encoding="utf-8")
         return path
 
@@ -159,9 +166,9 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     candidate_path = tmp_path / "generated-object.candidate.png"
     object_path = tmp_path / "generated-object.object.png"
     mask_path = tmp_path / "generated-object.mask.png"
-    candidate_path.write_bytes(b"candidate")
-    object_path.write_bytes(b"object")
-    mask_path.write_bytes(b"mask")
+    Image.new("RGBA", (64, 64), color=(128, 0, 128, 255)).save(candidate_path)
+    Image.new("RGBA", (64, 64), color=(255, 255, 0, 255)).save(object_path)
+    Image.new("L", (64, 64), color=255).save(mask_path)
     monkeypatch.setattr(
         "discoverex.application.use_cases.gen_verify.orchestrator.generate_region_objects",
         lambda **kwargs: _fake_generated_objects(
@@ -204,7 +211,7 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
 
     scene_dir = tmp_path / "scenes" / scene.meta.scene_id / scene.meta.version_id
     prompt_bundle = json.loads(
-        (scene_dir / "prompt_bundle.json").read_text(encoding="utf-8")
+        (scene_dir / "metadata" / "prompt_bundle.json").read_text(encoding="utf-8")
     )
 
     assert prompt_bundle["input_mode"] == "prompt"

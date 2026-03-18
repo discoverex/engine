@@ -44,6 +44,7 @@ def _run_pipeline_roundtrip(tmp_path: Path, model_group: str) -> None:
         / "scenes"
         / scene.meta.scene_id
         / scene.meta.version_id
+        / "metadata"
         / "scene.json"
     )
     assert scene_json.exists()

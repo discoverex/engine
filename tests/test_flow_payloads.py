@@ -15,4 +15,4 @@ def test_build_scene_payload_includes_failure_reason_for_failed_scene() -> None:
 
     assert payload["status"] == "failed"
     assert payload["failure_reason"] == "score_or_component_threshold_not_met"
-    assert payload["scene_json"] == "artifacts/scenes/scene-1/v1/scene.json"
+    assert payload["scene_json"] == "artifacts/scenes/scene-1/v1/metadata/scene.json"

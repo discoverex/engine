@@ -46,7 +46,7 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
 ) -> None:
     artifact_root = tmp_path / "engine"
     manifest_path = tmp_path / "engine-artifacts.json"
-    saved_dir = artifact_root / "scenes" / "scene-1" / "version-1"
+    saved_dir = artifact_root / "scenes" / "scene-1" / "version-1" / "metadata"
     saved_dir.mkdir(parents=True)
     scene_path = saved_dir / "scene.json"
     verification_path = saved_dir / "verification.json"
@@ -75,26 +75,42 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
     assert payload["artifacts"] == [
         {
             "logical_name": "scene_json",
-            "relative_path": "scene/scene.json",
+            "relative_path": "scenes/scene-1/version-1/metadata/scene.json",
             "content_type": "application/json",
             "mlflow_tag": "artifact_scene_uri",
             "description": None,
         },
         {
             "logical_name": "verification_json",
-            "relative_path": "scene/verification.json",
+            "relative_path": "scenes/scene-1/version-1/metadata/verification.json",
             "content_type": "application/json",
             "mlflow_tag": "artifact_verification_uri",
             "description": None,
         },
         {
             "logical_name": "naturalness_json",
-            "relative_path": "scene/naturalness.json",
+            "relative_path": "scenes/scene-1/version-1/metadata/naturalness.json",
             "content_type": "application/json",
             "mlflow_tag": "artifact_naturalness_uri",
             "description": None,
         },
     ]
-    assert (artifact_root / "scene" / "scene.json").read_text(encoding="utf-8") == "{}"
-    assert (artifact_root / "scene" / "verification.json").read_text(encoding="utf-8") == "{}"
-    assert (artifact_root / "scene" / "naturalness.json").read_text(encoding="utf-8") == "{}"
+    assert (
+        artifact_root / "scenes" / "scene-1" / "version-1" / "metadata" / "scene.json"
+    ).read_text(encoding="utf-8") == "{}"
+    assert (
+        artifact_root
+        / "scenes"
+        / "scene-1"
+        / "version-1"
+        / "metadata"
+        / "verification.json"
+    ).read_text(encoding="utf-8") == "{}"
+    assert (
+        artifact_root
+        / "scenes"
+        / "scene-1"
+        / "version-1"
+        / "metadata"
+        / "naturalness.json"
+    ).read_text(encoding="utf-8") == "{}"

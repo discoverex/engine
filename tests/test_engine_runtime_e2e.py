@@ -23,10 +23,10 @@ def test_tracking_artifact_e2e_generates_scene_and_records_tracking(
     assert Path(summary.execution_config).exists()
     assert summary.extra["mlflow_params"]["scene_id"] == summary.scene_id
     assert summary.extra["mlflow_params"]["version_id"] == summary.version_id
-    assert "prompt_bundle.json" in summary.extra["mlflow_artifacts"]
+    assert "metadata/prompt_bundle.json" in summary.extra["mlflow_artifacts"]
     assert "resolved_execution_config.json" in summary.extra["mlflow_artifacts"]
     assert (
-        f"scenes/{summary.scene_id}/{summary.version_id}/scene.json"
+        f"scenes/{summary.scene_id}/{summary.version_id}/metadata/scene.json"
         in summary.extra["bucket_objects"]
     )
 
@@ -45,9 +45,11 @@ def test_worker_contract_e2e_uploads_engine_manifest_and_scene(
     assert Path(summary.verification_json).exists()
     assert Path(summary.execution_config).exists()
     assert uploaded["engine_manifest_uri"].endswith("/engine-artifacts.json")
-    assert uploaded["engine_artifact_uris"]["scene_json"].endswith("/scene/scene.json")
+    assert uploaded["engine_artifact_uris"]["scene_json"].endswith(
+        f"/scenes/{summary.scene_id}/{summary.version_id}/metadata/scene.json"
+    )
     assert uploaded["engine_artifact_uris"]["verification_json"].endswith(
-        "/scene/verification.json"
+        f"/scenes/{summary.scene_id}/{summary.version_id}/metadata/verification.json"
     )
     logical_names = {item["logical_name"] for item in manifest["artifacts"]}
     assert "scene_json" in logical_names
