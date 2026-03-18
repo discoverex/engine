@@ -35,6 +35,8 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+deploy_app = typer.Typer(no_args_is_help=True, add_completion=False)
+register_app = typer.Typer(no_args_is_help=True, add_completion=False)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INFRA_DIR = REPO_ROOT / "infra" / "register"
@@ -216,8 +218,8 @@ async def _read_prefect_logs(flow_run_id: str, limit: int) -> list[PrefectLog]:
     return list(logs)  # type: ignore
 
 
-@app.command(
-    "deployflow",
+@deploy_app.command(
+    "flow",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Deploy a flow-kind-specific Prefect YAML deployment to the server.",
 )
@@ -231,8 +233,8 @@ def deploy_flow(
     raise typer.Exit(exit_code)
 
 
-@app.command(
-    "registerflow",
+@register_app.command(
+    "flow",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Submit the standard job spec to a flow-kind-specific deployment.",
 )
@@ -257,8 +259,8 @@ def register_flow(
     raise typer.Exit(exit_code)
 
 
-@app.command(
-    "registerbatch",
+@register_app.command(
+    "batch",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Submit one flow run per CSV row using the default job spec as a template.",
 )
@@ -282,7 +284,7 @@ def register_batch(
         typer.secho("Error: --branch is required.", fg=typer.colors.RED)
         raise typer.Exit(2)
     if _contains_any(remaining, ("--job-spec-file", "--job-spec-json")):
-        raise typer.BadParameter("registerbatch manages job spec payloads internally")
+        raise typer.BadParameter("register batch manages job spec payloads internally")
 
     template = _load_job_spec_template(job_spec_file)
     deployment = deployment_name_for_branch(branch, flow_kind=flow_kind)
@@ -303,8 +305,8 @@ def register_batch(
             raise typer.Exit(exit_code)
 
 
-@app.command(
-    "registerexperimentsweep",
+@register_app.command(
+    "experiment-sweep",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Submit an experiment sweep using a YAML sweep spec.",
 )
@@ -334,8 +336,8 @@ def register_experiment_sweep(
     raise typer.Exit(exit_code)
 
 
-@app.command(
-    "deployexperiment",
+@deploy_app.command(
+    "experiment",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Deploy an experiment generate runner to the batch queue.",
 )
@@ -362,6 +364,7 @@ def deploy_experiment(
 
 
 @app.command(
+    "deploycombined",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Compatibility alias for combined-flow deployment.",
 )
@@ -374,6 +377,7 @@ def deploy(ctx: typer.Context) -> None:
 
 
 @app.command(
+    "registercombined",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Compatibility alias for combined-flow registration.",
 )
@@ -398,7 +402,8 @@ def register(ctx: typer.Context) -> None:
     raise typer.Exit(exit_code)
 
 
-@app.command(
+@register_app.command(
+    "raw",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Register a job using the raw orchestrator script.",
 )
@@ -463,3 +468,7 @@ def check_logs(
     limit: int = typer.Option(200, help="Maximum number of log entries to fetch"),
 ) -> None:
     asyncio.run(_fetch_logs(flow_run_id, limit))
+
+
+app.add_typer(deploy_app, name="deploy")
+app.add_typer(register_app, name="register")
