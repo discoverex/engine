@@ -361,9 +361,10 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
     assert output["flow_run_id"] == "flow-123"
     assert output["attempt"] == 1
     assert output["outputs_prefix"] == "jobs/flow-123/attempt-1/"
-    assert logged[0][0] == "engine flow start: %s"
+    assert logged[0][0] == "prefect runtime import path: flow_module=%s dispatch_module=%s dispatch_source=%s"
+    assert logged[1][0] == "engine flow start: %s"
     assert logged[-1][0] == "engine payload summary: %s"
-    start_summary = json.loads(str(logged[0][1][0]))
+    start_summary = json.loads(str(logged[1][1][0]))
     assert start_summary["resolved_config"]["runtime"]["env"]["tracking_uri"] == "***REDACTED***"
     assert "[discoverex-engine-flow] start" in capsys.readouterr().err
 
