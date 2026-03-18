@@ -123,3 +123,13 @@ def test_generator_pixart_gpu_v2_hidden_object_profile_loads_object_pipeline() -
     assert inpaint_cfg["ic_light_model_id"] == "lllyasviel/ic-light"
     assert cfg.runtime.width == 1024
     assert cfg.runtime.height == 1024
+
+
+def test_generate_flow_naturalness_override_loads_generate_entrypoint() -> None:
+    cfg = load_pipeline_config(
+        config_name="generate",
+        config_dir="conf",
+        overrides=["profile=generator_pixart_gpu_v2_hidden_object", "flows/generate=naturalness"],
+    )
+    assert cfg.flows is not None
+    assert cfg.flows.generate.target.endswith("generate_v2_compat")

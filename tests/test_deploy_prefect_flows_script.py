@@ -107,6 +107,8 @@ def test_deploy_remote_flow_uses_from_source_and_deploy(monkeypatch: Any) -> Non
         work_pool_name="gpu-pool",
         work_queue_name="gpu-fixed",
         deployment_version="20260312120000",
+        deployment_name="discoverex-naturalness-experiment-feat-remote-source",
+        deployment_suffix="naturalness",
     )
 
     assert deployment_id == "deployment-123"
@@ -114,7 +116,7 @@ def test_deploy_remote_flow_uses_from_source_and_deploy(monkeypatch: Any) -> Non
     assert captured["source"]._url == "https://github.com/example/engine.git"
     assert captured["source"]._branch == "feat/remote-source"
     assert captured["deploy_kwargs"] == {
-        "name": "discoverex-generate-feat-remote-source",
+        "name": "discoverex-naturalness-experiment-feat-remote-source",
         "work_pool_name": "gpu-pool",
         "work_queue_name": "gpu-fixed",
         "job_variables": {},
@@ -160,6 +162,7 @@ def test_main_dry_run_prints_remote_deployment_metadata(
         "work_pool_name": "local-process",
         "work_queue_name": "gpu-fixed",
         "deployment_version": out["deployment_version"],
+        "deployment_suffix": "",
     }
 
 
@@ -199,6 +202,8 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
             "https://github.com/example/engine.git",
             "--ref",
             "main",
+            "--deployment-name",
+            "discoverex-naturalness-experiment-feat-remote-source",
         ],
     )
 
@@ -217,8 +222,10 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
         "work_pool_name": "local-process",
         "work_queue_name": "gpu-fixed",
         "deployment_version": out["deployment_version"],
+        "deployment_name": "discoverex-naturalness-experiment-feat-remote-source",
+        "deployment_suffix": "",
     }
-    assert out["deployment_name"] == "discoverex-generate-feat-remote-source"
+    assert out["deployment_name"] == "discoverex-naturalness-experiment-feat-remote-source"
 
 
 def test_build_parser_marks_script_as_remote_source_registrar() -> None:
@@ -231,3 +238,4 @@ def test_build_parser_marks_script_as_remote_source_registrar() -> None:
     assert parsed.repo_url == "https://github.com/discoverex/engine.git"
     assert parsed.ref is None
     assert parsed.deployment_version
+    assert parsed.deployment_suffix == ""

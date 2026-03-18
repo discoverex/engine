@@ -7,6 +7,9 @@ from uuid import UUID
 from typer.testing import CliRunner
 
 from scripts.cli.prefect import (
+    DEFAULT_NATURALNESS_SWEEP_SPEC,
+    DEFAULT_EXPERIMENT_NAME,
+    DEFAULT_EXPERIMENT_QUEUE,
     DEFAULT_REGISTER_JOB_SPEC,
     _build_job_spec_json_for_row,
     _build_prefect_log_filter,
@@ -135,7 +138,7 @@ def test_register_flow_targets_named_flow_kind(monkeypatch) -> None:  # type: ig
 
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
-    result = runner.invoke(app, ["register-flow", "generate", "--branch", "dev"])
+    result = runner.invoke(app, ["registerflow", "generate", "--branch", "dev"])
 
     assert result.exit_code == 0
     assert captured["script_name"] == "submit_job_spec.py"
@@ -153,7 +156,7 @@ def test_default_register_job_spec_points_to_repo_standard_file() -> None:
         / "infra"
         / "register"
         / "job_specs"
-        / "real-generate-pixart-hidden-object-v2-8gb-safe.yaml"
+        / "real-generate-pixart-hidden-object-naturalness-v2-8gb-safe.yaml"
     )
 
 
@@ -219,7 +222,7 @@ def test_register_batch_submits_one_run_per_csv_row(monkeypatch, tmp_path) -> No
 
     result = runner.invoke(
         app,
-        ["register-batch", str(csv_path), "--branch", "dev"],
+        ["registerbatch", str(csv_path), "--branch", "dev"],
     )
 
     assert result.exit_code == 0
@@ -268,3 +271,78 @@ def test_fetch_logs_formats_output(monkeypatch, capsys) -> None:  # type: ignore
     output = capsys.readouterr().out
     assert "hello" in output
     assert "prefect.flow_runs | INFO" in output
+
+
+def test_register_experiment_sweep_invokes_script(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def _fake_run(script_name: str, args: list[str]) -> int:
+        captured["script_name"] = script_name
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
+
+    result = runner.invoke(app, ["registerexperimentsweep"])
+
+    assert result.exit_code == 0
+    assert captured["script_name"] == "naturalness_sweep.py"
+    assert captured["args"] == [
+        str(DEFAULT_NATURALNESS_SWEEP_SPEC),
+        "--experiment",
+        DEFAULT_EXPERIMENT_NAME,
+    ]
+
+
+def test_register_experiment_sweep_uses_experiment_deployment(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def _fake_run(script_name: str, args: list[str]) -> int:
+        captured["script_name"] = script_name
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
+
+    result = runner.invoke(app, ["registerexperimentsweep", "--experiment", "naturalness", "--branch", "dev"])
+
+    assert result.exit_code == 0
+    assert captured["script_name"] == "naturalness_sweep.py"
+    assert captured["args"] == [
+        str(DEFAULT_NATURALNESS_SWEEP_SPEC),
+        "--deployment",
+        "discoverex-naturalness-experiment-dev",
+        "--branch",
+        "dev",
+        "--experiment",
+        "naturalness",
+    ]
+
+
+def test_deploy_experiment_uses_batch_queue(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def _fake_run(script_name: str, args: list[str]) -> int:
+        captured["script_name"] = script_name
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
+
+    result = runner.invoke(app, ["deployexperiment", "--experiment", "naturalness", "--branch", "dev"])
+
+    assert result.exit_code == 0
+    assert captured["script_name"] == "deploy_prefect_flows.py"
+    assert captured["args"] == [
+        "--flow-kind",
+        "generate",
+        "--work-queue-name",
+        DEFAULT_EXPERIMENT_QUEUE,
+        "--deployment-name",
+        "discoverex-naturalness-experiment-dev",
+        "--branch",
+        "dev",
+    ]
