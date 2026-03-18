@@ -53,6 +53,20 @@ def dispatch_engine_job(
             "src/discoverex/application/flows/prefect_subflow.py:run_prefect_engine_entry_flow"
         )
         execute_cmd = [str(python_bin), "-m", "prefect.engine"]
+        logger.info(
+            "engine child flow handoff: child_flow_run_id=%s entrypoint=%s",
+            child_flow_run_id,
+            child_env["PREFECT__FLOW_ENTRYPOINT"],
+        )
+    else:
+        logger.info("engine child flow handoff skipped: no parent task context")
+
+    logger.info(
+        "engine subprocess launch: cmd=%s flow_run_id=%s entrypoint=%s",
+        execute_cmd,
+        child_env.get("PREFECT__FLOW_RUN_ID", ""),
+        child_env.get("PREFECT__FLOW_ENTRYPOINT", ""),
+    )
 
     proc = subprocess.Popen(
         execute_cmd,
