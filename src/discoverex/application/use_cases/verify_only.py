@@ -19,6 +19,7 @@ from discoverex.orchestrator_contract.worker_runtime import (
 )
 
 from .worker_artifacts import collect_worker_artifacts
+from .gen_verify.persistence import write_naturalness_report
 
 
 def _run_perception_verification(
@@ -71,6 +72,7 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
     context.metadata_store.upsert_scene_metadata(scene)
 
     context.report_writer.write_verification_report(saved_dir=saved_dir, scene=scene)
+    naturalness_report = write_naturalness_report(saved_dir=saved_dir, scene=scene)
 
     scene_artifact = Path(scene.composite.final_image_ref)
     artifact_entries = collect_worker_artifacts(
@@ -78,6 +80,7 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
         [
             ("scene", saved_dir / "scene.json"),
             ("verification", saved_dir / "verification.json"),
+            ("naturalness", naturalness_report),
             ("final_image", scene_artifact if scene_artifact.exists() else None),
             ("execution_config", context.execution_snapshot_path),
         ],

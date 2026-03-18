@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from time import perf_counter
 
 from discoverex.application.context import AppContextLike
+from discoverex.application.use_cases.naturalness_evaluation import (
+    evaluate_scene_naturalness,
+)
 from discoverex.domain.scene import Scene
 from discoverex.execution_snapshot import build_tracking_params
 from discoverex.orchestrator_contract.worker_runtime import (
@@ -45,6 +49,62 @@ def write_verification_report(
     return report_path
 
 
+def write_naturalness_report(saved_dir: Path, scene: Scene) -> Path | None:
+    started = perf_counter()
+    try:
+        evaluation = evaluate_scene_naturalness(scene)
+    except (FileNotFoundError, KeyError, ValueError) as exc:
+        logger.info("naturalness report skipped reason=%s", exc)
+        return None
+    report_path = saved_dir / "naturalness.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "scene_id": scene.meta.scene_id,
+                "version_id": scene.meta.version_id,
+                "naturalness": evaluation.model_dump(mode="json"),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    logger.info(
+        "naturalness report written path=%s duration=%s",
+        report_path,
+        format_seconds(started),
+    )
+    return report_path
+
+
+def _naturalness_metrics(report_path: Path | None) -> dict[str, float]:
+    if report_path is None or not report_path.exists():
+        return {}
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    naturalness = payload.get("naturalness", {})
+    if not isinstance(naturalness, dict):
+        return {}
+    summary = naturalness.get("summary", {})
+    if not isinstance(summary, dict):
+        summary = {}
+    metrics: dict[str, float] = {}
+    overall = naturalness.get("overall_score")
+    if isinstance(overall, (int, float)):
+        metrics["naturalness.overall_score"] = float(overall)
+    for source_key, target_key in (
+        ("avg_placement_fit", "naturalness.avg_placement_fit"),
+        ("avg_seam_visibility", "naturalness.avg_seam_visibility"),
+        ("avg_saliency_lift", "naturalness.avg_saliency_lift"),
+    ):
+        value = summary.get(source_key)
+        if isinstance(value, (int, float)):
+            metrics[target_key] = float(value)
+    return metrics
+
+
 def track_run(
     *,
     context: AppContextLike,
@@ -52,6 +112,7 @@ def track_run(
     saved_dir: Path,
     composite_artifact: Path | None,
     prompt_bundle_artifact: Path | None = None,
+    naturalness_artifact: Path | None = None,
     extra_params: dict[str, str] | None = None,
 ) -> str | None:
     started = perf_counter()
@@ -62,6 +123,7 @@ def track_run(
         [
             ("scene", saved_dir / "scene.json"),
             ("verification", saved_dir / "verification.json"),
+            ("naturalness", naturalness_artifact),
             ("composite", composite_artifact),
             ("prompt_bundle", prompt_bundle_artifact),
             ("execution_config", execution_snapshot_path),
@@ -87,6 +149,7 @@ def track_run(
             "perception_score": scene.verification.perception.score,
             "total_score": scene.verification.final.total_score,
             "pass": 1.0 if scene.verification.final.pass_ else 0.0,
+            **_naturalness_metrics(naturalness_artifact),
         },
         artifacts=[artifact_path for _, artifact_path in artifact_entries],
     )

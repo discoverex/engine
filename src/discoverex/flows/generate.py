@@ -22,6 +22,7 @@ from discoverex.application.use_cases.gen_verify.object_pipeline import (
 from discoverex.application.use_cases.gen_verify.persistence import (
     save_scene,
     track_run,
+    write_naturalness_report,
     write_verification_report,
 )
 from discoverex.application.use_cases.gen_verify.prompt_bundle import (
@@ -318,12 +319,14 @@ def _persist_scene_outputs(
     prompt_bundle_path = save_prompt_bundle(scene_dir, prompt_bundle)
     saved_dir = save_scene(context=context, scene=scene)
     write_verification_report(context=context, saved_dir=saved_dir, scene=scene)
+    naturalness_report = write_naturalness_report(saved_dir=saved_dir, scene=scene)
     track_run(
         context=context,
         scene=scene,
         saved_dir=saved_dir,
         composite_artifact=composite_artifact,
         prompt_bundle_artifact=prompt_bundle_path,
+        naturalness_artifact=naturalness_report,
         extra_params=build_prompt_tracking_params(prompt_bundle),
     )
     return saved_dir
