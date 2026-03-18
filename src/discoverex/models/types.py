@@ -39,6 +39,9 @@ class InpaintRequest(BaseModel):
     region_id: str = ""
     bbox: tuple[float, float, float, float] | None = None
     region_mask_ref: str | Path | None = None
+    object_image_ref: str | Path | None = None
+    object_mask_ref: str | Path | None = None
+    object_candidate_ref: str | Path | None = None
     prompt: str = ""
     negative_prompt: str = ""
     output_path: str | Path | None = None
@@ -78,10 +81,24 @@ class InpaintPrediction(TypedDict, total=False):
     quality_score: float
     model_id: str
     patch_image_ref: str
+    candidate_image_ref: str
     object_image_ref: str
     object_mask_ref: str
     composited_image_ref: str
+    precomposited_image_ref: str
+    blend_mask_ref: str
+    edge_mask_ref: str
+    core_mask_ref: str
+    shadow_ref: str
+    edge_blend_ref: str
+    core_blend_ref: str
+    final_polish_ref: str
+    variant_manifest_ref: str
+    placement_variant_id: str
+    mask_source: str
     inpaint_mode: str
+    placement_score: float
+    selected_bbox: dict[str, float]
 
 
 # ---------------------------------------------------------------------------

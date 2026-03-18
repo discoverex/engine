@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import json
 import subprocess
 from collections.abc import Mapping
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
 import typer
+import yaml
 
 from infra.register.branch_deployments import (
     DEFAULT_FLOW_KIND,
@@ -34,7 +38,7 @@ app = typer.Typer(
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INFRA_DIR = REPO_ROOT / "infra" / "register"
 DEFAULT_REGISTER_JOB_SPEC = (
-    INFRA_DIR / "job_specs" / "real-generate-sdxl-gpu-8gb.yaml"
+    INFRA_DIR / "job_specs" / "real-generate-pixart-hidden-object-v2-8gb-safe.yaml"
 )
 
 
@@ -90,6 +94,67 @@ def _contains_any(args: list[str], options: tuple[str, ...]) -> bool:
         if any(item.startswith(f"{option}=") for option in options):
             return True
     return False
+
+
+def _load_job_spec_template(path: Path) -> dict[str, Any]:
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise typer.BadParameter(f"job spec at {path} must decode to an object")
+    return payload
+
+
+def _row_value(row: Mapping[str, str], key: str) -> str | None:
+    value = row.get(key)
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _build_job_spec_json_for_row(
+    template: Mapping[str, Any],
+    row: Mapping[str, str],
+    *,
+    row_index: int,
+) -> str:
+    job_spec = deepcopy(dict(template))
+    inputs = job_spec.setdefault("inputs", {})
+    if not isinstance(inputs, dict):
+        raise typer.BadParameter("job spec inputs must decode to an object")
+    args = inputs.setdefault("args", {})
+    if not isinstance(args, dict):
+        raise typer.BadParameter("job spec inputs.args must decode to an object")
+
+    required_columns = ("background_prompt", "object_prompt")
+    missing = [column for column in required_columns if not _row_value(row, column)]
+    if missing:
+        columns = ", ".join(missing)
+        raise typer.BadParameter(f"csv row {row_index} missing required column(s): {columns}")
+
+    args["background_prompt"] = _row_value(row, "background_prompt")
+    args["object_prompt"] = _row_value(row, "object_prompt")
+    args["background_negative_prompt"] = (
+        _row_value(row, "background_negative_prompt")
+        or str(args.get("background_negative_prompt", ""))
+    )
+    args["object_negative_prompt"] = (
+        _row_value(row, "object_negative_prompt")
+        or str(args.get("object_negative_prompt", ""))
+    )
+    args["final_prompt"] = _row_value(row, "final_prompt") or str(
+        args.get("final_prompt", "")
+    )
+    args["final_negative_prompt"] = _row_value(row, "final_negative_prompt") or str(
+        args.get("final_negative_prompt", "")
+    )
+
+    row_job_name = _row_value(row, "job_name")
+    if row_job_name:
+        job_spec["job_name"] = row_job_name
+    elif "job_name" not in job_spec:
+        job_spec["job_name"] = f"batch-generate-{row_index:03d}"
+
+    return json.dumps(job_spec, ensure_ascii=True)
 
 
 def _prefect_client_settings() -> Mapping[Any, Any]:
@@ -178,6 +243,52 @@ def register_flow(
         submit_args.extend(["--job-spec-file", str(DEFAULT_REGISTER_JOB_SPEC)])
     exit_code = _run_infra_script("submit_job_spec.py", submit_args)
     raise typer.Exit(exit_code)
+
+
+@app.command(
+    "register-batch",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Submit one flow run per CSV row using the default job spec as a template.",
+)
+def register_batch(
+    ctx: typer.Context,
+    csv_path: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
+    flow_kind: str = typer.Option("generate", "--flow-kind", help="One of: generate, verify, animate, combined."),
+    job_spec_file: Path = typer.Option(
+        DEFAULT_REGISTER_JOB_SPEC,
+        "--job-spec-file",
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+        help="Template job spec file used as the base payload for each row.",
+    ),
+) -> None:
+    if flow_kind not in SUPPORTED_FLOW_KINDS:
+        raise typer.BadParameter(f"flow_kind must be one of: {', '.join(SUPPORTED_FLOW_KINDS)}")
+    branch, remaining = _extract_option(ctx.args, "--branch")
+    if not branch:
+        typer.secho("Error: --branch is required.", fg=typer.colors.RED)
+        raise typer.Exit(2)
+    if _contains_any(remaining, ("--job-spec-file", "--job-spec-json")):
+        raise typer.BadParameter("register-batch manages job spec payloads internally")
+
+    template = _load_job_spec_template(job_spec_file)
+    deployment = deployment_name_for_branch(branch, flow_kind=flow_kind)
+    rows = list(csv.DictReader(csv_path.read_text(encoding="utf-8").splitlines()))
+    if not rows:
+        raise typer.BadParameter(f"csv file {csv_path} has no data rows")
+
+    for row_index, row in enumerate(rows, start=1):
+        submit_args = [
+            "--deployment",
+            deployment,
+            *remaining,
+            "--job-spec-json",
+            _build_job_spec_json_for_row(template, row, row_index=row_index),
+        ]
+        exit_code = _run_infra_script("submit_job_spec.py", submit_args)
+        if exit_code != 0:
+            raise typer.Exit(exit_code)
 
 
 @app.command(

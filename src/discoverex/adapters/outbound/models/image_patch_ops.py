@@ -66,10 +66,25 @@ def apply_patch(image: Any, patch: Any, bbox: tuple[int, int, int, int]) -> Any:
 
 
 def apply_alpha_patch(image: Any, patch: Any, bbox: tuple[int, int, int, int]) -> Any:
+    return apply_alpha_patch_with_opacity(image, patch, bbox, opacity=1.0)
+
+
+def apply_alpha_patch_with_opacity(
+    image: Any,
+    patch: Any,
+    bbox: tuple[int, int, int, int],
+    *,
+    opacity: float,
+) -> Any:
     left, top, right, bottom = bbox
     region_w = max(1, right - left)
     region_h = max(1, bottom - top)
     rgba_patch = patch.convert("RGBA").resize((region_w, region_h))
+    if opacity < 1.0:
+        alpha = rgba_patch.getchannel("A").point(
+            lambda value: max(0, min(255, int(round(value * max(0.0, opacity)))))
+        )
+        rgba_patch.putalpha(alpha)
     composited = image.convert("RGBA")
     composited.alpha_composite(rgba_patch, (left, top))
     return composited.convert("RGB")

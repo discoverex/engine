@@ -11,9 +11,15 @@ from discoverex.models.types import HiddenRegionRequest
 from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 
-from .background_pipeline import build_background_from_inputs
+from .background_pipeline import (
+    apply_background_canvas_upscale_if_needed,
+    apply_background_detail_reconstruction_if_needed,
+    build_background_from_inputs,
+)
 from .composite_pipeline import compose_scene
 from .model_lifecycle import unload_model
+from .object_pipeline import generate_region_objects
+from .object_pipeline import resolve_object_prompts
 from .persistence import save_scene, track_run, write_verification_report
 from .prompt_bundle import build_prompt_tracking_params, save_prompt_bundle
 from .region_pipeline import build_candidate_regions, generate_regions
@@ -60,6 +66,22 @@ def run(
             background_prompt=background_prompt,
             background_negative_prompt=background_negative_prompt,
         )
+        background = apply_background_canvas_upscale_if_needed(
+            background=background,
+            context=context,
+            scene_dir=scene_dir,
+            fx_handle=background_handle,
+            prompt=(background_prompt or "").strip(),
+            negative_prompt=(background_negative_prompt or "").strip(),
+        )
+        background = apply_background_detail_reconstruction_if_needed(
+            background=background,
+            context=context,
+            scene_dir=scene_dir,
+            fx_handle=background_handle,
+            prompt=(background_prompt or "").strip(),
+            negative_prompt=(background_negative_prompt or "").strip(),
+        )
     finally:
         unload_model(context.background_generator_model)
     _materialize_background_asset(background=background, scene_dir=scene_dir)
@@ -80,7 +102,20 @@ def run(
     finally:
         unload_model(context.hidden_region_model)
 
-    # 2. Inpaint regions (load inpaint model only)
+    object_handle = context.object_generator_model.load(model_versions.object_generator)
+    try:
+        generated_objects = generate_region_objects(
+            context=context,
+            scene_dir=scene_dir,
+            regions=regions_to_process,
+            object_handle=object_handle,
+            object_prompt=(object_prompt or "").strip(),
+            object_negative_prompt=(object_negative_prompt or "").strip(),
+        )
+    finally:
+        unload_model(context.object_generator_model)
+
+    # 2. Blend generated objects into selected regions (load inpaint model only)
     inpaint_handle = context.inpaint_model.load(model_versions.inpaint)
     try:
         regions, region_prompt_records = generate_regions(
@@ -88,6 +123,7 @@ def run(
             background=background,
             scene_dir=scene_dir,
             regions=regions_to_process,
+            generated_objects=generated_objects,
             inpaint_handle=inpaint_handle,
             object_prompt=(object_prompt or "").strip(),
             object_negative_prompt=(object_negative_prompt or "").strip(),
@@ -141,7 +177,9 @@ def run(
             update={"output_ref": background.asset_ref}
         ),
         object=PromptStageRecord(
-            mode="shared",
+            mode="per-region"
+            if len(resolve_object_prompts((object_prompt or "").strip(), total_regions=len(regions))) > 1
+            else "shared",
             prompt=(object_prompt or "").strip(),
             negative_prompt=(object_negative_prompt or "").strip(),
         ),

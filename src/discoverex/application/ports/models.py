@@ -55,6 +55,12 @@ class BackgroundGenerationPort(Protocol):
     def predict(self, handle: ModelHandle, request: FxRequest) -> FxPrediction: ...
 
 
+class ObjectGenerationPort(Protocol):
+    def load(self, model_ref_or_version: str) -> ModelHandle: ...
+
+    def predict(self, handle: ModelHandle, request: FxRequest) -> FxPrediction: ...
+
+
 # ---------------------------------------------------------------------------
 # Validator pipeline ports — load/extract(verify)/unload pattern
 # Each port is responsible for its own VRAM lifecycle.

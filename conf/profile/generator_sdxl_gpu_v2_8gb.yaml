@@ -1,13 +1,17 @@
 # @package _global_
 defaults:
+  - override /flows/generate: v2
   - override /models/background_generator: sdxl_gpu
-  - override /models/object_generator: sdxl_gpu
+  - override /models/object_generator: layerdiffuse
   - override /models/hidden_region: hf
-  - override /models/inpaint: sdxl_gpu
+  - override /models/inpaint: sdxl_gpu_similarity_v2
   - override /models/perception: hf
   - override /models/fx: copy_image
   - override /runtime/model_runtime: gpu
 
 runtime:
-  width: 512
-  height: 512
+  width: 256
+  height: 256
+  background_upscale_factor: 4
+  model_runtime:
+    offload_mode: sequential

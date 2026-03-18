@@ -16,6 +16,7 @@ class HydraComponentConfig(BaseModel):
 
 class ModelsConfig(BaseModel):
     background_generator: HydraComponentConfig
+    object_generator: HydraComponentConfig
     hidden_region: HydraComponentConfig
     inpaint: HydraComponentConfig
     perception: HydraComponentConfig
@@ -70,16 +71,17 @@ class RuntimeEnvConfig(BaseModel):
 class RuntimeConfig(BaseModel):
     width: int = 1024
     height: int = 768
+    background_upscale_factor: int = 1
     config_version: str = "config-v1"
     artifacts_root: str = "artifacts"
     model_runtime: RuntimeModelConfig = Field(default_factory=RuntimeModelConfig)
     env: RuntimeEnvConfig = Field(default_factory=RuntimeEnvConfig)
 
-    @field_validator("width", "height")
+    @field_validator("width", "height", "background_upscale_factor")
     @classmethod
     def validate_dimensions(cls, value: int) -> int:
         if value < 1:
-            raise ValueError("width/height must be >= 1")
+            raise ValueError("width/height/background_upscale_factor must be >= 1")
         return value
 
 
@@ -98,6 +100,7 @@ class ThresholdsConfig(BaseModel):
 
 class ModelVersionsConfig(BaseModel):
     background_generator: str = "background-generator-v0"
+    object_generator: str = "object-generator-v0"
     hidden_region: str = "hidden-region-v0"
     inpaint: str = "inpaint-v0"
     perception: str = "perception-v0"

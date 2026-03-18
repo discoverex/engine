@@ -24,7 +24,7 @@ class RegisterSettings(BaseSettings):
 
     engine_repo_url: str = "https://github.com/discoverex/engine.git"
     engine_repo_ref: str = "dev"
-    engine_execution_profile: str = "generator-sdxl-gpu"
+    engine_execution_profile: str = "generator-pixart-gpu"
 
     mlflow_tracking_uri: str = ""
     mlflow_s3_endpoint_url: str = ""

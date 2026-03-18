@@ -9,6 +9,7 @@ from discoverex.application.ports.models import (
     FxPort,
     HiddenRegionPort,
     InpaintPort,
+    ObjectGenerationPort,
     PerceptionPort,
 )
 from discoverex.application.ports.reporting import ReportWriterPort
@@ -26,6 +27,7 @@ from discoverex.config import (
 
 class AppContextLike(Protocol):
     background_generator_model: BackgroundGenerationPort
+    object_generator_model: ObjectGenerationPort
     hidden_region_model: HiddenRegionPort
     inpaint_model: InpaintPort
     perception_model: PerceptionPort

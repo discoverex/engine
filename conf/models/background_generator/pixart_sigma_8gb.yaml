@@ -1,7 +1,7 @@
 # @package models.background_generator
-_target_: discoverex.adapters.outbound.models.sdxl_background_generation.SdxlBackgroundGenerationModel
-model_id: stabilityai/sdxl-turbo
-refiner_model_id: stabilityai/stable-diffusion-xl-refiner-1.0
+_target_: discoverex.adapters.outbound.models.pixart_sigma_background_generation.PixArtSigmaBackgroundGenerationModel
+model_id: PixArt-alpha/PixArt-Sigma-XL-2-1024-MS
+detail_model_id: stabilityai/stable-diffusion-xl-refiner-1.0
 revision: main
 device: ${runtime.model_runtime.device}
 dtype: ${runtime.model_runtime.dtype}
@@ -17,7 +17,20 @@ enable_fp8_layerwise_casting: ${runtime.model_runtime.enable_fp8_layerwise_casti
 enable_channels_last: ${runtime.model_runtime.enable_channels_last}
 strict_runtime: true
 default_prompt: "cinematic hidden object puzzle background"
-default_negative_prompt: "blurry, low quality, artifact"
-default_num_inference_steps: 4
-default_guidance_scale: 0.0
-default_refiner_strength: 0.0
+default_negative_prompt: "blurry, low quality, extra fingers, bad anatomy, jpeg artifacts, text artifacts"
+default_num_inference_steps: 20
+default_guidance_scale: 5.0
+canvas_scale_factor: 2.0
+detail_num_inference_steps: 24
+detail_guidance_scale: 4.0
+detail_strength: 0.35
+tile_size: 512
+tile_overlap: 64
+enable_highres_extension: false
+extension_scale_factor: 1.5
+extension_num_inference_steps: 20
+extension_guidance_scale: 3.8
+extension_strength: 0.30
+text_encoder_8bit: false
+text_encoder_offload: true
+prompt_embedding_cache: true

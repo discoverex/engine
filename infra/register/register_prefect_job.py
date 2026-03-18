@@ -65,7 +65,13 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--contract-version", choices=("v1", "v2"), default="v2")
     parser.add_argument(
         "--execution-profile",
-        choices=("none", "local-tiny-cpu", "remote-gpu-hf", "generator-sdxl-gpu"),
+        choices=(
+            "none",
+            "local-tiny-cpu",
+            "remote-gpu-hf",
+            "generator-sdxl-gpu",
+            "generator-pixart-gpu",
+        ),
         default=SETTINGS.engine_execution_profile,
     )
     parser.add_argument("--command", required=True)

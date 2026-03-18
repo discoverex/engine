@@ -9,6 +9,7 @@ from .hf_fx import HFFxModel
 from .hf_hidden_region import HFHiddenRegionModel
 from .hf_inpaint import HFInpaintModel
 from .hf_perception import HFPerceptionModel
+from .pixart_sigma_background_generation import PixArtSigmaBackgroundGenerationModel
 from .sdxl_background_generation import SdxlBackgroundGenerationModel
 from .sdxl_final_render import SdxlFinalRenderModel
 from .sdxl_inpaint import SdxlInpaintModel
@@ -31,6 +32,7 @@ __all__ = [
     "HFHiddenRegionModel",
     "HFInpaintModel",
     "HFPerceptionModel",
+    "PixArtSigmaBackgroundGenerationModel",
     "SdxlBackgroundGenerationModel",
     "SdxlFinalRenderModel",
     "SdxlInpaintModel",

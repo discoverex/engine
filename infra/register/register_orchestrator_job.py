@@ -30,6 +30,7 @@ EXECUTION_PROFILES = (
     "local-tiny-cpu",
     "remote-gpu-hf",
     "generator-sdxl-gpu",
+    "generator-pixart-gpu",
 )
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[1]
@@ -321,6 +322,23 @@ def _build_profile_overrides(args: argparse.Namespace) -> list[str]:
                 "models/fx=copy_image",
             ]
         )
+    elif args.execution_profile == "generator-pixart-gpu":
+        overrides.extend(
+            [
+                "profile=generator_pixart_gpu_v2_8gb",
+                "runtime/model_runtime=gpu",
+                "flows/generate=v2",
+                "runtime.width=1024",
+                "runtime.height=1024",
+                "models/background_generator=pixart_sigma_8gb",
+                "models/object_generator=layerdiffuse",
+                "models/hidden_region=hf",
+                "models/inpaint=sdxl_gpu_similarity_v2",
+                "models/perception=hf",
+                "models/fx=copy_image",
+                "runtime.model_runtime.offload_mode=sequential",
+            ]
+        )
     return overrides
 
 
@@ -347,7 +365,11 @@ def _build_runtime_extras(args: argparse.Namespace) -> list[str]:
     profile_extras: list[str] = []
     if args.execution_profile == "local-tiny-cpu":
         profile_extras.append("ml-cpu")
-    elif args.execution_profile in {"remote-gpu-hf", "generator-sdxl-gpu"}:
+    elif args.execution_profile in {
+        "remote-gpu-hf",
+        "generator-sdxl-gpu",
+        "generator-pixart-gpu",
+    }:
         profile_extras.append("ml-gpu")
     for extra in profile_extras:
         if extra not in extras:
