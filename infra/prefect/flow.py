@@ -15,14 +15,8 @@ from infra.prefect.artifacts import (
     upload_worker_artifacts,
     write_local_artifacts,
 )
-from infra.prefect.job_spec import (
-    coerce_args,
-    coerce_overrides,
-    config_name as resolve_config_name,
-    extract_inputs_payload,
-    load_job_spec,
-    string_value,
-)
+from infra.prefect import dispatch as prefect_dispatch
+from infra.prefect.job_spec import extract_inputs_payload, load_job_spec
 from infra.prefect.provision import provision_runtime_dependencies
 from infra.prefect.reporting import log_failure_summary, log_start_summary
 from infra.prefect.runtime import (
@@ -41,6 +35,12 @@ _FLOW_KIND_BY_COMMAND: dict[str, FlowKind] = {
     "verify": "verify",
     "animate": "animate",
 }
+
+
+def engine_job_task(
+    payload: dict[str, Any], cwd: Path, env: dict[str, str]
+) -> prefect_dispatch.DispatchResult:
+    return prefect_dispatch.dispatch_engine_job(payload, cwd=cwd, env=env)
 
 
 def _coerce_command_for_deployment(
@@ -208,7 +208,12 @@ def _run_job_flow_logic(
     flow_run_id = flow_run.get_id() or "unknown-flow-run"
     attempt = flow_attempt()
     try:
-        logger.info("prefect runtime import path: flow_module=%s", __file__)
+        logger.info(
+            "prefect runtime import path: flow_module=%s dispatch_module=%s dispatch_source=%s",
+            __file__,
+            "direct",
+            "direct",
+        )
         job_spec = load_job_spec(job_spec_json)
 
         output_prefix = outputs_prefix(
@@ -242,12 +247,14 @@ def _run_job_flow_logic(
                 env=env,
                 logger=logger,
             )
-            parsed = _run_nested_pipeline_flow(
-                payload=payload,
-                logger=logger,
+            dispatch_result = engine_job_task(
+                payload,
+                cwd=ensure_repo_root(),
+                env=env,
             )
+            parsed = dispatch_result.payload
 
-        _apply_result_defaults(
+        prefect_dispatch.apply_result_defaults(
             parsed=parsed,
             job_spec=job_spec,
             flow_run_id=flow_run_id,
@@ -260,8 +267,8 @@ def _run_job_flow_logic(
             flow_run_id=flow_run_id,
             attempt=attempt,
             job_spec=job_spec,
-            stdout_text=json.dumps(parsed, ensure_ascii=True),
-            stderr_text="",
+            stdout_text=dispatch_result.stdout,
+            stderr_text=dispatch_result.stderr,
         )
         parsed.update(
             upload_worker_artifacts(
@@ -302,92 +309,3 @@ def ensure_repo_root() -> Any:
     from infra.prefect.bootstrap import repo_root
 
     return repo_root()
-
-
-def _run_nested_pipeline_flow(*, payload: dict[str, Any], logger: Any) -> dict[str, Any]:
-    from discoverex.application.flows.engine_entry import (
-        build_execution_snapshot,
-        load_pipeline_config,
-        normalize_pipeline_config_for_worker_runtime,
-        write_execution_snapshot,
-    )
-    from discoverex.flows.generate import run_generate_flow
-    from discoverex.flows.verify import run_verify_flow
-    from discoverex.flows.subflows import animate_stub
-
-    command = string_value(payload.get("command"))
-    args = coerce_args(payload.get("args"))
-    resolved_config = payload.get("resolved_config")
-    resolved_config_name = resolve_config_name(payload)
-    resolved_config_dir = string_value(payload.get("config_dir")) or "conf"
-    overrides = coerce_overrides(payload.get("overrides"))
-
-    cfg = load_pipeline_config(
-        config_name=resolved_config_name,
-        config_dir=resolved_config_dir,
-        overrides=overrides,
-        resolved_config=resolved_config,
-    )
-    cfg = normalize_pipeline_config_for_worker_runtime(cfg)
-    execution_snapshot = build_execution_snapshot(
-        command=command,
-        args=args,
-        config_name=resolved_config_name,
-        config_dir=resolved_config_dir,
-        overrides=overrides,
-        config=cfg,
-    )
-    execution_snapshot_path = write_execution_snapshot(
-        artifacts_root=Path(cfg.runtime.artifacts_root).resolve(),
-        command=command,
-        snapshot=execution_snapshot,
-    )
-
-    flow_name = {
-        "generate": "discoverex-generate-pipeline",
-        "verify": "discoverex-verify-pipeline",
-        "animate": "discoverex-animate-pipeline",
-    }[command]
-    logger.info(
-        "engine nested flow handoff: flow=%s command=%s config_name=%s override_count=%d",
-        flow_name,
-        command,
-        resolved_config_name,
-        len(overrides),
-    )
-    if command == "generate":
-        return run_generate_flow(
-            args=args,
-            config=cfg,
-            execution_snapshot=execution_snapshot,
-            execution_snapshot_path=execution_snapshot_path,
-        )
-    if command == "verify":
-        return run_verify_flow(
-            args=args,
-            config=cfg,
-            execution_snapshot=execution_snapshot,
-            execution_snapshot_path=execution_snapshot_path,
-        )
-    return animate_stub(
-        args=args,
-        config=cfg,
-        execution_snapshot=execution_snapshot,
-        execution_snapshot_path=execution_snapshot_path,
-    )
-
-
-def _apply_result_defaults(
-    *,
-    parsed: dict[str, Any],
-    job_spec: dict[str, Any],
-    flow_run_id: str,
-    attempt: int,
-    outputs_prefix: str,
-) -> None:
-    parsed.setdefault("job_name", string_value(job_spec.get("job_name")))
-    parsed.setdefault("engine", string_value(job_spec.get("engine")))
-    parsed.setdefault("run_mode", string_value(job_spec.get("run_mode")))
-    parsed.setdefault("flow_run_id", flow_run_id)
-    parsed.setdefault("attempt", attempt)
-    parsed.setdefault("outputs_prefix", outputs_prefix)
