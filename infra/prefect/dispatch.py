@@ -8,8 +8,15 @@ from pathlib import Path
 from typing import Any
 
 from prefect import get_run_logger
+from prefect.client.orchestration import get_client
+from prefect.context import FlowRunContext, TaskRunContext
+from prefect.states import Pending
 
 from infra.prefect.job_spec import (
+    config_name,
+    coerce_args,
+    coerce_overrides,
+    mapped_command,
     string_value,
 )
 
@@ -32,17 +39,23 @@ def dispatch_engine_job(
     if not python_bin.exists():
         raise RuntimeError(f"missing bootstrap python: {python_bin}")
 
-    # Inject parent flow run context to link the sub-process flow in Prefect UI
-    from prefect.context import FlowRunContext
-
     child_env = {**env, "ORCH_JOB_INPUTS_JSON": json.dumps(payload, ensure_ascii=True)}
-    
-    flow_run_ctx = FlowRunContext.get()
-    if flow_run_ctx and flow_run_ctx.flow_run:
-        child_env["PREFECT_PARENT_FLOW_RUN_ID"] = str(flow_run_ctx.flow_run.id)
+    execute_cmd = [
+        str(python_bin),
+        "-m",
+        "discoverex.application.flows.launcher_entry",
+    ]
+
+    child_flow_run_id = _create_child_flow_run(payload)
+    if child_flow_run_id:
+        child_env["PREFECT__FLOW_RUN_ID"] = child_flow_run_id
+        child_env["PREFECT__FLOW_ENTRYPOINT"] = (
+            "src/discoverex/application/flows/prefect_subflow.py:run_prefect_engine_entry_flow"
+        )
+        execute_cmd = [str(python_bin), "-m", "prefect.engine"]
 
     proc = subprocess.Popen(
-        [str(python_bin), "-m", "discoverex.application.flows.launcher_entry"],
+        execute_cmd,
         cwd=cwd,
         env=child_env,
         stdout=subprocess.PIPE,
@@ -102,6 +115,33 @@ def dispatch_engine_job(
     # QUIET SUCCESS: Only a summary is logged at INFO level (handled by flow.py)
     parsed = _parse_payload_from_stdout(stdout)
     return DispatchResult(payload=parsed, stdout=stdout, stderr=stderr)
+
+
+def _create_child_flow_run(payload: dict[str, Any]) -> str | None:
+    flow_run_ctx = FlowRunContext.get()
+    task_run_ctx = TaskRunContext.get()
+    if flow_run_ctx is None or task_run_ctx is None or task_run_ctx.task_run is None:
+        return None
+
+    from discoverex.application.flows.prefect_subflow import (
+        run_prefect_engine_entry_flow,
+    )
+
+    with get_client(sync_client=True) as client:
+        flow_run = client.create_flow_run(
+            flow=run_prefect_engine_entry_flow,
+            parameters={
+                "command": mapped_command(string_value(payload.get("command"))),
+                "args": coerce_args(payload.get("args")),
+                "config_name": config_name(payload),
+                "config_dir": string_value(payload.get("config_dir")) or "conf",
+                "overrides": coerce_overrides(payload.get("overrides")),
+                "resolved_config": payload.get("resolved_config"),
+            },
+            state=Pending(),
+            parent_task_run_id=task_run_ctx.task_run.id,
+        )
+    return str(flow_run.id)
 
 
 def _parse_payload_from_stdout(stdout: str) -> dict[str, Any]:
