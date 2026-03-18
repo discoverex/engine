@@ -186,7 +186,7 @@ def test_repo_root_prefect_entrypoint_exposes_run_job_flow(
     assert module.run_combined_job_flow is prefect_entrypoint.run_combined_job_flow
 
 
-def test_dispatch_engine_job_calls_nested_prefect_subflow(
+def test_dispatch_engine_job_calls_nested_generate_pipeline(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     sink: list[tuple[str, tuple[Any, ...]]] = []
@@ -199,9 +199,22 @@ def test_dispatch_engine_job_calls_nested_prefect_subflow(
         return {"status": "completed", "scene_id": "scene-1"}
 
     monkeypatch.setattr(
-        "discoverex.application.flows.engine_entry.run_prefect_engine_entry_flow",
-        _fake_nested_flow,
+        "discoverex.application.flows.engine_entry.load_pipeline_config",
+        lambda **kwargs: "cfg",
     )
+    monkeypatch.setattr(
+        "discoverex.application.flows.engine_entry.normalize_pipeline_config_for_worker_runtime",
+        lambda config: type("Cfg", (), {"runtime": type("Runtime", (), {"artifacts_root": str(tmp_path)})()})(),
+    )
+    monkeypatch.setattr(
+        "discoverex.application.flows.engine_entry.build_execution_snapshot",
+        lambda **kwargs: {"command": kwargs["command"], "config_name": kwargs["config_name"]},
+    )
+    monkeypatch.setattr(
+        "discoverex.application.flows.engine_entry.write_execution_snapshot",
+        lambda **kwargs: tmp_path / "resolved_execution_config.json",
+    )
+    monkeypatch.setattr("discoverex.flows.generate.run_generate_flow", _fake_nested_flow)
 
     result = prefect_dispatch.dispatch_engine_job(
         {
@@ -215,20 +228,16 @@ def test_dispatch_engine_job_calls_nested_prefect_subflow(
         env={},
     )
 
-    assert captured == {
-        "command": "generate",
-        "args": {"background_prompt": "harbor"},
-        "config_name": "generate",
-        "config_dir": "conf",
-        "overrides": ["profile=generator_pixart_gpu_v2_hidden_object"],
-        "resolved_config": None,
-    }
+    assert captured["args"] == {"background_prompt": "harbor"}
+    assert captured["execution_snapshot"]["command"] == "generate"
+    assert str(captured["execution_snapshot_path"]).endswith("resolved_execution_config.json")
     assert result.payload["status"] == "completed"
     assert result.stdout == json.dumps(result.payload, ensure_ascii=True)
     assert result.stderr == ""
     assert sink[-1][0] == (
         "engine nested flow handoff: flow=%s command=%s config_name=%s override_count=%d"
     )
+    assert sink[-1][1][0] == "discoverex-generate-pipeline"
 
 
 def test_flow_kind_entrypoint_rejects_mismatched_command(
