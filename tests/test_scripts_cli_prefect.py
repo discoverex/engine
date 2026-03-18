@@ -28,7 +28,7 @@ def test_register_defaults_to_standard_job_spec(monkeypatch) -> None:  # type: i
 
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
-    result = runner.invoke(app, ["register", "--branch", "dev"])
+    result = runner.invoke(app, ["registercombined", "--branch", "dev"])
 
     assert result.exit_code == 0
     assert captured["script_name"] == "submit_job_spec.py"
@@ -49,7 +49,7 @@ def test_register_requires_branch(monkeypatch) -> None:  # type: ignore[no-untyp
 
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
-    result = runner.invoke(app, ["register"])
+    result = runner.invoke(app, ["registercombined"])
 
     assert result.exit_code == 2
     assert "--branch is required" in result.stdout
@@ -69,7 +69,7 @@ def test_register_forwards_submit_spec_args(monkeypatch) -> None:  # type: ignor
     result = runner.invoke(
         app,
         [
-            "register",
+            "registercombined",
             "--branch",
             "feature/foo",
             "--job-name",
@@ -103,7 +103,7 @@ def test_register_maps_command_to_flow_kind(monkeypatch) -> None:  # type: ignor
     result = runner.invoke(
         app,
         [
-            "register",
+            "registercombined",
             "--branch",
             "feature/foo",
             "--command",
@@ -138,7 +138,7 @@ def test_register_flow_targets_named_flow_kind(monkeypatch) -> None:  # type: ig
 
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
-    result = runner.invoke(app, ["registerflow", "generate", "--branch", "dev"])
+    result = runner.invoke(app, ["register", "flow", "generate", "--branch", "dev"])
 
     assert result.exit_code == 0
     assert captured["script_name"] == "submit_job_spec.py"
@@ -222,7 +222,7 @@ def test_register_batch_submits_one_run_per_csv_row(monkeypatch, tmp_path) -> No
 
     result = runner.invoke(
         app,
-        ["registerbatch", str(csv_path), "--branch", "dev"],
+        ["register", "batch", str(csv_path), "--branch", "dev"],
     )
 
     assert result.exit_code == 0
@@ -284,7 +284,7 @@ def test_register_experiment_sweep_invokes_script(monkeypatch) -> None:  # type:
 
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
-    result = runner.invoke(app, ["registerexperimentsweep"])
+    result = runner.invoke(app, ["register", "experiment-sweep"])
 
     assert result.exit_code == 0
     assert captured["script_name"] == "naturalness_sweep.py"
@@ -306,7 +306,7 @@ def test_register_experiment_sweep_uses_experiment_deployment(monkeypatch) -> No
 
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
-    result = runner.invoke(app, ["registerexperimentsweep", "--experiment", "naturalness", "--branch", "dev"])
+    result = runner.invoke(app, ["register", "experiment-sweep", "--experiment", "naturalness", "--branch", "dev"])
 
     assert result.exit_code == 0
     assert captured["script_name"] == "naturalness_sweep.py"
@@ -332,7 +332,7 @@ def test_deploy_experiment_uses_batch_queue(monkeypatch) -> None:  # type: ignor
 
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
-    result = runner.invoke(app, ["deployexperiment", "--experiment", "naturalness", "--branch", "dev"])
+    result = runner.invoke(app, ["deploy", "experiment", "--experiment", "naturalness", "--branch", "dev"])
 
     assert result.exit_code == 0
     assert captured["script_name"] == "deploy_prefect_flows.py"

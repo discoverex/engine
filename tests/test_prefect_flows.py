@@ -5,11 +5,13 @@ import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 from prefect.runtime import flow_run
+from prefect.context import FlowRunContext, TaskRunContext
 
 import infra.prefect.dispatch as prefect_dispatch
 import infra.prefect.flow as prefect_entrypoint
@@ -26,6 +28,9 @@ from infra.prefect.job_spec import (
 class _FakeLogger:
     def __init__(self, sink: list[tuple[str, tuple[Any, ...]]]) -> None:
         self._sink = sink
+
+    def debug(self, message: str, *args: Any) -> None:
+        self._sink.append((message, args))
 
     def info(self, message: str, *args: Any) -> None:
         self._sink.append((message, args))
@@ -181,6 +186,74 @@ def test_repo_root_prefect_entrypoint_exposes_run_job_flow(
     assert module.run_generate_job_flow is prefect_entrypoint.run_generate_job_flow
     assert module.run_combined_job_flow.name == "discoverex-combined-flow"
     assert module.run_combined_job_flow is prefect_entrypoint.run_combined_job_flow
+
+
+def test_dispatch_engine_job_uses_prefect_engine_for_child_flow(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    (tmp_path / ".venv" / "bin").mkdir(parents=True)
+    python_bin = tmp_path / ".venv" / "bin" / "python"
+    python_bin.write_text("", encoding="utf-8")
+    monkeypatch.setattr(prefect_dispatch, "get_run_logger", lambda: _FakeLogger([]))
+
+    created: dict[str, Any] = {}
+
+    class _FakeClient:
+        def __enter__(self):  # type: ignore[no-untyped-def]
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
+            _ = (exc_type, exc, tb)
+
+        def create_flow_run(self, **kwargs: Any):  # type: ignore[no-untyped-def]
+            created.update(kwargs)
+            return SimpleNamespace(id="child-flow-123")
+
+    monkeypatch.setattr(prefect_dispatch, "get_client", lambda sync_client=True: _FakeClient())
+
+    captured: dict[str, Any] = {}
+
+    class _FakeProcess:
+        def __init__(self):  # type: ignore[no-untyped-def]
+            self.stdout = __import__("io").StringIO('{"status":"completed"}\n')
+            self.stderr = __import__("io").StringIO("")
+
+        def wait(self):  # type: ignore[no-untyped-def]
+            return 0
+
+    def _fake_popen(cmd, cwd, env, stdout, stderr, text, bufsize):  # type: ignore[no-untyped-def]
+        captured["cmd"] = cmd
+        captured["cwd"] = cwd
+        captured["env"] = env
+        return _FakeProcess()
+
+    monkeypatch.setattr(prefect_dispatch.subprocess, "Popen", _fake_popen)
+
+    flow_ctx = SimpleNamespace(flow_run=SimpleNamespace(id="parent-flow-1"))
+    task_ctx = SimpleNamespace(task_run=SimpleNamespace(id="parent-task-1"))
+    monkeypatch.setattr(FlowRunContext, "get", staticmethod(lambda: flow_ctx))
+    monkeypatch.setattr(TaskRunContext, "get", staticmethod(lambda: task_ctx))
+
+    result = prefect_dispatch.dispatch_engine_job(
+        {
+            "command": "generate",
+            "config_name": "generate",
+            "config_dir": "conf",
+            "args": {"background_prompt": "harbor"},
+            "overrides": ["profile=generator_pixart_gpu_v2_hidden_object"],
+        },
+        cwd=tmp_path,
+        env={},
+    )
+
+    assert created["parent_task_run_id"] == "parent-task-1"
+    assert captured["cmd"] == [str(python_bin), "-m", "prefect.engine"]
+    assert captured["env"]["PREFECT__FLOW_RUN_ID"] == "child-flow-123"
+    assert captured["env"]["PREFECT__FLOW_ENTRYPOINT"].endswith(
+        "prefect_subflow.py:run_prefect_engine_entry_flow"
+    )
+    assert result.payload["status"] == "completed"
 
 
 def test_flow_kind_entrypoint_rejects_mismatched_command(
