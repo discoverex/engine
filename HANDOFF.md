@@ -8,7 +8,7 @@
 ## What Changed
 - **OOM Fix (8GB VRAM):** Implemented sequential model loading/unloading. Models no longer reside in memory simultaneously.
 - **Hierarchical Logging:** Implemented "Quiet Success, Loud Failure". Detailed logs are streamed at `DEBUG` level, while failures flush `stderr` to `ERROR` level for visibility.
-- **YAML Migration:** All job specs migrated to YAML. All tools (`registerflow`, `submit-spec`) now use YAML as the primary format.
+- **YAML Migration:** All job specs migrated to YAML. All tools (`register flow`, `submit-spec`) now use YAML as the primary format.
 - **Subflow Linkage:** Engine subprocesses are now linked as **Subflows** in Prefect UI using `PREFECT_PARENT_FLOW_RUN_ID`.
 - **Explicit Tasks:** Decomposed `combined` flow into explicit `engine-generate-task` and `engine-verify-task` components.
 
@@ -19,8 +19,8 @@
 - [src/discoverex/application/use_cases/gen_verify/orchestrator.py](/home/esillileu/discoverex/engine/src/discoverex/application/use_cases/gen_verify/orchestrator.py) - Sequential loading logic.
 
 ## Current Register Strategy
-- `./bin/cli prefect deployflow <flow-kind> --branch <branch>`
-- `./bin/cli prefect registerflow <flow-kind> --branch <branch>`
+- `./bin/cli prefect deploy flow <flow-kind> --branch <branch>`
+- `./bin/cli prefect register flow <flow-kind> --branch <branch>`
   - targets deployment `discoverex-<flow-kind>-<branch-slug>`
   - uses YAML specs from `infra/register/job_specs/`
 
@@ -86,8 +86,8 @@
 - Current branch:
   - `git branch --show-current`
 - Re-register current branch deployment:
-  - `UV_CACHE_DIR="$PWD/.cache/uv" ./bin/cli prefect deployflow combined --branch "feat/engin-worker-observility" --work-pool-name gpu-pool`
+  - `UV_CACHE_DIR="$PWD/.cache/uv" ./bin/cli prefect deploy flow combined --branch "feat/engin-worker-observility" --work-pool-name gpu-pool`
 - Submit current branch standard job:
-  - `UV_CACHE_DIR="$PWD/.cache/uv" ./bin/cli prefect registerflow combined --branch "feat/engin-worker-observility"`
+  - `UV_CACHE_DIR="$PWD/.cache/uv" ./bin/cli prefect register flow combined --branch "feat/engin-worker-observility"`
 - Check flow run status:
   - `UV_CACHE_DIR="$PWD/.cache/uv" uv run python infra/register/check_flow_run_status.py e45bc516-010a-491f-806b-afd2c8e8ee2c`
