@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -84,16 +83,15 @@ def _canonicalize_artifact(
     relative_path: Path,
 ) -> dict[str, str]:
     mapping = {
-        "scene": ("scene_json", Path("scene/scene.json"), "artifact_scene_uri"),
-        "verification": (
-            "verification_json",
-            Path("scene/verification.json"),
-            "artifact_verification_uri",
-        ),
-        "naturalness": (
-            "naturalness_json",
-            Path("scene/naturalness.json"),
-            "artifact_naturalness_uri",
+        "scene": ("scene_json", "artifact_scene_uri"),
+        "verification": ("verification_json", "artifact_verification_uri"),
+        "naturalness": ("naturalness_json", "artifact_naturalness_uri"),
+        "prompt_bundle": ("prompt_bundle_json", "artifact_prompt_bundle_uri"),
+        "composite": ("composite_image", "artifact_composite_uri"),
+        "final_image": ("composite_image", "artifact_composite_uri"),
+        "output_manifest": (
+            "output_manifest_json",
+            "artifact_output_manifest_uri",
         ),
     }
     target = mapping.get(logical_name)
@@ -104,14 +102,10 @@ def _canonicalize_artifact(
             "absolute_path": str(source_path),
             "mlflow_tag": "",
         }
-    manifest_name, canonical_relative, mlflow_tag = target
-    canonical_path = artifacts_root / canonical_relative
-    if source_path.resolve() != canonical_path.resolve():
-        canonical_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, canonical_path)
+    manifest_name, mlflow_tag = target
     return {
         "logical_name": manifest_name,
-        "relative_path": canonical_relative.as_posix(),
-        "absolute_path": str(canonical_path),
+        "relative_path": relative_path.as_posix(),
+        "absolute_path": str(source_path),
         "mlflow_tag": mlflow_tag,
     }

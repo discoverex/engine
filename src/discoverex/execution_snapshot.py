@@ -62,7 +62,7 @@ def write_execution_snapshot(
     command: str,
     snapshot: dict[str, Any],
 ) -> Path:
-    target_dir = artifacts_root / "execution" / command / uuid4().hex[:12]
+    target_dir = artifacts_root / "debug" / "execution" / command / uuid4().hex[:12]
     target_dir.mkdir(parents=True, exist_ok=True)
     path = target_dir / "resolved_execution_config.json"
     path.write_text(

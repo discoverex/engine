@@ -229,7 +229,7 @@ def _materialize_background_asset(background, scene_dir: Path) -> None:  # type:
     source = Path(background.asset_ref)
     if not source.exists() or not source.is_file():
         return
-    base_dir = scene_dir / "layers" / "base"
+    base_dir = scene_dir / "assets" / "background"
     base_dir.mkdir(parents=True, exist_ok=True)
     target = base_dir / source.name
     if source.resolve() == target.resolve():

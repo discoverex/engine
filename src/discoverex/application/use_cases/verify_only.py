@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from discoverex.artifact_paths import output_manifest_path
 from discoverex.application.context import AppContextLike
 from discoverex.domain import (
     integrate_verification,
@@ -82,6 +83,14 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
             ("verification", saved_dir / "verification.json"),
             ("naturalness", naturalness_report),
             ("final_image", scene_artifact if scene_artifact.exists() else None),
+            (
+                "output_manifest",
+                output_manifest_path(
+                    context.artifacts_root,
+                    scene.meta.scene_id,
+                    scene.meta.version_id,
+                ),
+            ),
             ("execution_config", context.execution_snapshot_path),
         ],
     )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import shutil
 from time import perf_counter
 from typing import Any
 
@@ -58,8 +59,9 @@ def generate_region_objects(
             width = _OBJECT_GENERATION_SIZE
             height = _OBJECT_GENERATION_SIZE
             output_prefix = (
-                scene_dir / "layers" / "object-candidates" / f"{region.region_id}"
+                scene_dir / "assets" / "objects" / f"{region.region_id}"
             )
+            output_prefix.parent.mkdir(parents=True, exist_ok=True)
             candidate_path = output_prefix.with_suffix(".candidate.png")
             started = perf_counter()
             emit_progress_event(
@@ -93,11 +95,12 @@ def generate_region_objects(
                 image_path=generated_ref,
                 output_prefix=output_prefix,
             )
+            mask_assets = _relocate_mask_assets(scene_dir=scene_dir, masked=masked)
             placement_assets = _build_placement_assets(
                 context=context,
                 object_path=Path(str(masked["object"])),
-                mask_path=Path(str(masked["mask"])),
-                raw_alpha_path=Path(str(masked.get("raw_alpha_mask", masked["mask"]))),
+                mask_path=mask_assets["mask"],
+                raw_alpha_path=mask_assets["raw_alpha_mask"],
             )
             generated[region.region_id] = GeneratedObjectAsset(
                 region_id=region.region_id,
@@ -106,7 +109,7 @@ def generate_region_objects(
                 object_mask_ref=str(placement_assets["mask"]),
                 width=int(placement_assets["width"]),
                 height=int(placement_assets["height"]),
-                raw_alpha_mask_ref=str(masked.get("raw_alpha_mask", masked["mask"])),
+                raw_alpha_mask_ref=str(mask_assets["raw_alpha_mask"]),
                 mask_source=str(masked.get("mask_source", "unknown")),
                 tight_bbox=placement_assets.get("tight_bbox"),
             )
@@ -171,6 +174,32 @@ def _split_object_prompts(object_prompt: str) -> list[str]:
         if separator in prompt:
             return [part.strip() for part in prompt.split(separator) if part.strip()]
     return [prompt]
+
+
+def _relocate_mask_assets(
+    *,
+    scene_dir: Path,
+    masked: dict[str, str | Path],
+) -> dict[str, Path]:
+    masks_dir = scene_dir / "assets" / "masks"
+    masks_dir.mkdir(parents=True, exist_ok=True)
+    mask_path = _move_if_needed(Path(str(masked["mask"])), masks_dir)
+    raw_alpha_path = _move_if_needed(
+        Path(str(masked.get("raw_alpha_mask", masked["mask"]))),
+        masks_dir,
+    )
+    return {
+        "mask": mask_path,
+        "raw_alpha_mask": raw_alpha_path,
+    }
+
+
+def _move_if_needed(source: Path, target_dir: Path) -> Path:
+    target = target_dir / source.name
+    if source.resolve() == target.resolve():
+        return source
+    shutil.move(str(source), str(target))
+    return target
 
 
 def _round_up_to_multiple_of_8(value: int) -> int:
