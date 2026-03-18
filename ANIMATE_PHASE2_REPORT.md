@@ -26,7 +26,7 @@ ANIMATE_INTEGRATION_PLAN.md 섹션 8 Phase 2에 정의된 4개 항목:
 | `adapters/outbound/animate/keyframe_travel.py` | 98 | wan_keyframe_generator.py (줄 331-513) | launch/float/parabolic/hop 생성 함수 |
 | `adapters/outbound/animate/keyframe_physics.py` | 15 | wan_keyframe_generator.py (줄 110-116) | damped_sin/damped_cos 물리 헬퍼 |
 | `adapters/outbound/animate/numerical_validator.py` | 127 | wan_validator.py (708줄) | NumericalAnimationValidator — AnimationValidationPort 구현 |
-| `adapters/outbound/animate/validator_metrics.py` | 166 | wan_validator.py (줄 368-709) | 8개 검증 지표 계산 함수 전체 |
+| `adapters/outbound/animate/validator_metrics.py` | 166 | wan_validator.py (줄 368-709) | 9개 검증 지표 계산 함수 전체 |
 | `adapters/outbound/animate/frame_extraction.py` | 58 | wan_validator.py (줄 312-365) | ffmpeg 프레임 추출 + 배경색 감지 + 배경 마스크 |
 | `application/use_cases/animate/__init__.py` | 0 | — | 패키지 초기화 |
 | `adapters/outbound/animate/__init__.py` | 0 | — | 패키지 초기화 |
@@ -79,7 +79,7 @@ ANIMATE_INTEGRATION_PLAN.md 섹션 8 Phase 2에 정의된 4개 항목:
 | 파일 | 내용 |
 |------|------|
 | `numerical_validator.py` (127L) | NumericalAnimationValidator 클래스 — 메인 validate() 오케스트레이션 |
-| `validator_metrics.py` (166L) | 8개 검증 지표 계산 함수 전체 |
+| `validator_metrics.py` (166L) | 9개 검증 지표 계산 함수 전체 |
 | `frame_extraction.py` (58L) | extract_frames, detect_bg_color, get_bg_mask |
 
 **변경 사항**:
@@ -88,7 +88,7 @@ ANIMATE_INTEGRATION_PLAN.md 섹션 8 Phase 2에 정의된 4개 항목:
 - 분석 결과: `analysis=None` → `original_analysis: VisionAnalysis` 타입 명시
 - numpy 반환 타입: mypy strict에서 `no-any-return` 발생 → `Any` 반환 타입으로 해결
 
-**검증 8개 지표 이식 완료**:
+**검증 9개 지표 이식 완료**:
 1. `no_motion` — 캐릭터 영역 motion < min_motion × 0.5
 2. `too_slow` — char_motion < min_motion
 3. `too_fast` — char_motion > max_motion AND raw_motion 교차 검증

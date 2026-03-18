@@ -40,7 +40,7 @@ ANIMATE_INTEGRATION_PLAN.md 섹션 8 Phase 1에 정의된 4개 항목:
 
 **검증 엔티티**:
 - `AnimationValidationThresholds` — 수치 검증 임계값 (Hydra config 주입용)
-- `AnimationValidation` — 8개 지표 수치 검증 결과
+- `AnimationValidation` — 9개 지표 수치 검증 결과
 - `AIValidationContext` — AI 검증 요청 시 현재 생성 상태 DTO
 - `AIValidationFix` — AI 검증 결과 + 파라미터 보정값
 
@@ -68,7 +68,7 @@ ANIMATE_INTEGRATION_PLAN.md 섹션 8 Phase 1에 정의된 4개 항목:
 | `AIValidationPort` | load/validate/unload | 주관적 품질 평가 + 파라미터 보정 |
 | `PostMotionClassificationPort` | load/classify/unload | 키프레임 트래블 분류 |
 | `AnimationGenerationPort` | load/generate/unload | ComfyUI WAN I2V 생성 |
-| `AnimationValidationPort` | validate (stateless) | 수치 품질 검증 8개 지표 |
+| `AnimationValidationPort` | validate (stateless) | 수치 품질 검증 9개 지표 |
 | `BackgroundRemovalPort` | remove (stateless) | 배경 제거 → 투명 PNG |
 | `KeyframeGenerationPort` | generate (stateless) | CSS 키프레임 생성 |
 | `FormatConversionPort` | convert (stateless) | APNG/WebM/Lottie 변환 |

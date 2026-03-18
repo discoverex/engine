@@ -15,7 +15,7 @@
   → [Mode 분류] KEYFRAME_ONLY / MOTION_NEEDED
   → [Vision 분석] Gemini로 모션 파라미터 결정
   → [WAN I2V 생성] ComfyUI 워크플로우 실행 (최대 7회 재시도)
-  → [수치 검증] 8개 품질 지표
+  → [수치 검증] 9개 품질 지표
   → [AI 검증] Gemini Vision 주관 평가 + 파라미터 보정
   → [후처리 분류] 키프레임 트래블 필요 여부
   → [배경 제거] 투명 PNG 시퀀스
@@ -25,7 +25,7 @@
 | 파일 | 라인 | 역할 |
 |------|------|------|
 | wan_backend.py | 2515 | 전체 오케스트레이션 + ComfyUI 통신 + 전처리 + 후합성 |
-| wan_validator.py | 708 | 수치 기반 품질 검증 (8개 지표) |
+| wan_validator.py | 708 | 수치 기반 품질 검증 (9개 지표) |
 | wan_server.py | 581 | Flask REST API + 대시보드 |
 | wan_vision_analyzer.py | 491 | Gemini Vision → 모션 파라미터 |
 | wan_keyframe_generator.py | 512 | CSS 키프레임 애니메이션 생성 |
