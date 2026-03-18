@@ -1,0 +1,37 @@
+_target_: discoverex.flows.subflows.animate_pipeline
+
+models:
+  mode_classifier:
+    defaults:
+      - /models/mode_classifier: dummy
+  vision_analyzer:
+    defaults:
+      - /models/vision_analyzer: dummy
+  animation_generation:
+    defaults:
+      - /models/animation_generation: dummy
+  ai_validator:
+    defaults:
+      - /models/ai_validator: dummy
+  post_motion_classifier:
+    defaults:
+      - /models/post_motion_classifier: dummy
+
+animate_adapters:
+  bg_remover:
+    defaults:
+      - /animate_adapters/bg_remover: dummy
+  numerical_validator:
+    defaults:
+      - /animate_adapters/numerical_validator: dummy
+  mask_generator:
+    defaults:
+      - /animate_adapters/mask_generator: dummy
+  keyframe_generator:
+    defaults:
+      - /animate_adapters/keyframe_generator: dummy
+  format_converter:
+    defaults:
+      - /animate_adapters/format_converter: dummy
+
+max_retries: 7

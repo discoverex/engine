@@ -145,3 +145,41 @@ def build_validator_context(
         scoring_weights=scoring_weights,
         bundle_store=bundle_store,
     )
+
+
+def build_animate_context(
+    config: dict[str, Any],
+) -> Any:
+    """Build AnimateOrchestrator from Hydra-resolved config dict."""
+    from discoverex.application.use_cases.animate.orchestrator import (
+        AnimateOrchestrator,
+    )
+    from discoverex.config.animate_schema import AnimatePipelineConfig
+
+    cfg = AnimatePipelineConfig.model_validate(config)
+
+    mode_classifier = instantiate(cfg.models.mode_classifier.as_kwargs())
+    vision_analyzer = instantiate(cfg.models.vision_analyzer.as_kwargs())
+    animation_generator = instantiate(cfg.models.animation_generation.as_kwargs())
+    ai_validator = instantiate(cfg.models.ai_validator.as_kwargs())
+    post_motion = instantiate(cfg.models.post_motion_classifier.as_kwargs())
+
+    bg_remover = instantiate(cfg.animate_adapters.bg_remover.as_kwargs())
+    numerical_validator = instantiate(cfg.animate_adapters.numerical_validator.as_kwargs())
+    mask_generator = instantiate(cfg.animate_adapters.mask_generator.as_kwargs())
+    keyframe_generator = instantiate(cfg.animate_adapters.keyframe_generator.as_kwargs())
+    format_converter = instantiate(cfg.animate_adapters.format_converter.as_kwargs())
+
+    return AnimateOrchestrator(
+        mode_classifier=mode_classifier,
+        vision_analyzer=vision_analyzer,
+        animation_generator=animation_generator,
+        numerical_validator=numerical_validator,
+        ai_validator=ai_validator,
+        post_motion_classifier=post_motion,
+        bg_remover=bg_remover,
+        mask_generator=mask_generator,
+        keyframe_generator=keyframe_generator,
+        format_converter=format_converter,
+        max_retries=cfg.max_retries,
+    )
