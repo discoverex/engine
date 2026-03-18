@@ -11,7 +11,6 @@ from infra.prefect.job_spec import (
     config_name,
     coerce_args,
     coerce_overrides,
-    mapped_command,
     string_value,
 )
 
@@ -33,25 +32,76 @@ def dispatch_engine_job(
     logger = get_run_logger()
 
     from discoverex.application.flows.engine_entry import (
-        run_prefect_engine_entry_flow,
+        build_execution_snapshot,
+        load_pipeline_config,
+        normalize_pipeline_config_for_worker_runtime,
+        write_execution_snapshot,
+    )
+    from discoverex.flows.generate import run_generate_flow
+    from discoverex.flows.verify import run_verify_flow
+    from discoverex.flows.subflows import animate_stub
+
+    command = string_value(payload.get("command"))
+    args = coerce_args(payload.get("args"))
+    resolved_config = payload.get("resolved_config")
+    resolved_config_name = config_name(payload)
+    resolved_config_dir = string_value(payload.get("config_dir")) or "conf"
+    overrides = coerce_overrides(payload.get("overrides"))
+
+    cfg = load_pipeline_config(
+        config_name=resolved_config_name,
+        config_dir=resolved_config_dir,
+        overrides=overrides,
+        resolved_config=resolved_config,
+    )
+    cfg = normalize_pipeline_config_for_worker_runtime(cfg)
+    execution_snapshot = build_execution_snapshot(
+        command=command,
+        args=args,
+        config_name=resolved_config_name,
+        config_dir=resolved_config_dir,
+        overrides=overrides,
+        config=cfg,
+    )
+    execution_snapshot_path = write_execution_snapshot(
+        artifacts_root=Path(cfg.runtime.artifacts_root).resolve(),
+        command=command,
+        snapshot=execution_snapshot,
     )
 
-    nested_payload = {
-        "command": mapped_command(string_value(payload.get("command"))),
-        "args": coerce_args(payload.get("args")),
-        "config_name": config_name(payload),
-        "config_dir": string_value(payload.get("config_dir")) or "conf",
-        "overrides": coerce_overrides(payload.get("overrides")),
-        "resolved_config": payload.get("resolved_config"),
-    }
+    flow_name = {
+        "generate": "discoverex-generate-pipeline",
+        "verify": "discoverex-verify-pipeline",
+        "animate": "discoverex-animate-pipeline",
+    }[command]
     logger.info(
         "engine nested flow handoff: flow=%s command=%s config_name=%s override_count=%d",
-        "discoverex-engine-entry-pipeline",
-        nested_payload["command"],
-        nested_payload["config_name"],
-        len(nested_payload["overrides"]),
+        flow_name,
+        command,
+        resolved_config_name,
+        len(overrides),
     )
-    result = run_prefect_engine_entry_flow(**nested_payload)
+    if command == "generate":
+        result = run_generate_flow(
+            args=args,
+            config=cfg,
+            execution_snapshot=execution_snapshot,
+            execution_snapshot_path=execution_snapshot_path,
+        )
+    elif command == "verify":
+        result = run_verify_flow(
+            args=args,
+            config=cfg,
+            execution_snapshot=execution_snapshot,
+            execution_snapshot_path=execution_snapshot_path,
+        )
+    else:
+        result = animate_stub(
+            args=args,
+            config=cfg,
+            execution_snapshot=execution_snapshot,
+            execution_snapshot_path=execution_snapshot_path,
+        )
     return DispatchResult(
         payload=result,
         stdout=json.dumps(result, ensure_ascii=True),
