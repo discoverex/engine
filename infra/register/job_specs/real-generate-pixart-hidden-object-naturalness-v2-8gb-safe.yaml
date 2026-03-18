@@ -1,7 +1,7 @@
 run_mode: repo
 engine: discoverex
 repo_url: https://github.com/discoverex/engine.git
-ref: feat/object-hidding
+ref: feat/artifact-output-layout
 entrypoint:
   - /bin/sh
   - -lc
