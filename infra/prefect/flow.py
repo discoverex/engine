@@ -256,11 +256,12 @@ def _run_job_flow_logic(
                 env=env,
                 logger=logger,
             )
-            dispatch_result = engine_job_task(
+            dispatch_future = engine_job_task.submit(
                 payload,
                 cwd=ensure_repo_root(),
                 env=env,
             )
+            dispatch_result = dispatch_future.result()
             parsed = dispatch_result.payload
 
         prefect_dispatch.apply_result_defaults(
