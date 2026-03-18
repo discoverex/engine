@@ -16,6 +16,7 @@ from discoverex.artifact_paths import (
     verification_json_path,
 )
 from discoverex.domain.scene import Scene
+from PIL import Image
 
 
 @dataclass(frozen=True)
@@ -23,17 +24,24 @@ class OutputExportResult:
     manifest_path: Path
     lottie_path: Path
     layer_paths: list[Path]
+    source_layer_paths: list[Path]
 
 
 def export_output_bundle(*, artifacts_root: Path, scene: Scene) -> OutputExportResult:
     scene_id = scene.meta.scene_id
     version_id = scene.meta.version_id
     out_dir = outputs_dir(artifacts_root, scene_id, version_id)
-    layers_dir = out_dir / "layers"
+    layers_dir = out_dir / "layers" / "objects"
+    source_layers_dir = out_dir / "layers" / "source-objects"
     out_dir.mkdir(parents=True, exist_ok=True)
     layers_dir.mkdir(parents=True, exist_ok=True)
+    source_layers_dir.mkdir(parents=True, exist_ok=True)
 
-    exported_layers = _export_layers(scene=scene, layers_dir=layers_dir)
+    exported_layers, source_layer_paths = _export_layers(
+        scene=scene,
+        layers_dir=layers_dir,
+        source_layers_dir=source_layers_dir,
+    )
     lottie_path = out_dir / "animation.lottie"
     _write_lottie_bundle(
         scene=scene,
@@ -45,18 +53,55 @@ def export_output_bundle(*, artifacts_root: Path, scene: Scene) -> OutputExportR
         scene=scene,
         artifacts_root=artifacts_root,
         exported_layers=exported_layers,
+        source_layer_paths=source_layer_paths,
         lottie_path=lottie_path,
     )
     return OutputExportResult(
         manifest_path=manifest_path,
         lottie_path=lottie_path,
         layer_paths=exported_layers,
+        source_layer_paths=source_layer_paths,
     )
 
 
-def _export_layers(*, scene: Scene, layers_dir: Path) -> list[Path]:
+def _export_layers(
+    *,
+    scene: Scene,
+    layers_dir: Path,
+    source_layers_dir: Path,
+) -> tuple[list[Path], list[Path]]:
     exported: list[Path] = []
+    source_layers: list[Path] = []
+    candidates = scene.background.metadata.get("inpaint_layer_candidates", [])
+    candidate_by_region: dict[str, dict[str, object]] = {}
+    if isinstance(candidates, list):
+        for item in candidates:
+            if not isinstance(item, dict):
+                continue
+            region_id = item.get("region_id")
+            if isinstance(region_id, str):
+                candidate_by_region[region_id] = item
+
     for layer in sorted(scene.layers.items, key=lambda item: item.order):
+        if layer.source_region_id and layer.source_region_id in candidate_by_region:
+            candidate = candidate_by_region[layer.source_region_id]
+            full_canvas = _render_full_canvas_object_layer(
+                scene=scene,
+                layer=layer,
+                candidate=candidate,
+                layers_dir=layers_dir,
+            )
+            if full_canvas is not None:
+                exported.append(full_canvas)
+            source_layer = _export_source_object_layer(
+                layer=layer,
+                candidate=candidate,
+                source_layers_dir=source_layers_dir,
+            )
+            if source_layer is not None:
+                source_layers.append(source_layer)
+            continue
+
         source = Path(layer.image_ref)
         if not source.exists() or not source.is_file():
             continue
@@ -65,7 +110,61 @@ def _export_layers(*, scene: Scene, layers_dir: Path) -> list[Path]:
         if source.resolve() != target.resolve():
             shutil.copy2(source, target)
         exported.append(target)
-    return exported
+    return exported, source_layers
+
+
+def _render_full_canvas_object_layer(
+    *,
+    scene: Scene,
+    layer,
+    candidate: dict[str, object],
+    layers_dir: Path,
+) -> Path | None:
+    source_ref = candidate.get("object_image_ref") or candidate.get("layer_image_ref")
+    if not isinstance(source_ref, str):
+        return None
+    source_path = Path(source_ref)
+    if not source_path.exists() or not source_path.is_file():
+        return None
+    bbox = layer.bbox
+    if bbox is None:
+        return None
+    target = layers_dir / f"{layer.order:03d}-{layer.layer_id}.png"
+    with Image.open(source_path).convert("RGBA") as object_image:
+        canvas = Image.new(
+            "RGBA",
+            (int(scene.background.width), int(scene.background.height)),
+            color=(0, 0, 0, 0),
+        )
+        resized = object_image.resize(
+            (max(1, int(round(bbox.w))), max(1, int(round(bbox.h)))),
+            Image.LANCZOS,
+        )
+        canvas.paste(
+            resized,
+            (int(round(bbox.x)), int(round(bbox.y))),
+            resized,
+        )
+        canvas.save(target)
+    return target
+
+
+def _export_source_object_layer(
+    *,
+    layer,
+    candidate: dict[str, object],
+    source_layers_dir: Path,
+) -> Path | None:
+    source_ref = candidate.get("object_image_ref") or candidate.get("candidate_image_ref")
+    if not isinstance(source_ref, str):
+        return None
+    source_path = Path(source_ref)
+    if not source_path.exists() or not source_path.is_file():
+        return None
+    target = source_layers_dir / f"{layer.order:03d}-{layer.layer_id}{source_path.suffix or '.png'}"
+    if source_path.resolve() != target.resolve():
+        shutil.copy2(source_path, target)
+    return target
 
 
 def _write_lottie_bundle(
@@ -173,6 +272,7 @@ def _write_output_manifest(
     scene: Scene,
     artifacts_root: Path,
     exported_layers: list[Path],
+    source_layer_paths: list[Path],
     lottie_path: Path,
 ) -> Path:
     scene_id = scene.meta.scene_id
@@ -202,7 +302,7 @@ def _write_output_manifest(
             {
                 "layer_id": layer.layer_id,
                 "type": layer.type.value,
-                "path": f"layers/{path.name}",
+                "path": f"layers/objects/{path.name}",
                 "source_region_id": layer.source_region_id,
             }
             for layer, path in zip(
@@ -210,6 +310,12 @@ def _write_output_manifest(
                 exported_layers,
                 strict=False,
             )
+        ],
+        "source_layers": [
+            {
+                "path": f"layers/source-objects/{path.name}",
+            }
+            for path in source_layer_paths
         ],
         "delivery_bundle": bundle.model_dump(mode="json"),
     }

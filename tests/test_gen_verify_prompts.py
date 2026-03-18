@@ -240,6 +240,8 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     assert output_layers_dir.exists()
     assert output_manifest["lottie_path"] == "animation.lottie"
     assert output_manifest["layers"]
+    assert output_manifest["source_layers"]
+    assert (scene_dir / "outputs" / "layers" / "source-objects").exists()
     with ZipFile(lottie_path) as archive:
         names = set(archive.namelist())
     assert "manifest.json" in names

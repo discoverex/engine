@@ -61,7 +61,24 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
             created_at=now,
             updated_at=now,
         ),
-        background=Background(asset_ref=str(base_image), width=64, height=64),
+        background=Background(
+            asset_ref=str(base_image),
+            width=64,
+            height=64,
+            metadata={
+                "inpaint_layer_candidates": [
+                    {
+                        "region_id": "r1",
+                        "candidate_image_ref": str(object_image),
+                        "object_image_ref": str(object_image),
+                        "object_mask_ref": str(object_image),
+                        "patch_image_ref": str(object_image),
+                        "layer_image_ref": str(object_image),
+                        "bbox": {"x": 1, "y": 2, "w": 10, "h": 12},
+                    }
+                ]
+            },
+        ),
         regions=[
             Region(
                 region_id="r1",
@@ -119,8 +136,12 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
     assert exported.lottie_path.exists()
     assert exported.manifest_path.exists()
     assert len(exported.layer_paths) == 3
+    assert len(exported.source_layer_paths) == 1
     payload = json.loads(exported.manifest_path.read_text(encoding="utf-8"))
     assert payload["lottie_path"] == "animation.lottie"
+    assert payload["source_layers"] == [
+        {"path": "layers/source-objects/001-layer-object.png"}
+    ]
     assert [layer["layer_id"] for layer in payload["layers"]] == [
         "layer-base",
         "layer-object",

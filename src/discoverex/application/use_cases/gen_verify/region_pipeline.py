@@ -149,6 +149,7 @@ def generate_regions(
         record_layer_candidate(
             background=background,
             region=updated,
+            candidate_ref=object_asset.candidate_ref,
             object_ref=object_ref,
             object_mask_ref=object_mask_ref,
             patch_ref=patch_ref,
