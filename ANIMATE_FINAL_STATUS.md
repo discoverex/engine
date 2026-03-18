@@ -195,3 +195,14 @@
 | wan_backend.py ComfyUI (843줄) | — | ⬜ Phase 6 |
 | wan_server.py (581줄) | — | ❌ 제외 (REST API) |
 | wan_dashboard.html | — | ❌ 제외 (웹 UI) |
+
+### 세션 중 sprite_gen 스크립트 수정 (engine 미반영, 스크립트 전용)
+
+| sprite_gen 파일 | 변경 내용 | engine 반영 |
+|----------------|----------|------------|
+| wan_mode_classifier.py (+66줄) | 3단계 JSON 복구 + 핵심 필드 검증 + has_deformable 추론 | ✅ gemini_mode_classifier.py에 반영 (커밋 46b77da) |
+| wan_lottie_baker.py (신규 208줄) | Lottie + 키프레임 precomp 래퍼 베이크 | ✅ lottie_baker.py + lottie_baker_transform.py (커밋 40ec18c) |
+| wan_server.py (+51줄) | `/api/export_combined`, `/api/export_lottie` API 추가 | ❌ engine 외부 (REST API는 engine 범위 밖) |
+| wan_dashboard.html (+74줄) | 통합Lottie / 모션Lottie만 / 키프레임JSON 내보내기 버튼 3종 | ❌ engine 외부 (웹 UI는 engine 범위 밖) |
+
+상세 내용은 `ANIMATE_LOTTIE_BAKER_AND_REMAINING.md` 참조.
