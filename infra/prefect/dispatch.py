@@ -32,7 +32,7 @@ def dispatch_engine_job(
     _ = (cwd, env)
     logger = get_run_logger()
 
-    from discoverex.application.flows.prefect_subflow import (
+    from discoverex.application.flows.engine_entry import (
         run_prefect_engine_entry_flow,
     )
 
