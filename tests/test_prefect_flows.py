@@ -199,7 +199,7 @@ def test_dispatch_engine_job_calls_nested_prefect_subflow(
         return {"status": "completed", "scene_id": "scene-1"}
 
     monkeypatch.setattr(
-        "discoverex.application.flows.prefect_subflow.run_prefect_engine_entry_flow",
+        "discoverex.application.flows.engine_entry.run_prefect_engine_entry_flow",
         _fake_nested_flow,
     )
 
