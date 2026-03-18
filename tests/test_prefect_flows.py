@@ -289,19 +289,15 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
 
     monkeypatch.setattr(
         prefect_entrypoint,
-        "engine_job_task",
-        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
-            payload=fake_run_engine_entry(**{
-                "command": mapped_command(str(payload.get("command", ""))),
-                "args": coerce_args(payload.get("args")),
-                "config_name": config_name(payload),
-                "config_dir": str(payload.get("config_dir") or "conf"),
-                "resolved_config": payload.get("resolved_config"),
-                "overrides": coerce_overrides(payload.get("overrides")),
-            }),
-            stdout='{"status":"completed"}\n',
-            stderr="",
-        ),
+        "_run_nested_pipeline_flow",
+        lambda payload, logger: fake_run_engine_entry(**{
+            "command": mapped_command(str(payload.get("command", ""))),
+            "args": coerce_args(payload.get("args")),
+            "config_name": config_name(payload),
+            "config_dir": str(payload.get("config_dir") or "conf"),
+            "resolved_config": payload.get("resolved_config"),
+            "overrides": coerce_overrides(payload.get("overrides")),
+        }),
     )
     monkeypatch.setattr(
         prefect_entrypoint, "get_run_logger", lambda: _FakeLogger(logged)
@@ -345,7 +341,7 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
     assert output["flow_run_id"] == "flow-123"
     assert output["attempt"] == 1
     assert output["outputs_prefix"] == "jobs/flow-123/attempt-1/"
-    assert logged[0][0] == "prefect runtime import path: flow_module=%s dispatch_module=%s dispatch_source=%s"
+    assert logged[0][0] == "prefect runtime import path: flow_module=%s"
     assert logged[1][0] == "engine flow start: %s"
     assert logged[-1][0] == "engine payload summary: %s"
     start_summary = json.loads(str(logged[1][1][0]))
@@ -358,16 +354,12 @@ def test_repo_root_prefect_entrypoint_uploads_worker_artifacts(
 ) -> None:
     monkeypatch.setattr(
         prefect_entrypoint,
-        "engine_job_task",
-        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
-            payload={
-                "status": "completed",
-                "scene_id": "s1",
-                "version_id": "v1",
-            },
-            stdout='{"status":"completed","scene_id":"s1","version_id":"v1"}\n',
-            stderr="",
-        ),
+        "_run_nested_pipeline_flow",
+        lambda payload, logger: {
+            "status": "completed",
+            "scene_id": "s1",
+            "version_id": "v1",
+        },
     )
     monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
     monkeypatch.setattr(flow_run, "get_id", lambda: "flow-456")
@@ -420,16 +412,12 @@ def test_repo_root_prefect_entrypoint_raises_on_failed_payload(
     uploaded: list[dict[str, Any]] = []
     monkeypatch.setattr(
         prefect_entrypoint,
-        "engine_job_task",
-        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
-            payload={
-                "status": "failed",
-                "failure_reason": "boom",
-                "scene_json": "",
-            },
-            stdout='{"status":"failed","failure_reason":"boom","scene_json":""}\n',
-            stderr="stderr boom\n",
-        ),
+        "_run_nested_pipeline_flow",
+        lambda payload, logger: {
+            "status": "failed",
+            "failure_reason": "boom",
+            "scene_json": "",
+        },
     )
     monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
     monkeypatch.setattr(
