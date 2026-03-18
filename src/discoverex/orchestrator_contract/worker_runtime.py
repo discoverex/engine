@@ -68,6 +68,8 @@ def _content_type_for_path(path: Path) -> str | None:
     suffix = path.suffix.lower()
     if suffix == ".json":
         return "application/json"
+    if suffix == ".lottie":
+        return "application/zip"
     if suffix == ".png":
         return "image/png"
     if suffix in {".jpg", ".jpeg"}:
@@ -87,6 +89,7 @@ def _canonicalize_artifact(
         "verification": ("verification_json", "artifact_verification_uri"),
         "naturalness": ("naturalness_json", "artifact_naturalness_uri"),
         "prompt_bundle": ("prompt_bundle_json", "artifact_prompt_bundle_uri"),
+        "lottie": ("lottie_bundle", "artifact_lottie_uri"),
         "composite": ("composite_image", "artifact_composite_uri"),
         "final_image": ("composite_image", "artifact_composite_uri"),
         "output_manifest": (

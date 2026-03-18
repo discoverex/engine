@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from zipfile import ZipFile
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -219,6 +220,11 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     assert prompt_bundle["object"]["prompt"] == "hidden brass key"
     assert prompt_bundle["final_fx"]["prompt"] == "polished playable scene"
     assert prompt_bundle["regions"][0]["generation_prompt"] == "hidden brass key"
+    output_manifest = json.loads(
+        (scene_dir / "outputs" / "manifest.json").read_text(encoding="utf-8")
+    )
+    lottie_path = scene_dir / "outputs" / "animation.lottie"
+    output_layers_dir = scene_dir / "outputs" / "layers"
     tracker_call = _tracker_call_value(tracker)
     tracker_params = cast(dict[str, object], tracker_call["params"])
     tracker_artifacts = cast(list[Path], tracker_call["artifacts"])
@@ -228,6 +234,17 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     assert tracker_params["final_prompt_used"] == "polished playable scene"
     artifact_names = {path.name for path in tracker_artifacts}
     assert "prompt_bundle.json" in artifact_names
+    assert "animation.lottie" in artifact_names
+    assert "manifest.json" in artifact_names
+    assert lottie_path.exists()
+    assert output_layers_dir.exists()
+    assert output_manifest["lottie_path"] == "animation.lottie"
+    assert output_manifest["layers"]
+    with ZipFile(lottie_path) as archive:
+        names = set(archive.namelist())
+    assert "manifest.json" in names
+    assert "animations/scene.json" in names
+    assert any(name.startswith("images/") for name in names)
     fx_request = cast(SimpleNamespace, fx_model.requests[0])
     inpaint_request = cast(SimpleNamespace, inpaint_model.requests[0])
     assert fx_request.mode == "background"
