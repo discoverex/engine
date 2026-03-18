@@ -273,6 +273,31 @@ def test_fetch_logs_formats_output(monkeypatch, capsys) -> None:  # type: ignore
     assert "prefect.flow_runs | INFO" in output
 
 
+def test_inspect_run_renders_tree(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+
+    async def _fake_describe(flow_run_id: str, depth: int) -> list[str]:
+        assert flow_run_id == "f7b6ec0c-48e1-4dcc-8e74-1f03b3bbdd9c"
+        assert depth == 3
+        return [
+            "flow discoverex-generate-flow [Completed] id=root tasks=1",
+            "  task discoverex-generate-pipeline-0 [Completed] id=task-1 child_flow=child-1",
+            "    flow discoverex-generate-pipeline [Completed] id=child-1 tasks=11",
+        ]
+
+    monkeypatch.setattr("scripts.cli.prefect._describe_flow_run_tree", _fake_describe)
+
+    result = runner.invoke(
+        app,
+        ["inspect-run", "f7b6ec0c-48e1-4dcc-8e74-1f03b3bbdd9c", "--depth", "3"],
+    )
+
+    assert result.exit_code == 0
+    assert "flow discoverex-generate-flow" in result.stdout
+    assert "task discoverex-generate-pipeline-0" in result.stdout
+    assert "flow discoverex-generate-pipeline" in result.stdout
+
+
 def test_register_experiment_sweep_invokes_script(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     runner = CliRunner()
     captured: dict[str, object] = {}
