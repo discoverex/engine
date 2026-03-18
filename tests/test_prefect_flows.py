@@ -5,13 +5,11 @@ import json
 import os
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 from prefect.runtime import flow_run
-from prefect.context import FlowRunContext, TaskRunContext
 
 import infra.prefect.dispatch as prefect_dispatch
 import infra.prefect.flow as prefect_entrypoint
@@ -37,22 +35,6 @@ class _FakeLogger:
 
     def error(self, message: str, *args: Any) -> None:
         self._sink.append((message, args))
-
-
-class _FakeTaskFuture:
-    def __init__(self, result: Any) -> None:
-        self._result = result
-
-    def result(self) -> Any:
-        return self._result
-
-
-class _FakeTask:
-    def __init__(self, fn) -> None:  # type: ignore[no-untyped-def]
-        self._fn = fn
-
-    def submit(self, *args: Any, **kwargs: Any) -> _FakeTaskFuture:
-        return _FakeTaskFuture(self._fn(*args, **kwargs))
 
 
 def test_run_engine_job_executes_engine_entry_directly(
@@ -204,52 +186,22 @@ def test_repo_root_prefect_entrypoint_exposes_run_job_flow(
     assert module.run_combined_job_flow is prefect_entrypoint.run_combined_job_flow
 
 
-def test_dispatch_engine_job_uses_prefect_engine_for_child_flow(
+def test_dispatch_engine_job_calls_nested_prefect_subflow(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    (tmp_path / ".venv" / "bin").mkdir(parents=True)
-    python_bin = tmp_path / ".venv" / "bin" / "python"
-    python_bin.write_text("", encoding="utf-8")
-    monkeypatch.setattr(prefect_dispatch, "get_run_logger", lambda: _FakeLogger([]))
-
-    created: dict[str, Any] = {}
-
-    class _FakeClient:
-        def __enter__(self):  # type: ignore[no-untyped-def]
-            return self
-
-        def __exit__(self, exc_type, exc, tb):  # type: ignore[no-untyped-def]
-            _ = (exc_type, exc, tb)
-
-        def create_flow_run(self, **kwargs: Any):  # type: ignore[no-untyped-def]
-            created.update(kwargs)
-            return SimpleNamespace(id="child-flow-123")
-
-    monkeypatch.setattr(prefect_dispatch, "get_client", lambda sync_client=True: _FakeClient())
+    sink: list[tuple[str, tuple[Any, ...]]] = []
+    monkeypatch.setattr(prefect_dispatch, "get_run_logger", lambda: _FakeLogger(sink))
 
     captured: dict[str, Any] = {}
 
-    class _FakeProcess:
-        def __init__(self):  # type: ignore[no-untyped-def]
-            self.stdout = __import__("io").StringIO('{"status":"completed"}\n')
-            self.stderr = __import__("io").StringIO("")
+    def _fake_nested_flow(**kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs)
+        return {"status": "completed", "scene_id": "scene-1"}
 
-        def wait(self):  # type: ignore[no-untyped-def]
-            return 0
-
-    def _fake_popen(cmd, cwd, env, stdout, stderr, text, bufsize):  # type: ignore[no-untyped-def]
-        captured["cmd"] = cmd
-        captured["cwd"] = cwd
-        captured["env"] = env
-        return _FakeProcess()
-
-    monkeypatch.setattr(prefect_dispatch.subprocess, "Popen", _fake_popen)
-
-    flow_ctx = SimpleNamespace(flow_run=SimpleNamespace(id="parent-flow-1"))
-    task_ctx = SimpleNamespace(task_run=SimpleNamespace(id="parent-task-1"))
-    monkeypatch.setattr(FlowRunContext, "get", staticmethod(lambda: flow_ctx))
-    monkeypatch.setattr(TaskRunContext, "get", staticmethod(lambda: task_ctx))
+    monkeypatch.setattr(
+        "discoverex.application.flows.prefect_subflow.run_prefect_engine_entry_flow",
+        _fake_nested_flow,
+    )
 
     result = prefect_dispatch.dispatch_engine_job(
         {
@@ -263,13 +215,20 @@ def test_dispatch_engine_job_uses_prefect_engine_for_child_flow(
         env={},
     )
 
-    assert created["parent_task_run_id"] == "parent-task-1"
-    assert captured["cmd"] == [str(python_bin), "-m", "prefect.engine"]
-    assert captured["env"]["PREFECT__FLOW_RUN_ID"] == "child-flow-123"
-    assert captured["env"]["PREFECT__FLOW_ENTRYPOINT"].endswith(
-        "prefect_subflow.py:run_prefect_engine_entry_flow"
-    )
+    assert captured == {
+        "command": "generate",
+        "args": {"background_prompt": "harbor"},
+        "config_name": "generate",
+        "config_dir": "conf",
+        "overrides": ["profile=generator_pixart_gpu_v2_hidden_object"],
+        "resolved_config": None,
+    }
     assert result.payload["status"] == "completed"
+    assert result.stdout == json.dumps(result.payload, ensure_ascii=True)
+    assert result.stderr == ""
+    assert sink[-1][0] == (
+        "engine nested flow handoff: flow=%s command=%s config_name=%s override_count=%d"
+    )
 
 
 def test_flow_kind_entrypoint_rejects_mismatched_command(
@@ -322,19 +281,17 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
     monkeypatch.setattr(
         prefect_entrypoint,
         "engine_job_task",
-        _FakeTask(
-            lambda payload, cwd, env: prefect_dispatch.DispatchResult(
-                payload=fake_run_engine_entry(**{
-                    "command": mapped_command(str(payload.get("command", ""))),
-                    "args": coerce_args(payload.get("args")),
-                    "config_name": config_name(payload),
-                    "config_dir": str(payload.get("config_dir") or "conf"),
-                    "resolved_config": payload.get("resolved_config"),
-                    "overrides": coerce_overrides(payload.get("overrides")),
-                }),
-                stdout='{"status":"completed"}\n',
-                stderr="",
-            )
+        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
+            payload=fake_run_engine_entry(**{
+                "command": mapped_command(str(payload.get("command", ""))),
+                "args": coerce_args(payload.get("args")),
+                "config_name": config_name(payload),
+                "config_dir": str(payload.get("config_dir") or "conf"),
+                "resolved_config": payload.get("resolved_config"),
+                "overrides": coerce_overrides(payload.get("overrides")),
+            }),
+            stdout='{"status":"completed"}\n',
+            stderr="",
         ),
     )
     monkeypatch.setattr(
@@ -393,16 +350,14 @@ def test_repo_root_prefect_entrypoint_uploads_worker_artifacts(
     monkeypatch.setattr(
         prefect_entrypoint,
         "engine_job_task",
-        _FakeTask(
-            lambda payload, cwd, env: prefect_dispatch.DispatchResult(
-                payload={
-                    "status": "completed",
-                    "scene_id": "s1",
-                    "version_id": "v1",
-                },
-                stdout='{"status":"completed","scene_id":"s1","version_id":"v1"}\n',
-                stderr="",
-            )
+        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
+            payload={
+                "status": "completed",
+                "scene_id": "s1",
+                "version_id": "v1",
+            },
+            stdout='{"status":"completed","scene_id":"s1","version_id":"v1"}\n',
+            stderr="",
         ),
     )
     monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
@@ -457,16 +412,14 @@ def test_repo_root_prefect_entrypoint_raises_on_failed_payload(
     monkeypatch.setattr(
         prefect_entrypoint,
         "engine_job_task",
-        _FakeTask(
-            lambda payload, cwd, env: prefect_dispatch.DispatchResult(
-                payload={
-                    "status": "failed",
-                    "failure_reason": "boom",
-                    "scene_json": "",
-                },
-                stdout='{"status":"failed","failure_reason":"boom","scene_json":""}\n',
-                stderr="stderr boom\n",
-            )
+        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
+            payload={
+                "status": "failed",
+                "failure_reason": "boom",
+                "scene_json": "",
+            },
+            stdout='{"status":"failed","failure_reason":"boom","scene_json":""}\n',
+            stderr="stderr boom\n",
         ),
     )
     monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
