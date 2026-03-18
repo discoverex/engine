@@ -39,6 +39,22 @@ class _FakeLogger:
         self._sink.append((message, args))
 
 
+class _FakeTaskFuture:
+    def __init__(self, result: Any) -> None:
+        self._result = result
+
+    def result(self) -> Any:
+        return self._result
+
+
+class _FakeTask:
+    def __init__(self, fn) -> None:  # type: ignore[no-untyped-def]
+        self._fn = fn
+
+    def submit(self, *args: Any, **kwargs: Any) -> _FakeTaskFuture:
+        return _FakeTaskFuture(self._fn(*args, **kwargs))
+
+
 def test_run_engine_job_executes_engine_entry_directly(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -306,17 +322,19 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
     monkeypatch.setattr(
         prefect_entrypoint,
         "engine_job_task",
-        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
-            payload=fake_run_engine_entry(**{
-                "command": mapped_command(str(payload.get("command", ""))),
-                "args": coerce_args(payload.get("args")),
-                "config_name": config_name(payload),
-                "config_dir": str(payload.get("config_dir") or "conf"),
-                "resolved_config": payload.get("resolved_config"),
-                "overrides": coerce_overrides(payload.get("overrides")),
-            }),
-            stdout='{"status":"completed"}\n',
-            stderr="",
+        _FakeTask(
+            lambda payload, cwd, env: prefect_dispatch.DispatchResult(
+                payload=fake_run_engine_entry(**{
+                    "command": mapped_command(str(payload.get("command", ""))),
+                    "args": coerce_args(payload.get("args")),
+                    "config_name": config_name(payload),
+                    "config_dir": str(payload.get("config_dir") or "conf"),
+                    "resolved_config": payload.get("resolved_config"),
+                    "overrides": coerce_overrides(payload.get("overrides")),
+                }),
+                stdout='{"status":"completed"}\n',
+                stderr="",
+            )
         ),
     )
     monkeypatch.setattr(
@@ -375,14 +393,16 @@ def test_repo_root_prefect_entrypoint_uploads_worker_artifacts(
     monkeypatch.setattr(
         prefect_entrypoint,
         "engine_job_task",
-        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
-            payload={
-                "status": "completed",
-                "scene_id": "s1",
-                "version_id": "v1",
-            },
-            stdout='{"status":"completed","scene_id":"s1","version_id":"v1"}\n',
-            stderr="",
+        _FakeTask(
+            lambda payload, cwd, env: prefect_dispatch.DispatchResult(
+                payload={
+                    "status": "completed",
+                    "scene_id": "s1",
+                    "version_id": "v1",
+                },
+                stdout='{"status":"completed","scene_id":"s1","version_id":"v1"}\n',
+                stderr="",
+            )
         ),
     )
     monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
@@ -437,14 +457,16 @@ def test_repo_root_prefect_entrypoint_raises_on_failed_payload(
     monkeypatch.setattr(
         prefect_entrypoint,
         "engine_job_task",
-        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
-            payload={
-                "status": "failed",
-                "failure_reason": "boom",
-                "scene_json": "",
-            },
-            stdout='{"status":"failed","failure_reason":"boom","scene_json":""}\n',
-            stderr="stderr boom\n",
+        _FakeTask(
+            lambda payload, cwd, env: prefect_dispatch.DispatchResult(
+                payload={
+                    "status": "failed",
+                    "failure_reason": "boom",
+                    "scene_json": "",
+                },
+                stdout='{"status":"failed","failure_reason":"boom","scene_json":""}\n',
+                stderr="stderr boom\n",
+            )
         ),
     )
     monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
