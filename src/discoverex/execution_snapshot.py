@@ -99,6 +99,16 @@ def build_tracking_params(snapshot: dict[str, Any] | None) -> dict[str, str]:
         "adapters.artifact_store": _target_name(adapters.get("artifact_store")),
         "adapters.tracker": _target_name(adapters.get("tracker")),
     }
+    args = snapshot.get("args", {})
+    if isinstance(args, dict):
+        for key in ("sweep_id", "combo_id", "scenario_id", "search_stage"):
+            value = str(args.get(key, "")).strip()
+            if value:
+                params[f"args.{key}"] = value
+    overrides = snapshot.get("overrides", [])
+    if isinstance(overrides, list):
+        for name, value in _tracking_override_params(overrides).items():
+            params[name] = value
     for model_name in (
         "background_generator",
         "hidden_region",
@@ -153,3 +163,22 @@ def _is_sensitive_key(key: str) -> bool:
 
 def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _tracking_override_params(overrides: list[Any]) -> dict[str, str]:
+    params: dict[str, str] = {}
+    for raw in overrides:
+        text = str(raw).strip()
+        if not text or "=" not in text:
+            continue
+        key, value = text.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key or not value or _is_sensitive_key(key):
+            continue
+        params[f"override.{_sanitize_tracking_key(key)}"] = value
+    return params
+
+
+def _sanitize_tracking_key(value: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_.-]+", "_", value.strip("/"))

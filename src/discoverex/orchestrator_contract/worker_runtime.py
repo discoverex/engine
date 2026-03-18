@@ -90,6 +90,11 @@ def _canonicalize_artifact(
             Path("scene/verification.json"),
             "artifact_verification_uri",
         ),
+        "naturalness": (
+            "naturalness_json",
+            Path("scene/naturalness.json"),
+            "artifact_naturalness_uri",
+        ),
     }
     target = mapping.get(logical_name)
     if target is None:

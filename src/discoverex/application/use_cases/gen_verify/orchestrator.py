@@ -21,6 +21,7 @@ from .model_lifecycle import unload_model
 from .object_pipeline import generate_region_objects
 from .object_pipeline import resolve_object_prompts
 from .persistence import save_scene, track_run, write_verification_report
+from .persistence import write_naturalness_report
 from .prompt_bundle import build_prompt_tracking_params, save_prompt_bundle
 from .region_pipeline import build_candidate_regions, generate_regions
 from .scene_builder import build_scene, generate_run_ids
@@ -198,12 +199,14 @@ def run(
 
     saved_dir = save_scene(context=context, scene=scene)
     write_verification_report(context=context, saved_dir=saved_dir, scene=scene)
+    naturalness_report = write_naturalness_report(saved_dir=saved_dir, scene=scene)
     track_run(
         context=context,
         scene=scene,
         saved_dir=saved_dir,
         composite_artifact=composite.artifact_path,
         prompt_bundle_artifact=prompt_bundle_path,
+        naturalness_artifact=naturalness_report,
         extra_params=build_prompt_tracking_params(prompt_bundle),
     )
     emit_progress_event(

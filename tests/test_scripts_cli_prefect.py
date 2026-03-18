@@ -7,6 +7,9 @@ from uuid import UUID
 from typer.testing import CliRunner
 
 from scripts.cli.prefect import (
+    DEFAULT_NATURALNESS_SWEEP_SPEC,
+    DEFAULT_EXPERIMENT_NAME,
+    DEFAULT_EXPERIMENT_QUEUE,
     DEFAULT_REGISTER_JOB_SPEC,
     _build_job_spec_json_for_row,
     _build_prefect_log_filter,
@@ -25,7 +28,7 @@ def test_register_defaults_to_standard_job_spec(monkeypatch) -> None:  # type: i
 
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
-    result = runner.invoke(app, ["register", "--branch", "dev"])
+    result = runner.invoke(app, ["registercombined", "--branch", "dev"])
 
     assert result.exit_code == 0
     assert captured["script_name"] == "submit_job_spec.py"
@@ -46,7 +49,7 @@ def test_register_requires_branch(monkeypatch) -> None:  # type: ignore[no-untyp
 
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
-    result = runner.invoke(app, ["register"])
+    result = runner.invoke(app, ["registercombined"])
 
     assert result.exit_code == 2
     assert "--branch is required" in result.stdout
@@ -66,7 +69,7 @@ def test_register_forwards_submit_spec_args(monkeypatch) -> None:  # type: ignor
     result = runner.invoke(
         app,
         [
-            "register",
+            "registercombined",
             "--branch",
             "feature/foo",
             "--job-name",
@@ -100,7 +103,7 @@ def test_register_maps_command_to_flow_kind(monkeypatch) -> None:  # type: ignor
     result = runner.invoke(
         app,
         [
-            "register",
+            "registercombined",
             "--branch",
             "feature/foo",
             "--command",
@@ -135,7 +138,7 @@ def test_register_flow_targets_named_flow_kind(monkeypatch) -> None:  # type: ig
 
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
-    result = runner.invoke(app, ["register-flow", "generate", "--branch", "dev"])
+    result = runner.invoke(app, ["register", "flow", "generate", "--branch", "dev"])
 
     assert result.exit_code == 0
     assert captured["script_name"] == "submit_job_spec.py"
@@ -153,7 +156,7 @@ def test_default_register_job_spec_points_to_repo_standard_file() -> None:
         / "infra"
         / "register"
         / "job_specs"
-        / "real-generate-pixart-hidden-object-v2-8gb-safe.yaml"
+        / "real-generate-pixart-hidden-object-naturalness-v2-8gb-safe.yaml"
     )
 
 
@@ -219,7 +222,7 @@ def test_register_batch_submits_one_run_per_csv_row(monkeypatch, tmp_path) -> No
 
     result = runner.invoke(
         app,
-        ["register-batch", str(csv_path), "--branch", "dev"],
+        ["register", "batch", str(csv_path), "--branch", "dev"],
     )
 
     assert result.exit_code == 0
@@ -268,3 +271,103 @@ def test_fetch_logs_formats_output(monkeypatch, capsys) -> None:  # type: ignore
     output = capsys.readouterr().out
     assert "hello" in output
     assert "prefect.flow_runs | INFO" in output
+
+
+def test_inspect_run_renders_tree(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+
+    async def _fake_describe(flow_run_id: str, depth: int) -> list[str]:
+        assert flow_run_id == "f7b6ec0c-48e1-4dcc-8e74-1f03b3bbdd9c"
+        assert depth == 3
+        return [
+            "flow discoverex-generate-flow [Completed] id=root tasks=1",
+            "  task discoverex-generate-pipeline-0 [Completed] id=task-1 child_flow=child-1",
+            "    flow discoverex-generate-pipeline [Completed] id=child-1 tasks=11",
+        ]
+
+    monkeypatch.setattr("scripts.cli.prefect._describe_flow_run_tree", _fake_describe)
+
+    result = runner.invoke(
+        app,
+        ["inspect-run", "f7b6ec0c-48e1-4dcc-8e74-1f03b3bbdd9c", "--depth", "3"],
+    )
+
+    assert result.exit_code == 0
+    assert "flow discoverex-generate-flow" in result.stdout
+    assert "task discoverex-generate-pipeline-0" in result.stdout
+    assert "flow discoverex-generate-pipeline" in result.stdout
+
+
+def test_register_experiment_sweep_invokes_script(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def _fake_run(script_name: str, args: list[str]) -> int:
+        captured["script_name"] = script_name
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
+
+    result = runner.invoke(app, ["register", "experiment-sweep"])
+
+    assert result.exit_code == 0
+    assert captured["script_name"] == "naturalness_sweep.py"
+    assert captured["args"] == [
+        str(DEFAULT_NATURALNESS_SWEEP_SPEC),
+        "--experiment",
+        DEFAULT_EXPERIMENT_NAME,
+    ]
+
+
+def test_register_experiment_sweep_uses_experiment_deployment(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def _fake_run(script_name: str, args: list[str]) -> int:
+        captured["script_name"] = script_name
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
+
+    result = runner.invoke(app, ["register", "experiment-sweep", "--experiment", "naturalness", "--branch", "dev"])
+
+    assert result.exit_code == 0
+    assert captured["script_name"] == "naturalness_sweep.py"
+    assert captured["args"] == [
+        str(DEFAULT_NATURALNESS_SWEEP_SPEC),
+        "--deployment",
+        "discoverex-naturalness-experiment-dev",
+        "--branch",
+        "dev",
+        "--experiment",
+        "naturalness",
+    ]
+
+
+def test_deploy_experiment_uses_batch_queue(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def _fake_run(script_name: str, args: list[str]) -> int:
+        captured["script_name"] = script_name
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
+
+    result = runner.invoke(app, ["deploy", "experiment", "--experiment", "naturalness", "--branch", "dev"])
+
+    assert result.exit_code == 0
+    assert captured["script_name"] == "deploy_prefect_flows.py"
+    assert captured["args"] == [
+        "--flow-kind",
+        "generate",
+        "--work-queue-name",
+        DEFAULT_EXPERIMENT_QUEUE,
+        "--deployment-name",
+        "discoverex-naturalness-experiment-dev",
+        "--branch",
+        "dev",
+    ]

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import inspect
 import json
 from pathlib import Path
 from typing import Any
 
-from prefect import flow, get_run_logger, task
+from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
 
-from infra.prefect import dispatch as prefect_dispatch
 from infra.prefect.artifacts import (
     FAILED_STATUSES,
     payload_status,
@@ -16,6 +16,7 @@ from infra.prefect.artifacts import (
     upload_worker_artifacts,
     write_local_artifacts,
 )
+from infra.prefect import dispatch as prefect_dispatch
 from infra.prefect.job_spec import extract_inputs_payload, load_job_spec
 from infra.prefect.provision import provision_runtime_dependencies
 from infra.prefect.reporting import log_failure_summary, log_start_summary
@@ -37,17 +38,9 @@ _FLOW_KIND_BY_COMMAND: dict[str, FlowKind] = {
 }
 
 
-@task
 def engine_job_task(
     payload: dict[str, Any], cwd: Path, env: dict[str, str]
 ) -> prefect_dispatch.DispatchResult:
-    command = payload.get("command", "job")
-    from prefect.context import TaskRunContext
-    
-    ctx = TaskRunContext.get()
-    if ctx and ctx.task_run:
-        ctx.task_run.name = f"engine-{command}-task"
-        
     return prefect_dispatch.dispatch_engine_job(payload, cwd=cwd, env=env)
 
 
@@ -216,6 +209,12 @@ def _run_job_flow_logic(
     flow_run_id = flow_run.get_id() or "unknown-flow-run"
     attempt = flow_attempt()
     try:
+        logger.info(
+            "prefect runtime import path: flow_module=%s dispatch_module=%s dispatch_source=%s",
+            __file__,
+            inspect.getsourcefile(prefect_dispatch),
+            inspect.getsourcefile(prefect_dispatch.dispatch_engine_job),
+        )
         job_spec = load_job_spec(job_spec_json)
 
         output_prefix = outputs_prefix(

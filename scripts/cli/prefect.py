@@ -18,6 +18,7 @@ from infra.register.branch_deployments import (
     DEFAULT_FLOW_KIND,
     SUPPORTED_FLOW_KINDS,
     deployment_name_for_branch,
+    experiment_deployment_name,
 )
 
 
@@ -34,12 +35,21 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+deploy_app = typer.Typer(no_args_is_help=True, add_completion=False)
+register_app = typer.Typer(no_args_is_help=True, add_completion=False)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INFRA_DIR = REPO_ROOT / "infra" / "register"
 DEFAULT_REGISTER_JOB_SPEC = (
-    INFRA_DIR / "job_specs" / "real-generate-pixart-hidden-object-v2-8gb-safe.yaml"
+    INFRA_DIR
+    / "job_specs"
+    / "real-generate-pixart-hidden-object-naturalness-v2-8gb-safe.yaml"
 )
+DEFAULT_NATURALNESS_SWEEP_SPEC = (
+    INFRA_DIR / "sweeps" / "naturalness_medium.yaml"
+)
+DEFAULT_EXPERIMENT_QUEUE = "gpu-fixed-batch"
+DEFAULT_EXPERIMENT_NAME = "naturalness"
 
 
 def _flow_kind_for_command(command: str) -> str:
@@ -51,6 +61,10 @@ def _flow_kind_for_command(command: str) -> str:
         "verify": "verify",
         "animate": "animate",
     }[command]
+
+
+def _experiment_deployment_name(branch: str, experiment: str) -> str:
+    return experiment_deployment_name(branch, experiment=experiment)
 
 
 def _run_infra_script(script_name: str, args: list[str]) -> int:
@@ -204,8 +218,72 @@ async def _read_prefect_logs(flow_run_id: str, limit: int) -> list[PrefectLog]:
     return list(logs)  # type: ignore
 
 
-@app.command(
-    "deploy-flow",
+async def _describe_flow_run_tree(flow_run_id: str, depth: int = 2) -> list[str]:
+    from prefect.client.orchestration import get_client
+    from prefect.client.schemas.filters import (
+        FlowRunFilter,
+        FlowRunFilterId,
+        TaskRunFilter,
+        TaskRunFilterFlowRunId,
+    )
+    from prefect.settings import temporary_settings
+
+    async def _visit(client: Any, run_id: UUID, level: int) -> list[str]:
+        flow_run = await client.read_flow_run(run_id)
+        flow_obj = await client.read_flow(flow_run.flow_id)
+        task_runs = list(
+            await client.read_task_runs(
+                task_run_filter=TaskRunFilter(
+                    flow_run_id=TaskRunFilterFlowRunId(any_=[flow_run.id])
+                ),
+                limit=100,
+            )
+        )
+        lines = [
+            (
+                f"{'  ' * level}flow {flow_obj.name} "
+                f"[{flow_run.state_name}] id={flow_run.id} tasks={len(task_runs)}"
+            )
+        ]
+        if level >= depth:
+            return lines
+
+        parent_task_ids = [task_run.id for task_run in task_runs]
+        child_runs: list[Any] = []
+        if parent_task_ids:
+            child_runs = list(
+                await client.read_flow_runs(
+                    flow_run_filter=FlowRunFilter(parent_task_run_id={"any_": parent_task_ids}),
+                    limit=100,
+                )
+            )
+
+        child_run_by_parent_task = {
+            child_run.parent_task_run_id: child_run for child_run in child_runs
+        }
+
+        for task_run in task_runs:
+            child_run = child_run_by_parent_task.get(task_run.id)
+            child_suffix = ""
+            if child_run is not None:
+                child_suffix = f" child_flow={child_run.id}"
+            lines.append(
+                (
+                    f"{'  ' * (level + 1)}task {task_run.name} "
+                    f"[{task_run.state_name}] id={task_run.id}{child_suffix}"
+                )
+            )
+            if child_run is not None:
+                lines.extend(await _visit(client, child_run.id, level + 2))
+        return lines
+
+    with temporary_settings(updates=_prefect_client_settings()):
+        async with get_client() as client:
+            return await _visit(client, UUID(flow_run_id), 0)
+
+
+@deploy_app.command(
+    "flow",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Deploy a flow-kind-specific Prefect YAML deployment to the server.",
 )
@@ -219,8 +297,8 @@ def deploy_flow(
     raise typer.Exit(exit_code)
 
 
-@app.command(
-    "register-flow",
+@register_app.command(
+    "flow",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Submit the standard job spec to a flow-kind-specific deployment.",
 )
@@ -245,8 +323,8 @@ def register_flow(
     raise typer.Exit(exit_code)
 
 
-@app.command(
-    "register-batch",
+@register_app.command(
+    "batch",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Submit one flow run per CSV row using the default job spec as a template.",
 )
@@ -270,7 +348,7 @@ def register_batch(
         typer.secho("Error: --branch is required.", fg=typer.colors.RED)
         raise typer.Exit(2)
     if _contains_any(remaining, ("--job-spec-file", "--job-spec-json")):
-        raise typer.BadParameter("register-batch manages job spec payloads internally")
+        raise typer.BadParameter("register batch manages job spec payloads internally")
 
     template = _load_job_spec_template(job_spec_file)
     deployment = deployment_name_for_branch(branch, flow_kind=flow_kind)
@@ -291,7 +369,66 @@ def register_batch(
             raise typer.Exit(exit_code)
 
 
+@register_app.command(
+    "experiment-sweep",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Submit an experiment sweep using a YAML sweep spec.",
+)
+def register_experiment_sweep(
+    ctx: typer.Context,
+    experiment: str = typer.Option(DEFAULT_EXPERIMENT_NAME, "--experiment"),
+    sweep_spec: Path = typer.Option(
+        DEFAULT_NATURALNESS_SWEEP_SPEC,
+        "--sweep-spec",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+    ),
+) -> None:
+    branch, remaining = _extract_option(ctx.args, "--branch")
+    submit_args = [str(sweep_spec)]
+    if branch:
+        submit_args.extend(["--deployment", _experiment_deployment_name(branch, experiment)])
+        submit_args.extend(["--branch", branch])
+    submit_args.extend(["--experiment", experiment])
+    submit_args.extend(remaining)
+    exit_code = _run_infra_script(
+        "naturalness_sweep.py",
+        submit_args,
+    )
+    raise typer.Exit(exit_code)
+
+
+@deploy_app.command(
+    "experiment",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Deploy an experiment generate runner to the batch queue.",
+)
+def deploy_experiment(
+    ctx: typer.Context,
+    experiment: str = typer.Option(DEFAULT_EXPERIMENT_NAME, "--experiment"),
+) -> None:
+    branch, remaining = _extract_option(ctx.args, "--branch")
+    deploy_args = [
+        "--flow-kind",
+        "generate",
+        "--work-queue-name",
+        DEFAULT_EXPERIMENT_QUEUE,
+    ]
+    if branch:
+        deploy_args.extend(["--deployment-name", _experiment_deployment_name(branch, experiment)])
+        deploy_args.extend(["--branch", branch])
+    deploy_args.extend(remaining)
+    exit_code = _run_infra_script(
+        "deploy_prefect_flows.py",
+        deploy_args,
+    )
+    raise typer.Exit(exit_code)
+
+
 @app.command(
+    "deploycombined",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Compatibility alias for combined-flow deployment.",
 )
@@ -304,6 +441,7 @@ def deploy(ctx: typer.Context) -> None:
 
 
 @app.command(
+    "registercombined",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Compatibility alias for combined-flow registration.",
 )
@@ -328,7 +466,8 @@ def register(ctx: typer.Context) -> None:
     raise typer.Exit(exit_code)
 
 
-@app.command(
+@register_app.command(
+    "raw",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Register a job using the raw orchestrator script.",
 )
@@ -393,3 +532,17 @@ def check_logs(
     limit: int = typer.Option(200, help="Maximum number of log entries to fetch"),
 ) -> None:
     asyncio.run(_fetch_logs(flow_run_id, limit))
+
+
+@app.command("inspect-run", help="Display a flow run tree using Prefect API data.")
+def inspect_run(
+    flow_run_id: str = typer.Argument(..., help="The UUID of the root flow run"),
+    depth: int = typer.Option(2, min=0, help="Nested flow depth to display"),
+) -> None:
+    lines = asyncio.run(_describe_flow_run_tree(flow_run_id, depth))
+    for line in lines:
+        typer.echo(line)
+
+
+app.add_typer(deploy_app, name="deploy")
+app.add_typer(register_app, name="register")

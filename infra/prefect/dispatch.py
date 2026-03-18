@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -10,6 +8,9 @@ from typing import Any
 from prefect import get_run_logger
 
 from infra.prefect.job_spec import (
+    config_name,
+    coerce_args,
+    coerce_overrides,
     string_value,
 )
 
@@ -27,95 +28,85 @@ def dispatch_engine_job(
     cwd: Path,
     env: dict[str, str],
 ) -> DispatchResult:
+    _ = (cwd, env)
     logger = get_run_logger()
-    python_bin = cwd / ".venv" / "bin" / "python"
-    if not python_bin.exists():
-        raise RuntimeError(f"missing bootstrap python: {python_bin}")
 
-    # Inject parent flow run context to link the sub-process flow in Prefect UI
-    from prefect.context import FlowRunContext
+    from discoverex.application.flows.engine_entry import (
+        build_execution_snapshot,
+        load_pipeline_config,
+        normalize_pipeline_config_for_worker_runtime,
+        write_execution_snapshot,
+    )
+    from discoverex.flows.generate import run_generate_flow
+    from discoverex.flows.verify import run_verify_flow
+    from discoverex.flows.subflows import animate_stub
 
-    child_env = {**env, "ORCH_JOB_INPUTS_JSON": json.dumps(payload, ensure_ascii=True)}
-    
-    flow_run_ctx = FlowRunContext.get()
-    if flow_run_ctx and flow_run_ctx.flow_run:
-        child_env["PREFECT_PARENT_FLOW_RUN_ID"] = str(flow_run_ctx.flow_run.id)
+    command = string_value(payload.get("command"))
+    args = coerce_args(payload.get("args"))
+    resolved_config = payload.get("resolved_config")
+    resolved_config_name = config_name(payload)
+    resolved_config_dir = string_value(payload.get("config_dir")) or "conf"
+    overrides = coerce_overrides(payload.get("overrides"))
 
-    proc = subprocess.Popen(
-        [str(python_bin), "-m", "discoverex.application.flows.launcher_entry"],
-        cwd=cwd,
-        env=child_env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
+    cfg = load_pipeline_config(
+        config_name=resolved_config_name,
+        config_dir=resolved_config_dir,
+        overrides=overrides,
+        resolved_config=resolved_config,
+    )
+    cfg = normalize_pipeline_config_for_worker_runtime(cfg)
+    execution_snapshot = build_execution_snapshot(
+        command=command,
+        args=args,
+        config_name=resolved_config_name,
+        config_dir=resolved_config_dir,
+        overrides=overrides,
+        config=cfg,
+    )
+    execution_snapshot_path = write_execution_snapshot(
+        artifacts_root=Path(cfg.runtime.artifacts_root).resolve(),
+        command=command,
+        snapshot=execution_snapshot,
     )
 
-    stdout_lines: list[str] = []
-    stderr_lines: list[str] = []
-
-    def stream_stdout() -> None:
-        if proc.stdout is None:
-            return
-        for line in iter(proc.stdout.readline, ""):
-            stripped = line.rstrip()
-            stdout_lines.append(stripped)
-            # Log to DEBUG to keep it in the API but hidden from the default INFO UI
-            logger.debug(stripped)
-        proc.stdout.close()
-
-    def stream_stderr() -> None:
-        if proc.stderr is None:
-            return
-        for line in iter(proc.stderr.readline, ""):
-            stripped = line.rstrip()
-            stderr_lines.append(stripped)
-            # Log to DEBUG to keep diagnostics quiet during success
-            logger.debug(f"[diag] {stripped}")
-        proc.stderr.close()
-
-    t_out = threading.Thread(target=stream_stdout, daemon=True)
-    t_err = threading.Thread(target=stream_stderr, daemon=True)
-
-    t_out.start()
-    t_err.start()
-
-    return_code = proc.wait()
-    t_out.join()
-    t_err.join()
-
-    stdout = "\n".join(stdout_lines)
-    stderr = "\n".join(stderr_lines)
-
-    if return_code != 0:
-        # LOUD FAILURE: Flush stderr to ERROR level for immediate visibility in the UI
-        if stderr.strip():
-            logger.error(f"Engine process failed. Captured stderr:\n{stderr.strip()}")
-        
-        reason = stderr.strip() or stdout.strip() or f"exit_code={return_code}"
-        raise RuntimeError(
-            "engine subprocess failed"
-            f"\n\nexit_code: {return_code}"
-            f"\n\nreason: {reason}"
+    flow_name = {
+        "generate": "discoverex-generate-pipeline",
+        "verify": "discoverex-verify-pipeline",
+        "animate": "discoverex-animate-pipeline",
+    }[command]
+    logger.info(
+        "engine nested flow handoff: flow=%s command=%s config_name=%s override_count=%d",
+        flow_name,
+        command,
+        resolved_config_name,
+        len(overrides),
+    )
+    if command == "generate":
+        result = run_generate_flow(
+            args=args,
+            config=cfg,
+            execution_snapshot=execution_snapshot,
+            execution_snapshot_path=execution_snapshot_path,
         )
-    
-    # QUIET SUCCESS: Only a summary is logged at INFO level (handled by flow.py)
-    parsed = _parse_payload_from_stdout(stdout)
-    return DispatchResult(payload=parsed, stdout=stdout, stderr=stderr)
-
-
-def _parse_payload_from_stdout(stdout: str) -> dict[str, Any]:
-    for line in reversed(stdout.splitlines()):
-        text = line.strip()
-        if not text:
-            continue
-        try:
-            payload = json.loads(text)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            return payload
-    raise RuntimeError("engine subprocess did not emit a JSON payload on stdout")
+    elif command == "verify":
+        result = run_verify_flow(
+            args=args,
+            config=cfg,
+            execution_snapshot=execution_snapshot,
+            execution_snapshot_path=execution_snapshot_path,
+        )
+    else:
+        result = animate_stub(
+            args=args,
+            config=cfg,
+            execution_snapshot=execution_snapshot,
+            execution_snapshot_path=execution_snapshot_path,
+        )
+    return DispatchResult(
+        payload=result,
+        stdout=json.dumps(result, ensure_ascii=True),
+        stderr="",
+    )
 
 
 def apply_result_defaults(

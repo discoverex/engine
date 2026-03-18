@@ -45,9 +45,13 @@ def run_verify_flow(
     execution_snapshot_path: Path | None = None,
 ) -> dict[str, str]:
     scene_json = str(args["scene_json"])
-    scene = _load_scene(scene_json)
-    context = _build_context(config, execution_snapshot, execution_snapshot_path)
-    updated = _run_verify_only(scene, context)
+    scene = _load_scene.submit(scene_json).result()
+    context = _build_context.submit(
+        config,
+        execution_snapshot,
+        execution_snapshot_path,
+    ).result()
+    updated = _run_verify_only.submit(scene, context).result()
     return build_scene_payload(
         updated,
         config.runtime.artifacts_root,

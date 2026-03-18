@@ -77,6 +77,7 @@ def test_run_unloads_models_between_generation_stages(
     monkeypatch.setattr(orchestrator, "save_prompt_bundle", lambda *_: Path("prompt_bundle.json"))
     monkeypatch.setattr(orchestrator, "save_scene", lambda **_: tmp_path)
     monkeypatch.setattr(orchestrator, "write_verification_report", lambda **_: None)
+    monkeypatch.setattr(orchestrator, "write_naturalness_report", lambda **_: None)
     monkeypatch.setattr(orchestrator, "track_run", lambda **_: None)
     monkeypatch.setattr(orchestrator, "build_prompt_tracking_params", lambda *_: {})
     monkeypatch.setattr(orchestrator, "generate_run_ids", lambda: SimpleNamespace(scene_id="scene-1", version_id="v1"))

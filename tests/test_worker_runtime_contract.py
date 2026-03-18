@@ -50,8 +50,10 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
     saved_dir.mkdir(parents=True)
     scene_path = saved_dir / "scene.json"
     verification_path = saved_dir / "verification.json"
+    naturalness_path = saved_dir / "naturalness.json"
     scene_path.write_text("{}", encoding="utf-8")
     verification_path.write_text("{}", encoding="utf-8")
+    naturalness_path.write_text("{}", encoding="utf-8")
     outside_path = tmp_path / "outside.json"
     outside_path.write_text("{}", encoding="utf-8")
     monkeypatch.setenv(ARTIFACT_DIR_ENV, str(artifact_root))
@@ -62,6 +64,7 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
         artifacts=[
             ("scene", scene_path),
             ("verification", verification_path),
+            ("naturalness", naturalness_path),
             ("outside", outside_path),
         ],
     )
@@ -84,6 +87,14 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
             "mlflow_tag": "artifact_verification_uri",
             "description": None,
         },
+        {
+            "logical_name": "naturalness_json",
+            "relative_path": "scene/naturalness.json",
+            "content_type": "application/json",
+            "mlflow_tag": "artifact_naturalness_uri",
+            "description": None,
+        },
     ]
     assert (artifact_root / "scene" / "scene.json").read_text(encoding="utf-8") == "{}"
     assert (artifact_root / "scene" / "verification.json").read_text(encoding="utf-8") == "{}"
+    assert (artifact_root / "scene" / "naturalness.json").read_text(encoding="utf-8") == "{}"
