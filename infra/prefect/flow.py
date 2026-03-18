@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 from pathlib import Path
 from typing import Any
@@ -216,6 +217,12 @@ def _run_job_flow_logic(
     flow_run_id = flow_run.get_id() or "unknown-flow-run"
     attempt = flow_attempt()
     try:
+        logger.info(
+            "prefect runtime import path: flow_module=%s dispatch_module=%s dispatch_source=%s",
+            __file__,
+            inspect.getsourcefile(prefect_dispatch),
+            inspect.getsourcefile(prefect_dispatch.dispatch_engine_job),
+        )
         job_spec = load_job_spec(job_spec_json)
 
         output_prefix = outputs_prefix(
