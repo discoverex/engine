@@ -18,6 +18,44 @@ from .gemini_mode_prompt import MODE_CLASSIFIER_PROMPT
 
 logger = logging.getLogger(__name__)
 
+_REQUIRED_KEYS = {"has_deformable_parts", "processing_mode"}
+
+
+def _robust_parse(raw: str) -> dict[str, Any]:
+    """3-stage JSON recovery for mode classifier responses."""
+    import json
+    import re
+
+    # Stage 1: normal parse
+    try:
+        data = parse_gemini_json(raw)
+        if _REQUIRED_KEYS & set(data.keys()):
+            return data  # type: ignore[no-any-return]
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Stage 2: quote/brace repair
+    clean = re.sub(r"```json|```", "", raw).strip()
+    repaired = clean
+    if repaired.count('"') % 2 != 0:
+        repaired += '"'
+    open_b = repaired.count("{") - repaired.count("}")
+    repaired += "}" * max(0, open_b)
+    try:
+        data = json.loads(repaired)
+        if _REQUIRED_KEYS & set(data.keys()):
+            return data  # type: ignore[no-any-return]
+    except json.JSONDecodeError:
+        pass
+
+    # Stage 3: keyword extraction
+    raw_lower = raw.lower()
+    mode = "motion_needed"
+    if '"keyframe_only"' in raw_lower:
+        mode = "keyframe_only"
+    deformable = "true" not in raw_lower.split("has_deformable")[0][-20:] if "has_deformable" in raw_lower else True
+    return {"processing_mode": mode, "has_deformable_parts": deformable, "is_scene": False}
+
 
 class GeminiModeClassifier(GeminiClientMixin):
     """Stage 1: Determine KEYFRAME_ONLY vs MOTION_NEEDED via Gemini Vision."""
@@ -61,7 +99,7 @@ class GeminiModeClassifier(GeminiClientMixin):
 
 
 def _parse_mode_response(raw: str) -> ModeClassification:
-    data: dict[str, Any] = parse_gemini_json(raw)
+    data = _robust_parse(raw)
 
     if not data.get("is_classifiable", True):
         return ModeClassification(
@@ -73,7 +111,12 @@ def _parse_mode_response(raw: str) -> ModeClassification:
         )
 
     is_scene = bool(data.get("is_scene", False))
-    has_deformable = bool(data.get("has_deformable_parts", True))
+    if "has_deformable_parts" in data:
+        has_deformable = bool(data["has_deformable_parts"])
+    elif data.get("processing_mode") == "keyframe_only":
+        has_deformable = False
+    else:
+        has_deformable = True
 
     if is_scene:
         mode = ProcessingMode.MOTION_NEEDED

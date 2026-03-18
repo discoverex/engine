@@ -42,16 +42,22 @@ class LoopState:
         self.rebuild_base_prompts()
 
     def rebuild_base_prompts(self) -> None:
-        bg_pos = (
-            "纯白色背景，背景始终保持白色，边缘锐利，无残影"
-            if self.analysis.bg_type == "solid"
-            else "背景保持不变，画面清晰"
-        )
-        bg_neg = (
-            "背景变色，背景变暗，背景变灰，黑屏"
-            if self.analysis.bg_type == "solid"
-            else "背景消失，背景模糊"
-        )
+        if self.analysis.bg_type == "solid":
+            bg_pos = (
+                "纯白色背景，整个动画过程中背景始终保持白色，背景干净无杂质，"
+                "始终保持恒定的亮度，没有闪烁，画面明亮清晰，边缘锐利，无残影"
+            )
+            bg_neg = (
+                "背景变色，背景变暗，背景变黑，背景变灰，背景变黄，"
+                "背景变紫，背景颜色偏移，非白色背景，"
+                "黑屏，阴影遮盖，滤镜感，曝光不足，画面闪烁"
+            )
+        else:
+            bg_pos = (
+                "背景保持不变，整个动画过程中背景始终保持原始状态，"
+                "画面明亮清晰，边缘锐利，无残影"
+            )
+            bg_neg = "背景消失，背景模糊，背景扭曲，黑屏，画面闪烁"
         self._base_positive = bg_pos + ", " + self.analysis.positive
         self._base_negative = self.analysis.negative + ", " + bg_neg
 
