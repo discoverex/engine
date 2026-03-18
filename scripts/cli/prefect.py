@@ -218,6 +218,70 @@ async def _read_prefect_logs(flow_run_id: str, limit: int) -> list[PrefectLog]:
     return list(logs)  # type: ignore
 
 
+async def _describe_flow_run_tree(flow_run_id: str, depth: int = 2) -> list[str]:
+    from prefect.client.orchestration import get_client
+    from prefect.client.schemas.filters import (
+        FlowRunFilter,
+        FlowRunFilterId,
+        TaskRunFilter,
+        TaskRunFilterFlowRunId,
+    )
+    from prefect.settings import temporary_settings
+
+    async def _visit(client: Any, run_id: UUID, level: int) -> list[str]:
+        flow_run = await client.read_flow_run(run_id)
+        flow_obj = await client.read_flow(flow_run.flow_id)
+        task_runs = list(
+            await client.read_task_runs(
+                task_run_filter=TaskRunFilter(
+                    flow_run_id=TaskRunFilterFlowRunId(any_=[flow_run.id])
+                ),
+                limit=100,
+            )
+        )
+        lines = [
+            (
+                f"{'  ' * level}flow {flow_obj.name} "
+                f"[{flow_run.state_name}] id={flow_run.id} tasks={len(task_runs)}"
+            )
+        ]
+        if level >= depth:
+            return lines
+
+        parent_task_ids = [task_run.id for task_run in task_runs]
+        child_runs: list[Any] = []
+        if parent_task_ids:
+            child_runs = list(
+                await client.read_flow_runs(
+                    flow_run_filter=FlowRunFilter(parent_task_run_id={"any_": parent_task_ids}),
+                    limit=100,
+                )
+            )
+
+        child_run_by_parent_task = {
+            child_run.parent_task_run_id: child_run for child_run in child_runs
+        }
+
+        for task_run in task_runs:
+            child_run = child_run_by_parent_task.get(task_run.id)
+            child_suffix = ""
+            if child_run is not None:
+                child_suffix = f" child_flow={child_run.id}"
+            lines.append(
+                (
+                    f"{'  ' * (level + 1)}task {task_run.name} "
+                    f"[{task_run.state_name}] id={task_run.id}{child_suffix}"
+                )
+            )
+            if child_run is not None:
+                lines.extend(await _visit(client, child_run.id, level + 2))
+        return lines
+
+    with temporary_settings(updates=_prefect_client_settings()):
+        async with get_client() as client:
+            return await _visit(client, UUID(flow_run_id), 0)
+
+
 @deploy_app.command(
     "flow",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
@@ -468,6 +532,16 @@ def check_logs(
     limit: int = typer.Option(200, help="Maximum number of log entries to fetch"),
 ) -> None:
     asyncio.run(_fetch_logs(flow_run_id, limit))
+
+
+@app.command("inspect-run", help="Display a flow run tree using Prefect API data.")
+def inspect_run(
+    flow_run_id: str = typer.Argument(..., help="The UUID of the root flow run"),
+    depth: int = typer.Option(2, min=0, help="Nested flow depth to display"),
+) -> None:
+    lines = asyncio.run(_describe_flow_run_tree(flow_run_id, depth))
+    for line in lines:
+        typer.echo(line)
 
 
 app.add_typer(deploy_app, name="deploy")
