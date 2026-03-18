@@ -419,60 +419,64 @@ def run_generate_flow(
         bool(object_prompt),
         bool(final_prompt),
     )
-    context = _build_context(config, execution_snapshot, execution_snapshot_path)
-    run_ids = _generate_run_ids()
+    context = _build_context.submit(
+        config,
+        execution_snapshot,
+        execution_snapshot_path,
+    ).result()
+    run_ids = _generate_run_ids.submit().result()
     scene_dir = (
         Path(context.artifacts_root) / "scenes" / run_ids.scene_id / run_ids.version_id
     )
-    background, background_prompt_record = _build_background_stage(
+    background, background_prompt_record = _build_background_stage.submit(
         context=context,
         scene_dir=scene_dir,
         background_asset_ref=background_asset_ref or None,
         background_prompt=background_prompt or None,
         background_negative_prompt=background_negative_prompt or None,
-    )
-    background = _background_canvas_upscale_stage(
+    ).result()
+    background = _background_canvas_upscale_stage.submit(
         context=context,
         scene_dir=scene_dir,
         background=background,
         background_prompt=background_prompt or None,
         background_negative_prompt=background_negative_prompt or None,
-    )
-    background = _background_detail_reconstruct_stage(
+    ).result()
+    background = _background_detail_reconstruct_stage.submit(
         context=context,
         scene_dir=scene_dir,
         background=background,
         background_prompt=background_prompt or None,
         background_negative_prompt=background_negative_prompt or None,
-    )
-    background = _materialize_background_asset(background, scene_dir)
+    ).result()
+    background = _materialize_background_asset.submit(background, scene_dir).result()
     logger.info("generate flow background ready asset_ref=%s", background.asset_ref)
-    regions, region_prompt_records = _generate_regions_stage(
+    regions, region_prompt_records = _generate_regions_stage.submit(
         context=context,
         background=background,
         scene_dir=scene_dir,
         object_prompt=object_prompt,
         object_negative_prompt=object_negative_prompt,
-    )
-    scene = _build_scene_stage(
+    ).result()
+    scene = _build_scene_stage.submit(
         context=context,
         background=background,
         regions=regions,
         run_ids=run_ids,
-    )
+    ).result()
 
     fx_input_ref = background.asset_ref
     inpaint_ref = background.metadata.get("inpaint_composited_ref")
     if isinstance(inpaint_ref, str) and inpaint_ref:
         fx_input_ref = inpaint_ref
 
-    composite: CompositeResolution = _compose_scene_stage(
+    composite: CompositeResolution = _compose_scene_stage.submit(
         context=context,
         background_asset_ref=fx_input_ref,
         scene_dir=scene_dir,
         final_prompt=final_prompt,
         final_negative_prompt=final_negative_prompt,
-    )
+    ).result()
     scene.composite.final_image_ref = composite.image_ref
     scene = _finalize_layers(scene, background, fx_input_ref)
     logger.info(
@@ -481,8 +485,8 @@ def run_generate_flow(
         scene.composite.final_image_ref,
     )
 
-    scene = _verify_scene_stage(context=context, scene=scene)
-    _persist_scene_outputs(
+    scene = _verify_scene_stage.submit(context=context, scene=scene).result()
+    _persist_scene_outputs.submit(
         context=context,
         scene_dir=scene_dir,
         scene=scene,
@@ -495,7 +499,7 @@ def run_generate_flow(
         fx_input_ref=fx_input_ref,
         prompt_bundle_output_ref=background.asset_ref,
         composite_artifact=composite.artifact_path,
-    )
+    ).result()
     logger.info(
         "generate flow completed scene_id=%s version_id=%s duration=%s",
         scene.meta.scene_id,
