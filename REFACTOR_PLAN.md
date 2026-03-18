@@ -17,8 +17,8 @@ As of 2026-03-15, the repository has completed the core engine-side refactor and
   - `prefect_flow.py`
   - `infra/prefect/flow.py`
 - `bin/cli` and the engine CLI expose flow-kind aware operations, including:
-  - `bin/cli prefect deploy-flow <flow-kind> --branch <branch>`
-  - `bin/cli prefect register-flow <flow-kind> --branch <branch>`
+  - `bin/cli prefect deployflow <flow-kind> --branch <branch>`
+  - `bin/cli prefect registerflow <flow-kind> --branch <branch>`
   - `discoverex e2e --scenario <...>`
 - outdated local deployment YAML generation paths were removed
 - dead or outdated deployment files were removed
@@ -352,8 +352,8 @@ The repository must expose the new model through `bin/cli` instead of requiring 
 
 ### Example command family
 
-- `bin/cli prefect deploy-flow <flow-kind> --branch <branch>`
-- `bin/cli prefect register-flow <flow-kind> --branch <branch>`
+- `bin/cli prefect deployflow <flow-kind> --branch <branch>`
+- `bin/cli prefect registerflow <flow-kind> --branch <branch>`
 - `bin/cli prefect check-run <flow-run-id>`
 
 The exact verbs may differ, but the top-level CLI must express flow-kind and branch operations directly.
@@ -449,8 +449,8 @@ The engine refactor and runtime observability improvements have been successfull
 
 ### 2. Verified Operational Chain
 
-- **Deployment:** `bin/cli prefect deploy-flow` correctly registers remote-source deployments.
-- **Execution:** `bin/cli prefect register-flow` successfully triggers sequential, linked, and observable flow runs.
+- **Deployment:** `bin/cli prefect deployflow` correctly registers remote-source deployments.
+- **Execution:** `bin/cli prefect registerflow` successfully triggers sequential, linked, and observable flow runs.
 - **Diagnostics:** `bin/cli prefect check-logs` is now compliant with API limits (200 lines).
 
 ### 3. Final State Summary
@@ -464,4 +464,3 @@ The engine repository now adheres to the core principles: **Explicit Flows**, **
    - worker-contract verification
    - live local service verification
 2. Continuous monitoring of VRAM peak metrics during `object_inpaint` stages.
-

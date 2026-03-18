@@ -17,7 +17,7 @@ Prefect flow 및 작업 등록을 관리합니다.
 ### Flow 배포
 브랜치별 엔진 flow를 remote-source Prefect deployment로 등록합니다.
 ```bash
-./bin/cli prefect deploy-flow generate --branch dev --work-pool-name gpu-pool
+./bin/cli prefect deployflow generate --branch dev --work-pool-name gpu-pool
 ```
 
 deployment 이름은 `discoverex-<flow-kind>-<branch>` 규칙을 따릅니다.
@@ -27,13 +27,36 @@ deployment 이름은 `discoverex-<flow-kind>-<branch>` 규칙을 따릅니다.
 ### 작업 등록 (Registration)
 표준 job spec을 브랜치별 deployment에 제출합니다. `--branch`는 필수입니다. 모든 설정은 YAML 형식을 지원합니다.
 ```bash
-./bin/cli prefect register-flow generate --branch dev
+./bin/cli prefect registerflow generate --branch dev
 ```
 
 기본 spec 파일은 `infra/register/job_specs/real-generate-sdxl-gpu-8gb.yaml`입니다.
 메모리 압박이 있으면 `infra/register/job_specs/real-generate-sdxl-gpu-8gb-safe.yaml`을 사용해
 `sequential` offload와 더 작은 inpaint patch/step 조합으로 제출할 수 있습니다.
 기존 `deploy`/`register` 명령은 `combined` 기본 배포를 위한 호환 별칭으로 유지됩니다.
+
+### 배치 등록
+여러 scene을 CSV 기준으로 한 번에 제출할 때 사용합니다.
+```bash
+./bin/cli prefect registerbatch scenes.csv --branch dev
+```
+
+### 실험 배포
+대량 실험용 deployment는 단발 flow와 별도로 분리합니다.
+```bash
+./bin/cli prefect deployexperiment --experiment naturalness --branch dev
+```
+
+deployment 이름은 `discoverex-<experiment>-experiment-<branch>` 규칙을 따릅니다. 기본 큐는 `gpu-fixed-batch`입니다.
+
+### 실험 스윕 제출
+YAML sweep spec 기반으로 실험 잡을 fan-out합니다.
+```bash
+./bin/cli prefect registerexperimentsweep --experiment naturalness --branch dev
+./bin/cli prefect registerexperimentsweep --experiment naturalness --branch dev --sweep-spec infra/register/sweeps/naturalness_medium.yaml
+```
+
+실험은 수동 `generate` deployment와 다른 deployment namespace를 사용하므로, 대량 실험이 단발 실행 경로를 덮어쓰지 않습니다.
 
 ### 로그 확인
 특정 Prefect flow run ID의 로그를 가져옵니다.
