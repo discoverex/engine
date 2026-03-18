@@ -49,6 +49,10 @@ validator = [
     "pillow>=12.1.1",
     "ultralytics>=8.4.19",
 ]
+animate = [
+    "google-genai>=1.0.0",
+    "scipy>=1.11.0",
+]
 dev = [
     "mypy>=1.19.1",
     "pytest>=9.0.2",

@@ -206,6 +206,7 @@ def verify_command(
 
 @app.command("animate")
 def animate_command(
+    image_path: str = typer.Option("", "--image-path", help="Input image for animation"),
     scene_jsons: list[str] = typer.Option([], "--scene-jsons"),
     config_name: str = typer.Option("animate", "--config-name"),
     config_dir: str = typer.Option("conf", "--config-dir"),
@@ -213,9 +214,12 @@ def animate_command(
     verbose: bool = typer.Option(False, "--verbose"),
 ) -> None:
     configure_logging(verbose=verbose)
+    args: dict[str, object] = {"scene_jsons": scene_jsons}
+    if image_path:
+        args["image_path"] = image_path
     payload = _run_command(
         command="animate",
-        args={"scene_jsons": scene_jsons},
+        args=args,
         config_name=config_name,
         config_dir=config_dir,
         overrides=override,
