@@ -40,11 +40,19 @@ def normalize_flow_kind(flow_kind: str) -> FlowKind:
     return cleaned  # type: ignore[return-value]
 
 
-def deployment_name(*, engine: str, flow_kind: str, branch: str) -> str:
+def deployment_name(
+    *,
+    engine: str,
+    flow_kind: str,
+    branch: str,
+    suffix: str = "",
+) -> str:
     normalized_flow_kind = normalize_flow_kind(flow_kind)
-    return (
-        f"{engine.strip()}-{normalized_flow_kind}-{branch_slug(branch)}"
-    )
+    parts = [engine.strip(), normalized_flow_kind, branch_slug(branch)]
+    suffix_value = branch_slug(suffix) if str(suffix).strip() else ""
+    if suffix_value:
+        parts.append(suffix_value)
+    return "-".join(parts)
 
 
 def deployment_name_for_branch(
@@ -52,8 +60,30 @@ def deployment_name_for_branch(
     *,
     flow_kind: str = DEFAULT_FLOW_KIND,
     engine: str = SETTINGS.engine_name,
+    suffix: str = "",
 ) -> str:
-    return deployment_name(engine=engine, flow_kind=flow_kind, branch=branch)
+    return deployment_name(
+        engine=engine,
+        flow_kind=flow_kind,
+        branch=branch,
+        suffix=suffix,
+    )
+
+
+def experiment_deployment_name(
+    branch: str,
+    *,
+    experiment: str,
+    engine: str = SETTINGS.engine_name,
+) -> str:
+    return "-".join(
+        [
+            engine.strip(),
+            branch_slug(experiment),
+            "experiment",
+            branch_slug(branch),
+        ]
+    )
 
 
 def flow_entrypoint_for_kind(flow_kind: str) -> str:

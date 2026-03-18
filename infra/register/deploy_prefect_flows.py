@@ -34,6 +34,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--flow-entrypoint", default=None)
     parser.add_argument("--repo-url", default=SETTINGS.engine_repo_url)
     parser.add_argument("--ref", default=None)
+    parser.add_argument("--deployment-name", default=None)
+    parser.add_argument("--deployment-suffix", default="")
     parser.add_argument(
         "--deployment-version",
         default=default_deployment_version(),
@@ -80,13 +82,17 @@ def _deployment_metadata(
     work_pool_name: str,
     work_queue_name: str,
     deployment_version: str,
+    deployment_name: str | None,
+    deployment_suffix: str,
 ) -> dict[str, str]:
+    resolved_name = str(deployment_name or "").strip() or deployment_name_for_branch(
+        branch,
+        flow_kind=flow_kind,
+        engine=engine,
+        suffix=deployment_suffix,
+    )
     return {
-        "deployment_name": deployment_name_for_branch(
-            branch,
-            flow_kind=flow_kind,
-            engine=engine,
-        ),
+        "deployment_name": resolved_name,
         "engine": engine,
         "flow_kind": flow_kind,
         "branch": branch,
@@ -96,6 +102,7 @@ def _deployment_metadata(
         "work_pool_name": work_pool_name,
         "work_queue_name": work_queue_name,
         "deployment_version": deployment_version,
+        "deployment_suffix": deployment_suffix,
     }
 
 
@@ -132,13 +139,15 @@ def _deploy_remote_flow(
     work_pool_name: str,
     work_queue_name: str,
     deployment_version: str,
+    deployment_name: str,
+    deployment_suffix: str,
 ) -> str:
     remote_flow = flow.from_source(
         source=_flow_source(repo_url, ref),
         entrypoint=flow_entrypoint,
     )
     deployment_id = remote_flow.deploy(
-        name=deployment_name_for_branch(branch, flow_kind=flow_kind, engine=engine),
+        name=deployment_name,
         work_pool_name=work_pool_name,
         work_queue_name=work_queue_name,
         job_variables={},
@@ -166,6 +175,8 @@ def main() -> int:
         work_pool_name=args.work_pool_name,
         work_queue_name=args.work_queue_name,
         deployment_version=args.deployment_version,
+        deployment_name=args.deployment_name,
+        deployment_suffix=args.deployment_suffix,
     )
     if args.dry_run:
         print(json.dumps(deployment, ensure_ascii=True))
@@ -181,6 +192,8 @@ def main() -> int:
             work_pool_name=args.work_pool_name,
             work_queue_name=args.work_queue_name,
             deployment_version=args.deployment_version,
+            deployment_name=deployment["deployment_name"],
+            deployment_suffix=args.deployment_suffix,
         )
     print(json.dumps(deployment, ensure_ascii=True))
     return 0

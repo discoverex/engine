@@ -18,6 +18,7 @@ from infra.register.branch_deployments import (
     DEFAULT_FLOW_KIND,
     SUPPORTED_FLOW_KINDS,
     deployment_name_for_branch,
+    experiment_deployment_name,
 )
 
 
@@ -38,8 +39,15 @@ app = typer.Typer(
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INFRA_DIR = REPO_ROOT / "infra" / "register"
 DEFAULT_REGISTER_JOB_SPEC = (
-    INFRA_DIR / "job_specs" / "real-generate-pixart-hidden-object-v2-8gb-safe.yaml"
+    INFRA_DIR
+    / "job_specs"
+    / "real-generate-pixart-hidden-object-naturalness-v2-8gb-safe.yaml"
 )
+DEFAULT_NATURALNESS_SWEEP_SPEC = (
+    INFRA_DIR / "sweeps" / "naturalness_medium.yaml"
+)
+DEFAULT_EXPERIMENT_QUEUE = "gpu-fixed-batch"
+DEFAULT_EXPERIMENT_NAME = "naturalness"
 
 
 def _flow_kind_for_command(command: str) -> str:
@@ -51,6 +59,10 @@ def _flow_kind_for_command(command: str) -> str:
         "verify": "verify",
         "animate": "animate",
     }[command]
+
+
+def _experiment_deployment_name(branch: str, experiment: str) -> str:
+    return experiment_deployment_name(branch, experiment=experiment)
 
 
 def _run_infra_script(script_name: str, args: list[str]) -> int:
@@ -205,7 +217,7 @@ async def _read_prefect_logs(flow_run_id: str, limit: int) -> list[PrefectLog]:
 
 
 @app.command(
-    "deploy-flow",
+    "deployflow",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Deploy a flow-kind-specific Prefect YAML deployment to the server.",
 )
@@ -220,7 +232,7 @@ def deploy_flow(
 
 
 @app.command(
-    "register-flow",
+    "registerflow",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Submit the standard job spec to a flow-kind-specific deployment.",
 )
@@ -246,7 +258,7 @@ def register_flow(
 
 
 @app.command(
-    "register-batch",
+    "registerbatch",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Submit one flow run per CSV row using the default job spec as a template.",
 )
@@ -270,7 +282,7 @@ def register_batch(
         typer.secho("Error: --branch is required.", fg=typer.colors.RED)
         raise typer.Exit(2)
     if _contains_any(remaining, ("--job-spec-file", "--job-spec-json")):
-        raise typer.BadParameter("register-batch manages job spec payloads internally")
+        raise typer.BadParameter("registerbatch manages job spec payloads internally")
 
     template = _load_job_spec_template(job_spec_file)
     deployment = deployment_name_for_branch(branch, flow_kind=flow_kind)
@@ -289,6 +301,64 @@ def register_batch(
         exit_code = _run_infra_script("submit_job_spec.py", submit_args)
         if exit_code != 0:
             raise typer.Exit(exit_code)
+
+
+@app.command(
+    "registerexperimentsweep",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Submit an experiment sweep using a YAML sweep spec.",
+)
+def register_experiment_sweep(
+    ctx: typer.Context,
+    experiment: str = typer.Option(DEFAULT_EXPERIMENT_NAME, "--experiment"),
+    sweep_spec: Path = typer.Option(
+        DEFAULT_NATURALNESS_SWEEP_SPEC,
+        "--sweep-spec",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+    ),
+) -> None:
+    branch, remaining = _extract_option(ctx.args, "--branch")
+    submit_args = [str(sweep_spec)]
+    if branch:
+        submit_args.extend(["--deployment", _experiment_deployment_name(branch, experiment)])
+        submit_args.extend(["--branch", branch])
+    submit_args.extend(["--experiment", experiment])
+    submit_args.extend(remaining)
+    exit_code = _run_infra_script(
+        "naturalness_sweep.py",
+        submit_args,
+    )
+    raise typer.Exit(exit_code)
+
+
+@app.command(
+    "deployexperiment",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Deploy an experiment generate runner to the batch queue.",
+)
+def deploy_experiment(
+    ctx: typer.Context,
+    experiment: str = typer.Option(DEFAULT_EXPERIMENT_NAME, "--experiment"),
+) -> None:
+    branch, remaining = _extract_option(ctx.args, "--branch")
+    deploy_args = [
+        "--flow-kind",
+        "generate",
+        "--work-queue-name",
+        DEFAULT_EXPERIMENT_QUEUE,
+    ]
+    if branch:
+        deploy_args.extend(["--deployment-name", _experiment_deployment_name(branch, experiment)])
+        deploy_args.extend(["--branch", branch])
+    deploy_args.extend(remaining)
+    exit_code = _run_infra_script(
+        "deploy_prefect_flows.py",
+        deploy_args,
+    )
+    raise typer.Exit(exit_code)
 
 
 @app.command(
