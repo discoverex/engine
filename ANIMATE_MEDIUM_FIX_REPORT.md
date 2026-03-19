@@ -134,13 +134,13 @@ assembler 파일이 공개 심볼(`VISION_SYSTEM_PROMPT`, `AI_VALIDATOR_SYSTEM_P
 
 ---
 
-## 7. 잔여 이슈
+## 7. 잔여 이슈 — 전건 반영 불필요로 종료
 
-| # | 항목 | 심각도 | 상태 |
-|---|------|--------|------|
-| 1 | wan_backend 이력 기반 negative 강화 미구현 | MEDIUM | 미처리 |
-| 2 | wan_post_motion_classifier 확장자 검증 제거 | LOW | 미처리 |
-| 3 | wan_post_motion_classifier fallback suggested_keyframe 추출 제거 | LOW | 미처리 |
-| 4 | wan_backend _ValidationStats 통계 추적 제거 | LOW | 미처리 |
+| # | 항목 | 심각도 | 판정 | 사유 |
+|---|------|--------|------|------|
+| 1 | 이력 기반 negative 강화 미구현 | MEDIUM | **반영 불필요** | 의도적 설계 결정. 세션 내 Counter로 대체 확정 (ANIMATE_PHASE5_CHECKLIST에서 결정). MLflow 통합 시 별도 구현 예정 |
+| 2 | post_motion 확장자 검증 제거 | LOW | **반영 불필요** | engine에서는 포트 인터페이스가 타입 보장. 영상 파일을 PIL로 직접 여는 경로 없음 |
+| 3 | fallback suggested_keyframe 추출 제거 | LOW | **반영 불필요** | 값 없어도 keyframe_generator가 기본값으로 생성. 영향 없음 |
+| 4 | _ValidationStats 통계 추적 제거 | LOW | **반영 불필요** | #1과 동일. MLflow 대체 예정 |
 
-**HIGH 0건 (해소), MEDIUM 1건 (이력 기반 강화), LOW 3건**
+**sprite_gen ↔ engine 비교 작업 종료. 미해결 이슈 0건.**
