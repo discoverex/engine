@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from PIL import Image, ImageFilter
 
@@ -77,12 +78,34 @@ def _detect_bg_color(src: Image.Image) -> tuple[int, int, int]:
         if has_transparency:
             opaque = arr[:, :, 3] > 128
             pixels = arr[opaque, :3]
-            brightness = pixels.mean()
-            if brightness > 200:
-                logger.info("[Preprocess] 밝은 캐릭터 (%.0f) + 투명배경 → 검은 배경", brightness)
-                return (0, 0, 0)
+            best = _find_best_bg_color(pixels)
+            logger.info("[Preprocess] 투명배경 → 최적 배경색 %s", best)
+            return best
     logger.info("[Preprocess] 기본 → 흰색 배경")
     return (255, 255, 255)
+
+
+_BG_CANDIDATES = [
+    ("white", (255, 255, 255)),
+    ("black", (0, 0, 0)),
+    ("magenta", (255, 0, 255)),
+    ("lime", (0, 255, 0)),
+    ("blue", (0, 0, 255)),
+]
+
+
+def _find_best_bg_color(pixels: Any) -> tuple[int, int, int]:
+    """Find background color most distant from all character pixels."""
+    import numpy as np
+
+    best_color = (255, 255, 255)
+    best_dist = -1
+    for _name, color in _BG_CANDIDATES:
+        min_dist = np.abs(pixels.astype(int) - list(color)).sum(axis=1).min()
+        if min_dist > best_dist:
+            best_dist = min_dist
+            best_color = color
+    return best_color
 
 
 def preprocess_image_simple(
@@ -115,7 +138,8 @@ def preprocess_image_simple(
         src_resized = src.resize((target_w, target_h), Image.Resampling.LANCZOS)
 
     bg_rgb = _detect_bg_color(src)
-    bg_type = "dark" if bg_rgb == (0, 0, 0) else "solid"
+    _BG_TYPE_MAP = {(255, 255, 255): "solid", (0, 0, 0): "dark"}
+    bg_type = _BG_TYPE_MAP.get(bg_rgb, "chroma")
     canvas = Image.new("RGBA", (width, height), (*bg_rgb, 255))
 
     x = (width - target_w) // 2
