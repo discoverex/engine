@@ -17,7 +17,7 @@ from discoverex.domain.animate import (
     VisionAnalysis,
 )
 
-from .retry_logger import RetryLogger, count_existing_videos
+from .retry_logger import RetryLogger, build_history_negative, count_existing_videos
 from .retry_state import (
     CONSECUTIVE_FAIL_THRESHOLD,
     MOTION_ONLY_ISSUES,
@@ -41,7 +41,6 @@ class RetryResult:
     analysis: VisionAnalysis | None = None
     attempts: int = 0
     seed: int = 0
-
 class RetryLoop:
     """Generation + validation retry loop with AI feedback."""
 
@@ -70,6 +69,7 @@ class RetryLoop:
         offset = count_existing_videos(output_dir, stem)
         if offset:
             logger.info("  [이력] 기존 영상 %d개 발견 → attempt %d부터 시작", offset, offset + 1)
+        state.history_negative = build_history_negative(stats_file, stem)
         for attempt in range(1, self._cfg.max_retries + 1):
             seed = random.randint(0, 2**32 - 1)
             actual = attempt + offset

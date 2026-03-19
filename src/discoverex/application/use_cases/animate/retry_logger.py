@@ -7,6 +7,7 @@ sprite_gen's _ValidationStats, enabling cross-system statistics.
 from __future__ import annotations
 
 import logging
+import re
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -119,6 +120,73 @@ class RetryLogger:
                 f.write(text)
         except Exception as e:
             logger.warning("[Stats] write failed: %s", e)
+
+
+_ATTEMPT_RE = re.compile(
+    r"attempt\s+(\d+):\s*(\S+)\s*\|\s*([^[\]→]*?)"
+    r"(?:\[AI:\s*([^\]]*)\])?"
+    r"(?:\s*→\s*(\S+)\s*(?:\(([^)]*)\))?)?"
+    r"(?:\s*\[VRAM:(\d+)MB\])?"
+    r"\s*$"
+)
+
+
+def load_history(stats_file: Path, image_name: str | None = None) -> dict[str, Any]:
+    """Parse validation_stats.txt and return attempt history."""
+    result: dict[str, Any] = {"images": {}, "total_attempts": 0}
+    if not stats_file.exists():
+        return result
+    try:
+        lines = stats_file.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return result
+    cur_img: str | None = None
+    cur_attempts: list[dict[str, Any]] = []
+    for line in lines:
+        s = line.strip()
+        if not s:
+            continue
+        if s.startswith("[") and "IMAGE:" in s:
+            if cur_img and cur_attempts:
+                result["images"][cur_img] = {"attempts": cur_attempts}
+            cur_img = s.split("IMAGE:")[-1].strip()
+            cur_attempts = []
+            continue
+        m = _ATTEMPT_RE.search(s)
+        if m:
+            issues_raw = m.group(3).strip().rstrip(",")
+            issues = [x.strip() for x in issues_raw.split(",") if x.strip()]
+            ai_raw = m.group(4)
+            ai_issues = [x.strip() for x in ai_raw.split(",") if x.strip()] if ai_raw else []
+            cur_attempts.append({"issues": issues, "ai_issues": ai_issues})
+    if cur_img and cur_attempts:
+        result["images"][cur_img] = {"attempts": cur_attempts}
+    result["total_attempts"] = sum(len(v["attempts"]) for v in result["images"].values())
+    if image_name and image_name in result["images"]:
+        img = result["images"][image_name]
+        return {"images": {image_name: img}, "total_attempts": len(img["attempts"])}
+    return result
+
+
+def build_history_negative(stats_file: Path, stem: str) -> str:
+    """Build negative prompt from past failures (2+ occurrences)."""
+    from .retry_state import ISSUE_NEGATIVE_MAP
+
+    history = load_history(stats_file, stem)
+    if history["total_attempts"] == 0:
+        return ""
+    ic: Counter[str] = Counter()
+    for img_data in history["images"].values():
+        for a in img_data["attempts"]:
+            ic.update(a.get("issues", []))
+            ic.update(a.get("ai_issues", []))
+    negs = [ISSUE_NEGATIVE_MAP[k] for k, v in ic.most_common() if v >= 2 and ISSUE_NEGATIVE_MAP.get(k, "")]
+    if negs:
+        result = "，".join(negs)
+        logger.info("  [이력 강화] 이전 %d회 실패 기반 negative: %s...", history["total_attempts"], result[:80])
+        return result
+    logger.info("  [이력] 이전 %d회 기록 (빈도 2회 이상 이슈 없음 → 스킵)", history["total_attempts"])
+    return ""
 
 
 def count_existing_videos(output_dir: Path, stem: str) -> int:

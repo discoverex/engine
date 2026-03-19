@@ -8,13 +8,18 @@ from pathlib import Path
 from discoverex.domain.animate import VisionAnalysis
 
 ISSUE_NEGATIVE_MAP: dict[str, str] = {
-    "ghosting": "残影，鬼影，半透明残像",
-    "unnatural_movement": "身体变形，身体拉伸，动作不自然",
-    "character_inconsistency": "风格改变，纹理重建，颜色失真",
+    "ghosting": "残影，鬼影，半透明残像，画面闪烁，细节闪烁",
+    "unnatural_movement": "身体变形，身体拉伸，身体扭曲，动作不自然，轨迹突变",
+    "character_inconsistency": "风格改变，纹理重建，角色外观变化，颜色失真",
+    "no_motion": "",
+    "too_slow": "",
     "background_color_change": "背景变色，背景变暗，背景变灰",
     "frame_escape": "画面外移动，超出边界",
     "no_return_to_origin": "动作不回归，姿势偏移",
-    "speed_too_fast": "动作过快，快速移动",
+    "speed_too_fast": "动作过快，快速移动，急速运动",
+    "speed_too_slow": "",
+    "flickering": "画面闪烁，亮度变化，闪烁不定",
+    "repeated_motion": "重复动作，动作循环不自然",
 }
 QUALITY_ISSUES = {"unnatural_movement", "character_inconsistency"}
 MOTION_ONLY_ISSUES = {"no_motion", "too_slow"}
@@ -32,6 +37,7 @@ class LoopState:
     current_scale: float = 0.65
     adj_positive: str = ""
     adj_negative: str = ""
+    history_negative: str = ""
     consecutive_quality: int = 0
     consecutive_nomotion: int = 0
     _base_positive: str = ""
@@ -66,6 +72,8 @@ class LoopState:
         if self.adj_positive:
             pos += ", " + self.adj_positive
         neg = self._base_negative
+        if self.history_negative:
+            neg += ", " + self.history_negative
         if self.adj_negative:
             neg += ", " + self.adj_negative
         return pos, neg
