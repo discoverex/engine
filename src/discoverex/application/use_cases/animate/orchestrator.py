@@ -1,16 +1,4 @@
-"""AnimateOrchestrator — main animate pipeline coordinator.
-
-Orchestrates the full sprite animation generation flow:
-  Stage 1: Mode classification (KEYFRAME_ONLY / MOTION_NEEDED)
-  Step 0: Image preprocessing (white_anchor + padding)
-  Step 1: Vision analysis (Gemini → motion parameters)
-  Step 2: Mask generation
-  Step 3: Generation + validation retry loop
-  Step 4: Post-processing (compositing, bg removal, format conversion)
-  Stage 2: Post-motion classification (keyframe travel)
-
-All external dependencies are accessed through port interfaces only.
-"""
+"""AnimateOrchestrator — 5-stage sprite animation pipeline coordinator."""
 
 from __future__ import annotations
 
@@ -74,7 +62,12 @@ class AnimateOrchestrator:
 
         # Stage 1: Mode classification
         mode = self.mode_classifier.classify(image_path)
-        logger.info(f"[Stage1] mode={mode.processing_mode.value}")
+        logger.info(
+            "[Stage1] mode=%s facing=%s scene=%s deformable=%s action=%s",
+            mode.processing_mode.value, mode.facing_direction.value,
+            mode.is_scene, mode.has_deformable, mode.suggested_action)
+        if mode.subject_desc or mode.reason:
+            logger.info("  → 대상: %s | 근거: %s", mode.subject_desc, mode.reason[:80] if mode.reason else "")
 
         if mode.processing_mode == ProcessingMode.KEYFRAME_ONLY:
             return self._handle_keyframe_only(mode)
@@ -105,7 +98,7 @@ class AnimateOrchestrator:
 
         # Step 1: Vision analysis
         analysis = self.vision_analyzer.analyze(processed)
-        logger.info(f"[Animate] action={analysis.action_desc}")
+        _log_analysis(analysis)
 
         # Step 2: Mask generation
         mask_path = self._generate_mask(processed, analysis)
@@ -187,3 +180,14 @@ class AnimateOrchestrator:
                 logger.warning(f"[Animate] post-process failed: {e}")
 
         return transparent, converted
+
+
+def _log_analysis(a: VisionAnalysis) -> None:
+    logger.info("  → 액션: %s", a.action_desc)
+    logger.info("  → 오브젝트: %s", a.object_desc)
+    logger.info("  → 움직임: %s | 고정: %s", a.moving_parts, a.fixed_parts)
+    logger.info("  → fps=%d motion=%.2f~%.2f pingpong=%s", a.frame_rate, a.min_motion, a.max_motion, a.pingpong)
+    logger.info("  → positive: %s", a.positive[:80])
+    logger.info("  → negative: %s", a.negative[:80])
+    if a.reason:
+        logger.info("  → 근거: %s", a.reason[:120])
