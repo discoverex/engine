@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -62,7 +63,18 @@ class SamObjectMaskExtractor:
         try:
             import numpy as np
             import torch  # type: ignore
-            from mobile_sam import SamPredictor, sam_model_registry  # type: ignore
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message=".*timm.models.layers.*deprecated.*",
+                    category=FutureWarning,
+                )
+                warnings.filterwarnings(
+                    "ignore",
+                    message=".*timm.models.registry.*deprecated.*",
+                    category=FutureWarning,
+                )
+                from mobile_sam import SamPredictor, sam_model_registry  # type: ignore
             from PIL import Image  # type: ignore
         except Exception:
             return self._fallback_mask(image)
