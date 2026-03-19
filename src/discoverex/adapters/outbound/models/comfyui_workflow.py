@@ -76,9 +76,10 @@ def load_and_inject(
         elif ctype == "UnetLoaderGGUF" and model_name:
             node["inputs"]["unet_name"] = model_name
 
+    model_log = f" model={model_name}" if model_name else ""
     logger.info(
-        "[Workflow] injected: seed=%d steps=%d fps=%d %dx%d",
-        seed, steps, frame_rate, width, height,
+        "[Workflow] injected: seed=%d steps=%d fps=%d %dx%d%s",
+        seed, steps, frame_rate, width, height, model_log,
     )
     return workflow
 
