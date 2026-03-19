@@ -396,73 +396,134 @@ def _find_best_patch(
 ) -> dict[str, Any]:
     best: dict[str, Any] | None = None
     height, width = background_image.shape[:2]
+    candidate_cache: dict[tuple[int, int], list[dict[str, Any]]] = {}
+    variant_feature_cache: dict[tuple[str, int, int], dict[str, np.ndarray]] = {}
     for variant in variants:
         rgba = variant["image"]
+        variant_id = str(variant["variant_id"])
         patch_w = min(width, max(1, max(config.patch_similarity.min_patch_side, rgba.width)))
         patch_h = min(height, max(1, max(config.patch_similarity.min_patch_side, rgba.height)))
         for scale_factor in config.region_selection.scale_factors:
             scaled_w = min(width, max(1, int(round(patch_w * scale_factor))))
             scaled_h = min(height, max(1, int(round(patch_h * scale_factor))))
-            stride_x = max(8, int(round(scaled_w * config.region_selection.stride_ratio)))
-            stride_y = max(8, int(round(scaled_h * config.region_selection.stride_ratio)))
-            for top in range(0, max(1, height - scaled_h + 1), stride_y):
-                for left in range(0, max(1, width - scaled_w + 1), stride_x):
-                    bbox = (float(left), float(top), float(scaled_w), float(scaled_h))
-                    if any(bbox_iou(bbox, taken) > config.region_selection.iou_threshold for taken in selected_boxes):
-                        continue
-                    patch = background_image[top : top + scaled_h, left : left + scaled_w]
-                    if patch.size == 0:
-                        continue
-                    feature_scores = _score_patch(
-                        config=config,
-                        rgba_variant=rgba,
-                        patch_rgb=patch,
-                    )
-                    score = sum(feature_scores.values())
-                    if best is None or score > float(best["score"]):
-                        best = {
-                            "bbox": bbox,
-                            "score": score,
-                            "variant_id": variant["variant_id"],
-                            "feature_scores": feature_scores,
-                        }
+            cache_key = (scaled_w, scaled_h)
+            candidates = candidate_cache.get(cache_key)
+            if candidates is None:
+                candidates = _build_patch_candidates(
+                    config=config,
+                    background_image=background_image,
+                    patch_size=cache_key,
+                )
+                candidate_cache[cache_key] = candidates
+            variant_cache_key = (variant_id, scaled_w, scaled_h)
+            variant_features = variant_feature_cache.get(variant_cache_key)
+            if variant_features is None:
+                variant_features = _extract_feature_bundle(
+                    np.asarray(
+                        rgba.resize(
+                            (scaled_w, scaled_h), Image.Resampling.LANCZOS
+                        ).convert("RGB")
+                    ),
+                    config=config,
+                )
+                variant_feature_cache[variant_cache_key] = variant_features
+            for candidate in candidates:
+                bbox = candidate["bbox"]
+                if any(
+                    bbox_iou(bbox, taken) > config.region_selection.iou_threshold
+                    for taken in selected_boxes
+                ):
+                    continue
+                feature_scores = _score_feature_bundle(
+                    config=config,
+                    variant_features=variant_features,
+                    patch_features=candidate["features"],
+                )
+                score = sum(feature_scores.values())
+                if best is None or score > float(best["score"]):
+                    best = {
+                        "bbox": bbox,
+                        "score": score,
+                        "variant_id": variant_id,
+                        "feature_scores": feature_scores,
+                    }
     if best is None:
         raise RuntimeError("patch_similarity_v2 could not find a valid candidate patch")
     return best
 
 
-def _score_patch(
+def _build_patch_candidates(
     *,
     config: PipelineConfig,
-    rgba_variant: Image.Image,
-    patch_rgb: np.ndarray,
+    background_image: np.ndarray,
+    patch_size: tuple[int, int],
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    height, width = background_image.shape[:2]
+    patch_w, patch_h = patch_size
+    stride_x = max(8, int(round(patch_w * config.region_selection.stride_ratio)))
+    stride_y = max(8, int(round(patch_h * config.region_selection.stride_ratio)))
+    for top in range(0, max(1, height - patch_h + 1), stride_y):
+        for left in range(0, max(1, width - patch_w + 1), stride_x):
+            patch = background_image[top : top + patch_h, left : left + patch_w]
+            if patch.size == 0:
+                continue
+            candidates.append(
+                {
+                    "bbox": (float(left), float(top), float(patch_w), float(patch_h)),
+                    "features": _extract_feature_bundle(patch, config=config),
+                }
+            )
+    return candidates
+
+
+def _extract_feature_bundle(
+    image: np.ndarray,
+    *,
+    config: PipelineConfig,
+) -> dict[str, np.ndarray]:
+    return {
+        "lab": _normalize_feature_vector(_lab_features(image)),
+        "lbp": _normalize_feature_vector(_lbp_features(image, config=config)),
+        "gabor": _normalize_feature_vector(_gabor_features(image, config=config)),
+        "hog": _normalize_feature_vector(_hog_features(image, config=config)),
+    }
+
+
+def _score_feature_bundle(
+    *,
+    config: PipelineConfig,
+    variant_features: dict[str, np.ndarray],
+    patch_features: dict[str, np.ndarray],
 ) -> dict[str, float]:
-    patch_h, patch_w = patch_rgb.shape[:2]
-    variant_rgb = np.asarray(
-        rgba_variant.resize((patch_w, patch_h), Image.Resampling.LANCZOS).convert("RGB")
-    )
     weights = {
         "lab": config.patch_similarity.lab_weight,
         "lbp": config.patch_similarity.lbp_weight,
         "gabor": config.patch_similarity.gabor_weight,
         "hog": config.patch_similarity.hog_weight,
     }
+    weight_total = max(1e-8, float(sum(weights.values())))
     scores = {
-        "lab": _cosine_similarity(_lab_features(variant_rgb), _lab_features(patch_rgb)),
+        "lab": _normalized_similarity(
+            _cosine_similarity(variant_features["lab"], patch_features["lab"])
+        ),
         "lbp": _cosine_similarity(
-            _lbp_features(variant_rgb, config=config),
-            _lbp_features(patch_rgb, config=config),
+            variant_features["lbp"],
+            patch_features["lbp"],
         ),
         "gabor": _cosine_similarity(
-            _gabor_features(variant_rgb, config=config),
-            _gabor_features(patch_rgb, config=config),
+            variant_features["gabor"],
+            patch_features["gabor"],
         ),
         "hog": _cosine_similarity(
-            _hog_features(variant_rgb, config=config),
-            _hog_features(patch_rgb, config=config),
+            variant_features["hog"],
+            patch_features["hog"],
         ),
     }
-    return {name: score * weights[name] for name, score in scores.items()}
+    return {
+        name: (_normalized_similarity(score) * weights[name]) / weight_total
+        for name, score in scores.items()
+    }
 
 
 def _lab_features(image: np.ndarray) -> np.ndarray:
@@ -535,6 +596,23 @@ def _cosine_similarity(left: np.ndarray, right: np.ndarray) -> float:
     if np.allclose(left, 0.0) or np.allclose(right, 0.0):
         return 0.0
     return max(0.0, 1.0 - float(cosine(left, right)))
+
+
+def _normalize_feature_vector(vector: np.ndarray) -> np.ndarray:
+    array = np.asarray(vector, dtype=np.float32).reshape(-1)
+    if array.size == 0:
+        return array
+    finite = np.nan_to_num(array, nan=0.0, posinf=0.0, neginf=0.0)
+    norm = float(np.linalg.norm(finite))
+    if norm <= 1e-8:
+        return finite
+    return finite / norm
+
+
+def _normalized_similarity(value: float) -> float:
+    if not np.isfinite(value):
+        return 0.0
+    return float(np.clip(value, 0.0, 1.0))
 
 
 def _harmonize_objects(
