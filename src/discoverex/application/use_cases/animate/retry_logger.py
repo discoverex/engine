@@ -119,3 +119,13 @@ class RetryLogger:
                 f.write(text)
         except Exception as e:
             logger.warning("[Stats] write failed: %s", e)
+
+
+def count_existing_videos(output_dir: Path, stem: str) -> int:
+    """Count existing video files for this stem to avoid overwriting."""
+    import glob
+    patterns = [f"{stem}*_a*.mp4", f"{stem}*attempt*.mp4"]
+    seen: set[str] = set()
+    for pat in patterns:
+        seen.update(glob.glob(str(output_dir / pat)))
+    return len(seen)

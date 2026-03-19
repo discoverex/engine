@@ -17,7 +17,7 @@ from discoverex.domain.animate import (
     VisionAnalysis,
 )
 
-from .retry_logger import RetryLogger
+from .retry_logger import RetryLogger, count_existing_videos
 from .retry_state import (
     CONSECUTIVE_FAIL_THRESHOLD,
     MOTION_ONLY_ISSUES,
@@ -32,10 +32,7 @@ logger = logging.getLogger(__name__)
 class RetryConfig:
     max_retries: int = 7
     initial_scale: float = 0.65
-    thresholds: AnimationValidationThresholds = field(
-        default_factory=AnimationValidationThresholds
-    )
-
+    thresholds: AnimationValidationThresholds = field(default_factory=AnimationValidationThresholds)
 
 @dataclass
 class RetryResult:
@@ -44,7 +41,6 @@ class RetryResult:
     analysis: VisionAnalysis | None = None
     attempts: int = 0
     seed: int = 0
-
 
 class RetryLoop:
     """Generation + validation retry loop with AI feedback."""
@@ -71,9 +67,13 @@ class RetryLoop:
         stats_file = output_dir / "validation_stats.txt"
         self._log = RetryLogger(stats_file, stem)
         self._log.start_image()
+        offset = count_existing_videos(output_dir, stem)
+        if offset:
+            logger.info("  [이력] 기존 영상 %d개 발견 → attempt %d부터 시작", offset, offset + 1)
         for attempt in range(1, self._cfg.max_retries + 1):
             seed = random.randint(0, 2**32 - 1)
-            video = self._try_generate(image_path, state, seed, stem, attempt, output_dir)
+            actual = attempt + offset
+            video = self._try_generate(image_path, state, seed, stem, actual, output_dir)
             if video is None:
                 continue
             val = self._num_val.validate(video, state.analysis, self._cfg.thresholds)
