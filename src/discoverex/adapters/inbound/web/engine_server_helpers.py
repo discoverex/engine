@@ -167,3 +167,18 @@ def get_comfyui_progress() -> dict[str, Any] | None:
     except Exception:
         pass
     return None
+
+
+def resolve_lottie(raw: str, output_dir: Path) -> Path | None:
+    """Resolve lottie path — absolute, CWD-relative, or output_dir-relative."""
+    p = Path(raw)
+    if p.is_absolute() and p.exists():
+        return p
+    cwd = Path.cwd() / raw
+    if cwd.exists():
+        return cwd
+    od = output_dir / raw
+    if od.exists():
+        return od
+    logger.warning("[export] lottie not found: raw=%s cwd=%s od=%s", raw, cwd, od)
+    return None

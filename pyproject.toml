@@ -52,6 +52,7 @@ validator = [
 animate = [
     "google-genai>=1.0.0",
     "scipy>=1.11.0",
+    "rembg>=2.0.50",
 ]
 dev = [
     "mypy>=1.19.1",

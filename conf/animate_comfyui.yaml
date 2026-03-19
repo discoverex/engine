@@ -35,8 +35,8 @@ models:
 
 animate_adapters:
   bg_remover:
-    _target_: discoverex.adapters.outbound.animate.bg_remover.FfmpegBgRemover
-    tolerance: 50
+    _target_: discoverex.adapters.outbound.animate.bg_remover.RembgBgRemover
+    model_name: u2net
   numerical_validator:
     _target_: discoverex.adapters.outbound.animate.numerical_validator.NumericalAnimationValidator
   mask_generator:

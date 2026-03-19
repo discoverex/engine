@@ -19,6 +19,7 @@ from .engine_server_helpers import (
     browse_dir,
     extract_thumbnail,
     parse_stats,
+    resolve_lottie,
     serve_media,
 )
 
@@ -118,10 +119,8 @@ def register_extra_routes(
         keyframe_data = data.get("keyframe_data", {})
         output_name = data.get("output_name", "")
 
-        lp = Path(lottie_path)
-        if not lp.is_absolute():
-            lp = output_dir / lottie_path
-        if not lp.exists():
+        lp = resolve_lottie(lottie_path, output_dir)
+        if not lp:
             return jsonify({"error": "lottie not found"}), 404
         if not keyframe_data or not keyframe_data.get("keyframes"):
             return jsonify({"error": "keyframe_data required"}), 400
@@ -139,10 +138,8 @@ def register_extra_routes(
     def api_export_lottie() -> Any:
         data = request.get_json(force=True)
         lottie_path = data.get("lottie_path", "")
-        lp = Path(lottie_path)
-        if not lp.is_absolute():
-            lp = output_dir / lottie_path
-        if not lp.exists():
+        lp = resolve_lottie(lottie_path, output_dir)
+        if not lp:
             return jsonify({"error": "lottie not found"}), 404
         return send_file(str(lp), mimetype="application/json",
                          as_attachment=True, download_name=lp.name)
