@@ -94,40 +94,38 @@ class ComfyUIClient:
         return prompt_id
 
     def wait_for_completion(self, prompt_id: str) -> dict[str, Any]:
-        """Poll /history until generation completes. Returns history entry."""
+        """Poll /history until generation completes. WebSocket for progress."""
+        from .comfyui_progress import start_ws_progress
+
+        ComfyUIClient.current_progress = {"step": 0, "total": 0}
+        stop = {"stop": False}
+        ws_t = start_ws_progress(self._base_url, stop, ComfyUIClient.current_progress)
         start = time.monotonic()
         last_log = 0.0
-
-        while True:
-            elapsed = time.monotonic() - start
-            if elapsed > self._timeout_poll:
-                raise TimeoutError(f"ComfyUI timeout ({self._timeout_poll}s)")
-
-            url = f"{self._base_url}/history/{prompt_id}"
-            with urllib.request.urlopen(url, timeout=10) as resp:  # noqa: S310
-                history = json.loads(resp.read())
-
-            if prompt_id in history:
-                entry = history[prompt_id]
-                status = entry.get("status", {})
-                if status.get("completed", False) or status.get(
-                    "status_str", ""
-                ) in ("success", "error", ""):
-                    logger.info(
-                        "[ComfyUI] generation complete (%.1fs)", elapsed,
-                    )
-                    return dict(entry)
-
-            # Query /queue for running status + node progress
-            self._update_progress(prompt_id)
-
-            if elapsed - last_log >= _LOG_INTERVAL:
-                p = ComfyUIClient.current_progress
-                extra = f" ({p['step']}/{p['total']})" if p["total"] > 0 else ""
-                logger.info("[ComfyUI] generating… %.0fs elapsed%s", elapsed, extra)
-                last_log = elapsed
-
-            time.sleep(self._poll_interval)
+        try:
+            while True:
+                elapsed = time.monotonic() - start
+                if elapsed > self._timeout_poll:
+                    raise TimeoutError(f"ComfyUI timeout ({self._timeout_poll}s)")
+                url = f"{self._base_url}/history/{prompt_id}"
+                with urllib.request.urlopen(url, timeout=10) as resp:  # noqa: S310
+                    history = json.loads(resp.read())
+                if prompt_id in history:
+                    entry = history[prompt_id]
+                    st = entry.get("status", {})
+                    if st.get("completed") or st.get("status_str", "") in ("success", "error", ""):
+                        logger.info("[ComfyUI] generation complete (%.1fs)", elapsed)
+                        return dict(entry)
+                if elapsed - last_log >= _LOG_INTERVAL:
+                    p = ComfyUIClient.current_progress
+                    extra = f" ({p['step']}/{p['total']})" if p["total"] > 0 else ""
+                    logger.info("[ComfyUI] generating… %.0fs%s", elapsed, extra)
+                    last_log = elapsed
+                time.sleep(self._poll_interval)
+        finally:
+            stop["stop"] = True
+            if ws_t.is_alive():
+                ws_t.join(timeout=3)
 
     def download_video(
         self, history: dict[str, Any], output_path: Path,
@@ -174,20 +172,6 @@ class ComfyUIClient:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
-
-    def _update_progress(self, prompt_id: str) -> None:
-        """Poll /queue to estimate progress from running nodes."""
-        try:
-            with urllib.request.urlopen(f"{self._base_url}/queue", timeout=5) as r:  # noqa: S310
-                qdata = json.loads(r.read())
-            for item in qdata.get("queue_running", []):
-                if len(item) > 1 and item[1] == prompt_id and len(item) > 3 and isinstance(item[3], dict):
-                    done = len(item[3].get("outputs", {}))
-                    total = len(item[2]) if len(item) > 2 and isinstance(item[2], dict) else 0
-                    if total > 0:
-                        ComfyUIClient.current_progress = {"step": done, "total": total}
-        except Exception:
-            pass
 
     @staticmethod
     def _find_video(history: dict[str, Any]) -> tuple[str, str]:
