@@ -1,8 +1,4 @@
-"""ComfyUI HTTP API client — pure transport layer.
-
-Wraps the five ComfyUI REST endpoints used for WAN I2V generation.
-No domain knowledge; all ComfyUI-specific HTTP details are encapsulated here.
-"""
+"""ComfyUI HTTP API client — pure transport layer."""
 
 from __future__ import annotations
 
@@ -22,6 +18,9 @@ _LOG_INTERVAL = 30  # seconds between progress log lines
 
 class ComfyUIClient:
     """Stateless HTTP client for ComfyUI server."""
+
+    # Shared progress state — updated during polling, read by engine_server.
+    current_progress: dict[str, int] = {"step": 0, "total": 0}
 
     def __init__(
         self,
@@ -119,8 +118,13 @@ class ComfyUIClient:
                     )
                     return dict(entry)
 
+            # Query /queue for running status + node progress
+            self._update_progress(prompt_id)
+
             if elapsed - last_log >= _LOG_INTERVAL:
-                logger.info("[ComfyUI] generating… %.0fs elapsed", elapsed)
+                p = ComfyUIClient.current_progress
+                extra = f" ({p['step']}/{p['total']})" if p["total"] > 0 else ""
+                logger.info("[ComfyUI] generating… %.0fs elapsed%s", elapsed, extra)
                 last_log = elapsed
 
             time.sleep(self._poll_interval)
@@ -170,6 +174,20 @@ class ComfyUIClient:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    def _update_progress(self, prompt_id: str) -> None:
+        """Poll /queue to estimate progress from running nodes."""
+        try:
+            with urllib.request.urlopen(f"{self._base_url}/queue", timeout=5) as r:  # noqa: S310
+                qdata = json.loads(r.read())
+            for item in qdata.get("queue_running", []):
+                if len(item) > 1 and item[1] == prompt_id and len(item) > 3 and isinstance(item[3], dict):
+                    done = len(item[3].get("outputs", {}))
+                    total = len(item[2]) if len(item) > 2 and isinstance(item[2], dict) else 0
+                    if total > 0:
+                        ComfyUIClient.current_progress = {"step": done, "total": total}
+        except Exception:
+            pass
 
     @staticmethod
     def _find_video(history: dict[str, Any]) -> tuple[str, str]:

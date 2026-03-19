@@ -12,7 +12,6 @@ import logging
 import os
 import subprocess
 import tempfile
-import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -158,16 +157,13 @@ def parse_stats(stats_file: Path, stem: str | None = None) -> dict[str, Any]:
 
 
 def get_comfyui_progress() -> dict[str, Any] | None:
-    """Query ComfyUI /progress endpoint for current step/total."""
+    """Read progress from ComfyUIClient shared state."""
     try:
-        comfyui = os.environ.get("COMFYUI_URL", "http://127.0.0.1:8188")
-        url = f"{comfyui}/progress"
-        with urllib.request.urlopen(url, timeout=3) as resp:  # noqa: S310
-            data = json.loads(resp.read())
-        step = data.get("value", 0)
-        total = data.get("max", 0)
-        if total > 0:
-            return {"step": step, "total": total, "percent": round(step / total * 100)}
+        from discoverex.adapters.outbound.models.comfyui_client import ComfyUIClient
+
+        p = ComfyUIClient.current_progress
+        if p["total"] > 0:
+            return {"step": p["step"], "total": p["total"], "percent": round(p["step"] / p["total"] * 100)}
     except Exception:
         pass
     return None
