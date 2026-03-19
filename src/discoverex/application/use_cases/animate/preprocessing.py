@@ -86,22 +86,28 @@ def _detect_bg_color(src: Image.Image) -> tuple[int, int, int]:
 
 
 _BG_CANDIDATES = [
+    ("chroma_green", (0, 177, 64)),
     ("white", (255, 255, 255)),
     ("black", (0, 0, 0)),
-    ("magenta", (255, 0, 255)),
     ("lime", (0, 255, 0)),
-    ("blue", (0, 0, 255)),
+    ("magenta", (255, 0, 255)),
 ]
 
 
 def _find_best_bg_color(pixels: Any) -> tuple[int, int, int]:
-    """Find background color most distant from all character pixels."""
+    """Find background color distant from character pixels.
+
+    Prioritizes chroma_green if distance > 100, since WAN preserves green
+    backgrounds better than magenta. Falls back to max distance otherwise.
+    """
     import numpy as np
 
     best_color = (255, 255, 255)
     best_dist = -1
-    for _name, color in _BG_CANDIDATES:
-        min_dist = np.abs(pixels.astype(int) - list(color)).sum(axis=1).min()
+    for name, color in _BG_CANDIDATES:
+        min_dist = int(np.abs(pixels.astype(int) - list(color)).sum(axis=1).min())
+        if name == "chroma_green" and min_dist > 100:
+            return color
         if min_dist > best_dist:
             best_dist = min_dist
             best_color = color
