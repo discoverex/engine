@@ -18,47 +18,47 @@ variants:
       - models.inpaint.pre_match_scale_ratio=[0.09,0.13]
       - models.inpaint.pre_match_variant_count=15
       - +models.inpaint.placement_grid_stride=24
-      - models.inpaint.edge_blend_strength=0.21
-      - models.inpaint.final_polish_strength=0.21
+      - models.inpaint.edge_blend_strength=0.23
+      - models.inpaint.final_polish_strength=0.23
   - variant_id: coarse-06
     overrides:
       - models.inpaint.pre_match_scale_ratio=[0.08,0.12]
       - models.inpaint.pre_match_variant_count=15
       - +models.inpaint.placement_grid_stride=21
-      - models.inpaint.edge_blend_strength=0.18
-      - models.inpaint.final_polish_strength=0.18
+      - models.inpaint.edge_blend_strength=0.22
+      - models.inpaint.final_polish_strength=0.22
   - variant_id: coarse-05
     overrides:
       - models.inpaint.pre_match_scale_ratio=[0.08,0.12]
       - models.inpaint.pre_match_variant_count=12
       - +models.inpaint.placement_grid_stride=18
-      - models.inpaint.edge_blend_strength=0.15
-      - models.inpaint.final_polish_strength=0.15
+      - models.inpaint.edge_blend_strength=0.21
+      - models.inpaint.final_polish_strength=0.21
   - variant_id: coarse-04
     overrides:
       - models.inpaint.pre_match_scale_ratio=[0.08,0.12]
       - models.inpaint.pre_match_variant_count=12
       - +models.inpaint.placement_grid_stride=18
-      - models.inpaint.edge_blend_strength=0.12
-      - models.inpaint.final_polish_strength=0.12
+      - models.inpaint.edge_blend_strength=0.20
+      - models.inpaint.final_polish_strength=0.20
   - variant_id: coarse-03
     overrides:
       - models.inpaint.pre_match_scale_ratio=[0.07,0.11]
       - models.inpaint.pre_match_variant_count=12
       - +models.inpaint.placement_grid_stride=15
-      - models.inpaint.edge_blend_strength=0.10
-      - models.inpaint.final_polish_strength=0.10
+      - models.inpaint.edge_blend_strength=0.20
+      - models.inpaint.final_polish_strength=0.20
   - variant_id: coarse-02
     overrides:
       - models.inpaint.pre_match_scale_ratio=[0.07,0.11]
       - models.inpaint.pre_match_variant_count=9
       - +models.inpaint.placement_grid_stride=15
-      - models.inpaint.edge_blend_strength=0.08
-      - models.inpaint.final_polish_strength=0.08
+      - models.inpaint.edge_blend_strength=0.20
+      - models.inpaint.final_polish_strength=0.20
   - variant_id: coarse-01
     overrides:
       - models.inpaint.pre_match_scale_ratio=[0.07,0.11]
       - models.inpaint.pre_match_variant_count=9
       - +models.inpaint.placement_grid_stride=12
-      - models.inpaint.edge_blend_strength=0.06
-      - models.inpaint.final_polish_strength=0.06
+      - models.inpaint.edge_blend_strength=0.20
+      - models.inpaint.final_polish_strength=0.20
