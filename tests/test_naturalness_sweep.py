@@ -57,6 +57,9 @@ parameters:
     assert first["job_spec"]["inputs"]["args"]["sweep_id"] == "test-sweep"
     assert first["job_spec"]["inputs"]["args"]["scenario_id"] in {"s1", "s2"}
     assert "adapters.tracker.experiment_name=discoverex-naturalness-search" in first["job_spec"]["inputs"]["overrides"]
+    assert first["job_spec"]["outputs_prefix"].startswith(
+        "exp/discoverex-naturalness-search/test-sweep/"
+    )
 
 
 def test_submit_manifest_defaults_to_naturalness_deployment(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -204,3 +207,6 @@ variants:
     assert "flows/generate=inpaint_variant_pack" in job["inputs"]["overrides"]
     assert job["inputs"]["args"]["variant_count"] == 2
     assert "baseline" in job["inputs"]["args"]["variant_specs_json"]
+    assert job["outputs_prefix"].startswith(
+        "exp/discoverex-naturalness-tenpack-variants/tenpack-variants/"
+    )
