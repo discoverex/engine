@@ -25,7 +25,11 @@ logger = logging.getLogger(__name__)
 
 
 class FfmpegBgRemover:
-    """Remove background from video frames → transparent PNG sequence."""
+    """Remove background from video frames → transparent PNG sequence.
+
+    Uses original image silhouette as protection mask to preserve
+    character pixels (e.g. white wings) that match the background color.
+    """
 
     def __init__(self, tolerance: int = 50) -> None:
         self.tolerance = tolerance
@@ -36,12 +40,13 @@ class FfmpegBgRemover:
             raise RuntimeError(f"Frame extraction failed: {video}")
 
         bg_color = _detect_bg_color(frames[0])
+        protect = _build_protect_mask(video, bg_color, self.tolerance)
         output_dir = video.parent / f"{video.stem}_transparent"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         result_paths: list[Path] = []
         for i, frame in enumerate(frames):
-            rgba = _remove_bg_frame(frame, bg_color, self.tolerance)
+            rgba = _remove_bg_frame(frame, bg_color, self.tolerance, protect)
             out = output_dir / f"{video.stem}_frame_{i:04d}.png"
             rgba.save(out, "PNG")
             result_paths.append(out)
@@ -75,8 +80,36 @@ def _detect_bg_color(frame: np.ndarray) -> Any:
     return border.mean(axis=0)
 
 
+def _build_protect_mask(
+    video: Path, bg_color: np.ndarray, tolerance: int,
+) -> np.ndarray | None:
+    """Build character protection mask from original image (same dir)."""
+    import re
+    stem = re.sub(r"_a\d+$", "", video.stem)
+    orig = video.parent / f"{stem}.png"
+    if not orig.exists():
+        logger.debug("[BgRemover] no original image for protection: %s", orig)
+        return None
+    img = np.array(Image.open(orig).convert("RGB"))
+    is_bg = np.all(np.abs(img.astype(int) - bg_color) < tolerance, axis=2)
+    labeled, _ = ndimage.label(is_bg)
+    h, w = img.shape[:2]
+    border_labels = (
+        set(labeled[0, :].tolist()) | set(labeled[-1, :].tolist())
+        | set(labeled[:, 0].tolist()) | set(labeled[:, -1].tolist())
+    )
+    border_labels.discard(0)
+    bg_mask = np.zeros((h, w), dtype=bool)
+    for lbl in border_labels:
+        bg_mask |= labeled == lbl
+    protect = ~bg_mask  # character region = NOT background
+    logger.info("[BgRemover] protection mask: %d%% character pixels", int(protect.sum() / protect.size * 100))
+    return protect
+
+
 def _remove_bg_frame(
     frame: np.ndarray, bg_color: np.ndarray, tolerance: int,
+    protect: np.ndarray | None = None,
 ) -> Image.Image:
     h, w = frame.shape[:2]
     is_bg = np.all(np.abs(frame.astype(int) - bg_color) < tolerance, axis=2)
@@ -89,6 +122,9 @@ def _remove_bg_frame(
     bg_mask = np.zeros((h, w), dtype=bool)
     for lbl in border_labels:
         bg_mask |= labeled == lbl
+    # Protect character pixels from original image silhouette
+    if protect is not None and protect.shape == (h, w):
+        bg_mask &= ~protect
 
     rgba = np.zeros((h, w, 4), dtype=np.uint8)
     rgba[:, :, :3] = frame
