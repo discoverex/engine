@@ -5,7 +5,7 @@ import os
 import sys
 from time import perf_counter
 
-_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+_FORMAT = "[engine] %(asctime)s %(levelname)s [%(name)s] %(message)s"
 
 
 def configure_logging(*, verbose: bool = False) -> None:

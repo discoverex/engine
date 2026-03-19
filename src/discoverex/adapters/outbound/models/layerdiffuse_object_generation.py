@@ -8,6 +8,7 @@ from typing import Any
 
 from PIL import Image  # type: ignore
 
+from discoverex.cache_dirs import resolve_model_cache_dir
 from discoverex.models.types import FxPrediction, FxRequest, ModelHandle
 from discoverex.runtime_logging import format_seconds, get_logger
 
@@ -301,11 +302,10 @@ def _resolve_shared_cache_dir(raw_path: str) -> Path:
     path = Path(raw_path).expanduser()
     if path.is_absolute():
         return path
-    model_cache_dir = os.getenv("MODEL_CACHE_DIR", "").strip()
-    if model_cache_dir:
-        base = Path(model_cache_dir).expanduser()
-        parts = [part for part in path.parts if part not in {".", ".cache"}]
-        return base.joinpath(*parts) if parts else base
+    base = resolve_model_cache_dir()
+    parts = [part for part in path.parts if part not in {".", ".cache"}]
+    if parts:
+        return base.joinpath(*parts)
     hf_home = os.getenv("HF_HOME", "").strip()
     if hf_home:
         base = Path(hf_home).expanduser()

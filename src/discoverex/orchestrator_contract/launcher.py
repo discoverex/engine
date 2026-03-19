@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Literal, cast
 from urllib.parse import urlparse
 
+from discoverex.cache_dirs import resolve_cache_root, resolve_model_cache_dir, resolve_uv_cache_dir
 from discoverex.progress_events import emit_progress_event
 
 BootstrapModeName = Literal["auto", "uv", "pip"]
@@ -120,14 +121,27 @@ def _prepare_env(cwd: Path, extra_env: dict[str, str]) -> dict[str, str]:
         env.pop(key, None)
     env.update(extra_env)
     _rewrite_proxy_targets(env)
-    env["UV_CACHE_DIR"] = env.get("UV_CACHE_DIR", str(cwd / ".cache" / "uv"))
+    cache_root = resolve_cache_root(default_base=cwd / ".cache")
+    env.setdefault("CACHE_DIR", str(cache_root))
+    env["UV_CACHE_DIR"] = str(resolve_uv_cache_dir(default_base=cache_root))
+    env.setdefault("MODEL_CACHE_DIR", str(resolve_model_cache_dir(default_base=cache_root)))
     env["UV_PROJECT_ENVIRONMENT"] = str(cwd / ".venv")
     env["PREFECT_API_URL"] = ""
     env["PREFECT_EVENTS_ENABLED"] = "false"
     env.setdefault("PREFECT_SERVER_ALLOW_EPHEMERAL_MODE", "true")
     env.setdefault("PREFECT_LOGGING_TO_API_ENABLED", "false")
+    _require_worker_tracking_uri(env)
     Path(env["UV_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
     return env
+
+
+def _require_worker_tracking_uri(env: dict[str, str]) -> None:
+    tracking_uri = env.get("MLFLOW_TRACKING_URI", "").strip()
+    if tracking_uri:
+        return
+    raise LauncherError(
+        "MLFLOW_TRACKING_URI is required for worker execution; refusing to fall back to local sqlite tracking"
+    )
 
 
 def _rewrite_proxy_targets(env: dict[str, str]) -> None:

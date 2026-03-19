@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from discoverex.cache_dirs import resolve_cache_root, resolve_model_cache_dir, resolve_uv_cache_dir
+
 BootstrapModeName = Literal["auto", "uv", "pip"]
 
 
@@ -125,10 +127,17 @@ def _bootstrap_with_pip(
 
 def _install_env(env: dict[str, str], cwd: Path) -> dict[str, str]:
     install_env = env.copy()
-    install_env.setdefault("UV_CACHE_DIR", str(cwd / ".cache" / "uv"))
+    cache_root = resolve_cache_root(default_base=cwd / ".cache")
+    install_env.setdefault("CACHE_DIR", str(cache_root))
+    install_env["UV_CACHE_DIR"] = str(resolve_uv_cache_dir(default_base=cache_root))
+    install_env.setdefault(
+        "MODEL_CACHE_DIR",
+        str(resolve_model_cache_dir(default_base=cache_root)),
+    )
     install_env.pop("VIRTUAL_ENV", None)
     install_env["UV_PROJECT_ENVIRONMENT"] = str(cwd / ".venv")
     Path(install_env["UV_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
+    Path(install_env["MODEL_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
     return install_env
 
 

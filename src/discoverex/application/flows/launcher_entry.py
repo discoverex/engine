@@ -4,6 +4,8 @@ import json
 import os
 import sys
 
+from discoverex.runtime_logging import configure_logging
+
 from .run_engine_job import run_engine_job
 
 INPUTS_ENV = "ORCH_JOB_INPUTS_JSON"
@@ -17,6 +19,7 @@ def _load_payload() -> str:
 
 
 def main() -> None:
+    configure_logging()
     try:
         payload = run_engine_job(_load_payload())
     except Exception as exc:
