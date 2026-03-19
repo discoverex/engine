@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
 
 from PIL import Image, ImageFilter
 
@@ -64,56 +63,6 @@ def white_anchor(image: Image.Image, tolerance: int = 30) -> Image.Image:
     return Image.fromarray(s_arr)
 
 
-def _detect_bg_color(src: Image.Image) -> tuple[int, int, int]:
-    """Detect optimal background color based on character brightness.
-
-    If the character has many bright/white pixels → use black background.
-    Otherwise → use white background (default).
-    """
-    import numpy as np
-
-    arr = np.array(src)
-    if arr.shape[2] == 4:
-        has_transparency = (arr[:, :, 3] < 128).sum() > arr.shape[0] * arr.shape[1] * 0.1
-        if has_transparency:
-            opaque = arr[:, :, 3] > 128
-            pixels = arr[opaque, :3]
-            best = _find_best_bg_color(pixels)
-            logger.info("[Preprocess] 투명배경 → 최적 배경색 %s", best)
-            return best
-    logger.info("[Preprocess] 기본 → 흰색 배경")
-    return (255, 255, 255)
-
-
-_BG_CANDIDATES = [
-    ("chroma_green", (0, 177, 64)),
-    ("white", (255, 255, 255)),
-    ("black", (0, 0, 0)),
-    ("lime", (0, 255, 0)),
-    ("magenta", (255, 0, 255)),
-]
-
-
-def _find_best_bg_color(pixels: Any) -> tuple[int, int, int]:
-    """Find background color distant from character pixels.
-
-    Prioritizes chroma_green if distance > 100, since WAN preserves green
-    backgrounds better than magenta. Falls back to max distance otherwise.
-    """
-    import numpy as np
-
-    best_color = (255, 255, 255)
-    best_dist = -1
-    for name, color in _BG_CANDIDATES:
-        min_dist = int(np.abs(pixels.astype(int) - list(color)).sum(axis=1).min())
-        if name == "chroma_green" and min_dist > 100:
-            return color
-        if min_dist > best_dist:
-            best_dist = min_dist
-            best_color = color
-    return best_color
-
-
 def preprocess_image_simple(
     image_path: str | Path,
     output_path: str | Path,
@@ -122,11 +71,8 @@ def preprocess_image_simple(
     scale: float = 0.65,
     headroom_top: float = 0.18,
     headroom_bottom: float = 0.15,
-) -> tuple[Path, str]:
-    """Preprocess image with auto background color selection.
-
-    Returns (output_path, bg_type) where bg_type is "solid" or "dark".
-    """
+) -> Path:
+    """Preprocess image with white background for WAN I2V input."""
     src = Image.open(image_path).convert("RGBA")
     ow, oh = src.size
 
@@ -143,10 +89,7 @@ def preprocess_image_simple(
             target_w = int(ow * ratio)
         src_resized = src.resize((target_w, target_h), Image.Resampling.LANCZOS)
 
-    bg_rgb = _detect_bg_color(src)
-    _BG_TYPE_MAP = {(255, 255, 255): "solid", (0, 0, 0): "dark"}
-    bg_type = _BG_TYPE_MAP.get(bg_rgb, "chroma")
-    canvas = Image.new("RGBA", (width, height), (*bg_rgb, 255))
+    canvas = Image.new("RGBA", (width, height), (255, 255, 255, 255))
 
     x = (width - target_w) // 2
     y = int(height * headroom_top)
@@ -154,10 +97,7 @@ def preprocess_image_simple(
         y = max(0, height - target_h - int(height * headroom_bottom))
 
     canvas.paste(src_resized, (x, y), src_resized)
-    if bg_type == "solid":
-        result = white_anchor(canvas.convert("RGB"))
-    else:
-        result = canvas.convert("RGB")
+    result = white_anchor(canvas.convert("RGB"))
 
     out = Path(output_path)
     result.save(out)
@@ -165,6 +105,6 @@ def preprocess_image_simple(
     scaled_str = "원본유지" if (target_w == ow and target_h == oh) else "축소"
     logger.info(
         f"[Preprocess] {ow}x{oh} -> {target_w}x{target_h} ({scaled_str}) "
-        f"pos=({x},{y}) canvas={width}x{height} bg={bg_type}"
+        f"pos=({x},{y}) canvas={width}x{height}"
     )
-    return out, bg_type
+    return out

@@ -92,13 +92,12 @@ class AnimateOrchestrator:
         out_dir = self.output_dir / "motion"
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Step 0: Preprocess (auto bg color based on character brightness)
+        # Step 0: Preprocess
         processed = out_dir / f"{image_path.stem}_processed.png"
-        _, bg_type = preprocess_image_simple(image_path, processed)
+        preprocess_image_simple(image_path, processed)
 
         # Step 1: Vision analysis
         analysis = self.vision_analyzer.analyze(processed)
-        analysis = analysis.model_copy(update={"bg_type": bg_type})
         _log_analysis(analysis)
 
         # Step 2: Mask generation
