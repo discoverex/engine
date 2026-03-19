@@ -101,7 +101,7 @@ class RuntimeEnvConfig(BaseModel):
     aws_access_key_id: str = "minioadmin"
     aws_secret_access_key: str = "minioadmin"
     metadata_db_url: str = ""
-    tracking_uri: str = "sqlite:///mlflow.db"
+    tracking_uri: str = "http://127.0.0.1:38080"
 
 
 class RuntimeConfig(BaseModel):
