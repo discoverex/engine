@@ -580,10 +580,11 @@ async function runClassify() {
             combined_lottie_path: data.combined_lottie_path,
             lottie_info: data.lottie_info,
           };
-          const infoHtml = data.lottie_info
-            ? ` | Lottie: ${data.lottie_info.frame_count}f ${data.lottie_info.file_size_mb.toFixed(1)}MB`
+          const li = data.lottie_info;
+          const infoHtml = li && li.file_size_mb
+            ? ` | Lottie: ${li.frame_count}f ${li.file_size_mb.toFixed(1)}MB`
             : '';
-          log('KEYFRAME_ONLY Lottie 생성 완료' + infoHtml);
+          log('KEYFRAME_ONLY 분류 완료' + infoHtml);
         }
 
         // 키프레임 미리보기: 원본 이미지에 CSS 애니메이션 적용
@@ -1225,19 +1226,20 @@ async function runSelectVideo() {
     if (data.error) throw new Error(data.error);
 
     state.lottieData = data;
-    log('Lottie 변환 완료: ' + data.lottie_info.file_size_mb.toFixed(1) + 'MB');
+    const li4 = data.lottie_info;
+    log('Lottie 변환 완료' + (li4 ? `: ${li4.file_size_mb.toFixed(1)}MB` : ''));
     document.getElementById('lottieStatus').innerHTML = '<span class="badge badge-kf">완료</span>';
 
     // Lottie info
-    const info = data.lottie_info;
-    document.getElementById('lottieInfo').innerHTML = `
-      <dl class="classify-result" style="margin-top:12px">
-        <dt>fps</dt><dd>${info.fps}</dd>
-        <dt>frames</dt><dd>${info.frame_count}</dd>
-        <dt>duration</dt><dd>${info.duration_ms}ms</dd>
-        <dt>size</dt><dd>${info.width}×${info.height}</dd>
-        <dt>file</dt><dd>${info.file_size_mb.toFixed(1)}MB</dd>
-      </dl>`;
+    if (li4) {
+      document.getElementById('lottieInfo').innerHTML = `
+        <dl class="classify-result" style="margin-top:12px">
+          <dt>fps</dt><dd>${li4.fps}</dd>
+          <dt>frames</dt><dd>${li4.frame_count}</dd>
+          <dt>duration</dt><dd>${li4.duration_ms}ms</dd>
+          <dt>file</dt><dd>${li4.file_size_mb.toFixed(1)}MB</dd>
+        </dl>`;
+    }
 
     // Lottie 재생
     const previewEl = document.getElementById('lottiePreview');

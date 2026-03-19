@@ -47,9 +47,20 @@ def register_extra_routes(
         if not transparent or not transparent.frames:
             return jsonify({"error": "bg removal failed"}), 500
         converted = orchestrator.format_converter.convert(transparent.frames, preset, fps)
+        lottie_info = None
+        if converted.lottie_path and Path(str(converted.lottie_path)).exists():
+            lp = Path(str(converted.lottie_path))
+            lottie_info = {
+                "fps": fps,
+                "frame_count": len(transparent.frames),
+                "duration_ms": round(len(transparent.frames) / fps * 1000),
+                "width": 0, "height": 0,
+                "file_size_mb": round(lp.stat().st_size / (1024 * 1024), 1),
+            }
         return jsonify({
             "transparent_dir": str(transparent.frames[0].parent),
             "lottie_path": str(converted.lottie_path) if converted.lottie_path else None,
+            "lottie_info": lottie_info,
             "apng_path": str(converted.apng_path) if converted.apng_path else None,
             "webm_path": str(converted.webm_path) if converted.webm_path else None,
         })
