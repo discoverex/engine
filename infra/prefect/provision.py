@@ -8,8 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from discoverex.cache_dirs import resolve_cache_root, resolve_model_cache_dir, resolve_uv_cache_dir
-
 BootstrapModeName = Literal["auto", "uv", "pip"]
 
 
@@ -127,18 +125,42 @@ def _bootstrap_with_pip(
 
 def _install_env(env: dict[str, str], cwd: Path) -> dict[str, str]:
     install_env = env.copy()
-    cache_root = resolve_cache_root(default_base=cwd / ".cache")
+    cache_root = _resolve_cache_root(env=install_env, default_base=cwd / ".cache")
     install_env.setdefault("CACHE_DIR", str(cache_root))
-    install_env["UV_CACHE_DIR"] = str(resolve_uv_cache_dir(default_base=cache_root))
+    install_env["UV_CACHE_DIR"] = str(_resolve_uv_cache_dir(env=install_env, default_base=cache_root))
     install_env.setdefault(
         "MODEL_CACHE_DIR",
-        str(resolve_model_cache_dir(default_base=cache_root)),
+        str(_resolve_model_cache_dir(env=install_env, default_base=cache_root)),
     )
     install_env.pop("VIRTUAL_ENV", None)
     install_env["UV_PROJECT_ENVIRONMENT"] = str(cwd / ".venv")
     Path(install_env["UV_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
     Path(install_env["MODEL_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
     return install_env
+
+
+def _resolve_cache_root(*, env: dict[str, str], default_base: Path) -> Path:
+    cache_dir = str(env.get("CACHE_DIR", "")).strip()
+    if cache_dir:
+        return Path(cache_dir).expanduser()
+    model_cache_dir = str(env.get("MODEL_CACHE_DIR", "")).strip()
+    if model_cache_dir:
+        return Path(model_cache_dir).expanduser()
+    return default_base
+
+
+def _resolve_uv_cache_dir(*, env: dict[str, str], default_base: Path) -> Path:
+    explicit = str(env.get("UV_CACHE_DIR", "")).strip()
+    if explicit:
+        return Path(explicit).expanduser()
+    return default_base / "uv"
+
+
+def _resolve_model_cache_dir(*, env: dict[str, str], default_base: Path) -> Path:
+    explicit = str(env.get("MODEL_CACHE_DIR", "")).strip()
+    if explicit:
+        return Path(explicit).expanduser()
+    return default_base / "models"
 
 
 def _activate_repo_environment(*, cwd: Path, logger: Any) -> None:
