@@ -2,6 +2,7 @@
 
 이 모듈은 순수 계산만 담당한다. 외부 I/O·모델 의존 없음.
 """
+
 from __future__ import annotations
 
 from discoverex.domain.services.types import ObjectMetrics, SceneNorms
@@ -15,12 +16,12 @@ from discoverex.domain.services.types import ObjectMetrics, SceneNorms
 # 보조 3항: visual_degree(bool), logical_degree(bool), edge_strength(실수 정규화)
 # edge_strength는 레이어 자체 경계 선명도로 배경 대비 의미가 약해 보조로 변경
 HF_W = dict(
-    color_contrast=0.35,    # 필수
-    z_depth_hop=0.25,       # 필수
-    cluster_density=0.15,   # 필수 (최소 가중치 → θ_HUMAN 기준)
-    visual_degree=0.10,     # 보조 bool
-    logical_degree=0.10,    # 보조 bool
-    edge_strength=0.05,     # 보조 실수 정규화
+    color_contrast=0.35,  # 필수
+    z_depth_hop=0.25,  # 필수
+    cluster_density=0.15,  # 필수 (최소 가중치 → θ_HUMAN 기준)
+    visual_degree=0.10,  # 보조 bool
+    logical_degree=0.10,  # 보조 bool
+    edge_strength=0.05,  # 보조 실수 정규화
 )
 
 # ai_field 가중치 (합 = 1.0)
@@ -28,13 +29,13 @@ HF_W = dict(
 # 보조 4항: similar_distance(bool), sigma_threshold(bool), visual_degree(bool), edge_strength(실수 정규화)
 # edge_strength는 레이어 자체 경계 선명도로 배경 대비 의미가 약해 보조로 변경
 AF_W = dict(
-    similar_count=0.35,     # 필수
-    drr_slope=0.20,         # 필수 (최소 가중치 → θ_AI 기준)
-    color_contrast=0.20,    # 필수 (최소 가중치 → θ_AI 기준)
+    similar_count=0.35,  # 필수
+    drr_slope=0.20,  # 필수 (최소 가중치 → θ_AI 기준)
+    color_contrast=0.20,  # 필수 (최소 가중치 → θ_AI 기준)
     similar_distance=0.10,  # 보조 bool
-    sigma_threshold=0.07,   # 보조 bool
-    visual_degree=0.04,     # 보조 bool
-    edge_strength=0.04,     # 보조 실수 정규화
+    sigma_threshold=0.07,  # 보조 bool
+    visual_degree=0.04,  # 보조 bool
+    edge_strength=0.04,  # 보조 실수 정규화
 )
 
 # 설계안 §1 커트라인: 필수조건 중 최소 가중치 항목의 단독 극단값
@@ -44,15 +45,16 @@ AF_W = dict(
 θ_AI: float = 0.180
 
 # 보조 bool 임계값 (기존 resolve_answer 기준 유지)
-_θ_VISUAL_DEGREE: int = 2       # bool(visual_degree ≥ θ)
-_θ_LOGICAL_DEGREE: int = 3      # bool(logical_degree ≥ θ)
-_θ_SIMILAR_DIST: float = 80.0   # bool(similar_distance ≤ θ)
-_θ_SIGMA_INV: float = 0.25      # bool(1/σ ≥ θ) → σ ≤ 4.0
+_θ_VISUAL_DEGREE: int = 2  # bool(visual_degree ≥ θ)
+_θ_LOGICAL_DEGREE: int = 3  # bool(logical_degree ≥ θ)
+_θ_SIMILAR_DIST: float = 80.0  # bool(similar_distance ≤ θ)
+_θ_SIGMA_INV: float = 0.25  # bool(1/σ ≥ θ) → σ ≤ 4.0
 
 
 # ---------------------------------------------------------------------------
 # 내부 헬퍼
 # ---------------------------------------------------------------------------
+
 
 def _safe_div(numerator: float, denominator: float) -> float:
     """분모가 0일 때 0 반환."""
@@ -62,6 +64,7 @@ def _safe_div(numerator: float, denominator: float) -> float:
 # ---------------------------------------------------------------------------
 # 공개 함수
 # ---------------------------------------------------------------------------
+
 
 def human_field(
     obj_metrics: ObjectMetrics,
@@ -139,7 +142,7 @@ def ai_field(
 
     # 필수 3항 정규화
     inv_cc_norm = _safe_div(1.0 / (cc + 1.0), max_inv_cc)
-    drr_slope_norm = max(0.0, min(drr_slope, 1.0))   # clip [0, 1]
+    drr_slope_norm = max(0.0, min(drr_slope, 1.0))  # clip [0, 1]
 
     # 보조 4항 (bool 3 + 실수 1)
     b_sim_dist = 1.0 if similar_distance <= _θ_SIMILAR_DIST else 0.0

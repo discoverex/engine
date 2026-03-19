@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 
-def load_state_dict_materialized(module: Any, state_dict: dict[str, Any], *, strict: bool = True) -> Any:
+def load_state_dict_materialized(
+    module: Any, state_dict: dict[str, Any], *, strict: bool = True
+) -> Any:
     try:
         result = module.load_state_dict(state_dict, strict=strict, assign=True)
     except TypeError:

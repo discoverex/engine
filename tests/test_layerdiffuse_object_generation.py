@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from discoverex.adapters.outbound.models.layerdiffuse_object_generation import (
@@ -12,7 +13,7 @@ from discoverex.models.types import FxRequest
 
 
 def test_layerdiffuse_object_generator_writes_rgba_output(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     model = LayerDiffuseObjectGenerationModel(strict_runtime=True)

@@ -61,10 +61,16 @@ def _parse_args() -> argparse.Namespace:
         help="초기 가중치 JSON (없으면 ScoringWeights 기본값 사용)",
     )
     p.add_argument(
-        "--difficulty-min", type=float, default=0.1, help="설계안 §3 난이도 하한 (기본 0.1)"
+        "--difficulty-min",
+        type=float,
+        default=0.1,
+        help="설계안 §3 난이도 하한 (기본 0.1)",
     )
     p.add_argument(
-        "--difficulty-max", type=float, default=0.9, help="설계안 §3 난이도 상한 (기본 0.9)"
+        "--difficulty-max",
+        type=float,
+        default=0.9,
+        help="설계안 §3 난이도 상한 (기본 0.9)",
     )
     p.add_argument(
         "--margin", type=float, default=0.05, help="hinge loss 마진 (기본 0.05)"

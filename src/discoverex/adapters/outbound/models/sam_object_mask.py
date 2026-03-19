@@ -37,7 +37,9 @@ class SamObjectMaskExtractor:
         object_path = save_image(object_rgba, prefix.with_suffix(".object.png"))
         mask_path = save_image(mask, prefix.with_suffix(".mask.png"))
         if alpha is not None and alpha.getbbox() is not None:
-            raw_alpha_path = save_image(alpha, prefix.with_suffix(".raw-alpha-mask.png"))
+            raw_alpha_path = save_image(
+                alpha, prefix.with_suffix(".raw-alpha-mask.png")
+            )
         return {
             "object": object_path,
             "mask": mask_path,
@@ -63,6 +65,7 @@ class SamObjectMaskExtractor:
         try:
             import numpy as np
             import torch  # type: ignore
+
             with warnings.catch_warnings():
                 warnings.filterwarnings(
                     "ignore",

@@ -24,10 +24,16 @@ def _build_all_metrics(data: ValidatorInput) -> list[ObjectMetrics]:
         data.logical,
         data.visual,
     )
-    all_obj_ids = sorted(set(physical.alpha_degree_map) | set(visual.sigma_threshold_map))
+    all_obj_ids = sorted(
+        set(physical.alpha_degree_map) | set(visual.sigma_threshold_map)
+    )
 
-    max_visual = max((physical.alpha_degree_map.get(oid, 0) for oid in all_obj_ids), default=1)
-    max_logical = max((logical.degree_map.get(oid, 0) for oid in all_obj_ids), default=1)
+    max_visual = max(
+        (physical.alpha_degree_map.get(oid, 0) for oid in all_obj_ids), default=1
+    )
+    max_logical = max(
+        (logical.degree_map.get(oid, 0) for oid in all_obj_ids), default=1
+    )
     max_combined = max(max_visual + max_logical, 1)
 
     return [
@@ -35,7 +41,10 @@ def _build_all_metrics(data: ValidatorInput) -> list[ObjectMetrics]:
             "obj_id": oid,
             "visual_degree": physical.alpha_degree_map.get(oid, 0),
             "logical_degree": logical.degree_map.get(oid, 0),
-            "degree_norm": (physical.alpha_degree_map.get(oid, 0) + logical.degree_map.get(oid, 0)) / max_combined,
+            "degree_norm": (
+                physical.alpha_degree_map.get(oid, 0) + logical.degree_map.get(oid, 0)
+            )
+            / max_combined,
             "cluster_density": physical.cluster_density_map.get(oid, 0),
             "z_depth_hop": physical.z_depth_hop_map.get(oid, 0),
             "hop": logical.hop_map.get(oid, 0),
@@ -62,7 +71,8 @@ def _compute_scene_norms(metrics: list[ObjectMetrics]) -> SceneNorms:
         "max_inv_cc": max((_inv_cc(m) for m in metrics), default=1.0) or 1.0,
         "max_inv_es": max((_inv_es(m) for m in metrics), default=1.0) or 1.0,
         "max_hop": max((float(m["z_depth_hop"]) for m in metrics), default=1.0) or 1.0,
-        "max_cluster": max((float(m["cluster_density"]) for m in metrics), default=1.0) or 1.0,
+        "max_cluster": max((float(m["cluster_density"]) for m in metrics), default=1.0)
+        or 1.0,
     }
 
 
@@ -80,7 +90,9 @@ def build_verification_bundle(
 
     hidden_list: list[tuple[ObjectMetrics, float, float]] = []
     for m in all_metrics:
-        judged, hf, af = is_hidden(m, norms, float(m["similar_count"]) / max(total_objs - 1, 1))
+        judged, hf, af = is_hidden(
+            m, norms, float(m["similar_count"]) / max(total_objs - 1, 1)
+        )
         if judged:
             hidden_list.append((m, hf, af))
 
@@ -88,7 +100,7 @@ def build_verification_bundle(
     hidden_objects: list[HiddenObjectMeta] = []
     per_obj_p, per_obj_l = [], []
 
-    for (m, hf, af) in hidden_list:
+    for m, hf, af in hidden_list:
         D_obj = compute_difficulty(m, weights, answer_obj_count)
         p_score, l_score, _ = integrate_verification_v2(m, weights, answer_obj_count)
         per_obj_p.append(p_score)
@@ -96,30 +108,76 @@ def build_verification_bundle(
 
         signals = {
             "degree_norm": float(m["degree_norm"]),
-            "cluster_density_norm": min(float(m["cluster_density"]) / norms["max_cluster"], 1.0),
+            "cluster_density_norm": min(
+                float(m["cluster_density"]) / norms["max_cluster"], 1.0
+            ),
             "hop_diameter": float(m["hop"]) / max(float(m["diameter"]), 1e-6),
             "drr_slope_norm": max(0.0, min(float(m["drr_slope"]), 1.0)),
             "sigma_threshold_norm": 1.0 / max(float(m["sigma_threshold"]), 1e-6),
-            "similar_count_norm": min(float(m["similar_count"]) / max(answer_obj_count - 1, 1), 1.0),
+            "similar_count_norm": min(
+                float(m["similar_count"]) / max(answer_obj_count - 1, 1), 1.0
+            ),
             "similar_distance_norm": 1.0 / (1.0 + float(m["similar_distance"])),
             "color_contrast_norm": 1.0 / (1.0 + float(m["color_contrast"])),
             "edge_strength_norm": 1.0 / (1.0 + float(m["edge_strength"])),
         }
-        hidden_objects.append(HiddenObjectMeta(obj_id=m["obj_id"], human_field=hf, ai_field=af, D_obj=D_obj, difficulty_signals=signals))
+        hidden_objects.append(
+            HiddenObjectMeta(
+                obj_id=m["obj_id"],
+                human_field=hf,
+                ai_field=af,
+                D_obj=D_obj,
+                difficulty_signals=signals,
+            )
+        )
 
     avg_p = sum(per_obj_p) / len(per_obj_p) if per_obj_p else 0.0
     avg_l = sum(per_obj_l) / len(per_obj_l) if per_obj_l else 0.0
-    scene_difficulty = compute_scene_difficulty([m for (m, _, _) in hidden_list], weights, answer_obj_count)
+    scene_difficulty = compute_scene_difficulty(
+        [m for (m, _, _) in hidden_list], weights, answer_obj_count
+    )
 
-    passed = answer_obj_count >= hidden_obj_min and difficulty_min <= scene_difficulty <= difficulty_max
+    passed = (
+        answer_obj_count >= hidden_obj_min
+        and difficulty_min <= scene_difficulty <= difficulty_max
+    )
     reason = ""
     if not passed:
-        reason = f"hidden_obj_count={answer_obj_count} < {hidden_obj_min}" if answer_obj_count < hidden_obj_min else f"scene_difficulty={scene_difficulty:.4f} out of [{difficulty_min}, {difficulty_max}]"
+        reason = (
+            f"hidden_obj_count={answer_obj_count} < {hidden_obj_min}"
+            if answer_obj_count < hidden_obj_min
+            else f"scene_difficulty={scene_difficulty:.4f} out of [{difficulty_min}, {difficulty_max}]"
+        )
 
     return VerificationBundle(
-        perception=VerificationResult(score=avg_p, **{"pass": passed}, signals={"sigma_threshold_map": data.visual.sigma_threshold_map, "drr_slope_map": data.visual.drr_slope_map, "similar_count_map": data.visual.similar_count_map, "similar_distance_map": data.visual.similar_distance_map, "color_contrast_map": data.color_edge.color_contrast_map, "edge_strength_map": data.color_edge.edge_strength_map}),
-        logical=VerificationResult(score=avg_l, **{"pass": passed}, signals={"alpha_degree_map": data.physical.alpha_degree_map, "logical_degree_map": data.logical.degree_map, "cluster_density_map": data.physical.cluster_density_map, "z_depth_hop_map": data.physical.z_depth_hop_map, "hop_map": data.logical.hop_map, "diameter": data.logical.diameter, "answer_obj_count": answer_obj_count}),
-        final=FinalVerification(total_score=scene_difficulty, **{"pass": passed}, failure_reason=reason),
+        perception=VerificationResult(
+            score=avg_p,
+            **{"pass": passed},
+            signals={
+                "sigma_threshold_map": data.visual.sigma_threshold_map,
+                "drr_slope_map": data.visual.drr_slope_map,
+                "similar_count_map": data.visual.similar_count_map,
+                "similar_distance_map": data.visual.similar_distance_map,
+                "color_contrast_map": data.color_edge.color_contrast_map,
+                "edge_strength_map": data.color_edge.edge_strength_map,
+            },
+        ),
+        logical=VerificationResult(
+            score=avg_l,
+            **{"pass": passed},
+            signals={
+                "alpha_degree_map": data.physical.alpha_degree_map,
+                "logical_degree_map": data.logical.degree_map,
+                "cluster_density_map": data.physical.cluster_density_map,
+                "z_depth_hop_map": data.physical.z_depth_hop_map,
+                "hop_map": data.logical.hop_map,
+                "diameter": data.logical.diameter,
+                "answer_obj_count": answer_obj_count,
+            },
+        ),
+        final=FinalVerification(
+            total_score=scene_difficulty, **{"pass": passed}, failure_reason=reason
+        ),
         scene_difficulty=scene_difficulty,
         hidden_objects=hidden_objects,
     )

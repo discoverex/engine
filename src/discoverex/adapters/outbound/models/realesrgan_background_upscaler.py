@@ -54,12 +54,14 @@ class RealEsrganBackgroundUpscalerModel:
         )
 
     def predict(self, handle: ModelHandle, request: FxRequest) -> FxPrediction:
-        from PIL import Image  # type: ignore
         import numpy as np
+        from PIL import Image  # type: ignore
 
         image_ref = request.image_ref or request.params.get("image_ref")
         if not isinstance(image_ref, (str, Path)) or not str(image_ref):
-            raise ValueError("FxRequest.image_ref or FxRequest.params.image_ref is required")
+            raise ValueError(
+                "FxRequest.image_ref or FxRequest.params.image_ref is required"
+            )
         output_path = request.params.get("output_path")
         if not isinstance(output_path, str) or not output_path:
             raise ValueError("FxRequest.params.output_path is required")
@@ -73,13 +75,20 @@ class RealEsrganBackgroundUpscalerModel:
             target_h = height if height > 0 else image.height
             upsampler = self._load_upsampler(handle)
             source = np.asarray(image)[:, :, ::-1]
-            outscale = max(target_w / max(1, image.width), target_h / max(1, image.height), 1.0)
+            outscale = max(
+                target_w / max(1, image.width), target_h / max(1, image.height), 1.0
+            )
             output, _ = upsampler.enhance(source, outscale=outscale)
             upscaled = Image.fromarray(output[:, :, ::-1], mode="RGB")
             if upscaled.width != target_w or upscaled.height != target_h:
-                upscaled = upscaled.resize((target_w, target_h), Image.Resampling.LANCZOS)
+                upscaled = upscaled.resize(
+                    (target_w, target_h), Image.Resampling.LANCZOS
+                )
             upscaled.save(target_path)
-        return {"fx": request.mode or "background_upscale", "output_path": str(target_path)}
+        return {
+            "fx": request.mode or "background_upscale",
+            "output_path": str(target_path),
+        }
 
     def _load_upsampler(self, handle: ModelHandle) -> Any:
         if self._upsampler is not None:
@@ -121,7 +130,9 @@ class RealEsrganBackgroundUpscalerModel:
             scale=model_scales[self.model_name],
         )
         use_half = bool(
-            "16" in handle.dtype and handle.device == "cuda" and torch.cuda.is_available()
+            "16" in handle.dtype
+            and handle.device == "cuda"
+            and torch.cuda.is_available()
         )
         gpu_id = 0 if handle.device == "cuda" and torch.cuda.is_available() else None
         logger.info(

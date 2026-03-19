@@ -35,9 +35,8 @@ def configure_diffusers_pipeline(
             vae.enable_tiling()
         elif hasattr(pipe, "enable_vae_tiling"):
             pipe.enable_vae_tiling()
-    if (
-        enable_xformers_memory_efficient_attention
-        and hasattr(pipe, "enable_xformers_memory_efficient_attention")
+    if enable_xformers_memory_efficient_attention and hasattr(
+        pipe, "enable_xformers_memory_efficient_attention"
     ):
         try:
             pipe.enable_xformers_memory_efficient_attention()
@@ -62,8 +61,16 @@ def configure_diffusers_pipeline(
 def _enable_fp8_layerwise_casting(pipe: Any, *, handle: Any, torch_mod: Any) -> None:
     if torch_mod is None or not hasattr(torch_mod, "float8_e4m3fn"):
         return
-    compute_dtype = torch_mod.float16 if "16" in str(handle.dtype) else torch_mod.float32
-    for component_name in ("unet", "transformer", "vae", "text_encoder", "text_encoder_2"):
+    compute_dtype = (
+        torch_mod.float16 if "16" in str(handle.dtype) else torch_mod.float32
+    )
+    for component_name in (
+        "unet",
+        "transformer",
+        "vae",
+        "text_encoder",
+        "text_encoder_2",
+    ):
         component = getattr(pipe, component_name, None)
         method = getattr(component, "enable_layerwise_casting", None)
         if not callable(method):

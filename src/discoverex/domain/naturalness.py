@@ -1,14 +1,37 @@
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import asdict, dataclass, field
+from typing import TypedDict
 
-from pydantic import BaseModel, Field
+
+class SelectedBBox(TypedDict):
+    x: float
+    y: float
+    w: float
+    h: float
 
 
-class NaturalnessRegionInput(BaseModel):
+class NaturalnessSummary(TypedDict):
+    region_count: int
+    avg_placement_fit: float
+    avg_seam_visibility: float
+    avg_saliency_lift: float
+
+
+def default_summary() -> NaturalnessSummary:
+    return {
+        "region_count": 0,
+        "avg_placement_fit": 0.0,
+        "avg_seam_visibility": 0.0,
+        "avg_saliency_lift": 0.0,
+    }
+
+
+@dataclass(frozen=True)
+class NaturalnessRegionInput:
     region_id: str
     final_image_ref: str
-    selected_bbox: dict[str, float]
+    selected_bbox: SelectedBBox
     object_image_ref: str | None = None
     object_mask_ref: str | None = None
     patch_image_ref: str | None = None
@@ -19,18 +42,23 @@ class NaturalnessRegionInput(BaseModel):
     mask_source: str | None = None
 
 
-class NaturalnessRegionScore(BaseModel):
+@dataclass(frozen=True)
+class NaturalnessRegionScore:
     region_id: str
     natural_hidden_score: float
     placement_fit: float
     seam_visibility: float
     saliency_lift: float
-    diagnosis_signals: dict[str, Any] = Field(default_factory=dict)
+    diagnosis_signals: dict[str, float | str] = field(default_factory=dict)
 
 
-class NaturalnessEvaluation(BaseModel):
+@dataclass(frozen=True)
+class NaturalnessEvaluation:
     scene_id: str | None = None
     version_id: str | None = None
     overall_score: float = 0.0
-    regions: list[NaturalnessRegionScore] = Field(default_factory=list)
-    summary: dict[str, Any] = Field(default_factory=dict)
+    regions: list[NaturalnessRegionScore] = field(default_factory=list)
+    summary: NaturalnessSummary = field(default_factory=default_summary)
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)

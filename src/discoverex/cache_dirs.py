@@ -28,4 +28,3 @@ def resolve_model_cache_dir(*, default_base: Path | None = None) -> Path:
     if explicit:
         return Path(explicit).expanduser()
     return resolve_cache_root(default_base=default_base) / "models"
-

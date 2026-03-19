@@ -35,6 +35,7 @@ class MobileSAMAdapter:
 
     def load(self, handle: ModelHandle) -> None:  # noqa: ARG002
         import torch
+
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",

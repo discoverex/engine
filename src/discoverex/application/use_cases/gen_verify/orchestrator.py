@@ -18,10 +18,13 @@ from .background_pipeline import (
 )
 from .composite_pipeline import compose_scene
 from .model_lifecycle import unload_model
-from .object_pipeline import generate_region_objects
-from .object_pipeline import resolve_object_prompts
-from .persistence import save_scene, track_run, write_verification_report
-from .persistence import write_naturalness_report
+from .object_pipeline import generate_region_objects, resolve_object_prompts
+from .persistence import (
+    save_scene,
+    track_run,
+    write_naturalness_report,
+    write_verification_report,
+)
 from .prompt_bundle import build_prompt_tracking_params, save_prompt_bundle
 from .region_pipeline import build_candidate_regions, generate_regions
 from .scene_builder import build_scene, generate_run_ids
@@ -70,28 +73,30 @@ def run(
     finally:
         unload_model(context.background_generator_model)
 
-    upscaler_handle = context.background_upscaler_model.load(
-        model_versions.background_upscaler
-    )
-    try:
-        background = apply_background_canvas_upscale_if_needed(
-            background=background,
-            context=context,
-            scene_dir=scene_dir,
-            upscaler_handle=upscaler_handle,
-            prompt=(background_prompt or "").strip(),
-            negative_prompt=(background_negative_prompt or "").strip(),
+    background_upscaler_model = getattr(context, "background_upscaler_model", None)
+    if background_upscaler_model is not None:
+        upscaler_handle = background_upscaler_model.load(
+            model_versions.background_upscaler
         )
-        background = apply_background_detail_reconstruction_if_needed(
-            background=background,
-            context=context,
-            scene_dir=scene_dir,
-            upscaler_handle=upscaler_handle,
-            prompt=(background_prompt or "").strip(),
-            negative_prompt=(background_negative_prompt or "").strip(),
-        )
-    finally:
-        unload_model(context.background_upscaler_model)
+        try:
+            background = apply_background_canvas_upscale_if_needed(
+                background=background,
+                context=context,
+                scene_dir=scene_dir,
+                upscaler_handle=upscaler_handle,
+                prompt=(background_prompt or "").strip(),
+                negative_prompt=(background_negative_prompt or "").strip(),
+            )
+            background = apply_background_detail_reconstruction_if_needed(
+                background=background,
+                context=context,
+                scene_dir=scene_dir,
+                upscaler_handle=upscaler_handle,
+                prompt=(background_prompt or "").strip(),
+                negative_prompt=(background_negative_prompt or "").strip(),
+            )
+        finally:
+            unload_model(background_upscaler_model)
     _materialize_background_asset(background=background, scene_dir=scene_dir)
     logger.info("background ready asset_ref=%s", background.asset_ref)
 
@@ -186,7 +191,12 @@ def run(
         ),
         object=PromptStageRecord(
             mode="per-region"
-            if len(resolve_object_prompts((object_prompt or "").strip(), total_regions=len(regions))) > 1
+            if len(
+                resolve_object_prompts(
+                    (object_prompt or "").strip(), total_regions=len(regions)
+                )
+            )
+            > 1
             else "shared",
             prompt=(object_prompt or "").strip(),
             negative_prompt=(object_negative_prompt or "").strip(),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Literal
 
 import pytest
 
@@ -19,7 +20,7 @@ class _FakeImage:
     def save(self, path: Path) -> None:
         path.write_bytes(b"fake-image")
 
-    def resize(self, size: tuple[int, int], _resample=None) -> "_FakeImage":
+    def resize(self, size: tuple[int, int], _resample: Any = None) -> "_FakeImage":
         return _FakeImage(width=size[0], height=size[1])
 
     def convert(self, _mode: str) -> "_FakeImage":
@@ -28,7 +29,7 @@ class _FakeImage:
     def __enter__(self) -> "_FakeImage":
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> bool:  # type: ignore[no-untyped-def]
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Literal[False]:
         return False
 
 
@@ -50,7 +51,7 @@ def test_pixart_background_generation_writes_output(
     )
     handle = model.load("bg-v1")
 
-    def _fake_generate_base_image(**kwargs):  # type: ignore[no-untyped-def]
+    def _fake_generate_base_image(**kwargs: Any) -> _FakeImage:
         captured.update(kwargs)
         return _FakeImage(width=1024, height=1024)
 

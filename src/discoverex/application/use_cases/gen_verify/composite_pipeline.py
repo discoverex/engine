@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from time import perf_counter
 
-from discoverex.artifact_paths import composite_output_path
 from discoverex.application.context import AppContextLike
+from discoverex.artifact_paths import composite_output_path
 from discoverex.models.types import FxPrediction, FxRequest, ModelHandle
 from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger

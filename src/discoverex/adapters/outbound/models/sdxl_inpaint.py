@@ -260,9 +260,7 @@ class SdxlInpaintModel:
             result["object_mask_ref"] = str(composited_ref["mask"])
             result["composited_image_ref"] = str(composited_ref["composited"])
             if "precomposited" in composited_ref:
-                result["precomposited_image_ref"] = str(
-                    composited_ref["precomposited"]
-                )
+                result["precomposited_image_ref"] = str(composited_ref["precomposited"])
             if "blend_mask" in composited_ref:
                 result["blend_mask_ref"] = str(composited_ref["blend_mask"])
             if "edge_mask" in composited_ref:
@@ -280,7 +278,9 @@ class SdxlInpaintModel:
             if "variant_manifest" in composited_ref:
                 result["variant_manifest_ref"] = str(composited_ref["variant_manifest"])
             if "placement_variant_id" in composited_ref:
-                result["placement_variant_id"] = str(composited_ref["placement_variant_id"])
+                result["placement_variant_id"] = str(
+                    composited_ref["placement_variant_id"]
+                )
             if "mask_source" in composited_ref:
                 result["mask_source"] = str(composited_ref["mask_source"])
             if "selected_bbox" in composited_ref:
@@ -464,9 +464,7 @@ class SdxlInpaintModel:
         refined_object_path = save_image(
             object_image, output.with_suffix(".object.png")
         )
-        refined_mask_path = save_image(
-            refined_mask, output.with_suffix(".mask.png")
-        )
+        refined_mask_path = save_image(refined_mask, output.with_suffix(".mask.png"))
         variants = self._build_pre_match_variants(
             image=image,
             bbox=bbox,
@@ -585,7 +583,9 @@ class SdxlInpaintModel:
         edge_mask_path = save_image(
             edge_stage["blend_mask"], output.with_suffix(".edge-mask.png")
         )
-        core_mask_path = save_image(core_stage["blend_mask"], output.with_suffix(".core-mask.png"))
+        core_mask_path = save_image(
+            core_stage["blend_mask"], output.with_suffix(".core-mask.png")
+        )
         edge_patch_path = save_image(
             edge_stage["generated_patch"], output.with_suffix(".edge-blend.png")
         )
@@ -657,7 +657,9 @@ class SdxlInpaintModel:
                         self.final_inpaint_strength
                         if self.final_inpaint_strength is not None
                         else min(
-                            float(request.generation_strength or self.generation_strength),
+                            float(
+                                request.generation_strength or self.generation_strength
+                            ),
                             0.18,
                         )
                     ),
@@ -666,7 +668,10 @@ class SdxlInpaintModel:
                         if self.final_inpaint_steps is not None
                         else max(
                             4,
-                            min(int(request.generation_steps or self.generation_steps), 6),
+                            min(
+                                int(request.generation_steps or self.generation_steps),
+                                6,
+                            ),
                         )
                     ),
                     "generation_guidance_scale": (
@@ -788,13 +793,21 @@ class SdxlInpaintModel:
         if self.mask_refine_backend == "sam2" and not self.sam2_model_id.strip():
             raise RuntimeError("layerdiffuse_hidden_object_v1 requires sam2_model_id")
         if self.relight_method == "ic_light" and not self.ic_light_model_id.strip():
-            raise RuntimeError("layerdiffuse_hidden_object_v1 requires ic_light_model_id")
+            raise RuntimeError(
+                "layerdiffuse_hidden_object_v1 requires ic_light_model_id"
+            )
         if self.edge_blend_backend and not self.edge_blend_model_id.strip():
-            raise RuntimeError("layerdiffuse_hidden_object_v1 requires edge_blend_model_id")
+            raise RuntimeError(
+                "layerdiffuse_hidden_object_v1 requires edge_blend_model_id"
+            )
         if self.core_blend_backend and not self.core_blend_model_id.strip():
-            raise RuntimeError("layerdiffuse_hidden_object_v1 requires core_blend_model_id")
+            raise RuntimeError(
+                "layerdiffuse_hidden_object_v1 requires core_blend_model_id"
+            )
         if self.final_polish_backend and not self.final_polish_model_id.strip():
-            raise RuntimeError("layerdiffuse_hidden_object_v1 requires final_polish_model_id")
+            raise RuntimeError(
+                "layerdiffuse_hidden_object_v1 requires final_polish_model_id"
+            )
 
     def _backend_runtime(self) -> BackendRuntime:
         return BackendRuntime(
@@ -826,7 +839,9 @@ class SdxlInpaintModel:
             return self._sam2_refiner.refine(image=image, fallback_mask=fallback_mask)
         return fallback_mask
 
-    def _get_object_blend_backend(self, backend_kind: str) -> DiffusionObjectBlendBackend:
+    def _get_object_blend_backend(
+        self, backend_kind: str
+    ) -> DiffusionObjectBlendBackend:
         if backend_kind == "edge":
             if self._edge_blend_pipe is None:
                 self._edge_blend_pipe = DiffusionObjectBlendBackend(
@@ -884,7 +899,9 @@ class SdxlInpaintModel:
                 object_mask=object_mask,
                 scale_ratio=self._interpolate(self.pre_match_scale_ratio, fraction),
                 rotation_deg=self._interpolate(self.pre_match_rotation_deg, fraction),
-                saturation_mul=self._interpolate(self.pre_match_saturation_mul, fraction),
+                saturation_mul=self._interpolate(
+                    self.pre_match_saturation_mul, fraction
+                ),
                 contrast_mul=self._interpolate(self.pre_match_contrast_mul, fraction),
                 sharpness_mul=self._interpolate(self.pre_match_sharpness_mul, fraction),
                 index=index,
@@ -952,13 +969,21 @@ class SdxlInpaintModel:
             max(1, int(round(rgba.width * resize_scale))),
             max(1, int(round(rgba.height * resize_scale))),
         )
-        rgba = rgba.resize(resized_size, Image.LANCZOS)
-        mask = mask.resize(resized_size, Image.LANCZOS)
+        rgba = rgba.resize(resized_size, Image.Resampling.LANCZOS)
+        mask = mask.resize(resized_size, Image.Resampling.LANCZOS)
         rgba = ImageEnhance.Color(rgba).enhance(float(saturation_mul))
         rgba = ImageEnhance.Contrast(rgba).enhance(float(contrast_mul))
         rgba = ImageEnhance.Sharpness(rgba).enhance(float(sharpness_mul))
-        rgba = rgba.rotate(float(rotation_deg), resample=Image.BICUBIC, expand=True)
-        alpha = mask.rotate(float(rotation_deg), resample=Image.BICUBIC, expand=True)
+        rgba = rgba.rotate(
+            float(rotation_deg),
+            resample=Image.Resampling.BICUBIC,
+            expand=True,
+        )
+        alpha = mask.rotate(
+            float(rotation_deg),
+            resample=Image.Resampling.BICUBIC,
+            expand=True,
+        )
         if alpha.getbbox() is None:
             alpha = mask
         rgba.putalpha(alpha)
@@ -1094,7 +1119,9 @@ class SdxlInpaintModel:
             num_inference_steps=int(num_inference_steps),
             guidance_scale=float(guidance_scale),
         )
-        generated_patch = normalize_generated_patch(generated_patch, original_patch.size)
+        generated_patch = normalize_generated_patch(
+            generated_patch, original_patch.size
+        )
         composited = self._apply_patch_to_crop(
             image=source_image,
             patch=generated_patch,
@@ -1122,7 +1149,10 @@ class SdxlInpaintModel:
         localized_mask = self._localize_object_mask(
             crop_bbox=crop_bbox_with_padding,
             target_bbox=target_bbox,
-            working_size=(crop_bbox_with_padding[2] - crop_bbox_with_padding[0], crop_bbox_with_padding[3] - crop_bbox_with_padding[1]),
+            working_size=(
+                crop_bbox_with_padding[2] - crop_bbox_with_padding[0],
+                crop_bbox_with_padding[3] - crop_bbox_with_padding[1],
+            ),
             object_mask=object_mask,
         )
         shadow_mask = localized_mask.filter(
@@ -1318,7 +1348,9 @@ class SdxlInpaintModel:
         from PIL import Image  # type: ignore
 
         if request.object_image_ref is None or request.object_mask_ref is None:
-            raise ValueError("generated object refs are required for similarity_overlay_v2")
+            raise ValueError(
+                "generated object refs are required for similarity_overlay_v2"
+            )
         object_image = Image.open(request.object_image_ref).convert("RGBA")
         object_mask = Image.open(request.object_mask_ref).convert("L")
         return object_image, object_mask

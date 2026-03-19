@@ -111,9 +111,9 @@ def _make_orchestrator(
     physical_port: Any = None,
     logical_port: Any = None,
     visual_port: Any = None,
-    difficulty_min: float = 0.0,   # Dummy 어댑터 2객체 기준 pass 유도 (§3 기본값 아님)
+    difficulty_min: float = 0.0,  # Dummy 어댑터 2객체 기준 pass 유도 (§3 기본값 아님)
     difficulty_max: float = 1.0,
-    hidden_obj_min: int = 1,       # Dummy 어댑터 2객체 기준 pass 유도 (§3 기본값 아님)
+    hidden_obj_min: int = 1,  # Dummy 어댑터 2객체 기준 pass 유도 (§3 기본값 아님)
     scoring_weights: ScoringWeights | None = None,
 ) -> ValidatorOrchestrator:
     return ValidatorOrchestrator(
@@ -221,11 +221,20 @@ _LOGI_STD = (
 
 # 설계안 §2: Scene_Difficulty = D(obj) 단순 평균 (두 객체 동일 → avg = D_obj)
 _STD_METRICS = _make_metrics(
-    degree_norm=1.0, cluster_density=3, hop=2, diameter=4.0,
-    drr_slope=0.15, sigma_threshold=4.0, similar_count=1,
-    similar_distance=80.0, color_contrast=0.0, edge_strength=0.0,
+    degree_norm=1.0,
+    cluster_density=3,
+    hop=2,
+    diameter=4.0,
+    drr_slope=0.15,
+    sigma_threshold=4.0,
+    similar_count=1,
+    similar_distance=80.0,
+    color_contrast=0.0,
+    edge_strength=0.0,
 )
-_SCENE_DIFF_STD = compute_difficulty(_STD_METRICS, answer_obj_count=_ANSWER_OBJ_COUNT)  # ≈ 0.548111
+_SCENE_DIFF_STD = compute_difficulty(
+    _STD_METRICS, answer_obj_count=_ANSWER_OBJ_COUNT
+)  # ≈ 0.548111
 
 # 어려운 시나리오 (sigma=1, drr=1, sim_cnt=0, sim_dist=100, hop=4)
 # _HardLogicalExtraction: degree_map={} → logical_deg=0
@@ -244,23 +253,34 @@ _LOGI_HARD = (
 ) / _L_DENOM  # 0.86
 
 _HARD_METRICS = _make_metrics(
-    degree_norm=1.0, cluster_density=3, hop=4, diameter=4.0,
-    drr_slope=1.0, sigma_threshold=1.0, similar_count=0,
-    similar_distance=100.0, color_contrast=0.0, edge_strength=0.0,
+    degree_norm=1.0,
+    cluster_density=3,
+    hop=4,
+    diameter=4.0,
+    drr_slope=1.0,
+    sigma_threshold=1.0,
+    similar_count=0,
+    similar_distance=100.0,
+    color_contrast=0.0,
+    edge_strength=0.0,
 )
-_SCENE_DIFF_HARD = compute_difficulty(_HARD_METRICS, answer_obj_count=_ANSWER_OBJ_COUNT)  # ≈ 0.716891
+_SCENE_DIFF_HARD = compute_difficulty(
+    _HARD_METRICS, answer_obj_count=_ANSWER_OBJ_COUNT
+)  # ≈ 0.716891
 
 # TestE2EPhase5Chain 전용: integrate_verification_v2 직접 호출 기준 (기본 answer_obj_count=6)
 # sim_cnt_norm = similar_count / max(6-1, 1) = 1/5 = 0.2
 _PERC_STD_V2 = (
     _W.perception_sigma * (1.0 / 4.0)
     + _W.perception_drr * 0.15
-    + _W.perception_similar_count * (1.0 / 5.0)   # answer_obj_count=6 → 1/5
+    + _W.perception_similar_count * (1.0 / 5.0)  # answer_obj_count=6 → 1/5
     + _W.perception_similar_dist * (1.0 / 81.0)
     + _W.perception_color_contrast * 1.0
     + _W.perception_edge_strength * 1.0
 ) / _P_DENOM  # ≈ 0.489352
-_TOT_STD_V2 = _PERC_STD_V2 * _W.total_perception + _LOGI_STD * _W.total_logical  # ≈ 0.583208
+_TOT_STD_V2 = (
+    _PERC_STD_V2 * _W.total_perception + _LOGI_STD * _W.total_logical
+)  # ≈ 0.583208
 
 
 # ===========================================================================
@@ -383,9 +403,16 @@ class TestE2EFullPipelineDummy:
         _make_png(layer)
         # obj_1의 metrics: physical 기본값(degree=0, cluster=0, hop=0), visual 동일
         _obj1_m = _make_metrics(
-            degree_norm=0.0, cluster_density=0, hop=0, diameter=4.0,
-            drr_slope=0.15, sigma_threshold=4.0, similar_count=1,
-            similar_distance=80.0, color_contrast=0.0, edge_strength=0.0,
+            degree_norm=0.0,
+            cluster_density=0,
+            hop=0,
+            diameter=4.0,
+            drr_slope=0.15,
+            sigma_threshold=4.0,
+            similar_count=1,
+            similar_distance=80.0,
+            color_contrast=0.0,
+            edge_strength=0.0,
         )
         expected_scene_diff = (
             compute_difficulty(_STD_METRICS, answer_obj_count=2)
@@ -442,8 +469,8 @@ class TestE2EFullPipelineDummy:
         default_orch = _make_orchestrator()
         biased_orch = _make_orchestrator(
             scoring_weights=ScoringWeights(
-                difficulty_sigma=0.50,    # 기본값 0.12 → 0.50 (sigma=4 → 1/4=0.25 기여 증가)
-                difficulty_degree=0.00,   # 기본값 0.14 → 0.00
+                difficulty_sigma=0.50,  # 기본값 0.12 → 0.50 (sigma=4 → 1/4=0.25 기여 증가)
+                difficulty_degree=0.00,  # 기본값 0.14 → 0.00
             )
         )
         s1 = default_orch.run(

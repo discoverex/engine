@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zipfile import ZipFile
 
+from PIL import Image
+
 from discoverex.application.use_cases.output_exports import export_output_bundle
 from discoverex.domain.goal import AnswerForm, Goal, GoalType
 from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
@@ -26,7 +28,6 @@ from discoverex.domain.verification import (
     VerificationBundle,
     VerificationResult,
 )
-from PIL import Image
 
 
 def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) -> None:
@@ -139,7 +140,9 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
     assert len(exported.source_layer_paths) == 1
     payload = json.loads(exported.manifest_path.read_text(encoding="utf-8"))
     assert payload["lottie_path"] == "animation.lottie"
-    assert payload["source_layers"] == [{"path": "layers/source-objects/001-layer-object.png"}]
+    assert payload["source_layers"] == [
+        {"path": "layers/source-objects/001-layer-object.png"}
+    ]
     assert payload["object_entries"] == [
         {
             "object_number": 1,

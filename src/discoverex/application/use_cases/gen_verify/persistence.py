@@ -4,14 +4,15 @@ import json
 from pathlib import Path
 from time import perf_counter
 
-from discoverex.artifact_paths import (
-    naturalness_json_path,
-)
+from discoverex.adapters.outbound.io.json_files import write_json_file
 from discoverex.application.context import AppContextLike
 from discoverex.application.use_cases.naturalness_evaluation import (
     evaluate_scene_naturalness,
 )
 from discoverex.application.use_cases.output_exports import export_output_bundle
+from discoverex.artifact_paths import (
+    naturalness_json_path,
+)
 from discoverex.domain.scene import Scene
 from discoverex.execution_snapshot import build_tracking_params
 from discoverex.orchestrator_contract.worker_runtime import (
@@ -65,18 +66,13 @@ def write_naturalness_report(saved_dir: Path, scene: Scene) -> Path | None:
         scene.meta.scene_id,
         scene.meta.version_id,
     )
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(
-        json.dumps(
-            {
-                "scene_id": scene.meta.scene_id,
-                "version_id": scene.meta.version_id,
-                "naturalness": evaluation.model_dump(mode="json"),
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
+    write_json_file(
+        report_path,
+        {
+            "scene_id": scene.meta.scene_id,
+            "version_id": scene.meta.version_id,
+            "naturalness": evaluation.to_dict(),
+        },
     )
     logger.info(
         "naturalness report written path=%s duration=%s",

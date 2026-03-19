@@ -116,9 +116,9 @@ class ValidatorModelsConfig(BaseModel):
 
 
 class ValidatorThresholdsConfig(BaseModel):
-    difficulty_min: float = 0.1   # 설계안 §3 MVP 변수
-    difficulty_max: float = 0.9   # 설계안 §3 MVP 변수
-    hidden_obj_min: int = 3       # 설계안 §3 — is_hidden() 통과 객체 수 기준
+    difficulty_min: float = 0.1  # 설계안 §3 MVP 변수
+    difficulty_max: float = 0.9  # 설계안 §3 MVP 변수
+    hidden_obj_min: int = 3  # 설계안 §3 — is_hidden() 통과 객체 수 기준
 
     @field_validator("difficulty_min", "difficulty_max")
     @classmethod

@@ -150,8 +150,7 @@ def _print_is_hidden(bundle, layer_files: list[Path]) -> None:
     es_map = bundle.perception.signals.get("edge_strength_map", {})
 
     header = (
-        f"  {'파일명':<20} {'cc':>7} {'es':>8}"
-        f" {'hf':>7} {'af':>7} {'hidden':>8}  근거"
+        f"  {'파일명':<20} {'cc':>7} {'es':>8} {'hf':>7} {'af':>7} {'hidden':>8}  근거"
     )
     print(header)
     print("  " + BAR_THIN)
@@ -367,7 +366,9 @@ def main() -> None:
 
     print()
     print(f"  런타임         : {runtime}")
-    print(f"  difficulty     : [{args.difficulty_min}, {args.difficulty_max}]  hidden_min={args.hidden_obj_min}")
+    print(
+        f"  difficulty     : [{args.difficulty_min}, {args.difficulty_max}]  hidden_min={args.hidden_obj_min}"
+    )
     if runtime == "GPU":
         print("  실계산 항목    : 전 항목 (MobileSAM / Moondream2 / YOLO+CLIP)")
     else:

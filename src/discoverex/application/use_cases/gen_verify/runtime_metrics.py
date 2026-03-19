@@ -25,7 +25,11 @@ def track_stage_vram(context: Any, stage: str) -> Iterator[None]:
     finally:
         metrics = _read_vram_metrics(torch_mod)
         _record_stage_metrics(context, stage, metrics)
-        logger.info("stage vram peak stage=%s metrics=%s", stage, json.dumps(metrics, sort_keys=True))
+        logger.info(
+            "stage vram peak stage=%s metrics=%s",
+            stage,
+            json.dumps(metrics, sort_keys=True),
+        )
 
 
 def _record_stage_metrics(context: Any, stage: str, metrics: dict[str, Any]) -> None:
