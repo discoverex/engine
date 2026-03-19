@@ -100,3 +100,107 @@ def test_submit_manifest_defaults_to_naturalness_deployment(monkeypatch) -> None
     assert captured["deployment"] == "discoverex-naturalness-experiment-dev"
     assert result["deployment"] == "discoverex-naturalness-experiment-dev"
     assert result["results"][0]["deployment"] == "discoverex-naturalness-experiment-dev"
+
+
+def test_build_sweep_manifest_supports_baseline_without_parameters(tmp_path: Path) -> None:
+    base_job_spec = tmp_path / "base.yaml"
+    base_job_spec.write_text(
+        """
+run_mode: repo
+engine: discoverex
+job_name: base
+inputs:
+  contract_version: v2
+  command: generate
+  config_name: generate
+  config_dir: conf
+  args:
+    background_prompt: old
+    object_prompt: old
+  overrides:
+    - profile=generator_pixart_gpu_v2_hidden_object
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    sweep_spec = tmp_path / "sweep.yaml"
+    sweep_spec.write_text(
+        f"""
+sweep_id: tenpack
+base_job_spec: {base_job_spec.name}
+experiment_name: discoverex-naturalness-tenpack
+fixed_overrides:
+  - runtime.model_runtime.seed=7
+scenarios:
+  - scenario_id: s1
+    background_prompt: harbor
+    object_prompt: key | note | glass
+  - scenario_id: s2
+    background_prompt: attic
+    object_prompt: compass | watch | letter
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = build_sweep_manifest(sweep_spec)
+
+    assert manifest["combo_count"] == 1
+    assert manifest["scenario_count"] == 2
+    assert manifest["job_count"] == 2
+    assert manifest["jobs"][0]["combo_id"] == "combo-001"
+    assert "runtime.model_runtime.seed=7" in manifest["jobs"][0]["job_spec"]["inputs"]["overrides"]
+
+
+def test_build_sweep_manifest_supports_variant_pack_jobs(tmp_path: Path) -> None:
+    base_job_spec = tmp_path / "base.yaml"
+    base_job_spec.write_text(
+        """
+run_mode: repo
+engine: discoverex
+job_name: base
+inputs:
+  contract_version: v2
+  command: generate
+  config_name: generate
+  config_dir: conf
+  args:
+    background_prompt: old
+    object_prompt: old
+  overrides:
+    - profile=generator_pixart_gpu_v2_hidden_object
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    sweep_spec = tmp_path / "sweep.yaml"
+    sweep_spec.write_text(
+        f"""
+sweep_id: tenpack-variants
+base_job_spec: {base_job_spec.name}
+experiment_name: discoverex-naturalness-tenpack-variants
+scenarios:
+  - scenario_id: s1
+    background_prompt: harbor
+    object_prompt: key | note | glass
+variants:
+  - variant_id: baseline
+    overrides:
+      - models.inpaint.edge_blend_strength=0.18
+  - variant_id: strong
+    overrides:
+      - models.inpaint.edge_blend_strength=0.24
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = build_sweep_manifest(sweep_spec)
+
+    assert manifest["combo_count"] == 1
+    assert manifest["variant_count"] == 2
+    assert manifest["job_count"] == 1
+    job = manifest["jobs"][0]["job_spec"]
+    assert "flows/generate=inpaint_variant_pack" in job["inputs"]["overrides"]
+    assert job["inputs"]["args"]["variant_count"] == 2
+    assert "baseline" in job["inputs"]["args"]["variant_specs_json"]
