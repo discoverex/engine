@@ -579,7 +579,7 @@ class PixArtSigmaBackgroundGenerationModel:
         pipe = PixArtSigmaPipeline.from_pretrained(
             self.model_id,
             revision=self.revision,
-            dtype=torch_dtype,
+            torch_dtype=torch_dtype,
         )
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(
             pipe.scheduler.config,
