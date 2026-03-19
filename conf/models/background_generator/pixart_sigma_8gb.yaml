@@ -1,7 +1,7 @@
 # @package models.background_generator
 _target_: discoverex.adapters.outbound.models.pixart_sigma_background_generation.PixArtSigmaBackgroundGenerationModel
 model_id: PixArt-alpha/PixArt-Sigma-XL-2-1024-MS
-detail_model_id: stabilityai/stable-diffusion-xl-refiner-1.0
+detail_model_id: null
 revision: main
 device: ${runtime.model_runtime.device}
 dtype: ${runtime.model_runtime.dtype}
@@ -34,3 +34,10 @@ extension_strength: 0.30
 text_encoder_8bit: false
 text_encoder_offload: true
 prompt_embedding_cache: true
+upscale_backend: realesrgan
+realesrgan_model_name: RealESRGAN_x4plus
+realesrgan_weights_cache_dir: .cache/realesrgan
+realesrgan_tile: 512
+realesrgan_tile_pad: 16
+realesrgan_pre_pad: 0
+realesrgan_half: true

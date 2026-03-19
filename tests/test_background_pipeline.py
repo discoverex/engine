@@ -25,7 +25,7 @@ def test_read_background_image_size_reports_dimensions(tmp_path: Path) -> None:
 
 def test_apply_background_hires_fix_updates_background_dimensions(tmp_path: Path) -> None:
     source = tmp_path / "background.png"
-    output = tmp_path / "layers" / "base" / "generated-background.hiresfix.png"
+    output = tmp_path / "assets" / "background" / "generated-background.hiresfix.png"
     Image.new("RGB", (64, 48), color=(120, 140, 160)).save(source)
 
     class _FakeBackgroundModel:
