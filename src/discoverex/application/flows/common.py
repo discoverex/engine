@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Literal, Protocol
 
+from discoverex.artifact_paths import scene_json_path
+
 FlowCommand = Literal["generate", "verify", "animate"]
 
 
@@ -38,7 +40,13 @@ def build_scene_payload(
         "scene_id": scene.meta.scene_id,
         "version_id": scene.meta.version_id,
         "status": scene.meta.status.value,
-        "scene_json": f"{artifacts_root}/scenes/{scene.meta.scene_id}/{scene.meta.version_id}/scene.json",
+        "scene_json": str(
+            scene_json_path(
+                artifacts_root,
+                scene.meta.scene_id,
+                scene.meta.version_id,
+            )
+        ),
     }
     if execution_config_path:
         payload["execution_config"] = execution_config_path

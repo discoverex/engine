@@ -3,13 +3,21 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from discoverex.artifact_paths import prompt_bundle_json_path
+
 from .types import PromptBundle
 
 _PROMPT_PARAM_LIMIT = 250
 
 
 def save_prompt_bundle(scene_dir: Path, prompt_bundle: PromptBundle) -> Path:
-    path = scene_dir / "prompt_bundle.json"
+    artifacts_root = scene_dir.parents[2]
+    path = prompt_bundle_json_path(
+        artifacts_root,
+        scene_dir.parent.name,
+        scene_dir.name,
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         handle.write(
             json.dumps(

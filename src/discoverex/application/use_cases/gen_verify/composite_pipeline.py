@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from time import perf_counter
 
+from discoverex.artifact_paths import composite_output_path
 from discoverex.application.context import AppContextLike
 from discoverex.models.types import FxPrediction, FxRequest, ModelHandle
 from discoverex.progress_events import emit_progress_event
@@ -44,7 +45,12 @@ def compose_scene(
     negative_prompt: str = "blurry, low quality, artifact",
 ) -> CompositeResolution:
     started = perf_counter()
-    output_path = scene_dir / "composite.png"
+    output_path = composite_output_path(
+        scene_dir.parents[2],
+        scene_dir.parent.name,
+        scene_dir.name,
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     logger.info(
         "final render started source=%s output=%s size=%sx%s",
         background_asset_ref,

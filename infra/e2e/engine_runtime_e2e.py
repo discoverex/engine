@@ -273,9 +273,9 @@ def run_tracking_artifact_e2e(
     scene_json = Path(str(payload["scene_json"]))
     scene_id = str(payload["scene_id"])
     version_id = str(payload["version_id"])
-    scene_dir = scene_json.parent
-    verification_json = scene_dir / "verification.json"
-    prompt_bundle = scene_dir / "prompt_bundle.json"
+    metadata_dir = scene_json.parent
+    verification_json = metadata_dir / "verification.json"
+    prompt_bundle = metadata_dir / "prompt_bundle.json"
     execution_config = Path(str(payload["execution_config"]))
     assert scene_json.exists()
     assert verification_json.exists()
@@ -300,9 +300,9 @@ def run_tracking_artifact_e2e(
     }
     bucket_objects = set(fake_s3_store.bucket(bucket).keys())
     required_objects = {
-        f"scenes/{scene_id}/{version_id}/scene.json",
-        f"scenes/{scene_id}/{version_id}/verification.json",
-        f"scenes/{scene_id}/{version_id}/prompt_bundle.json",
+        f"scenes/{scene_id}/{version_id}/metadata/scene.json",
+        f"scenes/{scene_id}/{version_id}/metadata/verification.json",
+        f"scenes/{scene_id}/{version_id}/metadata/prompt_bundle.json",
     }
     missing_objects = sorted(required_objects - bucket_objects)
     if missing_objects:
@@ -501,9 +501,9 @@ def run_live_services_e2e(
         key for key in bucket_objects if key.startswith(f"{artifact_uri_prefix}/")
     )
     required_objects = {
-        f"scenes/{scene_id}/{version_id}/scene.json",
-        f"scenes/{scene_id}/{version_id}/verification.json",
-        f"scenes/{scene_id}/{version_id}/prompt_bundle.json",
+        f"scenes/{scene_id}/{version_id}/metadata/scene.json",
+        f"scenes/{scene_id}/{version_id}/metadata/verification.json",
+        f"scenes/{scene_id}/{version_id}/metadata/prompt_bundle.json",
     }
     missing_objects = sorted(required_objects - bucket_objects)
     if missing_objects:

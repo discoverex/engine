@@ -4,10 +4,14 @@ import json
 from pathlib import Path
 from time import perf_counter
 
+from discoverex.artifact_paths import (
+    naturalness_json_path,
+)
 from discoverex.application.context import AppContextLike
 from discoverex.application.use_cases.naturalness_evaluation import (
     evaluate_scene_naturalness,
 )
+from discoverex.application.use_cases.output_exports import export_output_bundle
 from discoverex.domain.scene import Scene
 from discoverex.execution_snapshot import build_tracking_params
 from discoverex.orchestrator_contract.worker_runtime import (
@@ -56,7 +60,12 @@ def write_naturalness_report(saved_dir: Path, scene: Scene) -> Path | None:
     except (FileNotFoundError, KeyError, ValueError) as exc:
         logger.info("naturalness report skipped reason=%s", exc)
         return None
-    report_path = saved_dir / "naturalness.json"
+    report_path = naturalness_json_path(
+        saved_dir.parents[3],
+        scene.meta.scene_id,
+        scene.meta.version_id,
+    )
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(
         json.dumps(
             {
@@ -118,6 +127,10 @@ def track_run(
     started = perf_counter()
     execution_snapshot = getattr(context, "execution_snapshot", None)
     execution_snapshot_path = getattr(context, "execution_snapshot_path", None)
+    output_exports = export_output_bundle(
+        artifacts_root=context.artifacts_root,
+        scene=scene,
+    )
     artifact_entries = collect_worker_artifacts(
         saved_dir,
         [
@@ -126,7 +139,13 @@ def track_run(
             ("naturalness", naturalness_artifact),
             ("composite", composite_artifact),
             ("prompt_bundle", prompt_bundle_artifact),
+            ("lottie", output_exports.lottie_path),
+            ("output_manifest", output_exports.manifest_path),
             ("execution_config", execution_snapshot_path),
+            *[
+                (f"output_layer/{layer_path.name}", layer_path)
+                for layer_path in output_exports.layer_paths
+            ],
         ],
     )
 

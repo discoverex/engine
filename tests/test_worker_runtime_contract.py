@@ -46,14 +46,17 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
 ) -> None:
     artifact_root = tmp_path / "engine"
     manifest_path = tmp_path / "engine-artifacts.json"
-    saved_dir = artifact_root / "scenes" / "scene-1" / "version-1"
+    saved_dir = artifact_root / "scenes" / "scene-1" / "version-1" / "metadata"
     saved_dir.mkdir(parents=True)
     scene_path = saved_dir / "scene.json"
     verification_path = saved_dir / "verification.json"
     naturalness_path = saved_dir / "naturalness.json"
+    lottie_path = artifact_root / "scenes" / "scene-1" / "version-1" / "outputs" / "animation.lottie"
+    lottie_path.parent.mkdir(parents=True, exist_ok=True)
     scene_path.write_text("{}", encoding="utf-8")
     verification_path.write_text("{}", encoding="utf-8")
     naturalness_path.write_text("{}", encoding="utf-8")
+    lottie_path.write_bytes(b"PK")
     outside_path = tmp_path / "outside.json"
     outside_path.write_text("{}", encoding="utf-8")
     monkeypatch.setenv(ARTIFACT_DIR_ENV, str(artifact_root))
@@ -65,6 +68,7 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
             ("scene", scene_path),
             ("verification", verification_path),
             ("naturalness", naturalness_path),
+            ("lottie", lottie_path),
             ("outside", outside_path),
         ],
     )
@@ -75,26 +79,49 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
     assert payload["artifacts"] == [
         {
             "logical_name": "scene_json",
-            "relative_path": "scene/scene.json",
+            "relative_path": "scenes/scene-1/version-1/metadata/scene.json",
             "content_type": "application/json",
             "mlflow_tag": "artifact_scene_uri",
             "description": None,
         },
         {
             "logical_name": "verification_json",
-            "relative_path": "scene/verification.json",
+            "relative_path": "scenes/scene-1/version-1/metadata/verification.json",
             "content_type": "application/json",
             "mlflow_tag": "artifact_verification_uri",
             "description": None,
         },
         {
             "logical_name": "naturalness_json",
-            "relative_path": "scene/naturalness.json",
+            "relative_path": "scenes/scene-1/version-1/metadata/naturalness.json",
             "content_type": "application/json",
             "mlflow_tag": "artifact_naturalness_uri",
             "description": None,
         },
+        {
+            "logical_name": "lottie_bundle",
+            "relative_path": "scenes/scene-1/version-1/outputs/animation.lottie",
+            "content_type": "application/zip",
+            "mlflow_tag": "artifact_lottie_uri",
+            "description": None,
+        },
     ]
-    assert (artifact_root / "scene" / "scene.json").read_text(encoding="utf-8") == "{}"
-    assert (artifact_root / "scene" / "verification.json").read_text(encoding="utf-8") == "{}"
-    assert (artifact_root / "scene" / "naturalness.json").read_text(encoding="utf-8") == "{}"
+    assert (
+        artifact_root / "scenes" / "scene-1" / "version-1" / "metadata" / "scene.json"
+    ).read_text(encoding="utf-8") == "{}"
+    assert (
+        artifact_root
+        / "scenes"
+        / "scene-1"
+        / "version-1"
+        / "metadata"
+        / "verification.json"
+    ).read_text(encoding="utf-8") == "{}"
+    assert (
+        artifact_root
+        / "scenes"
+        / "scene-1"
+        / "version-1"
+        / "metadata"
+        / "naturalness.json"
+    ).read_text(encoding="utf-8") == "{}"

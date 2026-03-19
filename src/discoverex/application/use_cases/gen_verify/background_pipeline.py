@@ -33,7 +33,10 @@ def build_background_from_inputs(
 
     if prompt:
         started = perf_counter()
-        output_path = scene_dir / "layers" / "base" / "generated-background.png"
+        output_path = (
+            scene_dir / "assets" / "background" / "generated-background.png"
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         emit_progress_event(
             stage="background_generation",
             status="started",
@@ -134,7 +137,10 @@ def apply_background_canvas_upscale_if_needed(
     source_path = Path(background.asset_ref)
     if not source_path.exists():
         return background
-    output_path = scene_dir / "layers" / "base" / "generated-background.canvas.png"
+    output_path = (
+        scene_dir / "assets" / "background" / "generated-background.canvas.png"
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     emit_progress_event(
         stage="background_canvas_upscale",
         status="started",
@@ -209,7 +215,10 @@ def apply_background_detail_reconstruction_if_needed(
     source_path = Path(background.asset_ref)
     if not source_path.exists():
         return background
-    output_path = scene_dir / "layers" / "base" / "generated-background.hiresfix.png"
+    output_path = (
+        scene_dir / "assets" / "background" / "generated-background.hiresfix.png"
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     emit_progress_event(
         stage="background_detail_reconstruction",
         status="started",

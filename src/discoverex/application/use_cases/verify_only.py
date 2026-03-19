@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from discoverex.application.context import AppContextLike
+from discoverex.application.use_cases.output_exports import export_output_bundle
 from discoverex.domain import (
     integrate_verification,
     judge_scene,
@@ -75,6 +76,10 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
     naturalness_report = write_naturalness_report(saved_dir=saved_dir, scene=scene)
 
     scene_artifact = Path(scene.composite.final_image_ref)
+    output_exports = export_output_bundle(
+        artifacts_root=context.artifacts_root,
+        scene=scene,
+    )
     artifact_entries = collect_worker_artifacts(
         saved_dir,
         [
@@ -82,7 +87,13 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
             ("verification", saved_dir / "verification.json"),
             ("naturalness", naturalness_report),
             ("final_image", scene_artifact if scene_artifact.exists() else None),
+            ("lottie", output_exports.lottie_path),
+            ("output_manifest", output_exports.manifest_path),
             ("execution_config", context.execution_snapshot_path),
+            *[
+                (f"output_layer/{layer_path.name}", layer_path)
+                for layer_path in output_exports.layer_paths
+            ],
         ],
     )
     tracking_run_id = context.tracker.log_pipeline_run(

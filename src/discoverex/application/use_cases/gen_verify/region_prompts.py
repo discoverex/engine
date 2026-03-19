@@ -26,6 +26,7 @@ def record_layer_candidate(
     *,
     background: Background,
     region: Region,
+    candidate_ref: object,
     object_ref: object,
     object_mask_ref: object,
     patch_ref: object,
@@ -39,6 +40,7 @@ def record_layer_candidate(
     candidates.append(
         {
             "region_id": region.region_id,
+            "candidate_image_ref": candidate_ref,
             "object_image_ref": object_ref,
             "object_mask_ref": object_mask_ref,
             "patch_image_ref": patch_ref,

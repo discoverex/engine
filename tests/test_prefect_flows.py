@@ -384,7 +384,7 @@ def test_repo_root_prefect_entrypoint_uploads_worker_artifacts(
             ),
             "engine_artifact_uris": {
                 "scene_json": (
-                    "s3://bucket/jobs/flow-456/attempt-1/engine/scene/scene.json"
+                    "s3://bucket/jobs/flow-456/attempt-1/engine/scenes/s1/v1/metadata/scene.json"
                 )
             },
         },
@@ -410,7 +410,9 @@ def test_repo_root_prefect_entrypoint_uploads_worker_artifacts(
     assert output["stdout_uri"].endswith("/stdout.log")
     assert output["manifest_uri"].endswith("/artifacts.json")
     assert output["engine_manifest_uri"].endswith("/engine-artifacts.json")
-    assert output["engine_artifact_uris"]["scene_json"].endswith("/scene/scene.json")
+    assert output["engine_artifact_uris"]["scene_json"].endswith(
+        "/scenes/s1/v1/metadata/scene.json"
+    )
 
 
 def test_repo_root_prefect_entrypoint_raises_on_failed_payload(

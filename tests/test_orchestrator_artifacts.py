@@ -18,7 +18,7 @@ def test_write_engine_artifact_manifest_writes_canonical_manifest(
     artifact_root = tmp_path / "engine"
     artifact_root.mkdir()
     manifest_path = tmp_path / "engine-artifacts.json"
-    scene_path = artifact_root / "scene" / "scene.json"
+    scene_path = artifact_root / "metadata" / "scene.json"
     scene_path.parent.mkdir(parents=True)
     scene_path.write_text("{}", encoding="utf-8")
     monkeypatch.setenv(ARTIFACT_DIR_ENV, str(artifact_root))
@@ -28,7 +28,7 @@ def test_write_engine_artifact_manifest_writes_canonical_manifest(
         [
             {
                 "logical_name": "scene",
-                "relative_path": "scene/scene.json",
+                "relative_path": "metadata/scene.json",
                 "content_type": "application/json",
                 "mlflow_tag": "artifact_scene_uri",
             }
@@ -38,7 +38,7 @@ def test_write_engine_artifact_manifest_writes_canonical_manifest(
     assert written == manifest_path
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert payload["schema_version"] == 1
-    assert payload["artifacts"][0]["relative_path"] == "scene/scene.json"
+    assert payload["artifacts"][0]["relative_path"] == "metadata/scene.json"
 
 
 def test_write_engine_artifact_manifest_returns_none_for_empty_artifacts() -> None:

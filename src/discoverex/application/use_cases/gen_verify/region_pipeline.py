@@ -78,10 +78,11 @@ def generate_regions(
         region_started = perf_counter()
         output_path = (
             scene_dir
-            / "layers"
-            / "inpaint"
+            / "assets"
+            / "patches"
             / f"{region.region_id}-{uuid4().hex[:8]}.png"
         )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         generation_prompt = region_prompt or _DEFAULT_OBJECT_GENERATION_PROMPT
         logger.info(
             "object inpaint started region=%s index=%d/%d bbox=(%.1f,%.1f,%.1f,%.1f)",
@@ -148,6 +149,7 @@ def generate_regions(
         record_layer_candidate(
             background=background,
             region=updated,
+            candidate_ref=object_asset.candidate_ref,
             object_ref=object_ref,
             object_mask_ref=object_mask_ref,
             patch_ref=patch_ref,
