@@ -27,18 +27,27 @@ _MIME = {
 
 
 def video_list(motion_dir: Path, stem: str) -> list[dict[str, Any]]:
-    """Glob MP4s matching stem pattern."""
-    pattern = str(motion_dir / f"{stem}*attempt*.mp4")
+    """Glob MP4s matching stem pattern (supports _attempt* and _a* naming)."""
     if stem == "*":
-        pattern = str(motion_dir / "*.mp4")
+        patterns = [str(motion_dir / "*.mp4")]
+    else:
+        patterns = [
+            str(motion_dir / f"{stem}*_a*.mp4"),
+            str(motion_dir / f"{stem}*attempt*.mp4"),
+        ]
+    seen: set[str] = set()
     vids = []
-    for p in sorted(glob.glob(pattern)):
-        fp = Path(p)
-        vids.append({
-            "path": str(fp),
-            "filename": fp.name,
-            "size_mb": round(fp.stat().st_size / (1024 * 1024), 2),
-        })
+    for pattern in patterns:
+        for p in sorted(glob.glob(pattern)):
+            if p in seen:
+                continue
+            seen.add(p)
+            fp = Path(p)
+            vids.append({
+                "path": str(fp),
+                "filename": fp.name,
+                "size_mb": round(fp.stat().st_size / (1024 * 1024), 2),
+            })
     return vids
 
 
@@ -49,6 +58,10 @@ def resolve_media_path(filepath: str, output_dir: Path) -> Path | None:
     p = Path(filepath)
     if p.is_absolute() and p.exists():
         return p
+    # Try CWD-relative first (engine uses relative artifact paths)
+    cwd_resolved = Path.cwd() / p
+    if cwd_resolved.exists():
+        return cwd_resolved
     candidates = [output_dir / filepath, Path.home() / filepath]
     for c in candidates:
         if c.exists():
