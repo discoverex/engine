@@ -101,11 +101,6 @@ def test_pixart_hires_fix_writes_output(
     )
     monkeypatch.setattr(
         model,
-        "_upscale_with_realesrgan",
-        lambda **kwargs: kwargs["image"].resize((2048, 2048)),
-    )
-    monkeypatch.setattr(
-        model,
         "_reconstruct_details",
         lambda **kwargs: kwargs["image"],
     )
@@ -130,65 +125,10 @@ def test_pixart_hires_fix_writes_output(
     assert output_path.exists()
 
 
-def test_pixart_canvas_upscale_uses_realesrgan_backend(
+def test_pixart_canvas_upscale_resizes_image(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    captured: dict[str, object] = {}
-    model = PixArtSigmaBackgroundGenerationModel(
-        strict_runtime=False,
-        upscale_backend="realesrgan",
-    )
-    monkeypatch.setattr(
-        "discoverex.adapters.outbound.models.pixart_sigma_background_generation.resolve_runtime",
-        lambda: RuntimeResolution(
-            available=True,
-            torch=None,
-            transformers=type(
-                "_TfCompat", (), {"__version__": "4.46.0", "MT5Tokenizer": object()}
-            )(),
-            reason="",
-        ),
-    )
-    handle = model.load("bg-v1")
-    source_path = tmp_path / "source.png"
-    source_path.write_bytes(b"seed")
-    monkeypatch.setattr(
-        "PIL.Image.open",
-        lambda *_args, **_kwargs: _FakeImage(width=256, height=256),
-    )
-
-    def _fake_upscale(**kwargs):  # type: ignore[no-untyped-def]
-        captured.update(kwargs)
-        return _FakeImage(width=512, height=512)
-
-    monkeypatch.setattr(model, "_upscale_with_realesrgan", _fake_upscale)
-
-    pred = model.predict(
-        handle,
-        FxRequest(
-            mode="canvas_upscale",
-            params={
-                "image_ref": str(source_path),
-                "output_path": str(tmp_path / "upscaled.png"),
-                "width": 512,
-                "height": 512,
-            },
-        ),
-    )
-
-    assert pred["fx"] == "background_canvas_upscale"
-    assert captured["width"] == 512
-    assert captured["height"] == 512
-
-
-def test_pixart_detail_reconstruct_uses_realesrgan_backend(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    captured: dict[str, object] = {}
-    model = PixArtSigmaBackgroundGenerationModel(
-        strict_runtime=False,
-        upscale_backend="realesrgan",
-    )
+    model = PixArtSigmaBackgroundGenerationModel(strict_runtime=False)
     monkeypatch.setattr(
         "discoverex.adapters.outbound.models.pixart_sigma_background_generation.resolve_runtime",
         lambda: RuntimeResolution(
@@ -208,24 +148,18 @@ def test_pixart_detail_reconstruct_uses_realesrgan_backend(
         lambda *_args, **_kwargs: _FakeImage(width=512, height=512),
     )
 
-    def _fake_upscale(**kwargs):  # type: ignore[no-untyped-def]
-        captured.update(kwargs)
-        return _FakeImage(width=512, height=512)
-
-    monkeypatch.setattr(model, "_upscale_with_realesrgan", _fake_upscale)
-
     pred = model.predict(
         handle,
         FxRequest(
-            mode="detail_reconstruct",
+            mode="canvas_upscale",
             params={
                 "image_ref": str(source_path),
-                "output_path": str(tmp_path / "refined.png"),
-                "prompt": "misty harbor",
+                "output_path": str(tmp_path / "upscaled.png"),
+                "width": 1024,
+                "height": 1024,
             },
         ),
     )
 
-    assert pred["fx"] == "background_detail_reconstruct"
-    assert captured["width"] == 512
-    assert captured["height"] == 512
+    assert pred["fx"] == "background_canvas_upscale"
+    assert Path(pred["output_path"]).exists()

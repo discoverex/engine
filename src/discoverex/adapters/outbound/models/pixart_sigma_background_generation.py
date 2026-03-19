@@ -62,13 +62,6 @@ class PixArtSigmaBackgroundGenerationModel:
         text_encoder_8bit: bool = False,
         text_encoder_offload: bool = True,
         prompt_embedding_cache: bool = True,
-        upscale_backend: str = "realesrgan",
-        realesrgan_model_name: str = "RealESRGAN_x4plus",
-        realesrgan_weights_cache_dir: str = ".cache/realesrgan",
-        realesrgan_tile: int = 512,
-        realesrgan_tile_pad: int = 16,
-        realesrgan_pre_pad: int = 0,
-        realesrgan_half: bool = True,
     ) -> None:
         self.model_id = model_id
         self.revision = revision
@@ -106,16 +99,8 @@ class PixArtSigmaBackgroundGenerationModel:
         self.text_encoder_8bit = text_encoder_8bit
         self.text_encoder_offload = text_encoder_offload
         self.prompt_embedding_cache = prompt_embedding_cache
-        self.upscale_backend = upscale_backend
-        self.realesrgan_model_name = realesrgan_model_name
-        self.realesrgan_weights_cache_dir = realesrgan_weights_cache_dir
-        self.realesrgan_tile = realesrgan_tile
-        self.realesrgan_tile_pad = realesrgan_tile_pad
-        self.realesrgan_pre_pad = realesrgan_pre_pad
-        self.realesrgan_half = realesrgan_half
         self._base_pipe: Any | None = None
         self._detail_pipe: Any | None = None
-        self._realesrgan_upsampler: Any | None = None
 
     def load(self, model_ref_or_version: str) -> ModelHandle:
         logger.info(
@@ -283,20 +268,12 @@ class PixArtSigmaBackgroundGenerationModel:
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with Image.open(source_path).convert("RGB") as image:
-            if self._use_realesrgan_backend():
-                canvas = self._upscale_with_realesrgan(
-                    image=image,
-                    width=width,
-                    height=height,
-                    canvas_scale_factor=canvas_scale_factor,
-                )
-            else:
-                canvas = self._upscale_canvas(
-                    image=image,
-                    width=width,
-                    height=height,
-                    canvas_scale_factor=canvas_scale_factor,
-                )
+            canvas = self._upscale_canvas(
+                image=image,
+                width=width,
+                height=height,
+                canvas_scale_factor=canvas_scale_factor,
+            )
             canvas.save(output_path)
         return output_path
 
@@ -363,46 +340,35 @@ class PixArtSigmaBackgroundGenerationModel:
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with Image.open(source_path).convert("RGB") as image:
-            if self._use_realesrgan_backend():
-                refined = self._upscale_with_realesrgan(
-                    image=image,
-                    width=image.width,
-                    height=image.height,
-                    canvas_scale_factor=1.0,
+            refined = self._reconstruct_details(
+                handle=handle,
+                image=image,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                seed=seed,
+                num_inference_steps=detail_steps,
+                guidance_scale=detail_guidance,
+                strength=detail_strength,
+            )
+            if enable_extension:
+                extension_w = max(1, int(round(refined.width * extension_scale_factor)))
+                extension_h = max(1, int(round(refined.height * extension_scale_factor)))
+                extended = refined.resize(
+                    (extension_w, extension_h),
+                    Image.Resampling.LANCZOS,
                 )
-            else:
                 refined = self._reconstruct_details(
                     handle=handle,
-                    image=image,
+                    image=extended,
                     prompt=prompt,
                     negative_prompt=negative_prompt,
                     seed=seed,
-                    num_inference_steps=detail_steps,
-                    guidance_scale=detail_guidance,
-                    strength=detail_strength,
+                    num_inference_steps=extension_steps,
+                    guidance_scale=extension_guidance,
+                    strength=extension_strength,
                 )
-                if enable_extension:
-                    extension_w = max(1, int(round(refined.width * extension_scale_factor)))
-                    extension_h = max(1, int(round(refined.height * extension_scale_factor)))
-                    extended = refined.resize(
-                        (extension_w, extension_h),
-                        Image.Resampling.LANCZOS,
-                    )
-                    refined = self._reconstruct_details(
-                        handle=handle,
-                        image=extended,
-                        prompt=prompt,
-                        negative_prompt=negative_prompt,
-                        seed=seed,
-                        num_inference_steps=extension_steps,
-                        guidance_scale=extension_guidance,
-                        strength=extension_strength,
-                    )
             refined.save(output_path)
         return output_path
-
-    def _use_realesrgan_backend(self) -> bool:
-        return self.upscale_backend.strip().lower() == "realesrgan"
 
     def _generate_base_image(
         self,
@@ -455,30 +421,6 @@ class PixArtSigmaBackgroundGenerationModel:
             target_w = width
             target_h = height
         return image.resize((target_w, target_h), Image.Resampling.LANCZOS)
-
-    def _upscale_with_realesrgan(
-        self,
-        *,
-        image: Any,
-        width: int,
-        height: int,
-        canvas_scale_factor: float,
-    ) -> Any:
-        from PIL import Image  # type: ignore
-
-        target_w = width if width > 0 else max(1, int(round(image.width * canvas_scale_factor)))
-        target_h = height if height > 0 else max(1, int(round(image.height * canvas_scale_factor)))
-        self._release_base_pipe()
-        upsampler = self._load_realesrgan_upsampler()
-        import numpy as np
-
-        source = np.asarray(image.convert("RGB"))[:, :, ::-1]
-        outscale = max(target_w / max(1, image.width), target_h / max(1, image.height), 1.0)
-        output, _ = upsampler.enhance(source, outscale=outscale)
-        upscaled = Image.fromarray(output[:, :, ::-1], mode="RGB")
-        if upscaled.width != target_w or upscaled.height != target_h:
-            upscaled = upscaled.resize((target_w, target_h), Image.Resampling.LANCZOS)
-        return upscaled
 
     def _reconstruct_details(
         self,
@@ -695,66 +637,7 @@ class PixArtSigmaBackgroundGenerationModel:
         )
         return self._detail_pipe
 
-    def _load_realesrgan_upsampler(self) -> Any:
-        if self._realesrgan_upsampler is not None:
-            return self._realesrgan_upsampler
-        try:
-            import torch  # type: ignore
-            from basicsr.archs.rrdbnet_arch import RRDBNet  # type: ignore
-            from basicsr.utils.download_util import load_file_from_url  # type: ignore
-            from realesrgan import RealESRGANer  # type: ignore
-        except Exception as exc:
-            raise RuntimeError(
-                "RealESRGAN runtime unavailable. Install ml-gpu dependencies with realesrgan/basicsr."
-            ) from exc
-        model_name = self.realesrgan_model_name.strip() or "RealESRGAN_x4plus"
-        model_urls = {
-            "RealESRGAN_x4plus": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
-            "RealESRGAN_x2plus": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth",
-        }
-        model_scales = {
-            "RealESRGAN_x4plus": 4,
-            "RealESRGAN_x2plus": 2,
-        }
-        if model_name not in model_urls:
-            raise ValueError(f"unsupported RealESRGAN model: {model_name}")
-        weights_dir = Path(self.realesrgan_weights_cache_dir)
-        weights_dir.mkdir(parents=True, exist_ok=True)
-        model_path = load_file_from_url(
-            url=model_urls[model_name],
-            model_dir=str(weights_dir),
-            progress=True,
-            file_name=f"{model_name}.pth",
-        )
-        rrdb = RRDBNet(
-            num_in_ch=3,
-            num_out_ch=3,
-            num_feat=64,
-            num_block=23,
-            num_grow_ch=32,
-            scale=model_scales[model_name],
-        )
-        use_half = bool(self.realesrgan_half and "16" in self.dtype and self.device == "cuda" and torch.cuda.is_available())
-        self._realesrgan_upsampler = RealESRGANer(
-            scale=model_scales[model_name],
-            model_path=model_path,
-            model=rrdb,
-            tile=max(0, int(self.realesrgan_tile)),
-            tile_pad=max(0, int(self.realesrgan_tile_pad)),
-            pre_pad=max(0, int(self.realesrgan_pre_pad)),
-            half=use_half,
-            gpu_id=0 if self.device == "cuda" and torch.cuda.is_available() else None,
-        )
-        return self._realesrgan_upsampler
-
-    def _release_base_pipe(self) -> None:
-        if self._base_pipe is None:
-            return
-        clear_model_runtime(self._base_pipe)
-        self._base_pipe = None
-
     def unload(self) -> None:
-        clear_model_runtime(self._base_pipe, self._detail_pipe, self._realesrgan_upsampler)
+        clear_model_runtime(self._base_pipe, self._detail_pipe)
         self._base_pipe = None
         self._detail_pipe = None
-        self._realesrgan_upsampler = None

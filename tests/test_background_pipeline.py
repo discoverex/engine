@@ -30,7 +30,7 @@ def test_apply_background_hires_fix_updates_background_dimensions(tmp_path: Path
 
     class _FakeBackgroundModel:
         def predict(self, _handle, request):  # type: ignore[no-untyped-def]
-            image = Image.open(request.params["image_ref"]).convert("RGB")
+            image = Image.open(request.image_ref).convert("RGB")
             resized = image.resize((256, 192), Image.Resampling.LANCZOS)
             Path(request.params["output_path"]).parent.mkdir(parents=True, exist_ok=True)
             resized.save(request.params["output_path"])
@@ -44,14 +44,14 @@ def test_apply_background_hires_fix_updates_background_dimensions(tmp_path: Path
             background_upscale_factor=4,
             model_runtime=SimpleNamespace(seed=None),
         ),
-        background_generator_model=_FakeBackgroundModel(),
+        background_upscaler_model=_FakeBackgroundModel(),
     )
 
     updated = apply_background_hires_fix_if_needed(
         background=background,
         context=context,
         scene_dir=tmp_path,
-        fx_handle=object(),
+        upscaler_handle=object(),
         prompt="stormy harbor",
         negative_prompt="blurry",
     )

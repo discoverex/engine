@@ -12,6 +12,7 @@ class AppContext(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     background_generator_model: Any
+    background_upscaler_model: Any
     object_generator_model: Any
     hidden_region_model: Any
     inpaint_model: Any

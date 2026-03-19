@@ -128,20 +128,20 @@ def _background_canvas_upscale_stage(
     background_prompt: str | None,
     background_negative_prompt: str | None,
 ) -> Background:
-    handle = context.background_generator_model.load(
-        context.model_versions.background_generator
+    handle = context.background_upscaler_model.load(
+        context.model_versions.background_upscaler
     )
     try:
         return apply_background_canvas_upscale_if_needed(
             background=background,
             context=context,
             scene_dir=scene_dir,
-            fx_handle=handle,
+            upscaler_handle=handle,
             prompt=(background_prompt or "").strip(),
             negative_prompt=(background_negative_prompt or "").strip(),
         )
     finally:
-        unload_model(context.background_generator_model)
+        unload_model(context.background_upscaler_model)
 
 
 @task(name="discoverex-generate-background-detail-reconstruct", persist_result=False)
@@ -153,20 +153,20 @@ def _background_detail_reconstruct_stage(
     background_prompt: str | None,
     background_negative_prompt: str | None,
 ) -> Background:
-    handle = context.background_generator_model.load(
-        context.model_versions.background_generator
+    handle = context.background_upscaler_model.load(
+        context.model_versions.background_upscaler
     )
     try:
         return apply_background_detail_reconstruction_if_needed(
             background=background,
             context=context,
             scene_dir=scene_dir,
-            fx_handle=handle,
+            upscaler_handle=handle,
             prompt=(background_prompt or "").strip(),
             negative_prompt=(background_negative_prompt or "").strip(),
         )
     finally:
-        unload_model(context.background_generator_model)
+        unload_model(context.background_upscaler_model)
 
 
 @task(name="discoverex-generate-regions", persist_result=False)

@@ -34,10 +34,3 @@ extension_strength: 0.30
 text_encoder_8bit: false
 text_encoder_offload: true
 prompt_embedding_cache: true
-upscale_backend: realesrgan
-realesrgan_model_name: RealESRGAN_x4plus
-realesrgan_weights_cache_dir: .cache/realesrgan
-realesrgan_tile: 512
-realesrgan_tile_pad: 16
-realesrgan_pre_pad: 0
-realesrgan_half: true

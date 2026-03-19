@@ -1,0 +1,2 @@
+# @package models.background_upscaler
+_target_: discoverex.adapters.outbound.models.copy_fx.CopyImageFxModel
