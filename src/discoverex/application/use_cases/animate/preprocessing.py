@@ -63,6 +63,28 @@ def white_anchor(image: Image.Image, tolerance: int = 30) -> Image.Image:
     return Image.fromarray(s_arr)
 
 
+def _detect_bg_color(src: Image.Image) -> tuple[int, int, int]:
+    """Detect optimal background color based on character brightness.
+
+    If the character has many bright/white pixels → use black background.
+    Otherwise → use white background (default).
+    """
+    import numpy as np
+
+    arr = np.array(src)
+    if arr.shape[2] == 4:
+        has_transparency = (arr[:, :, 3] < 128).sum() > arr.shape[0] * arr.shape[1] * 0.1
+        if has_transparency:
+            opaque = arr[:, :, 3] > 128
+            pixels = arr[opaque, :3]
+            brightness = pixels.mean()
+            if brightness > 200:
+                logger.info("[Preprocess] 밝은 캐릭터 (%.0f) + 투명배경 → 검은 배경", brightness)
+                return (0, 0, 0)
+    logger.info("[Preprocess] 기본 → 흰색 배경")
+    return (255, 255, 255)
+
+
 def preprocess_image_simple(
     image_path: str | Path,
     output_path: str | Path,
@@ -71,11 +93,10 @@ def preprocess_image_simple(
     scale: float = 0.65,
     headroom_top: float = 0.18,
     headroom_bottom: float = 0.15,
-) -> Path:
-    """Preprocess image with fixed dimensions for WAN I2V input.
+) -> tuple[Path, str]:
+    """Preprocess image with auto background color selection.
 
-    If the original fits within the canvas, no scaling is applied.
-    Otherwise scales down by the given ratio.
+    Returns (output_path, bg_type) where bg_type is "solid" or "dark".
     """
     src = Image.open(image_path).convert("RGBA")
     ow, oh = src.size
@@ -93,7 +114,9 @@ def preprocess_image_simple(
             target_w = int(ow * ratio)
         src_resized = src.resize((target_w, target_h), Image.Resampling.LANCZOS)
 
-    canvas = Image.new("RGBA", (width, height), (255, 255, 255, 255))
+    bg_rgb = _detect_bg_color(src)
+    bg_type = "dark" if bg_rgb == (0, 0, 0) else "solid"
+    canvas = Image.new("RGBA", (width, height), (*bg_rgb, 255))
 
     x = (width - target_w) // 2
     y = int(height * headroom_top)
@@ -101,7 +124,10 @@ def preprocess_image_simple(
         y = max(0, height - target_h - int(height * headroom_bottom))
 
     canvas.paste(src_resized, (x, y), src_resized)
-    result = white_anchor(canvas.convert("RGB"))
+    if bg_type == "solid":
+        result = white_anchor(canvas.convert("RGB"))
+    else:
+        result = canvas.convert("RGB")
 
     out = Path(output_path)
     result.save(out)
@@ -109,6 +135,6 @@ def preprocess_image_simple(
     scaled_str = "원본유지" if (target_w == ow and target_h == oh) else "축소"
     logger.info(
         f"[Preprocess] {ow}x{oh} -> {target_w}x{target_h} ({scaled_str}) "
-        f"pos=({x},{y}) canvas={width}x{height}"
+        f"pos=({x},{y}) canvas={width}x{height} bg={bg_type}"
     )
-    return out
+    return out, bg_type
