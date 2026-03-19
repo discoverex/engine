@@ -3,12 +3,16 @@ defaults:
   - override flows/animate: animate_pipeline
   - _self_
 
-# --- Animate pipeline models (AnimatePipelineConfig.models) ---
+# --- Animate pipeline: Gemini (4 ports) + ComfyUI (generation) ---
 models:
   mode_classifier:
-    _target_: discoverex.adapters.outbound.models.dummy_animate.DummyModeClassifier
+    _target_: discoverex.adapters.outbound.models.gemini_mode_classifier.GeminiModeClassifier
+    model: ${oc.env:GEMINI_MODEL,gemini-2.5-flash}
+    max_retries: 3
   vision_analyzer:
-    _target_: discoverex.adapters.outbound.models.dummy_animate.DummyVisionAnalyzer
+    _target_: discoverex.adapters.outbound.models.gemini_vision_analyzer.GeminiVisionAnalyzer
+    model: ${oc.env:GEMINI_MODEL,gemini-2.5-flash}
+    max_retries: 3
   animation_generation:
     _target_: discoverex.adapters.outbound.models.comfyui_wan_generator.ComfyUIWanGenerator
     base_url: ${oc.env:COMFYUI_URL,http://127.0.0.1:8188}
@@ -21,9 +25,13 @@ models:
     poll_interval: 2.0
     free_between_attempts: false
   ai_validator:
-    _target_: discoverex.adapters.outbound.models.dummy_animate.DummyAIValidator
+    _target_: discoverex.adapters.outbound.models.gemini_ai_validator.GeminiAIValidator
+    model: ${oc.env:GEMINI_MODEL,gemini-2.5-flash}
+    max_retries: 2
   post_motion_classifier:
-    _target_: discoverex.adapters.outbound.models.dummy_animate.DummyPostMotionClassifier
+    _target_: discoverex.adapters.outbound.models.gemini_post_motion.GeminiPostMotionClassifier
+    model: ${oc.env:GEMINI_MODEL,gemini-2.5-flash}
+    max_retries: 2
 
 animate_adapters:
   bg_remover:
@@ -37,4 +45,4 @@ animate_adapters:
   format_converter:
     _target_: discoverex.adapters.outbound.animate.dummy_animate.DummyFormatConverter
 
-max_retries: 1
+max_retries: 7

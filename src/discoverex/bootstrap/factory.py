@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -164,13 +165,19 @@ def build_animate_context(
     ai_validator = instantiate(cfg.models.ai_validator.as_kwargs())
     post_motion = instantiate(cfg.models.post_motion_classifier.as_kwargs())
 
-    # load() lifecycle for model ports that require initialization
+    # load() lifecycle — Gemini needs api_key, ComfyUI/Dummy accept None.
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    handle: ModelHandle | None = (
+        ModelHandle(name="gemini", version="v0", runtime="api", extra={"api_key": api_key})
+        if api_key
+        else None
+    )
     for adapter in (
         mode_classifier, vision_analyzer, animation_generator,
         ai_validator, post_motion,
     ):
         if hasattr(adapter, "load"):
-            adapter.load(None)
+            adapter.load(handle)
 
     bg_remover = instantiate(cfg.animate_adapters.bg_remover.as_kwargs())
     numerical_validator = instantiate(cfg.animate_adapters.numerical_validator.as_kwargs())
