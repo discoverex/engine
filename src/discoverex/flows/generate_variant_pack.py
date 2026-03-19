@@ -16,6 +16,13 @@ from discoverex.application.flows.engine_entry import (
     normalize_pipeline_config_for_worker_runtime,
     write_execution_snapshot,
 )
+from discoverex.artifact_paths import (
+    naturalness_json_path,
+    output_manifest_path,
+    prompt_bundle_json_path,
+    scene_json_path,
+    verification_json_path,
+)
 from discoverex.application.use_cases.gen_verify.scene_builder import build_scene
 from discoverex.application.use_cases.gen_verify.types import RunIds
 from discoverex.config import PipelineConfig
@@ -149,6 +156,36 @@ def _variant_manifest_path(*, artifacts_root: Path, scene_id: str, prepare_id: s
     )
     path.mkdir(parents=True, exist_ok=True)
     return path / "variant_pack.json"
+
+
+def _variant_artifact_entries(
+    *,
+    artifacts_root: Path,
+    variant_result: dict[str, Any],
+) -> list[tuple[str, Path | None]]:
+    scene_id = str(variant_result.get("scene_id", "")).strip()
+    version_id = str(variant_result.get("version_id", "")).strip()
+    variant_id = str(variant_result.get("variant_id", "")).strip() or "variant"
+    if not scene_id or not version_id:
+        return []
+    output_dir = artifacts_root / "scenes" / scene_id / version_id / "outputs"
+    return [
+        (f"variant/{variant_id}/scene", scene_json_path(artifacts_root, scene_id, version_id)),
+        (
+            f"variant/{variant_id}/verification",
+            verification_json_path(artifacts_root, scene_id, version_id),
+        ),
+        (
+            f"variant/{variant_id}/naturalness",
+            naturalness_json_path(artifacts_root, scene_id, version_id),
+        ),
+        (
+            f"variant/{variant_id}/prompt_bundle",
+            prompt_bundle_json_path(artifacts_root, scene_id, version_id),
+        ),
+        (f"variant/{variant_id}/output_manifest", output_manifest_path(artifacts_root, scene_id, version_id)),
+        (f"variant/{variant_id}/lottie", output_dir / "animation.lottie"),
+    ]
 
 
 @flow(name="discoverex-generate-inpaint-variant-pack", persist_result=False)
@@ -340,6 +377,23 @@ def run_generate_inpaint_variant_pack_flow(
     }
     payload["variant_pack_manifest"] = str(manifest_path)
     payload["variant_count"] = str(len(variant_results))
+    payload["variants"] = variant_results
+    if getattr(base_context, "artifacts_root", None):
+        from discoverex.orchestrator_contract.worker_runtime import write_worker_artifact_manifest
+
+        artifact_entries: list[tuple[str, Path | None]] = [("variant_pack_manifest", manifest_path)]
+        artifacts_root = Path(base_context.artifacts_root)
+        for result in variant_results:
+            artifact_entries.extend(
+                _variant_artifact_entries(
+                    artifacts_root=artifacts_root,
+                    variant_result=result,
+                )
+            )
+        write_worker_artifact_manifest(
+            artifacts_root=artifacts_root,
+            artifacts=artifact_entries,
+        )
     logger.info(
         "generate inpaint variant pack completed scene_id=%s variants=%d duration=%s",
         prepare_ids.scene_id,
