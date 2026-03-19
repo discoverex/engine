@@ -19,7 +19,7 @@ from flask_cors import CORS  # type: ignore[import-untyped]
 
 from discoverex.domain.animate_keyframe import KeyframeConfig
 
-from .engine_server_helpers import video_list
+from .engine_server_helpers import get_comfyui_progress, video_list
 
 logger = logging.getLogger(__name__)
 
@@ -167,12 +167,14 @@ def api_status(job_id: str) -> Any:
 
     elapsed = int(time.time() - job["started_at"])
     videos = video_list(DIR_MOTION, job["stem"])
+    progress = get_comfyui_progress() if job["status"] == "running" else None
     return jsonify({
         "status": job["status"],
         "elapsed_sec": elapsed,
         "result": job.get("result"),
         "error": job.get("error"),
         "videos": videos,
+        "progress": progress,
     })
 
 

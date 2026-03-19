@@ -1091,8 +1091,16 @@ async function runGenerate() {
       const sd = await sr.json();
 
       const vidCount = (sd.videos || []).length;
+      const prog = sd.progress;
+      let progBar = '';
+      if (prog && prog.total > 0) {
+        const pct = prog.percent;
+        progBar = `<div style="width:100%;background:var(--surf);border-radius:4px;height:18px;margin-top:6px;overflow:hidden">` +
+          `<div style="width:${pct}%;background:var(--accent);height:100%;border-radius:4px;transition:width 0.3s"></div></div>` +
+          `<div style="font-size:11px;color:var(--mid);margin-top:2px">${prog.step}/${prog.total} steps (${pct}%)</div>`;
+      }
       document.getElementById('genStatus').innerHTML =
-        `<div class="spinner"></div> 생성 중... (${sd.elapsed_sec}초, ${vidCount}/${maxRetries}개 영상)`;
+        `<div class="spinner"></div> 생성 중... (${sd.elapsed_sec}초, ${vidCount}/${maxRetries}개 영상)` + progBar;
 
       if (vidCount > lastVideoCount) {
         lastVideoCount = vidCount;
