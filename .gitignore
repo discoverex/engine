@@ -1,3 +1,6 @@
+# Secrets
+.env
+
 # Python bytecode / build
 __pycache__/
 *.py[cod]
