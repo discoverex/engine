@@ -84,6 +84,32 @@ Answer NO when you observe:
   - Surface details (painted eyes, decals, patterns) that are part of the rigid surface
     → these move WITH the body, they don't deform independently
 
+CRITICAL — RIGID BODY RULE:
+  Metal objects, mechanical parts, tools, and hardware are ALMOST ALWAYS rigid bodies.
+  Even if they have complex shapes (gears, teeth, ornamental edges, engravings),
+  the parts do NOT bend or flex — they are fused into one solid piece.
+
+  RIGID (keyframe_only):
+    - Keys, locks, coins, medals, badges, buckles
+    - Swords, daggers, axes, hammers, wrenches, screwdrivers
+    - Gears, bolts, nuts, screws, nails, chains (single link)
+    - Bottles, cups, vases, jars, crystals, gems, rings
+    - Boxes, crates, books (closed), phones, remotes
+    - Any object made of metal, glass, ceramic, stone, or hard plastic
+      where all parts are fused together with no moving joints
+
+  NOT RIGID (motion_needed):
+    - Objects with VISIBLE HINGES or JOINTS that clearly separate two parts
+    - Scissors (two blades joined by a pivot)
+    - Pliers, tongs (two arms joined by a pivot)
+    - Chains (multiple links that flex relative to each other)
+    - Puppets, dolls with articulated limbs
+    - Flowers with visible stems that would sway
+
+  ASK YOURSELF: "Can I see a joint, hinge, or flexible connection
+                  where TWO SEPARATE PARTS would move relative to each other?"
+  If NO → the object is rigid → keyframe_only.
+
 KEY PRINCIPLE:
   The question is NOT "what is this object?"
   The question IS "would any visible part change its outline shape during motion?"
@@ -149,14 +175,16 @@ OUTPUT FORMAT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Respond ONLY with JSON. No text outside JSON. No markdown fences.
 
+CRITICAL: Put decision fields FIRST. Keep subject_desc under 15 words.
+
 {
   "is_classifiable": <true or false>,
-  "is_scene": <true or false — true if environmental background detected>,
-  "subject_desc": "<brief visual description of the subject>",
+  "is_scene": <true or false>,
   "has_deformable_parts": <true or false>,
-  "deformable_reasoning": "<describe WHAT structural feature you observed — do not name the object category>",
   "processing_mode": "<keyframe_only | motion_needed>",
   "facing_direction": "<left | right | up | down | none>",
   "suggested_action": "<nudge_horizontal | nudge_vertical | wobble | spin | bounce | pop | launch | float | parabolic | hop | (empty string)>",
-  "reason": "<1-sentence summary referencing structural observations, not the object name>"
+  "deformable_reasoning": "<1 sentence: what structural feature you observed>",
+  "subject_desc": "<under 15 words: brief visual description>",
+  "reason": "<1 sentence: summary referencing structural observations>"
 }"""

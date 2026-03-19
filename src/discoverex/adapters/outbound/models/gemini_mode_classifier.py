@@ -14,6 +14,7 @@ from discoverex.domain.animate import (
 )
 
 from .gemini_common import GeminiClientMixin, parse_gemini_json
+from .gemini_mode_fallback import extract_from_text
 from .gemini_mode_prompt import MODE_CLASSIFIER_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -48,13 +49,8 @@ def _robust_parse(raw: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
-    # Stage 3: keyword extraction
-    raw_lower = raw.lower()
-    mode = "motion_needed"
-    if '"keyframe_only"' in raw_lower:
-        mode = "keyframe_only"
-    deformable = "true" not in raw_lower.split("has_deformable")[0][-20:] if "has_deformable" in raw_lower else True
-    return {"processing_mode": mode, "has_deformable_parts": deformable, "is_scene": False}
+    # Stage 3: keyword extraction with rigid-body detection
+    return extract_from_text(raw.lower())
 
 
 class GeminiModeClassifier(GeminiClientMixin):
