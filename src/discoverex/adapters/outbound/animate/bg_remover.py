@@ -25,11 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class FfmpegBgRemover:
-    """Remove background from video frames → transparent PNG sequence.
-
-    Uses original image silhouette as protection mask to preserve
-    character pixels (e.g. white wings) that match the background color.
-    """
+    """Remove background from video frames → transparent PNG sequence."""
 
     def __init__(self, tolerance: int = 50) -> None:
         self.tolerance = tolerance
@@ -40,16 +36,13 @@ class FfmpegBgRemover:
             raise RuntimeError(f"Frame extraction failed: {video}")
 
         bg_color = _detect_bg_color(frames[0])
-        is_dark_bg = bg_color.mean() < 128
-        protect = None if is_dark_bg else _build_protect_mask(video, bg_color, self.tolerance)
-        if is_dark_bg:
-            logger.info("[BgRemover] dark bg (%.0f) → protection mask skipped", bg_color.mean())
+        logger.info("[BgRemover] bg color: R=%.0f G=%.0f B=%.0f", *bg_color)
         output_dir = video.parent / f"{video.stem}_transparent"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         result_paths: list[Path] = []
         for i, frame in enumerate(frames):
-            rgba = _remove_bg_frame(frame, bg_color, self.tolerance, protect)
+            rgba = _remove_bg_frame(frame, bg_color, self.tolerance)
             out = output_dir / f"{video.stem}_frame_{i:04d}.png"
             rgba.save(out, "PNG")
             result_paths.append(out)
@@ -83,65 +76,8 @@ def _detect_bg_color(frame: np.ndarray) -> Any:
     return border.mean(axis=0)
 
 
-def _build_protect_mask(
-    video: Path, bg_color: np.ndarray, tolerance: int,
-) -> np.ndarray | None:
-    """Build character protection mask from original image alpha or silhouette."""
-    import re
-    stem = re.sub(r"_a\d+$", "", video.stem)
-    # 1. preprocessed 이미지 (같은 디렉토리)
-    orig_processed = video.parent / f"{stem}.png"
-    # 2. 원본 입력 이미지 (ComfyUI input 등) — alpha 채널 활용
-    orig_input = _find_original_input(video, stem)
-    # Alpha 채널 우선 사용
-    if orig_input and orig_input.exists():
-        img = Image.open(orig_input)
-        if img.mode == "RGBA":
-            alpha = np.array(img)[:, :, 3]
-            protect = alpha > 128  # 불투명 = 캐릭터
-            # preprocessed 크기에 맞추기
-            if orig_processed.exists():
-                target = Image.open(orig_processed).convert("RGB")
-                th, tw = np.array(target).shape[:2]
-                if protect.shape != (th, tw):
-                    resized = Image.fromarray(protect.astype(np.uint8) * 255).resize((tw, th), Image.NEAREST)
-                    protect = np.array(resized) > 128
-            logger.info("[BgRemover] alpha mask: %d%% character", int(protect.sum() / protect.size * 100))
-            return protect
-    # Fallback: flood-fill 기반
-    if orig_processed and orig_processed.exists():
-        img_arr = np.array(Image.open(orig_processed).convert("RGB"))
-        is_bg = np.all(np.abs(img_arr.astype(int) - bg_color) < tolerance, axis=2)
-        labeled, _ = ndimage.label(is_bg)
-        h, w = img_arr.shape[:2]
-        bl = set(labeled[0,:].tolist()) | set(labeled[-1,:].tolist()) | set(labeled[:,0].tolist()) | set(labeled[:,-1].tolist())
-        bl.discard(0)
-        bg_m = np.zeros((h, w), dtype=bool)
-        for lbl in bl:
-            bg_m |= labeled == lbl
-        protect = ~bg_m
-        logger.info("[BgRemover] silhouette mask: %d%% character", int(protect.sum() / protect.size * 100))
-        return protect
-    return None
-
-
-def _find_original_input(video: Path, stem: str) -> Path | None:
-    """Find original input image with alpha channel."""
-    import re
-    base = re.sub(r"_processed$", "", stem)
-    candidates = [
-        Path.home() / "ComfyUI" / "input" / f"{base}.png",
-        video.parent.parent.parent / "input" / f"{base}.png",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
-    return None
-
-
 def _remove_bg_frame(
     frame: np.ndarray, bg_color: np.ndarray, tolerance: int,
-    protect: np.ndarray | None = None,
 ) -> Image.Image:
     h, w = frame.shape[:2]
     is_bg = np.all(np.abs(frame.astype(int) - bg_color) < tolerance, axis=2)
@@ -154,9 +90,6 @@ def _remove_bg_frame(
     bg_mask = np.zeros((h, w), dtype=bool)
     for lbl in border_labels:
         bg_mask |= labeled == lbl
-    # Protect character pixels from original image silhouette
-    if protect is not None and protect.shape == (h, w):
-        bg_mask &= ~protect
 
     rgba = np.zeros((h, w, 4), dtype=np.uint8)
     rgba[:, :, :3] = frame
