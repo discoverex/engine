@@ -124,6 +124,7 @@ def api_generate() -> Any:
         return jsonify({"error": "image_path required"}), 400
 
     max_retries = int(data.get("max_retries", 7))
+    model_name = data.get("model_name", "")
     job_id = uuid.uuid4().hex[:8]
     stem = Path(image_path).stem
 
@@ -137,6 +138,10 @@ def api_generate() -> Any:
 
     def _run() -> None:
         try:
+            # Override WAN model if specified by frontend
+            gen = _orchestrator.animation_generator
+            if model_name and hasattr(gen, "_model_name"):
+                gen._model_name = model_name
             result = _orchestrator.run(Path(image_path))
             _jobs[job_id]["result"] = {
                 "success": result.success,

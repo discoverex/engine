@@ -35,10 +35,12 @@ class ComfyUIWanGenerator:
         poll_interval: float = 2.0,
         positive_node_id: str | None = None,
         negative_node_id: str | None = None,
+        model_name: str = "",
         free_between_attempts: bool = False,
     ) -> None:
         self._base_url = base_url
         self._workflow_path = Path(workflow_path)
+        self._model_name = model_name
         self._steps = steps
         self._width = width
         self._height = height
@@ -102,6 +104,7 @@ class ComfyUIWanGenerator:
             height=self._height,
             positive_node_id=self._positive_node_id,
             negative_node_id=self._negative_node_id,
+            model_name=self._model_name,
         )
 
         prompt_id = self._client.queue_prompt(workflow, self._client_id)

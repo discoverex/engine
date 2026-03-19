@@ -27,6 +27,7 @@ def load_and_inject(
     height: int = 480,
     positive_node_id: str | None = None,
     negative_node_id: str | None = None,
+    model_name: str | None = None,
 ) -> dict[str, Any]:
     """Load workflow JSON and inject runtime parameters."""
     raw = json.loads(workflow_path.read_text(encoding="utf-8"))
@@ -72,6 +73,8 @@ def load_and_inject(
         elif ctype == "WanImageToVideo":
             node["inputs"]["width"] = width
             node["inputs"]["height"] = height
+        elif ctype == "UnetLoaderGGUF" and model_name:
+            node["inputs"]["unet_name"] = model_name
 
     logger.info(
         "[Workflow] injected: seed=%d steps=%d fps=%d %dx%d",
