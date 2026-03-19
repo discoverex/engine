@@ -68,11 +68,7 @@ def test_submit_job_spec_resolves_deployment_from_inputs(
         job_spec={
             "run_mode": "inline",
             "engine": "discoverex",
-            "entrypoint": [
-                "/bin/sh",
-                "-lc",
-                "python -m discoverex.adapters.outbound.execution.launcher",
-            ],
+            "entrypoint": ["prefect_flow.py:run_generate_job_flow"],
             "inputs": {
                 "contract_version": "v2",
                 "command": "generate",
@@ -175,7 +171,7 @@ def test_submit_job_spec_preserves_explicit_resolved_config(
         job_spec={
             "run_mode": "inline",
             "engine": "discoverex",
-            "entrypoint": ["/bin/sh", "-lc", "python -m discoverex.adapters.outbound.execution.launcher"],
+            "entrypoint": ["prefect_flow.py:run_generate_job_flow"],
             "inputs": {
                 "contract_version": "v2",
                 "command": "generate",

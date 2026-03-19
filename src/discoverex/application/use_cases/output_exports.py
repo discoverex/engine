@@ -18,7 +18,6 @@ from discoverex.artifact_paths import (
 from discoverex.domain.scene import Scene
 from PIL import Image
 
-
 @dataclass(frozen=True)
 class OutputExportResult:
     manifest_path: Path
@@ -120,7 +119,7 @@ def _render_full_canvas_object_layer(
     candidate: dict[str, object],
     layers_dir: Path,
 ) -> Path | None:
-    source_ref = candidate.get("object_image_ref") or candidate.get("layer_image_ref")
+    source_ref = candidate.get("layer_image_ref") or candidate.get("object_image_ref")
     if not isinstance(source_ref, str):
         return None
     source_path = Path(source_ref)
@@ -204,6 +203,13 @@ def _build_lottie_animation(
     artifacts_root: Path,
 ) -> dict[str, object]:
     layer_lookup = {path.name.split("-", 1)[1].rsplit(".", 1)[0]: path for path in exported_layers}
+    candidate_by_region = _candidate_by_region(scene)
+    object_entries = _build_object_entries(scene=scene, candidate_by_region=candidate_by_region)
+    object_entry_by_region = {
+        str(entry["region_id"]): entry
+        for entry in object_entries
+        if isinstance(entry.get("region_id"), str)
+    }
     assets: list[dict[str, object]] = []
     layers: list[dict[str, object]] = []
     for index, layer in enumerate(sorted(scene.layers.items, key=lambda item: item.order), start=1):
@@ -211,6 +217,12 @@ def _build_lottie_animation(
         if exported_path is None:
             continue
         asset_id = f"image_{index}"
+        entry = (
+            object_entry_by_region.get(layer.source_region_id)
+            if layer.source_region_id is not None
+            else None
+        )
+        layer_name = _lottie_layer_name(layer=layer, object_entry=entry)
         assets.append(
             {
                 "id": asset_id,
@@ -226,7 +238,7 @@ def _build_lottie_animation(
                 "ddd": 0,
                 "ind": index,
                 "ty": 2,
-                "nm": layer.layer_id,
+                "nm": layer_name,
                 "cl": layer.type.value,
                 "refId": asset_id,
                 "sr": 1,
@@ -263,6 +275,7 @@ def _build_lottie_animation(
             "scene_id": scene.meta.scene_id,
             "version_id": scene.meta.version_id,
             "scene_json": str(scene_json_path(artifacts_root, scene.meta.scene_id, scene.meta.version_id)),
+            "object_entries": object_entries,
         },
     }
 
@@ -278,6 +291,13 @@ def _write_output_manifest(
     scene_id = scene.meta.scene_id
     version_id = scene.meta.version_id
     manifest_path = output_manifest_path(artifacts_root, scene_id, version_id)
+    candidate_by_region = _candidate_by_region(scene)
+    object_entries = _build_object_entries(scene=scene, candidate_by_region=candidate_by_region)
+    object_entry_by_region = {
+        str(entry["region_id"]): entry
+        for entry in object_entries
+        if isinstance(entry.get("region_id"), str)
+    }
     bundle = build_game_bundle(
         scene=scene,
         source_scene_json=str(scene_json_path(artifacts_root, scene_id, version_id)),
@@ -304,6 +324,21 @@ def _write_output_manifest(
                 "type": layer.type.value,
                 "path": f"layers/objects/{path.name}",
                 "source_region_id": layer.source_region_id,
+                "object_number": (
+                    object_entry_by_region[layer.source_region_id]["object_number"]
+                    if layer.source_region_id in object_entry_by_region
+                    else None
+                ),
+                "center": (
+                    object_entry_by_region[layer.source_region_id]["center"]
+                    if layer.source_region_id in object_entry_by_region
+                    else None
+                ),
+                "description": (
+                    "aligned object render with alpha"
+                    if layer.source_region_id in object_entry_by_region
+                    else None
+                ),
             }
             for layer, path in zip(
                 [item for item in sorted(scene.layers.items, key=lambda item: item.order) if Path(item.image_ref).exists()],
@@ -317,6 +352,11 @@ def _write_output_manifest(
             }
             for path in source_layer_paths
         ],
+        "object_entries": object_entries,
+        "object_sources": _build_object_source_entries(
+            candidate_by_region=candidate_by_region,
+            object_entry_by_region=object_entry_by_region,
+        ),
         "delivery_bundle": bundle.model_dump(mode="json"),
     }
     manifest_path.write_text(
@@ -324,3 +364,87 @@ def _write_output_manifest(
         encoding="utf-8",
     )
     return manifest_path
+
+
+def _candidate_by_region(scene: Scene) -> dict[str, dict[str, object]]:
+    candidates = scene.background.metadata.get("inpaint_layer_candidates", [])
+    if not isinstance(candidates, list):
+        return {}
+    indexed: dict[str, dict[str, object]] = {}
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        region_id = item.get("region_id")
+        if isinstance(region_id, str):
+            indexed[region_id] = item
+    return indexed
+
+
+def _build_object_entries(
+    *,
+    scene: Scene,
+    candidate_by_region: dict[str, dict[str, object]],
+) -> list[dict[str, object]]:
+    entries: list[dict[str, object]] = []
+    numbered_layers = [
+        layer
+        for layer in sorted(scene.layers.items, key=lambda item: item.order)
+        if layer.source_region_id and layer.source_region_id in candidate_by_region
+    ]
+    for object_number, layer in enumerate(numbered_layers, start=1):
+        if layer.bbox is None or layer.source_region_id is None:
+            continue
+        bbox = layer.bbox
+        center = [
+            round(float(bbox.x + (bbox.w / 2.0)), 3),
+            round(float(bbox.y + (bbox.h / 2.0)), 3),
+        ]
+        entries.append(
+            {
+                "object_number": object_number,
+                "layer_id": layer.layer_id,
+                "region_id": layer.source_region_id,
+                "center": center,
+                "bbox": {
+                    "x": bbox.x,
+                    "y": bbox.y,
+                    "w": bbox.w,
+                    "h": bbox.h,
+                },
+            }
+        )
+    return entries
+
+
+def _build_object_source_entries(
+    *,
+    candidate_by_region: dict[str, dict[str, object]],
+    object_entry_by_region: dict[str, dict[str, object]],
+) -> list[dict[str, object]]:
+    entries: list[dict[str, object]] = []
+    for region_id, candidate in candidate_by_region.items():
+        object_entry = object_entry_by_region.get(region_id, {})
+        entries.append(
+            {
+                "region_id": region_id,
+                "object_number": object_entry.get("object_number"),
+                "center": object_entry.get("center"),
+                "candidate_image_ref": candidate.get("candidate_image_ref"),
+                "object_image_ref": candidate.get("object_image_ref"),
+                "layer_image_ref": candidate.get("layer_image_ref"),
+                "object_mask_ref": candidate.get("object_mask_ref"),
+                "patch_image_ref": candidate.get("patch_image_ref"),
+            }
+        )
+    return entries
+
+
+def _lottie_layer_name(*, layer, object_entry: dict[str, object] | None) -> str:
+    if layer.source_region_id is not None and object_entry is not None:
+        object_number = object_entry.get("object_number")
+        center = object_entry.get("center")
+        if isinstance(object_number, int) and isinstance(center, list) and len(center) == 2:
+            return f"object {object_number} center=({center[0]}, {center[1]})"
+        if isinstance(object_number, int):
+            return f"object {object_number}"
+    return layer.layer_id

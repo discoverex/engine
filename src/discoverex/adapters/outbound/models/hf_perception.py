@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from discoverex.models.types import ModelHandle, PerceptionRequest
 
@@ -34,7 +35,8 @@ class HFPerceptionModel:
         self.batch_size = batch_size
         self.seed = seed
         self.strict_runtime = strict_runtime
-        self._pipeline: object | None = None
+        self._image_processor: Any | None = None
+        self._model: Any | None = None
 
     def load(self, model_ref_or_version: str) -> ModelHandle:
         runtime = resolve_runtime()
@@ -96,36 +98,50 @@ class HFPerceptionModel:
         runtime = resolve_runtime()
         if not runtime.available or runtime.transformers is None:
             return None
-        transformers = runtime.transformers
-
         try:
-            if self._pipeline is None:
-                device_arg = 0 if handle.device.startswith("cuda") else -1
-                self._pipeline = transformers.pipeline(
-                    "image-classification",
-                    model=self.model_id,
+            import torch  # type: ignore
+            from transformers import (  # type: ignore
+                AutoModelForImageClassification,
+                ViTImageProcessor,
+            )
+
+            if self._model is None:
+                self._image_processor = ViTImageProcessor.from_pretrained(
+                    self.model_id,
                     revision=self.revision,
-                    device=device_arg,
                 )
+                self._model = AutoModelForImageClassification.from_pretrained(
+                    self.model_id,
+                    revision=self.revision,
+                )
+                if handle.device:
+                    self._model = self._model.to(handle.device)
             image = Image.open(image_path).convert("RGB")
-            pipeline = self._pipeline
-            if not callable(pipeline):
+            processor = self._image_processor
+            model = self._model
+            if processor is None or model is None:
                 return None
-            preds = pipeline(image, top_k=1)
+            inputs = processor(images=image, return_tensors="pt")
+            if handle.device:
+                inputs = {
+                    key: value.to(handle.device) if hasattr(value, "to") else value
+                    for key, value in inputs.items()
+                }
+            with torch.no_grad():
+                outputs = model(**inputs)
+            logits = getattr(outputs, "logits", None)
+            if logits is None:
+                return None
+            score = float(torch.nn.functional.softmax(logits, dim=-1).max().item())
         except Exception:
             return None
 
-        if not preds:
-            return None
-        top = preds[0]
-        score = top.get("score")
-        if isinstance(score, float):
-            return max(0.0, min(1.0, score))
-        return None
+        return max(0.0, min(1.0, score))
 
     def unload(self) -> None:
-        clear_model_runtime(self._pipeline)
-        self._pipeline = None
+        clear_model_runtime(self._image_processor, self._model)
+        self._image_processor = None
+        self._model = None
 
     def _predict_fallback(self, request: PerceptionRequest) -> float:
         region_factor = min(0.45, 0.08 * request.region_count)

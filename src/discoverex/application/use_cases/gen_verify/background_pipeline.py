@@ -127,7 +127,7 @@ def apply_background_canvas_upscale_if_needed(
     background: Background,
     context: AppContextLike,
     scene_dir: Path,
-    fx_handle: ModelHandle,
+    upscaler_handle: ModelHandle,
     prompt: str,
     negative_prompt: str,
 ) -> Background:
@@ -159,19 +159,15 @@ def apply_background_canvas_upscale_if_needed(
     )
     started = perf_counter()
     with track_stage_vram(context, "background_canvas_upscale"):
-        prediction = context.background_generator_model.predict(
-            fx_handle,
+        prediction = context.background_upscaler_model.predict(
+            upscaler_handle,
             FxRequest(
                 mode="canvas_upscale",
+                image_ref=background.asset_ref,
                 params={
                     "output_path": str(output_path),
-                    "image_ref": background.asset_ref,
                     "width": int(background.width * factor),
                     "height": int(background.height * factor),
-                    "prompt": prompt or "cinematic hidden object puzzle background",
-                    "negative_prompt": negative_prompt or _DEFAULT_BACKGROUND_NEGATIVE,
-                    "seed": getattr(context.runtime.model_runtime, "seed", None),
-                    "canvas_scale_factor": float(factor),
                 },
             ),
         )
@@ -205,7 +201,7 @@ def apply_background_detail_reconstruction_if_needed(
     background: Background,
     context: AppContextLike,
     scene_dir: Path,
-    fx_handle: ModelHandle,
+    upscaler_handle: ModelHandle,
     prompt: str,
     negative_prompt: str,
 ) -> Background:
@@ -235,20 +231,15 @@ def apply_background_detail_reconstruction_if_needed(
     )
     started = perf_counter()
     with track_stage_vram(context, "background_detail_reconstruction"):
-        prediction = context.background_generator_model.predict(
-            fx_handle,
+        prediction = context.background_upscaler_model.predict(
+            upscaler_handle,
             FxRequest(
                 mode="detail_reconstruct",
+                image_ref=background.asset_ref,
                 params={
                     "output_path": str(output_path),
-                    "image_ref": background.asset_ref,
-                    "prompt": prompt or "cinematic hidden object puzzle background",
-                    "negative_prompt": negative_prompt or _DEFAULT_BACKGROUND_NEGATIVE,
-                    "seed": getattr(context.runtime.model_runtime, "seed", None),
-                    "detail_num_inference_steps": 24,
-                    "detail_guidance_scale": 4.0,
-                    "detail_strength": 0.35,
-                    "enable_highres_extension": False,
+                    "width": background.width,
+                    "height": background.height,
                 },
             ),
         )
@@ -280,7 +271,7 @@ def apply_background_hires_fix_if_needed(
     background: Background,
     context: AppContextLike,
     scene_dir: Path,
-    fx_handle: ModelHandle,
+    upscaler_handle: ModelHandle,
     prompt: str,
     negative_prompt: str,
 ) -> Background:
@@ -288,7 +279,7 @@ def apply_background_hires_fix_if_needed(
         background=background,
         context=context,
         scene_dir=scene_dir,
-        fx_handle=fx_handle,
+        upscaler_handle=upscaler_handle,
         prompt=prompt,
         negative_prompt=negative_prompt,
     )
@@ -296,7 +287,7 @@ def apply_background_hires_fix_if_needed(
         background=background,
         context=context,
         scene_dir=scene_dir,
-        fx_handle=fx_handle,
+        upscaler_handle=upscaler_handle,
         prompt=prompt,
         negative_prompt=negative_prompt,
     )

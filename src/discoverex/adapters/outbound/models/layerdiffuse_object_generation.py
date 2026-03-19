@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import importlib
+import os
 from pathlib import Path
 from time import perf_counter
 from typing import Any
 
 from PIL import Image  # type: ignore
 
+from discoverex.cache_dirs import resolve_model_cache_dir
 from discoverex.models.types import FxPrediction, FxRequest, ModelHandle
 from discoverex.runtime_logging import format_seconds, get_logger
 
 from .fx_param_parsing import as_float, as_int_or_none, as_positive_int, as_str
+from .model_loading import load_state_dict_materialized
 from .pipeline_memory import OffloadMode, configure_diffusers_pipeline
 from .runtime import (
     apply_seed,
@@ -79,7 +82,7 @@ class LayerDiffuseObjectGenerationModel:
         self.default_negative_prompt = default_negative_prompt
         self.default_num_inference_steps = default_num_inference_steps
         self.default_guidance_scale = default_guidance_scale
-        self.weights_cache_dir = weights_cache_dir
+        self.weights_cache_dir = str(_resolve_shared_cache_dir(weights_cache_dir))
         self._pipe: Any | None = None
         self._transparent_decoder: Any | None = None
         self._layerdiffuse_applied = False
@@ -216,7 +219,7 @@ class LayerDiffuseObjectGenerationModel:
         pipe = AutoPipelineForText2Image.from_pretrained(
             self.model_id,
             revision=self.revision,
-            torch_dtype=torch_dtype,
+            dtype=torch_dtype,
             variant=variant,
         )
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(
@@ -236,7 +239,7 @@ class LayerDiffuseObjectGenerationModel:
                 key: base_state[key] + offset[key] if key in offset else base_state[key]
                 for key in base_state
             }
-            pipe.unet.load_state_dict(merged_state, strict=True)
+            load_state_dict_materialized(pipe.unet, merged_state, strict=True)
             self._layerdiffuse_applied = True
         self._pipe = configure_diffusers_pipeline(
             pipe,
@@ -293,3 +296,22 @@ class LayerDiffuseObjectGenerationModel:
                 pass
         self._transparent_decoder = None
         self._layerdiffuse_applied = False
+
+
+def _resolve_shared_cache_dir(raw_path: str) -> Path:
+    path = Path(raw_path).expanduser()
+    if path.is_absolute():
+        return path
+    base = resolve_model_cache_dir()
+    parts = [part for part in path.parts if part not in {".", ".cache"}]
+    if parts:
+        return base.joinpath(*parts)
+    hf_home = os.getenv("HF_HOME", "").strip()
+    if hf_home:
+        base = Path(hf_home).expanduser()
+    else:
+        base = Path.home() / ".cache" / "huggingface" / "discoverex"
+    parts = [part for part in path.parts if part not in {"."}]
+    if parts and parts[0] == ".cache":
+        parts = parts[1:]
+    return base.joinpath(*parts) if parts else base

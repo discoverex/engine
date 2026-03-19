@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +35,18 @@ class MobileSAMAdapter:
 
     def load(self, handle: ModelHandle) -> None:  # noqa: ARG002
         import torch
-        from mobile_sam import SamPredictor, sam_model_registry
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=".*timm.models.layers.*deprecated.*",
+                category=FutureWarning,
+            )
+            warnings.filterwarnings(
+                "ignore",
+                message=".*timm.models.registry.*deprecated.*",
+                category=FutureWarning,
+            )
+            from mobile_sam import SamPredictor, sam_model_registry
 
         dtype = torch.float16 if self._dtype == "float16" else torch.float32
         sam = sam_model_registry["vit_t"](checkpoint=None)

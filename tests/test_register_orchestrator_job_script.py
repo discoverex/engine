@@ -41,10 +41,7 @@ def test_register_script_dry_run_builds_repo_job_spec() -> None:
     payload = json.loads(proc.stdout)
     assert payload["run_mode"] == "repo"
     assert payload["repo_url"] == "https://github.com/example/engine.git"
-    assert (
-        payload["entrypoint"][2]
-        == "PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher"
-    )
+    assert payload["entrypoint"] == ["prefect_flow.py:run_generate_job_flow"]
     assert payload["inputs"]["contract_version"] == "v2"
     assert payload["inputs"]["command"] == "generate"
     assert payload["inputs"]["config_name"] == "generate"
@@ -389,7 +386,7 @@ def test_register_script_allows_explicit_config_name_and_dir() -> None:
     assert payload["inputs"]["overrides"] == []
 
 
-def test_register_script_accepts_custom_entrypoint_for_inline_mode() -> None:
+def test_register_script_sets_prefect_flow_entrypoint_for_inline_mode() -> None:
     proc = subprocess.run(
         [
             sys.executable,
@@ -397,8 +394,6 @@ def test_register_script_accepts_custom_entrypoint_for_inline_mode() -> None:
             "--dry-run",
             "--run-mode",
             "inline",
-            "--entrypoint-shell-command",
-            "cd /opt/engine-src && PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher",
             "--command",
             "generate",
             "--background-asset-ref",
@@ -411,8 +406,4 @@ def test_register_script_accepts_custom_entrypoint_for_inline_mode() -> None:
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
     assert payload["run_mode"] == "inline"
-    assert payload["entrypoint"] == [
-        "/bin/sh",
-        "-lc",
-        "cd /opt/engine-src && PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher",
-    ]
+    assert payload["entrypoint"] == ["prefect_flow.py:run_generate_job_flow"]

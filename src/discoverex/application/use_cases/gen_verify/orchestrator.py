@@ -67,11 +67,18 @@ def run(
             background_prompt=background_prompt,
             background_negative_prompt=background_negative_prompt,
         )
+    finally:
+        unload_model(context.background_generator_model)
+
+    upscaler_handle = context.background_upscaler_model.load(
+        model_versions.background_upscaler
+    )
+    try:
         background = apply_background_canvas_upscale_if_needed(
             background=background,
             context=context,
             scene_dir=scene_dir,
-            fx_handle=background_handle,
+            upscaler_handle=upscaler_handle,
             prompt=(background_prompt or "").strip(),
             negative_prompt=(background_negative_prompt or "").strip(),
         )
@@ -79,12 +86,12 @@ def run(
             background=background,
             context=context,
             scene_dir=scene_dir,
-            fx_handle=background_handle,
+            upscaler_handle=upscaler_handle,
             prompt=(background_prompt or "").strip(),
             negative_prompt=(background_negative_prompt or "").strip(),
         )
     finally:
-        unload_model(context.background_generator_model)
+        unload_model(context.background_upscaler_model)
     _materialize_background_asset(background=background, scene_dir=scene_dir)
     logger.info("background ready asset_ref=%s", background.asset_ref)
 

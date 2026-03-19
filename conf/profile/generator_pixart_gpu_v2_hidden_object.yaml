@@ -2,6 +2,7 @@
 defaults:
   - override /flows/generate: v2
   - override /models/background_generator: pixart_sigma_8gb
+  - override /models/background_upscaler: realesrgan
   - override /models/object_generator: layerdiffuse
   - override /models/hidden_region: hf
   - override /models/inpaint: sdxl_gpu_layerdiffuse_hidden_object_v1

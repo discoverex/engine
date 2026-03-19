@@ -143,13 +143,20 @@ def generate_regions(
         if isinstance(composited_ref, str) and composited_ref:
             background.metadata["inpaint_composited_ref"] = composited_ref
             current_composite_ref = composited_ref
-        object_ref = details.get("object_image_ref")
-        object_mask_ref = details.get("object_mask_ref")
-        patch_ref = details.get("patch_image_ref")
+        object_ref = details.get("object_image_ref") or object_asset.object_ref
+        object_mask_ref = details.get("object_mask_ref") or object_asset.object_mask_ref
+        patch_ref = details.get("patch_image_ref") or object_asset.object_ref
+        details = {
+            **details,
+            "candidate_image_ref": details.get("candidate_image_ref") or object_asset.candidate_ref,
+            "object_image_ref": object_ref,
+            "object_mask_ref": object_mask_ref,
+            "patch_image_ref": patch_ref,
+        }
         record_layer_candidate(
             background=background,
             region=updated,
-            candidate_ref=object_asset.candidate_ref,
+            candidate_ref=details.get("candidate_image_ref"),
             object_ref=object_ref,
             object_mask_ref=object_mask_ref,
             patch_ref=patch_ref,

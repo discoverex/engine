@@ -1,5 +1,6 @@
 defaults:
   - models/background_generator: dummy
+  - models/background_upscaler: dummy
   - models/object_generator: dummy
   - models/hidden_region: dummy
   - models/inpaint: dummy
@@ -31,6 +32,7 @@ thresholds:
 
 model_versions:
   background_generator: background-generator-v0
+  background_upscaler: background-upscaler-v0
   object_generator: object-generator-v0
   hidden_region: hidden-region-v0
   inpaint: inpaint-v0

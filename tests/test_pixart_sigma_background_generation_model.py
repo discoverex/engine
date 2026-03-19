@@ -123,3 +123,43 @@ def test_pixart_hires_fix_writes_output(
     assert pred["fx"] == "background_hires_fix"
     assert pred["output_path"] == str(output_path)
     assert output_path.exists()
+
+
+def test_pixart_canvas_upscale_resizes_image(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    model = PixArtSigmaBackgroundGenerationModel(strict_runtime=False)
+    monkeypatch.setattr(
+        "discoverex.adapters.outbound.models.pixart_sigma_background_generation.resolve_runtime",
+        lambda: RuntimeResolution(
+            available=True,
+            torch=None,
+            transformers=type(
+                "_TfCompat", (), {"__version__": "4.46.0", "MT5Tokenizer": object()}
+            )(),
+            reason="",
+        ),
+    )
+    handle = model.load("bg-v1")
+    source_path = tmp_path / "source.png"
+    source_path.write_bytes(b"seed")
+    monkeypatch.setattr(
+        "PIL.Image.open",
+        lambda *_args, **_kwargs: _FakeImage(width=512, height=512),
+    )
+
+    pred = model.predict(
+        handle,
+        FxRequest(
+            mode="canvas_upscale",
+            params={
+                "image_ref": str(source_path),
+                "output_path": str(tmp_path / "upscaled.png"),
+                "width": 1024,
+                "height": 1024,
+            },
+        ),
+    )
+
+    assert pred["fx"] == "background_canvas_upscale"
+    assert Path(pred["output_path"]).exists()

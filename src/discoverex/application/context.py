@@ -6,6 +6,7 @@ from typing import Protocol
 from discoverex.application.ports.io import SceneIOPort
 from discoverex.application.ports.models import (
     BackgroundGenerationPort,
+    BackgroundUpscalerPort,
     FxPort,
     HiddenRegionPort,
     InpaintPort,
@@ -27,6 +28,7 @@ from discoverex.config import (
 
 class AppContextLike(Protocol):
     background_generator_model: BackgroundGenerationPort
+    background_upscaler_model: BackgroundUpscalerPort
     object_generator_model: ObjectGenerationPort
     hidden_region_model: HiddenRegionPort
     inpaint_model: InpaintPort

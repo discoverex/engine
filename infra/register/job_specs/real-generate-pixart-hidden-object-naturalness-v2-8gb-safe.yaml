@@ -3,9 +3,7 @@ engine: discoverex
 repo_url: https://github.com/discoverex/engine.git
 ref: feat/artifact-output-layout
 entrypoint:
-  - /bin/sh
-  - -lc
-  - PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher
+  - prefect_flow.py:run_generate_job_flow
 config: null
 job_name: quick-generate-pixart-hidden-object-naturalness-v2-8gb-safe
 inputs:
@@ -24,9 +22,9 @@ inputs:
     - profile=generator_pixart_gpu_v2_hidden_object
     - runtime/model_runtime=gpu
     - flows/generate=naturalness
-    - runtime.width=768
-    - runtime.height=768
-    - runtime.background_upscale_factor=1
+    - runtime.width=512
+    - runtime.height=512
+    - runtime.background_upscale_factor=2
     - models/background_generator=pixart_sigma_8gb
     - models/object_generator=layerdiffuse
     - models/hidden_region=hf

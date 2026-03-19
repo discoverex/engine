@@ -23,11 +23,13 @@ class Moondream2Adapter:
     def __init__(
         self,
         model_id: str = "vikhyat/moondream2",
+        revision: str = "main",
         quantization: str = "4bit",
         device: str = "cuda",
         dtype: str = "float16",
     ) -> None:
         self._model_id = model_id
+        self._revision = revision
         self._quantization = quantization
         self._device = device
         self._dtype = dtype
@@ -48,10 +50,13 @@ class Moondream2Adapter:
             )
 
         self._tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[no-untyped-call]
-            self._model_id, trust_remote_code=True
+            self._model_id,
+            revision=self._revision,
+            trust_remote_code=True,
         )
         self._model = AutoModelForCausalLM.from_pretrained(
             self._model_id,
+            revision=self._revision,
             trust_remote_code=True,
             quantization_config=quant_cfg,
             device_map=self._device if quant_cfg is None else "auto",

@@ -39,11 +39,7 @@ def build_inline_job_spec(
     payload = {
         "run_mode": "inline",
         "engine": "discoverex",
-        "entrypoint": [
-            "/bin/sh",
-            "-lc",
-            "PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher",
-        ],
+        "entrypoint": ["prefect_flow.py:run_generate_job_flow"],
         "job_name": job_name,
         "inputs": engine_run.model_dump(mode="python"),
     }
@@ -114,11 +110,7 @@ def _inline_job_spec_from_engine_payload(job_spec: dict[str, Any]) -> JobSpec:
     payload = {
         "run_mode": "inline",
         "engine": "discoverex",
-        "entrypoint": [
-            "/bin/sh",
-            "-lc",
-            "PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher",
-        ],
+        "entrypoint": ["prefect_flow.py:run_generate_job_flow"],
         "job_name": job_spec.get("job_name"),
         "inputs": engine_run.model_dump(mode="python"),
         "env": job_spec.get("env", {}),

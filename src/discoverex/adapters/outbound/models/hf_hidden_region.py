@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from discoverex.models.types import HiddenRegionRequest, ModelHandle
 
@@ -34,7 +35,8 @@ class HFHiddenRegionModel:
         self.batch_size = batch_size
         self.seed = seed
         self.strict_runtime = strict_runtime
-        self._detector: object | None = None
+        self._image_processor: Any | None = None
+        self._detector: Any | None = None
 
     def load(self, model_ref_or_version: str) -> ModelHandle:
         runtime = resolve_runtime()
@@ -103,40 +105,68 @@ class HFHiddenRegionModel:
         runtime = resolve_runtime()
         if not runtime.available or runtime.transformers is None:
             return None
-        transformers = runtime.transformers
-
         try:
-            if self._detector is None:
-                device_arg = 0 if handle.device.startswith("cuda") else -1
-                self._detector = transformers.pipeline(
-                    "object-detection",
-                    model=self.model_id,
-                    revision=self.revision,
-                    device=device_arg,
-                )
-            detector = self._detector
-            if not callable(detector):
-                return None
-            image = Image.open(image_path).convert("RGB")
-            preds = detector(image)
+            import torch  # type: ignore
+            from transformers import (  # type: ignore
+                AutoImageProcessor,
+                AutoModelForObjectDetection,
+            )
         except Exception:
             return None
 
-        if not isinstance(preds, list):
+        try:
+            if self._detector is None:
+                self._image_processor = AutoImageProcessor.from_pretrained(
+                    self.model_id,
+                    revision=self.revision,
+                    use_fast=True,
+                )
+                self._detector = AutoModelForObjectDetection.from_pretrained(
+                    self.model_id,
+                    revision=self.revision,
+                    low_cpu_mem_usage=False,
+                )
+                if handle.device:
+                    self._detector = self._detector.to(handle.device)
+            detector = self._detector
+            processor = self._image_processor
+            if detector is None or processor is None:
+                return None
+            image = Image.open(image_path).convert("RGB")
+            inputs = processor(images=image, return_tensors="pt")
+            if handle.device:
+                inputs = {
+                    key: value.to(handle.device) if hasattr(value, "to") else value
+                    for key, value in inputs.items()
+                }
+            with torch.no_grad():
+                outputs = detector(**inputs)
+            target_sizes = torch.tensor(
+                [[image.height, image.width]],
+                device=outputs.logits.device,
+            )
+            processed = processor.post_process_object_detection(
+                outputs,
+                threshold=0.2,
+                target_sizes=target_sizes,
+            )
+            preds = processed[0] if processed else {}
+        except Exception:
+            return None
+
+        if not isinstance(preds, dict):
             return None
         width = max(1, request.width)
         height = max(1, request.height)
         boxes: list[tuple[float, float, float, float]] = []
-        for pred in preds[:3]:
-            if not isinstance(pred, dict):
+        pred_boxes = preds.get("boxes")
+        if pred_boxes is None:
+            return None
+        for box in pred_boxes[:3]:
+            values = box.tolist() if hasattr(box, "tolist") else list(box)
+            if len(values) != 4:
                 continue
-            box = pred.get("box")
-            if not isinstance(box, dict):
-                continue
-            xmin = float(box.get("xmin", 0.0))
-            ymin = float(box.get("ymin", 0.0))
-            xmax = float(box.get("xmax", xmin))
-            ymax = float(box.get("ymax", ymin))
+            xmin, ymin, xmax, ymax = [float(value) for value in values]
             x = max(0.0, min(xmin, float(width)))
             y = max(0.0, min(ymin, float(height)))
             w = max(1.0, min(xmax, float(width)) - x)
@@ -145,5 +175,6 @@ class HFHiddenRegionModel:
         return boxes or None
 
     def unload(self) -> None:
-        clear_model_runtime(self._detector)
+        clear_model_runtime(self._image_processor, self._detector)
+        self._image_processor = None
         self._detector = None

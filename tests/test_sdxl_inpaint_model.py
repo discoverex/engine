@@ -292,7 +292,7 @@ def test_layerdiffuse_hidden_object_mode_writes_stage_artifacts(
     model = SdxlInpaintModel(
         strict_runtime=True,
         inpaint_mode="layerdiffuse_hidden_object_v1",
-        relight_method="ic_light",
+        relight_method="basic",
         edge_blend_backend="powerpaint_v2_sd15",
         core_blend_backend="powerpaint_v2_sd15",
         final_polish_backend="brushnet",

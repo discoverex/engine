@@ -139,14 +139,36 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
     assert len(exported.source_layer_paths) == 1
     payload = json.loads(exported.manifest_path.read_text(encoding="utf-8"))
     assert payload["lottie_path"] == "animation.lottie"
-    assert payload["source_layers"] == [
-        {"path": "layers/source-objects/001-layer-object.png"}
+    assert payload["source_layers"] == [{"path": "layers/source-objects/001-layer-object.png"}]
+    assert payload["object_entries"] == [
+        {
+            "object_number": 1,
+            "layer_id": "layer-object",
+            "region_id": "r1",
+            "center": [6.0, 8.0],
+            "bbox": {"x": 1.0, "y": 2.0, "w": 10.0, "h": 12.0},
+        }
+    ]
+    assert payload["object_sources"] == [
+        {
+            "region_id": "r1",
+            "object_number": 1,
+            "center": [6.0, 8.0],
+            "candidate_image_ref": str(object_image),
+            "object_image_ref": str(object_image),
+            "layer_image_ref": str(object_image),
+            "object_mask_ref": str(object_image),
+            "patch_image_ref": str(object_image),
+        }
     ]
     assert [layer["layer_id"] for layer in payload["layers"]] == [
         "layer-base",
         "layer-object",
         "layer-final",
     ]
+    assert payload["layers"][1]["object_number"] == 1
+    assert payload["layers"][1]["center"] == [6.0, 8.0]
+    assert payload["layers"][1]["description"] == "aligned object render with alpha"
     with ZipFile(exported.lottie_path) as archive:
         names = set(archive.namelist())
         animation = json.loads(archive.read("animations/scene.json").decode("utf-8"))
@@ -156,4 +178,6 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
     assert "images/001-layer-object.png" in names
     assert "images/002-layer-final.png" in names
     assert animation["metadata"]["scene_id"] == "scene-1"
+    assert animation["metadata"]["object_entries"] == payload["object_entries"]
+    assert animation["layers"][1]["nm"] == "object 1 center=(6.0, 8.0)"
     assert len(animation["layers"]) == 3

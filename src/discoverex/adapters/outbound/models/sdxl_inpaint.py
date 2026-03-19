@@ -116,6 +116,7 @@ class SdxlInpaintModel:
         rmbg_model_id: str = "",
         sam2_model_id: str = "",
         ic_light_model_id: str = "",
+        ic_light_base_model_id: str = "",
         edge_blend_model_id: str = "",
         core_blend_model_id: str = "",
         final_polish_model_id: str = "",
@@ -188,6 +189,7 @@ class SdxlInpaintModel:
         self.rmbg_model_id = rmbg_model_id
         self.sam2_model_id = sam2_model_id
         self.ic_light_model_id = ic_light_model_id
+        self.ic_light_base_model_id = ic_light_base_model_id
         self.edge_blend_model_id = edge_blend_model_id
         self.core_blend_model_id = core_blend_model_id
         self.final_polish_model_id = final_polish_model_id
@@ -986,6 +988,7 @@ class SdxlInpaintModel:
             if self._ic_light_relighter is None:
                 self._ic_light_relighter = IcLightRelighter(
                     model_id=self.ic_light_model_id,
+                    base_model_id=self.ic_light_base_model_id,
                     runtime=self._backend_runtime(),
                 )
             return self._ic_light_relighter.relight(

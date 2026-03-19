@@ -32,7 +32,7 @@ def generate_patch_with_diffusers(
         built = StableDiffusionImg2ImgPipeline.from_pretrained(  # type: ignore[no-untyped-call]
             generation_model_id,
             revision=revision,
-            torch_dtype=torch.float32 if "32" in handle.dtype else torch.float16,
+            dtype=torch.float32 if "32" in handle.dtype else torch.float16,
             safety_checker=None,
             feature_extractor=None,
             requires_safety_checker=False,

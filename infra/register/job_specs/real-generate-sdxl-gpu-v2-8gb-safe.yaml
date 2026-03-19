@@ -3,9 +3,7 @@ engine: discoverex
 repo_url: https://github.com/discoverex/engine.git
 ref: feat/engin-worker-observility
 entrypoint:
-  - /bin/sh
-  - -lc
-  - PYTHONPATH=src python -m discoverex.orchestrator_contract.launcher
+  - prefect_flow.py:run_generate_job_flow
 config: null
 job_name: quick-generate-v2-https-8gb-safe
 inputs:

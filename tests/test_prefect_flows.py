@@ -60,14 +60,7 @@ def test_run_engine_job_executes_engine_entry_directly(
         {
             "run_mode": "inline",
             "engine": "discoverex",
-            "entrypoint": [
-                "/bin/sh",
-                "-lc",
-                (
-                    "PYTHONPATH=src python -m "
-                    "discoverex.adapters.outbound.execution.launcher"
-                ),
-            ],
+            "entrypoint": ["prefect_flow.py:run_generate_job_flow"],
             "inputs": {
                 "contract_version": "v2",
                 "command": "generate",
@@ -147,14 +140,7 @@ def test_run_engine_job_prefers_inline_resolved_config(
         {
             "run_mode": "inline",
             "engine": "discoverex",
-            "entrypoint": [
-                "/bin/sh",
-                "-lc",
-                (
-                    "PYTHONPATH=src python -m "
-                    "discoverex.adapters.outbound.execution.launcher"
-                ),
-            ],
+            "entrypoint": ["prefect_flow.py:run_generate_job_flow"],
             "inputs": {
                 "contract_version": "v2",
                 "command": "generate",
@@ -214,7 +200,10 @@ def test_dispatch_engine_job_calls_nested_generate_pipeline(
         "discoverex.application.flows.engine_entry.write_execution_snapshot",
         lambda **kwargs: tmp_path / "resolved_execution_config.json",
     )
-    monkeypatch.setattr("discoverex.flows.generate.run_generate_flow", _fake_nested_flow)
+    monkeypatch.setattr(
+        "discoverex.application.flows.engine_entry._resolve_subflow",
+        lambda config, command: _fake_nested_flow,
+    )
 
     result = prefect_dispatch.dispatch_engine_job(
         {
@@ -237,7 +226,7 @@ def test_dispatch_engine_job_calls_nested_generate_pipeline(
     assert sink[-1][0] == (
         "engine nested flow handoff: flow=%s command=%s config_name=%s override_count=%d"
     )
-    assert sink[-1][1][0] == "discoverex-generate-pipeline"
+    assert sink[-1][1][0] == "_fake_nested_flow"
 
 
 def test_flow_kind_entrypoint_rejects_mismatched_command(
