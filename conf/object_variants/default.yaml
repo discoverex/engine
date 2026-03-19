@@ -1,0 +1,11 @@
+default_count: 3
+rotation_degrees:
+  - -18.0
+  - 0.0
+  - 18.0
+scale_factors:
+  - 0.85
+  - 1.0
+  - 1.15
+max_variants_per_object: 9
+canvas_padding: 12

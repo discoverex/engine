@@ -38,6 +38,41 @@ class FlowsConfig(BaseModel):
     animate: HydraComponentConfig
 
 
+class RegionSelectionConfig(BaseModel):
+    strategy: Literal["patch_similarity_v2", "legacy_detr"] = "patch_similarity_v2"
+    max_regions: int = 3
+    iou_threshold: float = 0.12
+    stride_ratio: float = 0.25
+    scale_factors: list[float] = Field(default_factory=lambda: [0.85, 1.0, 1.15])
+
+
+class ObjectVariantsConfig(BaseModel):
+    default_count: int = 3
+    rotation_degrees: list[float] = Field(default_factory=lambda: [-18.0, 0.0, 18.0])
+    scale_factors: list[float] = Field(default_factory=lambda: [0.85, 1.0, 1.15])
+    max_variants_per_object: int = 9
+    canvas_padding: int = 12
+
+
+class PatchSimilarityConfig(BaseModel):
+    lab_weight: float = 0.35
+    lbp_weight: float = 0.20
+    gabor_weight: float = 0.20
+    hog_weight: float = 0.25
+    lbp_points: int = 16
+    lbp_radius: int = 2
+    gabor_frequencies: list[float] = Field(default_factory=lambda: [0.12, 0.2])
+    gabor_thetas: list[float] = Field(default_factory=lambda: [0.0, 0.78539816339])
+    hog_orientations: int = 9
+    hog_pixels_per_cell: int = 8
+    min_patch_side: int = 48
+
+
+class ColorHarmonizationConfig(BaseModel):
+    enabled: bool = True
+    blend_alpha: float = 0.65
+
+
 class RuntimeModelConfig(BaseModel):
     device: Literal["cpu", "cuda"] = "cuda"
     dtype: str = "float16"
@@ -179,6 +214,14 @@ class PipelineConfig(BaseModel):
     models: ModelsConfig
     adapters: AdaptersConfig
     flows: FlowsConfig | None = None
+    region_selection: RegionSelectionConfig = Field(default_factory=RegionSelectionConfig)
+    object_variants: ObjectVariantsConfig = Field(default_factory=ObjectVariantsConfig)
+    patch_similarity: PatchSimilarityConfig = Field(
+        default_factory=PatchSimilarityConfig
+    )
+    color_harmonization: ColorHarmonizationConfig = Field(
+        default_factory=ColorHarmonizationConfig
+    )
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     thresholds: ThresholdsConfig = Field(default_factory=ThresholdsConfig)
     model_versions: ModelVersionsConfig = Field(default_factory=ModelVersionsConfig)

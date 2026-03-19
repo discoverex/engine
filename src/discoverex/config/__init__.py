@@ -1,9 +1,13 @@
 from .schema import (
     AdaptersConfig,
+    ColorHarmonizationConfig,
     HydraComponentConfig,
     ModelsConfig,
     ModelVersionsConfig,
+    ObjectVariantsConfig,
+    PatchSimilarityConfig,
     PipelineConfig,
+    RegionSelectionConfig,
     RuntimeConfig,
     RuntimeEnvConfig,
     RuntimeModelConfig,
@@ -16,10 +20,14 @@ from .schema import (
 
 __all__ = [
     "AdaptersConfig",
+    "ColorHarmonizationConfig",
     "HydraComponentConfig",
     "ModelVersionsConfig",
     "ModelsConfig",
+    "ObjectVariantsConfig",
+    "PatchSimilarityConfig",
     "PipelineConfig",
+    "RegionSelectionConfig",
     "RuntimeConfig",
     "RuntimeEnvConfig",
     "RuntimeModelConfig",

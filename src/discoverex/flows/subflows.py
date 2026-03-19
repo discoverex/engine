@@ -10,6 +10,7 @@ from discoverex.config import PipelineConfig
 from .generate import run_generate_flow
 from .generate_variant_pack import run_generate_inpaint_variant_pack_flow
 from .verify import run_verify_flow
+from discoverex.application.use_cases.generate_verify_v2 import run as run_generate_verify_v2
 
 
 def generate_v1_compat(
@@ -38,6 +39,26 @@ def generate_v2_compat(
         args=args,
         config=config,
         execution_snapshot=execution_snapshot,
+        execution_snapshot_path=execution_snapshot_path,
+    )
+
+
+def generate_verify_v2(
+    *,
+    args: dict[str, Any],
+    config: PipelineConfig,
+    execution_snapshot: dict[str, Any] | None = None,
+    execution_snapshot_path: Path | None = None,
+) -> dict[str, str]:
+    context = build_context(
+        config=config,
+        execution_snapshot=execution_snapshot,
+        execution_snapshot_path=execution_snapshot_path,
+    )
+    return run_generate_verify_v2(
+        args=args,
+        config=config,
+        context=context,
         execution_snapshot_path=execution_snapshot_path,
     )
 
