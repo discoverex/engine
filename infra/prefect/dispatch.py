@@ -35,11 +35,9 @@ def dispatch_engine_job(
         build_execution_snapshot,
         load_pipeline_config,
         normalize_pipeline_config_for_worker_runtime,
+        _resolve_subflow,
         write_execution_snapshot,
     )
-    from discoverex.flows.generate import run_generate_flow
-    from discoverex.flows.verify import run_verify_flow
-    from discoverex.flows.subflows import animate_stub
 
     command = string_value(payload.get("command"))
     args = coerce_args(payload.get("args"))
@@ -69,11 +67,8 @@ def dispatch_engine_job(
         snapshot=execution_snapshot,
     )
 
-    flow_name = {
-        "generate": "discoverex-generate-pipeline",
-        "verify": "discoverex-verify-pipeline",
-        "animate": "discoverex-animate-pipeline",
-    }[command]
+    subflow = _resolve_subflow(cfg, command)
+    flow_name = getattr(subflow, "name", "") or getattr(subflow, "__name__", "") or command
     logger.info(
         "engine nested flow handoff: flow=%s command=%s config_name=%s override_count=%d",
         flow_name,
@@ -81,27 +76,12 @@ def dispatch_engine_job(
         resolved_config_name,
         len(overrides),
     )
-    if command == "generate":
-        result = run_generate_flow(
-            args=args,
-            config=cfg,
-            execution_snapshot=execution_snapshot,
-            execution_snapshot_path=execution_snapshot_path,
-        )
-    elif command == "verify":
-        result = run_verify_flow(
-            args=args,
-            config=cfg,
-            execution_snapshot=execution_snapshot,
-            execution_snapshot_path=execution_snapshot_path,
-        )
-    else:
-        result = animate_stub(
-            args=args,
-            config=cfg,
-            execution_snapshot=execution_snapshot,
-            execution_snapshot_path=execution_snapshot_path,
-        )
+    result = subflow(
+        args=args,
+        config=cfg,
+        execution_snapshot=execution_snapshot,
+        execution_snapshot_path=execution_snapshot_path,
+    )
     return DispatchResult(
         payload=result,
         stdout=json.dumps(result, ensure_ascii=True),
