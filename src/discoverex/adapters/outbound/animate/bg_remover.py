@@ -83,28 +83,57 @@ def _detect_bg_color(frame: np.ndarray) -> Any:
 def _build_protect_mask(
     video: Path, bg_color: np.ndarray, tolerance: int,
 ) -> np.ndarray | None:
-    """Build character protection mask from original image (same dir)."""
+    """Build character protection mask from original image alpha or silhouette."""
     import re
     stem = re.sub(r"_a\d+$", "", video.stem)
-    orig = video.parent / f"{stem}.png"
-    if not orig.exists():
-        logger.debug("[BgRemover] no original image for protection: %s", orig)
-        return None
-    img = np.array(Image.open(orig).convert("RGB"))
-    is_bg = np.all(np.abs(img.astype(int) - bg_color) < tolerance, axis=2)
-    labeled, _ = ndimage.label(is_bg)
-    h, w = img.shape[:2]
-    border_labels = (
-        set(labeled[0, :].tolist()) | set(labeled[-1, :].tolist())
-        | set(labeled[:, 0].tolist()) | set(labeled[:, -1].tolist())
-    )
-    border_labels.discard(0)
-    bg_mask = np.zeros((h, w), dtype=bool)
-    for lbl in border_labels:
-        bg_mask |= labeled == lbl
-    protect = ~bg_mask  # character region = NOT background
-    logger.info("[BgRemover] protection mask: %d%% character pixels", int(protect.sum() / protect.size * 100))
-    return protect
+    # 1. preprocessed 이미지 (같은 디렉토리)
+    orig_processed = video.parent / f"{stem}.png"
+    # 2. 원본 입력 이미지 (ComfyUI input 등) — alpha 채널 활용
+    orig_input = _find_original_input(video, stem)
+    # Alpha 채널 우선 사용
+    if orig_input and orig_input.exists():
+        img = Image.open(orig_input)
+        if img.mode == "RGBA":
+            alpha = np.array(img)[:, :, 3]
+            protect = alpha > 128  # 불투명 = 캐릭터
+            # preprocessed 크기에 맞추기
+            if orig_processed.exists():
+                target = Image.open(orig_processed).convert("RGB")
+                th, tw = np.array(target).shape[:2]
+                if protect.shape != (th, tw):
+                    resized = Image.fromarray(protect.astype(np.uint8) * 255).resize((tw, th), Image.NEAREST)
+                    protect = np.array(resized) > 128
+            logger.info("[BgRemover] alpha mask: %d%% character", int(protect.sum() / protect.size * 100))
+            return protect
+    # Fallback: flood-fill 기반
+    if orig_processed and orig_processed.exists():
+        img_arr = np.array(Image.open(orig_processed).convert("RGB"))
+        is_bg = np.all(np.abs(img_arr.astype(int) - bg_color) < tolerance, axis=2)
+        labeled, _ = ndimage.label(is_bg)
+        h, w = img_arr.shape[:2]
+        bl = set(labeled[0,:].tolist()) | set(labeled[-1,:].tolist()) | set(labeled[:,0].tolist()) | set(labeled[:,-1].tolist())
+        bl.discard(0)
+        bg_m = np.zeros((h, w), dtype=bool)
+        for lbl in bl:
+            bg_m |= labeled == lbl
+        protect = ~bg_m
+        logger.info("[BgRemover] silhouette mask: %d%% character", int(protect.sum() / protect.size * 100))
+        return protect
+    return None
+
+
+def _find_original_input(video: Path, stem: str) -> Path | None:
+    """Find original input image with alpha channel."""
+    import re
+    base = re.sub(r"_processed$", "", stem)
+    candidates = [
+        Path.home() / "ComfyUI" / "input" / f"{base}.png",
+        video.parent.parent.parent / "input" / f"{base}.png",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
 
 
 def _remove_bg_frame(
