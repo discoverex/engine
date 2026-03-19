@@ -40,7 +40,10 @@ class FfmpegBgRemover:
             raise RuntimeError(f"Frame extraction failed: {video}")
 
         bg_color = _detect_bg_color(frames[0])
-        protect = _build_protect_mask(video, bg_color, self.tolerance)
+        is_dark_bg = bg_color.mean() < 128
+        protect = None if is_dark_bg else _build_protect_mask(video, bg_color, self.tolerance)
+        if is_dark_bg:
+            logger.info("[BgRemover] dark bg (%.0f) → protection mask skipped", bg_color.mean())
         output_dir = video.parent / f"{video.stem}_transparent"
         output_dir.mkdir(parents=True, exist_ok=True)
 
