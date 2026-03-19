@@ -28,6 +28,7 @@ def build_runtime_env(
 ) -> dict[str, str]:
     env = os.environ.copy()
     env.update(coerce_env_map(job_spec.get("env")))
+    env.update(runtime_extra_env(job_spec))
     ensure_worker_artifact_env(env)
     py_path = str(repo_root() / "src")
     existing = env.get("PYTHONPATH", "")
@@ -49,6 +50,16 @@ def coerce_env_map(raw: object) -> dict[str, str]:
     if not isinstance(raw, dict):
         raise RuntimeError("job_spec.env must be a JSON object")
     return {str(key): str(value) for key, value in raw.items()}
+
+
+def runtime_extra_env(job_spec: dict[str, Any]) -> dict[str, str]:
+    payload = job_spec.get("inputs", {})
+    if not isinstance(payload, dict):
+        return {}
+    runtime = payload.get("runtime", {})
+    if not isinstance(runtime, dict):
+        return {}
+    return coerce_env_map(runtime.get("extra_env"))
 
 
 def ensure_worker_artifact_env(env: dict[str, str]) -> None:
@@ -109,7 +120,7 @@ def summarize_run_request(
     outputs_prefix: str,
 ) -> dict[str, Any]:
     runtime = payload.get("runtime", {})
-    runtime_env = runtime.get("extra_env", {}) if isinstance(runtime, dict) else {}
+    runtime_env = runtime_extra_env({"inputs": payload})
     resolved_config = redact_resolved_config(payload)
     env_presence = {
         "artifact_dir": bool(env.get(ARTIFACT_DIR_ENV, "").strip()),

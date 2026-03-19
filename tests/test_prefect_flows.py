@@ -20,6 +20,7 @@ from infra.prefect.job_spec import (
     config_name,
     mapped_command,
 )
+from infra.prefect.runtime import build_runtime_env
 
 
 class _FakeLogger:
@@ -258,6 +259,49 @@ def test_flow_kind_entrypoint_rejects_mismatched_command(
                 ensure_ascii=True,
             )
         )
+
+
+def test_build_runtime_env_merges_runtime_extra_env(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("BASE_ONLY", "1")
+    monkeypatch.setenv("SHARED_KEY", "from-os")
+    monkeypatch.setattr("infra.prefect.runtime.repo_root", lambda: tmp_path)
+
+    env = build_runtime_env(
+        job_spec={
+            "engine": "discoverex",
+            "run_mode": "repo",
+            "job_name": "job-1",
+            "env": {
+                "RUNNER_ONLY": "runner",
+                "SHARED_KEY": "from-job-spec-env",
+            },
+            "inputs": {
+                "runtime": {
+                    "extra_env": {
+                        "EXTRA_ONLY": "extra",
+                        "SHARED_KEY": "from-runtime-extra-env",
+                        "MLFLOW_TRACKING_URI": "http://mlflow.example.com",
+                        "UV_CACHE_DIR": "/cache/uv",
+                    }
+                }
+            },
+        },
+        flow_run_id="flow-1",
+        attempt=1,
+        outputs_prefix="jobs/flow-1/attempt-1/",
+        resume_key=None,
+        checkpoint_dir=None,
+    )
+
+    assert env["BASE_ONLY"] == "1"
+    assert env["RUNNER_ONLY"] == "runner"
+    assert env["EXTRA_ONLY"] == "extra"
+    assert env["SHARED_KEY"] == "from-runtime-extra-env"
+    assert env["MLFLOW_TRACKING_URI"] == "http://mlflow.example.com"
+    assert env["UV_CACHE_DIR"] == "/cache/uv"
 
 
 def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
