@@ -188,6 +188,10 @@ def _job_spec_for_case(
     job_spec["job_name"] = (
         f"{sweep_id}--{search_stage}--{combo['combo_id']}--{scenario['scenario_id']}"
     )
+    safe_experiment = experiment_name.replace("/", "-").strip() or "experiment"
+    job_spec["outputs_prefix"] = (
+        f"exp/{safe_experiment}/{sweep_id}/{job_spec['job_name']}/"
+    )
     return job_spec
 
 
