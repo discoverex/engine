@@ -6,6 +6,7 @@ Registered onto the Flask app via register_extra_routes().
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -156,3 +157,14 @@ def register_extra_routes(
     @app.route("/api/video_thumb/<path:filepath>")
     def api_video_thumb(filepath: str) -> Any:
         return extract_thumbnail(filepath, output_dir)
+
+    # --- Available models ---
+
+    @app.route("/api/available_models")
+    def api_available_models() -> Any:
+        import glob as g
+
+        comfyui_root = os.environ.get("COMFYUI_ROOT", os.path.expanduser("~/ComfyUI"))
+        unet_dir = Path(comfyui_root) / "models" / "unet"
+        installed = {Path(f).name for f in g.glob(str(unet_dir / "*.gguf"))}
+        return jsonify({"installed": sorted(installed)})

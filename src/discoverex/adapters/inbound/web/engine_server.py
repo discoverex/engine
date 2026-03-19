@@ -28,9 +28,7 @@ DIR_MOTION = OUTPUT_DIR / "motion"
 DASHBOARD_PATH = Path(
     os.environ.get(
         "DASHBOARD_HTML",
-        os.path.expanduser(
-            "~/anim_pipeline/image_pipeline/sprite_gen/wan_dashboard.html"
-        ),
+        str(Path(__file__).parent / "dashboard.html"),
     )
 )
 
