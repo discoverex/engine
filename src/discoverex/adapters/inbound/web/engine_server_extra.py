@@ -40,13 +40,18 @@ def register_extra_routes(
         video_path = data.get("video_path", "")
         preset = data.get("preset", "original")
         fps = int(data.get("fps", 16))
+        target_size = data.get("target_size")
         vid = Path(video_path)
         if not vid.exists():
             return jsonify({"error": "video_path not found"}), 400
         transparent = orchestrator.bg_remover.remove(vid, fps=fps)
         if not transparent or not transparent.frames:
             return jsonify({"error": "bg removal failed"}), 500
-        converted = orchestrator.format_converter.convert(transparent.frames, preset, fps)
+        if target_size:
+            converted = orchestrator.format_converter.convert_with_opts(
+                transparent.frames, fps=fps, max_size=int(target_size))
+        else:
+            converted = orchestrator.format_converter.convert(transparent.frames, preset, fps)
         lottie_info = None
         if converted.lottie_path and Path(str(converted.lottie_path)).exists():
             lp = Path(str(converted.lottie_path))
@@ -54,7 +59,8 @@ def register_extra_routes(
                 "fps": fps,
                 "frame_count": len(transparent.frames),
                 "duration_ms": round(len(transparent.frames) / fps * 1000),
-                "width": 0, "height": 0,
+                "width": int(target_size) if target_size else 0,
+                "height": int(target_size) if target_size else 0,
                 "file_size_mb": round(lp.stat().st_size / (1024 * 1024), 1),
             }
         return jsonify({

@@ -54,6 +54,22 @@ class MultiFormatConverter:
             apng_path=apng_path, webm_path=webm_path, lottie_path=lottie_path,
         )
 
+    def convert_with_opts(
+        self, frames: list[Path], fps: int = 16,
+        max_size: int | None = None, max_frames: int | None = None,
+        png_optimize: bool = True, **_: Any,
+    ) -> ConvertedAsset:
+        """Convert with explicit size/frame options (for target_size slider)."""
+        if not frames:
+            raise FileNotFoundError("No PNG frames provided")
+        output_dir = frames[0].parent
+        stem = frames[0].stem.rsplit("_frame_", 1)[0]
+        selected = _select_frames(frames, max_frames)
+        apng_path = _save_apng(selected, output_dir / f"{stem}.apng", fps)
+        webm_path = _save_webm(frames, output_dir / f"{stem}.webm", fps, stem)
+        lottie_path = _save_lottie(selected, output_dir / f"{stem}.json", fps, max_size, png_optimize)
+        return ConvertedAsset(apng_path=apng_path, webm_path=webm_path, lottie_path=lottie_path)
+
 
 def _select_frames(frames: list[Path], max_frames: int | None) -> list[Path]:
     if not max_frames or len(frames) <= max_frames:
