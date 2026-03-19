@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 from time import perf_counter
@@ -63,6 +64,39 @@ def normalize_pipeline_config_for_worker_runtime(config: Any) -> Any:
     return _normalize(config)
 
 
+def _log_runtime_env_diagnostics() -> None:
+    model_cache_dir = os.getenv("MODEL_CACHE_DIR", "").strip()
+    hf_home = os.getenv("HF_HOME", "").strip()
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "").strip()
+    tracking_proxy = os.getenv("MLFLOW_TRACKING_PROXY_URL", "").strip()
+    metadata_db_url = os.getenv("METADATA_DB_URL", "").strip()
+
+    logger.info(
+        "engine runtime env: model_cache_dir=%s hf_home=%s mlflow_tracking_uri=%s mlflow_tracking_proxy=%s metadata_db_url=%s",
+        bool(model_cache_dir),
+        bool(hf_home),
+        bool(tracking_uri),
+        bool(tracking_proxy),
+        bool(metadata_db_url),
+    )
+    if not model_cache_dir:
+        logger.warning(
+            "MODEL_CACHE_DIR is not set; model adapters will fall back to HF_HOME or a user cache directory"
+        )
+    if not tracking_uri:
+        logger.warning(
+            "MLFLOW_TRACKING_URI is not set; runtime will fall back to config/default tracking storage"
+        )
+    elif tracking_uri.startswith(("http://", "https://")) and not tracking_proxy:
+        logger.warning(
+            "MLFLOW_TRACKING_URI is remote but MLFLOW_TRACKING_PROXY_URL is not set; worker launcher may reject remote tracking"
+        )
+    if not metadata_db_url:
+        logger.info(
+            "METADATA_DB_URL is not set; metadata storage will use the configured local/json fallback"
+        )
+
+
 def _resolve_subflow(config: "PipelineConfig", command: FlowCommand) -> SubflowHandler:
     from hydra.utils import instantiate
 
@@ -88,6 +122,7 @@ def engine_entry_flow(
         config_name,
         len(overrides or []),
     )
+    _log_runtime_env_diagnostics()
     cfg = load_pipeline_config(
         config_name=config_name,
         config_dir=config_dir,

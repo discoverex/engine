@@ -398,6 +398,7 @@ class PixArtSigmaBackgroundGenerationModel:
             width=width,
             height=height,
             generator=generator,
+            clean_caption=False,
         )
         images = getattr(result, "images", None)
         if not images:
@@ -551,7 +552,7 @@ class PixArtSigmaBackgroundGenerationModel:
                 "diffusers pixart runtime unavailable. Install compatible ml-gpu dependencies."
             ) from exc
         try:
-            T5Tokenizer.from_pretrained("t5-3b", legacy=True)
+            T5Tokenizer.from_pretrained("t5-3b", legacy=False)
         except Exception:
             try:
                 import importlib
@@ -571,7 +572,7 @@ class PixArtSigmaBackgroundGenerationModel:
                     stderr=subprocess.DEVNULL,
                 )
                 T5Tokenizer = importlib.reload(T5Tokenizer)
-                T5Tokenizer.from_pretrained("t5-3b", legacy=True)
+                T5Tokenizer.from_pretrained("t5-3b", legacy=False)
             except Exception as exc2:
                 logger.warning("tokenizer install failed: %s", exc2)
         torch_dtype = torch.float32 if "32" in handle.dtype else torch.float16

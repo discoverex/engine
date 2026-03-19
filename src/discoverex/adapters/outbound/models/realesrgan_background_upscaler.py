@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +33,7 @@ class RealEsrganBackgroundUpscalerModel:
         self.tile_pad = tile_pad
         self.pre_pad = pre_pad
         self.strict_runtime = strict_runtime
-        self.weights_cache_dir = weights_cache_dir
+        self.weights_cache_dir = str(_resolve_shared_cache_dir(weights_cache_dir))
         self._upsampler: Any | None = None
 
     def load(self, model_ref_or_version: str) -> ModelHandle:
@@ -81,6 +83,7 @@ class RealEsrganBackgroundUpscalerModel:
     def _load_upsampler(self, handle: ModelHandle) -> Any:
         if self._upsampler is not None:
             return self._upsampler
+        _ensure_torchvision_compat()
         try:
             import torch  # type: ignore
             from basicsr.archs.rrdbnet_arch import RRDBNet  # type: ignore
@@ -141,3 +144,33 @@ class RealEsrganBackgroundUpscalerModel:
     def unload(self) -> None:
         clear_model_runtime(self._upsampler)
         self._upsampler = None
+
+
+def _resolve_shared_cache_dir(raw_path: str) -> Path:
+    path = Path(raw_path).expanduser()
+    if path.is_absolute():
+        return path
+    model_cache_dir = os.getenv("MODEL_CACHE_DIR", "").strip()
+    if model_cache_dir:
+        base = Path(model_cache_dir).expanduser()
+        parts = [part for part in path.parts if part not in {".", ".cache"}]
+        return base.joinpath(*parts) if parts else base
+    hf_home = os.getenv("HF_HOME", "").strip()
+    if hf_home:
+        base = Path(hf_home).expanduser()
+    else:
+        base = Path.home() / ".cache" / "huggingface" / "discoverex"
+    parts = [part for part in path.parts if part not in {"."}]
+    if parts and parts[0] == ".cache":
+        parts = parts[1:]
+    return base.joinpath(*parts) if parts else base
+
+
+def _ensure_torchvision_compat() -> None:
+    if "torchvision.transforms.functional_tensor" in sys.modules:
+        return
+    try:
+        from torchvision.transforms import _functional_tensor  # type: ignore
+    except Exception:
+        return
+    sys.modules["torchvision.transforms.functional_tensor"] = _functional_tensor

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -80,7 +81,7 @@ class LayerDiffuseObjectGenerationModel:
         self.default_negative_prompt = default_negative_prompt
         self.default_num_inference_steps = default_num_inference_steps
         self.default_guidance_scale = default_guidance_scale
-        self.weights_cache_dir = weights_cache_dir
+        self.weights_cache_dir = str(_resolve_shared_cache_dir(weights_cache_dir))
         self._pipe: Any | None = None
         self._transparent_decoder: Any | None = None
         self._layerdiffuse_applied = False
@@ -294,3 +295,23 @@ class LayerDiffuseObjectGenerationModel:
                 pass
         self._transparent_decoder = None
         self._layerdiffuse_applied = False
+
+
+def _resolve_shared_cache_dir(raw_path: str) -> Path:
+    path = Path(raw_path).expanduser()
+    if path.is_absolute():
+        return path
+    model_cache_dir = os.getenv("MODEL_CACHE_DIR", "").strip()
+    if model_cache_dir:
+        base = Path(model_cache_dir).expanduser()
+        parts = [part for part in path.parts if part not in {".", ".cache"}]
+        return base.joinpath(*parts) if parts else base
+    hf_home = os.getenv("HF_HOME", "").strip()
+    if hf_home:
+        base = Path(hf_home).expanduser()
+    else:
+        base = Path.home() / ".cache" / "huggingface" / "discoverex"
+    parts = [part for part in path.parts if part not in {"."}]
+    if parts and parts[0] == ".cache":
+        parts = parts[1:]
+    return base.joinpath(*parts) if parts else base
