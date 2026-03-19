@@ -33,7 +33,7 @@ def load_inpaint_pipe(
     pipe = AutoPipelineForInpainting.from_pretrained(  # type: ignore[no-untyped-call]
         model_id,
         revision=revision,
-        torch_dtype=torch_dtype,
+        dtype=torch_dtype,
     )
     return configure_diffusers_pipeline(
         pipe,

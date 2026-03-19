@@ -218,7 +218,7 @@ class LayerDiffuseObjectGenerationModel:
         pipe = AutoPipelineForText2Image.from_pretrained(
             self.model_id,
             revision=self.revision,
-            torch_dtype=torch_dtype,
+            dtype=torch_dtype,
             variant=variant,
         )
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(

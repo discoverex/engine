@@ -131,7 +131,7 @@ class TinySDFxModel:
         pipe = StableDiffusionPipeline.from_pretrained(  # type: ignore[no-untyped-call]
             self.model_id,
             revision=self.revision,
-            torch_dtype=torch_dtype,
+            dtype=torch_dtype,
             safety_checker=None,
             feature_extractor=None,
             requires_safety_checker=False,

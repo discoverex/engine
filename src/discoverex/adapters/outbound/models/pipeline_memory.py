@@ -24,10 +24,17 @@ def configure_diffusers_pipeline(
         _enable_fp8_layerwise_casting(pipe, handle=handle, torch_mod=torch_mod)
     if enable_attention_slicing and hasattr(pipe, "enable_attention_slicing"):
         pipe.enable_attention_slicing("auto")
-    if enable_vae_slicing and hasattr(pipe, "enable_vae_slicing"):
-        pipe.enable_vae_slicing()
-    if enable_vae_tiling and hasattr(pipe, "enable_vae_tiling"):
-        pipe.enable_vae_tiling()
+    vae = getattr(pipe, "vae", None)
+    if enable_vae_slicing:
+        if vae is not None and hasattr(vae, "enable_slicing"):
+            vae.enable_slicing()
+        elif hasattr(pipe, "enable_vae_slicing"):
+            pipe.enable_vae_slicing()
+    if enable_vae_tiling:
+        if vae is not None and hasattr(vae, "enable_tiling"):
+            vae.enable_tiling()
+        elif hasattr(pipe, "enable_vae_tiling"):
+            pipe.enable_vae_tiling()
     if (
         enable_xformers_memory_efficient_attention
         and hasattr(pipe, "enable_xformers_memory_efficient_attention")

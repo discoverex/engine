@@ -579,7 +579,7 @@ class PixArtSigmaBackgroundGenerationModel:
         pipe = PixArtSigmaPipeline.from_pretrained(
             self.model_id,
             revision=self.revision,
-            torch_dtype=torch_dtype,
+            dtype=torch_dtype,
         )
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(
             pipe.scheduler.config,
@@ -618,7 +618,7 @@ class PixArtSigmaBackgroundGenerationModel:
         torch_dtype = torch.float32 if "32" in handle.dtype else torch.float16
         pipe = AutoPipelineForImage2Image.from_pretrained(
             self.detail_model_id,
-            torch_dtype=torch_dtype,
+            dtype=torch_dtype,
         )
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(
             pipe.scheduler.config,

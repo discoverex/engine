@@ -236,7 +236,7 @@ class SdxlBackgroundGenerationModel:
         pipe = AutoPipelineForText2Image.from_pretrained(  # type: ignore[no-untyped-call]
             self.model_id,
             revision=self.revision,
-            torch_dtype=torch_dtype,
+            dtype=torch_dtype,
         )
         self._base_pipe = configure_diffusers_pipeline(
             pipe,
@@ -269,7 +269,7 @@ class SdxlBackgroundGenerationModel:
         torch_dtype = torch.float32 if "32" in handle.dtype else torch.float16
         pipe = AutoPipelineForImage2Image.from_pretrained(  # type: ignore[no-untyped-call]
             self.refiner_model_id,
-            torch_dtype=torch_dtype,
+            dtype=torch_dtype,
         )
         self._refiner_pipe = configure_diffusers_pipeline(
             pipe,

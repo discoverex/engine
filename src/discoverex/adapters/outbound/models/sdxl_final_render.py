@@ -180,7 +180,7 @@ class SdxlFinalRenderModel:
         pipe = AutoPipelineForImage2Image.from_pretrained(  # type: ignore[no-untyped-call]
             self.model_id,
             revision=self.revision,
-            torch_dtype=torch_dtype,
+            dtype=torch_dtype,
         )
         self._pipe = configure_diffusers_pipeline(
             pipe,
