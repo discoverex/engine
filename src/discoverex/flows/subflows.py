@@ -107,7 +107,19 @@ def animate_pipeline(
             ),
         }
 
-    orchestrator = build_animate_context(config.model_dump())
+    # PipelineConfig strips animate-specific keys (extra="ignore").
+    # Re-compose raw Hydra config to preserve animate models/adapters.
+    if execution_snapshot and execution_snapshot.get("config_name"):
+        from discoverex.config_loader import load_raw_animate_config
+
+        raw_config = load_raw_animate_config(
+            config_name=execution_snapshot["config_name"],
+            config_dir=execution_snapshot.get("config_dir", "conf"),
+            overrides=execution_snapshot.get("overrides", []),
+        )
+    else:
+        raw_config = config.model_dump()
+    orchestrator = build_animate_context(raw_config)
     result = orchestrator.run(Path(image_path))
 
     payload: dict[str, Any] = {

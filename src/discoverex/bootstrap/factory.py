@@ -164,6 +164,14 @@ def build_animate_context(
     ai_validator = instantiate(cfg.models.ai_validator.as_kwargs())
     post_motion = instantiate(cfg.models.post_motion_classifier.as_kwargs())
 
+    # load() lifecycle for model ports that require initialization
+    for adapter in (
+        mode_classifier, vision_analyzer, animation_generator,
+        ai_validator, post_motion,
+    ):
+        if hasattr(adapter, "load"):
+            adapter.load(None)
+
     bg_remover = instantiate(cfg.animate_adapters.bg_remover.as_kwargs())
     numerical_validator = instantiate(cfg.animate_adapters.numerical_validator.as_kwargs())
     mask_generator = instantiate(cfg.animate_adapters.mask_generator.as_kwargs())

@@ -33,7 +33,7 @@ class AnimateThresholdsConfig(BaseModel):
 
 
 class AnimatePipelineConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     models: AnimateModelsConfig
     animate_adapters: AnimateAdaptersConfig
