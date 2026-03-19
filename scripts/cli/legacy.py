@@ -20,12 +20,12 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Run the legacy prompt-driven generation on CPU.",
 )
-def generate_cpu(ctx: typer.Context):
+def generate_cpu(ctx: typer.Context) -> None:
     script_path = SCRIPTS_DIR / "run_generate_cpu_sdxl.sh"
     if not script_path.exists():
         typer.secho(f"Error: Script not found at {script_path}", fg=typer.colors.RED)
         raise typer.Exit(1)
-    
+
     # Run the shell script
     cmd = ["bash", str(script_path)] + ctx.args
     proc = subprocess.run(cmd, check=False)
@@ -36,12 +36,12 @@ def generate_cpu(ctx: typer.Context):
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Check the contents of a MinIO scene bundle.",
 )
-def check_minio(ctx: typer.Context):
+def check_minio(ctx: typer.Context) -> None:
     script_path = SCRIPTS_DIR / "check_minio_scene_bundle.py"
     if not script_path.exists():
         typer.secho(f"Error: Script not found at {script_path}", fg=typer.colors.RED)
         raise typer.Exit(1)
-    
+
     # Run the python script
     cmd = [sys.executable, str(script_path)] + ctx.args
     proc = subprocess.run(cmd, check=False)

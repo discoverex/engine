@@ -3,24 +3,34 @@ from __future__ import annotations
 
 import argparse
 import csv
+import importlib
 import itertools
 import json
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
+if TYPE_CHECKING:
+    pass
+
 try:
-    from .branch_deployments import experiment_deployment_name
-    from .settings import SETTINGS
+    from infra.register import branch_deployments as _branch_deployments
+    from infra.register import settings as _settings
 except ImportError:  # pragma: no cover - direct script execution path
-    from branch_deployments import experiment_deployment_name
-    from settings import SETTINGS
+    _branch_deployments = importlib.import_module("branch_deployments")
+    _settings = importlib.import_module("settings")
+
+experiment_deployment_name = _branch_deployments.experiment_deployment_name
+SETTINGS = _settings.SETTINGS
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_SPEC = (
-    SCRIPT_DIR / "job_specs" / "real-generate-pixart-hidden-object-naturalness-v2-8gb-safe.yaml"
+    SCRIPT_DIR
+    / "job_specs"
+    / "real-generate-pixart-hidden-object-naturalness-v2-8gb-safe.yaml"
 )
 DEFAULT_EXPERIMENT = "naturalness"
 
@@ -29,7 +39,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Submit a naturalness parameter sweep to the generate Prefect flow."
     )
-    parser.add_argument("sweep_spec", help="YAML file defining scenarios and parameter grid")
+    parser.add_argument(
+        "sweep_spec", help="YAML file defining scenarios and parameter grid"
+    )
     parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
     parser.add_argument("--deployment", default=None)
     parser.add_argument("--branch", default=SETTINGS.register_flow_ref or "dev")
@@ -62,7 +74,10 @@ def _load_scenarios(spec: dict[str, Any], sweep_path: Path) -> list[dict[str, st
     scenarios = spec.get("scenarios", [])
     if not isinstance(scenarios, list) or not scenarios:
         raise SystemExit("sweep spec requires scenarios or scenarios_csv")
-    return [_normalized_scenario(dict(item), index + 1) for index, item in enumerate(scenarios)]
+    return [
+        _normalized_scenario(dict(item), index + 1)
+        for index, item in enumerate(scenarios)
+    ]
 
 
 def _normalized_scenario(row: dict[str, Any], index: int) -> dict[str, str]:
@@ -70,7 +85,9 @@ def _normalized_scenario(row: dict[str, Any], index: int) -> dict[str, str]:
     background_prompt = str(row.get("background_prompt", "")).strip()
     object_prompt = str(row.get("object_prompt", "")).strip()
     if not background_prompt or not object_prompt:
-        raise SystemExit(f"scenario {scenario_id} requires background_prompt and object_prompt")
+        raise SystemExit(
+            f"scenario {scenario_id} requires background_prompt and object_prompt"
+        )
     output = {
         "scenario_id": scenario_id,
         "background_prompt": background_prompt,
@@ -167,11 +184,11 @@ def _job_spec_for_case(
     scenario_overrides = str(scenario.get("scenario_overrides", "")).strip()
     if scenario_overrides:
         overrides.extend(
-            item.strip()
-            for item in scenario_overrides.split("||")
-            if item.strip()
+            item.strip() for item in scenario_overrides.split("||") if item.strip()
         )
-    overrides.extend(f"{key}={value}" for key, value in combo.items() if key != "combo_id")
+    overrides.extend(
+        f"{key}={value}" for key, value in combo.items() if key != "combo_id"
+    )
     overrides.append(f"adapters.tracker.experiment_name={experiment_name}")
     args.update(scenario)
     args["sweep_id"] = sweep_id
@@ -315,12 +332,14 @@ def submit_manifest(
     }
 
 
-def _load_submit_job_spec():
+def _load_submit_job_spec() -> Callable[..., dict[str, Any]]:
     try:
-        from .register_orchestrator_job import submit_job_spec as fn
+        from infra.register.register_orchestrator_job import submit_job_spec
     except ImportError:  # pragma: no cover - direct script execution path
-        from register_orchestrator_job import submit_job_spec as fn
-    return fn
+        submit_job_spec = importlib.import_module(
+            "register_orchestrator_job"
+        ).submit_job_spec
+    return submit_job_spec
 
 
 def main() -> int:
@@ -340,7 +359,9 @@ def main() -> int:
         if args.output
         else spec_path.with_suffix(".submitted.json")
     )
-    output_path.write_text(json.dumps(output, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+    output_path.write_text(
+        json.dumps(output, ensure_ascii=True, indent=2) + "\n", encoding="utf-8"
+    )
     print(json.dumps(output, ensure_ascii=True, indent=2))
     return 0
 

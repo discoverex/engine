@@ -4,6 +4,7 @@ import asyncio
 import csv
 import json
 import subprocess
+import sys
 from collections.abc import Mapping
 from copy import deepcopy
 from datetime import datetime
@@ -45,9 +46,7 @@ DEFAULT_REGISTER_JOB_SPEC = (
     / "job_specs"
     / "real-generate-pixart-hidden-object-naturalness-v2-8gb-safe.yaml"
 )
-DEFAULT_NATURALNESS_SWEEP_SPEC = (
-    INFRA_DIR / "sweeps" / "naturalness_medium.yaml"
-)
+DEFAULT_NATURALNESS_SWEEP_SPEC = INFRA_DIR / "sweeps" / "naturalness_medium.yaml"
 DEFAULT_EXPERIMENT_QUEUE = "gpu-fixed-batch"
 DEFAULT_EXPERIMENT_NAME = "naturalness"
 
@@ -67,14 +66,12 @@ def _experiment_deployment_name(branch: str, experiment: str) -> str:
     return experiment_deployment_name(branch, experiment=experiment)
 
 
-def _run_infra_script(script_name: str, args: list[str]) -> int:
-    script_path = INFRA_DIR / script_name
-    if not script_path.exists():
-        typer.secho(f"Error: Script not found at {script_path}", fg=typer.colors.RED)
+def _run_infra_script(module_name: str, args: list[str]) -> int:
+    module_path = REPO_ROOT / Path(*module_name.split("."))
+    if not module_path.with_suffix(".py").exists():
+        typer.secho(f"Error: Module not found at {module_path}.py", fg=typer.colors.RED)
         return 1
-    import sys
-
-    cmd = [sys.executable, str(script_path)] + args
+    cmd = [sys.executable, "-m", module_name, *args]
     proc = subprocess.run(cmd, check=False)
     return proc.returncode
 
@@ -143,17 +140,17 @@ def _build_job_spec_json_for_row(
     missing = [column for column in required_columns if not _row_value(row, column)]
     if missing:
         columns = ", ".join(missing)
-        raise typer.BadParameter(f"csv row {row_index} missing required column(s): {columns}")
+        raise typer.BadParameter(
+            f"csv row {row_index} missing required column(s): {columns}"
+        )
 
     args["background_prompt"] = _row_value(row, "background_prompt")
     args["object_prompt"] = _row_value(row, "object_prompt")
-    args["background_negative_prompt"] = (
-        _row_value(row, "background_negative_prompt")
-        or str(args.get("background_negative_prompt", ""))
-    )
-    args["object_negative_prompt"] = (
-        _row_value(row, "object_negative_prompt")
-        or str(args.get("object_negative_prompt", ""))
+    args["background_negative_prompt"] = _row_value(
+        row, "background_negative_prompt"
+    ) or str(args.get("background_negative_prompt", ""))
+    args["object_negative_prompt"] = _row_value(row, "object_negative_prompt") or str(
+        args.get("object_negative_prompt", "")
     )
     args["final_prompt"] = _row_value(row, "final_prompt") or str(
         args.get("final_prompt", "")
@@ -206,7 +203,7 @@ async def _read_prefect_logs(flow_run_id: str, limit: int) -> list[PrefectLog]:
     from prefect.client.orchestration import get_client
     from prefect.settings import temporary_settings
 
-    # Using Any for settings mapping as PREFECT_API_URL/PREFECT_CLIENT_CUSTOM_HEADERS 
+    # Using Any for settings mapping as PREFECT_API_URL/PREFECT_CLIENT_CUSTOM_HEADERS
     # are complex objects not easily typed here.
     with temporary_settings(updates=_prefect_client_settings()):
         async with get_client() as client:
@@ -222,7 +219,6 @@ async def _describe_flow_run_tree(flow_run_id: str, depth: int = 2) -> list[str]
     from prefect.client.orchestration import get_client
     from prefect.client.schemas.filters import (
         FlowRunFilter,
-        FlowRunFilterId,
         TaskRunFilter,
         TaskRunFilterFlowRunId,
     )
@@ -253,7 +249,9 @@ async def _describe_flow_run_tree(flow_run_id: str, depth: int = 2) -> list[str]
         if parent_task_ids:
             child_runs = list(
                 await client.read_flow_runs(
-                    flow_run_filter=FlowRunFilter(parent_task_run_id={"any_": parent_task_ids}),
+                    flow_run_filter=FlowRunFilter(
+                        parent_task_run_id={"any_": parent_task_ids}
+                    ),
                     limit=100,
                 )
             )
@@ -268,10 +266,8 @@ async def _describe_flow_run_tree(flow_run_id: str, depth: int = 2) -> list[str]
             if child_run is not None:
                 child_suffix = f" child_flow={child_run.id}"
             lines.append(
-                (
-                    f"{'  ' * (level + 1)}task {task_run.name} "
-                    f"[{task_run.state_name}] id={task_run.id}{child_suffix}"
-                )
+                f"{'  ' * (level + 1)}task {task_run.name} "
+                f"[{task_run.state_name}] id={task_run.id}{child_suffix}"
             )
             if child_run is not None:
                 lines.extend(await _visit(client, child_run.id, level + 2))
@@ -289,11 +285,17 @@ async def _describe_flow_run_tree(flow_run_id: str, depth: int = 2) -> list[str]
 )
 def deploy_flow(
     ctx: typer.Context,
-    flow_kind: str = typer.Argument(..., help="One of: generate, verify, animate, combined."),
+    flow_kind: str = typer.Argument(
+        ..., help="One of: generate, verify, animate, combined."
+    ),
 ) -> None:
     if flow_kind not in SUPPORTED_FLOW_KINDS:
-        raise typer.BadParameter(f"flow_kind must be one of: {', '.join(SUPPORTED_FLOW_KINDS)}")
-    exit_code = _run_infra_script("deploy_prefect_flows.py", ["--flow-kind", flow_kind, *ctx.args])
+        raise typer.BadParameter(
+            f"flow_kind must be one of: {', '.join(SUPPORTED_FLOW_KINDS)}"
+        )
+    exit_code = _run_infra_script(
+        "infra.register.deploy_prefect_flows", ["--flow-kind", flow_kind, *ctx.args]
+    )
     raise typer.Exit(exit_code)
 
 
@@ -304,10 +306,14 @@ def deploy_flow(
 )
 def register_flow(
     ctx: typer.Context,
-    flow_kind: str = typer.Argument(..., help="One of: generate, verify, animate, combined."),
+    flow_kind: str = typer.Argument(
+        ..., help="One of: generate, verify, animate, combined."
+    ),
 ) -> None:
     if flow_kind not in SUPPORTED_FLOW_KINDS:
-        raise typer.BadParameter(f"flow_kind must be one of: {', '.join(SUPPORTED_FLOW_KINDS)}")
+        raise typer.BadParameter(
+            f"flow_kind must be one of: {', '.join(SUPPORTED_FLOW_KINDS)}"
+        )
     branch, remaining = _extract_option(ctx.args, "--branch")
     if not branch:
         typer.secho("Error: --branch is required.", fg=typer.colors.RED)
@@ -319,7 +325,7 @@ def register_flow(
     ]
     if not _contains_any(remaining, ("--job-spec-file", "--job-spec-json")):
         submit_args.extend(["--job-spec-file", str(DEFAULT_REGISTER_JOB_SPEC)])
-    exit_code = _run_infra_script("submit_job_spec.py", submit_args)
+    exit_code = _run_infra_script("infra.register.submit_job_spec", submit_args)
     raise typer.Exit(exit_code)
 
 
@@ -331,7 +337,9 @@ def register_flow(
 def register_batch(
     ctx: typer.Context,
     csv_path: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
-    flow_kind: str = typer.Option("generate", "--flow-kind", help="One of: generate, verify, animate, combined."),
+    flow_kind: str = typer.Option(
+        "generate", "--flow-kind", help="One of: generate, verify, animate, combined."
+    ),
     job_spec_file: Path = typer.Option(
         DEFAULT_REGISTER_JOB_SPEC,
         "--job-spec-file",
@@ -342,7 +350,9 @@ def register_batch(
     ),
 ) -> None:
     if flow_kind not in SUPPORTED_FLOW_KINDS:
-        raise typer.BadParameter(f"flow_kind must be one of: {', '.join(SUPPORTED_FLOW_KINDS)}")
+        raise typer.BadParameter(
+            f"flow_kind must be one of: {', '.join(SUPPORTED_FLOW_KINDS)}"
+        )
     branch, remaining = _extract_option(ctx.args, "--branch")
     if not branch:
         typer.secho("Error: --branch is required.", fg=typer.colors.RED)
@@ -364,7 +374,7 @@ def register_batch(
             "--job-spec-json",
             _build_job_spec_json_for_row(template, row, row_index=row_index),
         ]
-        exit_code = _run_infra_script("submit_job_spec.py", submit_args)
+        exit_code = _run_infra_script("infra.register.submit_job_spec", submit_args)
         if exit_code != 0:
             raise typer.Exit(exit_code)
 
@@ -389,12 +399,14 @@ def register_experiment_sweep(
     branch, remaining = _extract_option(ctx.args, "--branch")
     submit_args = [str(sweep_spec)]
     if branch:
-        submit_args.extend(["--deployment", _experiment_deployment_name(branch, experiment)])
+        submit_args.extend(
+            ["--deployment", _experiment_deployment_name(branch, experiment)]
+        )
         submit_args.extend(["--branch", branch])
     submit_args.extend(["--experiment", experiment])
     submit_args.extend(remaining)
     exit_code = _run_infra_script(
-        "naturalness_sweep.py",
+        "infra.register.naturalness_sweep",
         submit_args,
     )
     raise typer.Exit(exit_code)
@@ -417,11 +429,13 @@ def deploy_experiment(
         DEFAULT_EXPERIMENT_QUEUE,
     ]
     if branch:
-        deploy_args.extend(["--deployment-name", _experiment_deployment_name(branch, experiment)])
+        deploy_args.extend(
+            ["--deployment-name", _experiment_deployment_name(branch, experiment)]
+        )
         deploy_args.extend(["--branch", branch])
     deploy_args.extend(remaining)
     exit_code = _run_infra_script(
-        "deploy_prefect_flows.py",
+        "infra.register.deploy_prefect_flows",
         deploy_args,
     )
     raise typer.Exit(exit_code)
@@ -434,7 +448,7 @@ def deploy_experiment(
 )
 def deploy(ctx: typer.Context) -> None:
     exit_code = _run_infra_script(
-        "deploy_prefect_flows.py",
+        "infra.register.deploy_prefect_flows",
         ["--flow-kind", DEFAULT_FLOW_KIND, *ctx.args],
     )
     raise typer.Exit(exit_code)
@@ -462,7 +476,7 @@ def register(ctx: typer.Context) -> None:
     ]
     if not _contains_any(remaining, ("--job-spec-file", "--job-spec-json")):
         submit_args.extend(["--job-spec-file", str(DEFAULT_REGISTER_JOB_SPEC)])
-    exit_code = _run_infra_script("submit_job_spec.py", submit_args)
+    exit_code = _run_infra_script("infra.register.submit_job_spec", submit_args)
     raise typer.Exit(exit_code)
 
 
@@ -472,7 +486,7 @@ def register(ctx: typer.Context) -> None:
     help="Register a job using the raw orchestrator script.",
 )
 def register_raw(ctx: typer.Context) -> None:
-    exit_code = _run_infra_script("register_orchestrator_job.py", ctx.args)
+    exit_code = _run_infra_script("infra.register.register_orchestrator_job", ctx.args)
     raise typer.Exit(exit_code)
 
 
@@ -481,7 +495,7 @@ def register_raw(ctx: typer.Context) -> None:
     help="Build a job specification JSON file.",
 )
 def build_spec(ctx: typer.Context) -> None:
-    exit_code = _run_infra_script("build_job_spec.py", ctx.args)
+    exit_code = _run_infra_script("infra.register.build_job_spec", ctx.args)
     raise typer.Exit(exit_code)
 
 
@@ -490,7 +504,7 @@ def build_spec(ctx: typer.Context) -> None:
     help="Submit a pre-built job specification to Prefect.",
 )
 def submit_spec(ctx: typer.Context) -> None:
-    exit_code = _run_infra_script("submit_job_spec.py", ctx.args)
+    exit_code = _run_infra_script("infra.register.submit_job_spec", ctx.args)
     raise typer.Exit(exit_code)
 
 
@@ -516,12 +530,15 @@ async def _fetch_logs(flow_run_id: str, limit: int = 200) -> None:
             level_name = str(getattr(log, "level_name", getattr(log, "level", "")))
             logger_name = log.name
             typer.echo(
-                typer.style(f"[{timestamp}] ", fg=typer.colors.BRIGHT_BLACK) +
-                typer.style(f"{logger_name} | {level_name.ljust(7)} | ", fg=color) +
-                f"{log.message}"
+                typer.style(f"[{timestamp}] ", fg=typer.colors.BRIGHT_BLACK)
+                + typer.style(f"{logger_name} | {level_name.ljust(7)} | ", fg=color)
+                + f"{log.message}"
             )
     except ImportError:
-        typer.secho("Error: prefect library not found in current environment.", fg=typer.colors.RED)
+        typer.secho(
+            "Error: prefect library not found in current environment.",
+            fg=typer.colors.RED,
+        )
     except Exception as e:
         typer.secho(f"Error fetching logs: {e}", fg=typer.colors.RED)
 

@@ -26,9 +26,7 @@ def test_generator_sdxl_gpu_profile_loads_dedicated_generator_stack() -> None:
     assert cfg.models.background_generator.target.endswith(
         "SdxlBackgroundGenerationModel"
     )
-    assert cfg.models.object_generator.target.endswith(
-        "SdxlBackgroundGenerationModel"
-    )
+    assert cfg.models.object_generator.target.endswith("SdxlBackgroundGenerationModel")
     assert cfg.models.inpaint.target.endswith("SdxlInpaintModel")
     assert cfg.models.fx.target.endswith("CopyImageFxModel")
     assert cfg.runtime.width == 512
@@ -63,15 +61,23 @@ def test_generator_sdxl_gpu_v2_8gb_profile_loads_v2_stack() -> None:
         "LayerDiffuseObjectGenerationModel"
     )
     assert cfg.models.inpaint.model_dump(mode="python")["overlay_alpha"] == 0.5
-    assert cfg.models.inpaint.model_dump(mode="python")["final_inpaint_strength"] == 0.22
+    assert (
+        cfg.models.inpaint.model_dump(mode="python")["final_inpaint_strength"] == 0.22
+    )
     assert cfg.models.inpaint.model_dump(mode="python")["final_inpaint_steps"] == 8
-    assert cfg.models.object_generator.model_dump(mode="python")[
-        "default_num_inference_steps"
-    ] == 30
-    assert cfg.models.object_generator.model_dump(mode="python")[
-        "default_guidance_scale"
-    ] == 5.0
-    assert cfg.models.object_generator.model_dump(mode="python")["offload_mode"] == "model"
+    assert (
+        cfg.models.object_generator.model_dump(mode="python")[
+            "default_num_inference_steps"
+        ]
+        == 30
+    )
+    assert (
+        cfg.models.object_generator.model_dump(mode="python")["default_guidance_scale"]
+        == 5.0
+    )
+    assert (
+        cfg.models.object_generator.model_dump(mode="python")["offload_mode"] == "model"
+    )
     assert cfg.models.inpaint.model_dump(mode="python")["final_context_size"] == 512
     assert cfg.runtime.width == 256
     assert cfg.runtime.height == 256
@@ -130,7 +136,10 @@ def test_generate_flow_naturalness_override_loads_generate_entrypoint() -> None:
     cfg = load_pipeline_config(
         config_name="generate",
         config_dir="conf",
-        overrides=["profile=generator_pixart_gpu_v2_hidden_object", "flows/generate=naturalness"],
+        overrides=[
+            "profile=generator_pixart_gpu_v2_hidden_object",
+            "flows/generate=naturalness",
+        ],
     )
     assert cfg.flows is not None
     assert cfg.flows.generate.target.endswith("generate_v2_compat")

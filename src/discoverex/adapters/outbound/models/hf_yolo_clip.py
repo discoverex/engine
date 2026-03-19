@@ -48,7 +48,7 @@ class YoloCLIPAdapter:
 
     def load(self, handle: ModelHandle) -> None:  # noqa: ARG002
         from transformers import CLIPModel, CLIPProcessor
-        from ultralytics import YOLO
+        from ultralytics import YOLO  # type: ignore[attr-defined]
 
         self._yolo = YOLO(self._yolo_model_id)
         self._yolo.to(self._device)

@@ -19,8 +19,8 @@ from discoverex.orchestrator_contract.worker_runtime import (
     write_worker_artifact_manifest,
 )
 
-from .worker_artifacts import collect_worker_artifacts
 from .gen_verify.persistence import write_naturalness_report
+from .worker_artifacts import collect_worker_artifacts
 
 
 def _run_perception_verification(

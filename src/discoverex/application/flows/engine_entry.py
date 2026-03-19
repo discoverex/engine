@@ -1,118 +1,28 @@
 from __future__ import annotations
 
-import os
-from collections.abc import Callable
 from pathlib import Path
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import Any
 
 from prefect import flow
 
-from discoverex.cache_dirs import resolve_cache_root, resolve_model_cache_dir, resolve_uv_cache_dir
 from discoverex.runtime_logging import format_seconds, get_logger
 
 from .common import build_error_payload
+from .engine import (
+    FlowCommand,
+    build_execution_snapshot,
+    load_pipeline_config,
+    log_runtime_env_diagnostics,
+    normalize_pipeline_config_for_worker_runtime,
+    summarize_for_logging,
+    write_execution_snapshot,
+)
+from .engine import (
+    resolve_subflow as _resolve_subflow,
+)
 
-if TYPE_CHECKING:
-    from discoverex.config import PipelineConfig
-
-FlowCommand = Literal["generate", "verify", "animate"]
-SubflowHandler = Callable[..., dict[str, Any]]
 logger = get_logger("discoverex.engine")
-
-
-def load_pipeline_config(
-    config_name: str,
-    config_dir: str = "conf",
-    overrides: list[str] | None = None,
-    resolved_config: object | None = None,
-) -> "PipelineConfig":
-    from discoverex.config_loader import (
-        resolve_pipeline_config as _resolve_pipeline_config,
-    )
-
-    return _resolve_pipeline_config(
-        config_name=config_name,
-        config_dir=config_dir,
-        overrides=overrides,
-        resolved_config=resolved_config,
-    )
-
-
-def build_execution_snapshot(**kwargs: Any) -> dict[str, Any]:
-    from discoverex.execution_snapshot import build_execution_snapshot as _build
-
-    return _build(**kwargs)
-
-
-def summarize_for_logging(snapshot: dict[str, Any]) -> dict[str, str]:
-    from discoverex.execution_snapshot import summarize_for_logging as _summarize
-
-    return _summarize(snapshot)
-
-
-def write_execution_snapshot(**kwargs: Any) -> Path:
-    from discoverex.execution_snapshot import write_execution_snapshot as _write
-
-    return _write(**kwargs)
-
-
-def normalize_pipeline_config_for_worker_runtime(config: Any) -> Any:
-    from discoverex.orchestrator_contract.worker_runtime import (
-        normalize_pipeline_config_for_worker_runtime as _normalize,
-    )
-
-    return _normalize(config)
-
-
-def _log_runtime_env_diagnostics() -> None:
-    cache_dir = os.getenv("CACHE_DIR", "").strip()
-    model_cache_dir = os.getenv("MODEL_CACHE_DIR", "").strip()
-    uv_cache_dir = os.getenv("UV_CACHE_DIR", "").strip()
-    hf_home = os.getenv("HF_HOME", "").strip()
-    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "").strip()
-    tracking_proxy = os.getenv("MLFLOW_TRACKING_PROXY_URL", "").strip()
-    metadata_db_url = os.getenv("METADATA_DB_URL", "").strip()
-    resolved_cache_root = resolve_cache_root().resolve()
-    resolved_uv_cache = resolve_uv_cache_dir(default_base=resolved_cache_root).resolve()
-    resolved_model_cache = resolve_model_cache_dir(default_base=resolved_cache_root).resolve()
-
-    logger.info(
-        "engine runtime env: cache_dir=%s uv_cache_dir=%s model_cache_dir=%s hf_home=%s mlflow_tracking_uri=%s mlflow_tracking_proxy=%s metadata_db_url=%s",
-        cache_dir or str(resolved_cache_root),
-        uv_cache_dir or str(resolved_uv_cache),
-        model_cache_dir or str(resolved_model_cache),
-        hf_home or "",
-        tracking_uri or "",
-        tracking_proxy or "",
-        metadata_db_url or "",
-    )
-    if not cache_dir:
-        logger.warning(
-            "CACHE_DIR is not set; runtime will fall back to repo-local or user cache directories"
-        )
-    if not tracking_uri:
-        logger.warning(
-            "MLFLOW_TRACKING_URI is not set; runtime will fall back to config/default tracking storage"
-        )
-    elif tracking_uri.startswith(("http://", "https://")) and not tracking_proxy:
-        logger.warning(
-            "MLFLOW_TRACKING_URI is remote but MLFLOW_TRACKING_PROXY_URL is not set; worker launcher may reject remote tracking"
-        )
-    if not metadata_db_url:
-        logger.info(
-            "METADATA_DB_URL is not set; metadata storage will use the configured local/json fallback"
-        )
-
-
-def _resolve_subflow(config: "PipelineConfig", command: FlowCommand) -> SubflowHandler:
-    from hydra.utils import instantiate
-
-    if config.flows is None:
-        raise ValueError("flows config is required for engine entry flow")
-    component = getattr(config.flows, command)
-    handler = instantiate(component.as_kwargs())
-    return cast(SubflowHandler, handler)
 
 
 def engine_entry_flow(
@@ -130,7 +40,7 @@ def engine_entry_flow(
         config_name,
         len(overrides or []),
     )
-    _log_runtime_env_diagnostics()
+    log_runtime_env_diagnostics()
     cfg = load_pipeline_config(
         config_name=config_name,
         config_dir=config_dir,
@@ -216,7 +126,7 @@ def run_prefect_engine_entry_flow(
     overrides: list[str] | None = None,
     resolved_config: object | None = None,
 ) -> dict[str, Any]:
-    return engine_entry_flow(
+    return run_engine_entry(
         command=command,
         args=args,
         config_name=config_name,

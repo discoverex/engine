@@ -15,7 +15,9 @@ def test_final_render_resizes_source_to_requested_dimensions(
 ) -> None:
     captured: dict[str, object] = {}
     fake_torch = SimpleNamespace(
-        Generator=lambda device="cpu": SimpleNamespace(manual_seed=lambda seed: ("seeded", device, seed))
+        Generator=lambda device="cpu": SimpleNamespace(
+            manual_seed=lambda seed: ("seeded", device, seed)
+        )
     )
 
     class _FakePipe:

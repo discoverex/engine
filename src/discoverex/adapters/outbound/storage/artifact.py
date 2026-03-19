@@ -62,7 +62,11 @@ class LocalArtifactStoreAdapter:
             ),
             encoding="utf-8",
         )
-        (output_manifest_path(self.root_dir, scene.meta.scene_id, scene.meta.version_id)).write_text(
+        (
+            output_manifest_path(
+                self.root_dir, scene.meta.scene_id, scene.meta.version_id
+            )
+        ).write_text(
             json.dumps(
                 {
                     "scene_id": scene.meta.scene_id,

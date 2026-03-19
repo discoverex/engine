@@ -13,7 +13,11 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
-    if name in {"engine_entry_flow", "run_prefect_engine_entry_flow", "run_engine_entry"}:
+    if name in {
+        "engine_entry_flow",
+        "run_prefect_engine_entry_flow",
+        "run_engine_entry",
+    }:
         module = importlib.import_module("discoverex.application.flows.engine_entry")
         return getattr(module, name)
     if name in {"build_inline_job_spec", "run_engine_job"}:

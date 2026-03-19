@@ -116,12 +116,12 @@ class HFHiddenRegionModel:
 
         try:
             if self._detector is None:
-                self._image_processor = AutoImageProcessor.from_pretrained(
+                self._image_processor = AutoImageProcessor.from_pretrained(  # type: ignore[no-untyped-call]
                     self.model_id,
                     revision=self.revision,
                     use_fast=True,
                 )
-                self._detector = AutoModelForObjectDetection.from_pretrained(
+                self._detector = AutoModelForObjectDetection.from_pretrained(  # type: ignore[no-untyped-call]
                     self.model_id,
                     revision=self.revision,
                     low_cpu_mem_usage=False,

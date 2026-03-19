@@ -168,12 +168,19 @@ class _StorageApiState:
 
 @contextmanager
 def _patched_storage_uploads(state: _StorageApiState) -> Iterator[None]:
-    from discoverex.orchestrator_contract import output_uploads
+    from discoverex.orchestrator_contract.uploads import (
+        engine_artifacts,
+        presign,
+        results,
+    )
 
-    output_uploads_module = cast(Any, output_uploads)
-    saved_http_json = output_uploads_module.http_json
-    saved_upload_bytes = output_uploads_module.upload_bytes
-    saved_storage_base_url = output_uploads_module.storage_base_url
+    engine_artifacts_module = cast(Any, engine_artifacts)
+    presign_module = cast(Any, presign)
+    results_module = cast(Any, results)
+    saved_presign_http_json = presign_module.http_json
+    saved_presign_storage_base_url = presign_module.storage_base_url
+    saved_results_upload_bytes = results_module.upload_bytes
+    saved_engine_upload_bytes = engine_artifacts_module.upload_bytes
 
     def fake_storage_base_url() -> str:
         return "http://storage.mock"
@@ -206,15 +213,17 @@ def _patched_storage_uploads(state: _StorageApiState) -> Iterator[None]:
             raise RuntimeError(f"unexpected fake upload url={url}")
         state.put(url.removeprefix(prefix), payload)
 
-    output_uploads_module.http_json = fake_http_json
-    output_uploads_module.upload_bytes = fake_upload_bytes
-    output_uploads_module.storage_base_url = fake_storage_base_url
+    presign_module.http_json = fake_http_json
+    presign_module.storage_base_url = fake_storage_base_url
+    results_module.upload_bytes = fake_upload_bytes
+    engine_artifacts_module.upload_bytes = fake_upload_bytes
     try:
         yield None
     finally:
-        output_uploads_module.http_json = saved_http_json
-        output_uploads_module.upload_bytes = saved_upload_bytes
-        output_uploads_module.storage_base_url = saved_storage_base_url
+        presign_module.http_json = saved_presign_http_json
+        presign_module.storage_base_url = saved_presign_storage_base_url
+        results_module.upload_bytes = saved_results_upload_bytes
+        engine_artifacts_module.upload_bytes = saved_engine_upload_bytes
 
 
 def _prepare_storage_entry(
@@ -252,8 +261,9 @@ def run_tracking_artifact_e2e(
     bucket = "tracking-artifact-e2e"
 
     fake_s3_store = _FakeS3Store()
-    with _patched_fake_s3_modules(fake_s3_store), _patched_environ(
-        _prefect_local_env()
+    with (
+        _patched_fake_s3_modules(fake_s3_store),
+        _patched_environ(_prefect_local_env()),
     ):
         payload = _run_generate_payload(
             background_asset_ref="bg://engine-e2e",
@@ -295,9 +305,18 @@ def run_tracking_artifact_e2e(
     if not runs:
         raise RuntimeError("MLflow run was not created")
     latest_run = runs[0]
-    artifact_names = {
-        item.path for item in client.list_artifacts(latest_run.info.run_id, path="")
-    }
+
+    def _artifact_paths(path: str = "") -> set[str]:
+        paths: set[str] = set()
+        for item in client.list_artifacts(latest_run.info.run_id, path=path):
+            item_path = str(item.path)
+            if getattr(item, "is_dir", False):
+                paths.update(_artifact_paths(item_path))
+            else:
+                paths.add(item_path)
+        return paths
+
+    artifact_names = _artifact_paths()
     bucket_objects = set(fake_s3_store.bucket(bucket).keys())
     required_objects = {
         f"scenes/{scene_id}/{version_id}/metadata/scene.json",
@@ -345,12 +364,15 @@ def run_worker_contract_e2e(
         ARTIFACT_DIR_ENV: str(artifact_dir),
         ARTIFACT_MANIFEST_ENV: str(manifest_path),
     }
-    with _patched_storage_uploads(storage_state), _patched_environ(
-        {
-            **env,
-            **_prefect_local_env(),
-            "STORAGE_API_URL": "http://storage.mock",
-        }
+    with (
+        _patched_storage_uploads(storage_state),
+        _patched_environ(
+            {
+                **env,
+                **_prefect_local_env(),
+                "STORAGE_API_URL": "http://storage.mock",
+            }
+        ),
     ):
         payload = _run_generate_payload(
             background_asset_ref="bg://worker-e2e",
@@ -359,7 +381,7 @@ def run_worker_contract_e2e(
                 artifacts_root=run_dir / "ignored-artifacts-root",
             )
             + [
-                "adapters/artifact_store=minio",
+                "adapters/artifact_store=local",
                 "adapters/tracker=mlflow_server",
             ],
             worker_runtime=True,
@@ -425,7 +447,9 @@ def run_live_services_e2e(
     from mlflow.tracking import MlflowClient
 
     _require_model_runtime(model_group)
-    _require_live_service_health(tracking_uri=tracking_uri, s3_endpoint_url=s3_endpoint_url)
+    _require_live_service_health(
+        tracking_uri=tracking_uri, s3_endpoint_url=s3_endpoint_url
+    )
     run_dir = work_dir / "live-services"
     artifacts_root = (run_dir / "artifacts").resolve()
     with _patched_environ(
@@ -434,9 +458,7 @@ def run_live_services_e2e(
             "MLFLOW_TRACKING_URI": tracking_uri,
             "MLFLOW_S3_ENDPOINT_URL": s3_endpoint_url,
             "AWS_ACCESS_KEY_ID": os.getenv("AWS_ACCESS_KEY_ID", "minioadmin"),
-            "AWS_SECRET_ACCESS_KEY": os.getenv(
-                "AWS_SECRET_ACCESS_KEY", "minioadmin"
-            ),
+            "AWS_SECRET_ACCESS_KEY": os.getenv("AWS_SECRET_ACCESS_KEY", "minioadmin"),
             "ARTIFACT_BUCKET": artifact_bucket,
         }
     ):
@@ -494,7 +516,9 @@ def run_live_services_e2e(
     )
     bucket_objects = {
         item["Key"]
-        for item in s3_client.list_objects_v2(Bucket=artifact_bucket).get("Contents", [])
+        for item in s3_client.list_objects_v2(Bucket=artifact_bucket).get(
+            "Contents", []
+        )
     }
     artifact_uri_prefix = _artifact_uri_prefix(latest_run.info.artifact_uri)
     mlflow_bucket_objects = sorted(
@@ -632,7 +656,9 @@ def _require_model_runtime(model_group: str) -> None:
 
 
 def ensure_live_infra(
-    *, compose_file: Path | None = None, services: tuple[str, ...] = ("postgres", "minio", "mlflow")
+    *,
+    compose_file: Path | None = None,
+    services: tuple[str, ...] = ("postgres", "minio", "mlflow"),
 ) -> None:
     docker = shutil.which("docker")
     if docker is None:

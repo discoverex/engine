@@ -148,7 +148,9 @@ def compute_scene_difficulty(
     if not answer_objs:
         return 0.0
     count = answer_obj_count if answer_obj_count is not None else len(answer_objs)
-    return sum(compute_difficulty(obj, weights, count) for obj in answer_objs) / len(answer_objs)
+    return sum(compute_difficulty(obj, weights, count) for obj in answer_objs) / len(
+        answer_objs
+    )
 
 
 def integrate_verification_v2(

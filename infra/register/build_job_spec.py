@@ -4,7 +4,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from register_orchestrator_job import _build_job_spec, _build_parser, _resolved_job_name
+from infra.register.register_orchestrator_job import (
+    _build_job_spec,
+    _build_parser,
+    _resolved_job_name,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_JOB_SPEC_DIR = SCRIPT_DIR / "job_specs"

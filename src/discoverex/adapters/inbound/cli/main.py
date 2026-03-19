@@ -91,9 +91,7 @@ def _load_e2e_module() -> Any:
             module_path,
         )
         if spec is None or spec.loader is None:
-            raise RuntimeError(
-                f"failed to load e2e module: {module_path}"
-            ) from None
+            raise RuntimeError(f"failed to load e2e module: {module_path}") from None
         module = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = module
         spec.loader.exec_module(module)

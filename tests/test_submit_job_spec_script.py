@@ -1,20 +1,17 @@
 from __future__ import annotations
 
-import importlib
 import json
-import sys
 from contextlib import contextmanager
-from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
 from discoverex.config_loader import load_pipeline_config
+from infra.register import register_orchestrator_job as _register_job
+from infra.register.job_types import JobSpec
 
-SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "infra" / "register"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
-register_job = importlib.import_module("register_orchestrator_job")
+register_job = cast(Any, _register_job)
 
 
 def test_submit_job_spec_resolves_deployment_from_inputs(
@@ -99,7 +96,8 @@ def test_submit_job_spec_resolves_deployment_from_inputs(
             "CF-Access-Client-Secret": "cf-secret",
         }
     }
-    submitted = json.loads(str(captured["parameters"]["job_spec_json"]))
+    parameters = cast(dict[str, object], captured["parameters"])
+    submitted = json.loads(str(parameters["job_spec_json"]))
     assert "resolved_config" in submitted["inputs"]
     assert submitted["inputs"]["resolved_config"]["runtime"]["width"] == 1024
 
@@ -129,9 +127,9 @@ def test_submit_job_spec_preserves_explicit_resolved_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, object] = {}
-    explicit = load_pipeline_config(config_name="generate", config_dir="conf").model_dump(
-        mode="python"
-    )
+    explicit = load_pipeline_config(
+        config_name="generate", config_dir="conf"
+    ).model_dump(mode="python")
     explicit["runtime"]["width"] = 2048
 
     class _FakeClient:
@@ -168,7 +166,9 @@ def test_submit_job_spec_preserves_explicit_resolved_config(
     monkeypatch.setattr(register_job, "get_client", _fake_get_client)
 
     register_job.submit_job_spec(
-        job_spec={
+        job_spec=cast(
+            JobSpec,
+            {
             "run_mode": "inline",
             "engine": "discoverex",
             "entrypoint": ["prefect_flow.py:run_generate_job_flow"],
@@ -184,9 +184,11 @@ def test_submit_job_spec_preserves_explicit_resolved_config(
             },
             "env": {},
             "outputs_prefix": None,
-        },
+            },
+        ),
         prefect_api_url="http://127.0.0.1:4200/api",
     )
 
-    submitted = json.loads(str(captured["parameters"]["job_spec_json"]))
+    parameters = cast(dict[str, object], captured["parameters"])
+    submitted = json.loads(str(parameters["job_spec_json"]))
     assert submitted["inputs"]["resolved_config"]["runtime"]["width"] == 2048

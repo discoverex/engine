@@ -127,7 +127,9 @@ def _install_env(env: dict[str, str], cwd: Path) -> dict[str, str]:
     install_env = env.copy()
     cache_root = _resolve_cache_root(env=install_env, default_base=cwd / ".cache")
     install_env.setdefault("CACHE_DIR", str(cache_root))
-    install_env["UV_CACHE_DIR"] = str(_resolve_uv_cache_dir(env=install_env, default_base=cache_root))
+    install_env["UV_CACHE_DIR"] = str(
+        _resolve_uv_cache_dir(env=install_env, default_base=cache_root)
+    )
     install_env.setdefault(
         "MODEL_CACHE_DIR",
         str(_resolve_model_cache_dir(env=install_env, default_base=cache_root)),

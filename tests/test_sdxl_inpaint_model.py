@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pytest
 from PIL import Image, ImageDraw
@@ -184,7 +185,7 @@ def test_sdxl_inpaint_can_disable_masked_only_mode(
     )
 
     assert captured["padding_mask_crop"] is None
-    mask = captured["mask"]
+    mask = cast(Image.Image, captured["mask"])
     assert mask.getbbox() == (0, 0, 128, 64)
 
 
@@ -242,6 +243,7 @@ def test_sdxl_inpaint_v2_selects_similarity_bbox_and_writes_precomposite(
     ImageDraw.Draw(object_mask).rectangle((8, 8, 24, 24), fill=255)
     object_mask.save(mask_path)
     captured: list[dict[str, object]] = []
+
     def _fake_generate_image(**kwargs):  # type: ignore[no-untyped-def]
         captured.append(dict(kwargs))
         return kwargs["image"].copy()
@@ -282,7 +284,7 @@ def test_sdxl_inpaint_v2_selects_similarity_bbox_and_writes_precomposite(
     assert captured[0]["inpaint_only_masked"] is True
     assert captured[0]["strength"] == pytest.approx(0.18)
     assert captured[0]["padding_mask_crop"] is None
-    assert captured[0]["mask"].getbbox() is not None
+    assert cast(Image.Image, captured[0]["mask"]).getbbox() is not None
     assert Image.open(pred["blend_mask_ref"]).getbbox() is not None
 
 
@@ -388,4 +390,4 @@ def test_layerdiffuse_hidden_object_mode_writes_stage_artifacts(
     assert captured[0]["strength"] == pytest.approx(0.18)
     assert captured[1]["strength"] == pytest.approx(0.35)
     assert captured[2]["strength"] == pytest.approx(0.12)
-    assert captured[0]["mask"].getbbox() is not None
+    assert cast(Image.Image, captured[0]["mask"]).getbbox() is not None

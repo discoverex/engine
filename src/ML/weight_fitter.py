@@ -121,9 +121,7 @@ class WeightFitter:
 
         records: list[tuple[np.ndarray, bool]] = [
             (
-                np.array(
-                    [float(sd.get(k, 0.0)) for k in _SIGNAL_KEYS], dtype=float
-                ),
+                np.array([float(sd.get(k, 0.0)) for k in _SIGNAL_KEYS], dtype=float),
                 bool(lbl),
             )
             for sd, lbl in labeled
@@ -143,7 +141,8 @@ class WeightFitter:
             return loss / len(records)
 
         result = minimize(
-            _loss, x0,
+            _loss,
+            x0,
             method="Nelder-Mead",
             options={"maxiter": max_iter, "xatol": 1e-5, "fatol": 1e-5},
         )

@@ -30,6 +30,7 @@ Usage
         "edge_strength_norm": float,
     }
 """
+
 from __future__ import annotations
 
 import argparse
@@ -127,8 +128,7 @@ def convert(bundle_dir: Path, out_path: Path) -> int:
                 total += 1
 
     print(
-        f"[OK] {total} records written to {out_path}  "
-        f"({skipped} bundles skipped)",
+        f"[OK] {total} records written to {out_path}  ({skipped} bundles skipped)",
         file=sys.stderr,
     )
     return total

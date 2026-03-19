@@ -5,22 +5,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = (
-    Path(__file__).resolve().parents[1]
-    / "infra"
-    / "register"
-    / "register_orchestrator_job.py"
-)
-BUILD_SCRIPT = (
-    Path(__file__).resolve().parents[1] / "infra" / "register" / "build_job_spec.py"
-)
+MODULE = "infra.register.register_orchestrator_job"
+BUILD_MODULE = "infra.register.build_job_spec"
 
 
 def test_register_script_dry_run_builds_repo_job_spec() -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--command",
             "generate",
@@ -58,7 +52,8 @@ def test_build_job_spec_script_writes_job_spec_file_under_register_dir(
     proc = subprocess.run(
         [
             sys.executable,
-            str(BUILD_SCRIPT),
+            "-m",
+            BUILD_MODULE,
             "--output-file",
             str(output_path),
             "--command",
@@ -85,7 +80,8 @@ def test_register_script_requires_command_specific_args() -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--command",
             "verify",
@@ -106,7 +102,8 @@ def test_register_script_accepts_background_prompt_only() -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--command",
             "generate",
@@ -134,7 +131,8 @@ def test_register_script_accepts_v1_command_when_version_is_v1() -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--contract-version",
             "v1",
@@ -162,7 +160,8 @@ def test_register_script_local_tiny_profile_adds_worker_overrides_and_env() -> N
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--execution-profile",
             "local-tiny-cpu",
@@ -221,7 +220,8 @@ def test_register_script_remote_profile_keeps_engine_storage_local_when_metadata
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--execution-profile",
             "remote-gpu-hf",
@@ -263,7 +263,8 @@ def test_register_script_generator_sdxl_gpu_profile_sets_dedicated_models() -> N
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--execution-profile",
             "generator-sdxl-gpu",
@@ -309,7 +310,8 @@ def test_register_script_generator_pixart_gpu_profile_sets_dedicated_models() ->
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--execution-profile",
             "generator-pixart-gpu",
@@ -359,7 +361,8 @@ def test_register_script_allows_explicit_config_name_and_dir() -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--command",
             "verify",
@@ -390,7 +393,8 @@ def test_register_script_sets_prefect_flow_entrypoint_for_inline_mode() -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--run-mode",
             "inline",

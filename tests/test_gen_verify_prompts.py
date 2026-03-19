@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-from zipfile import ZipFile
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
+from zipfile import ZipFile
 
 from PIL import Image
 
@@ -13,6 +13,7 @@ from discoverex.application.use_cases.gen_verify.object_pipeline import (
     GeneratedObjectAsset,
 )
 from discoverex.config import ModelVersionsConfig, RuntimeConfig, ThresholdsConfig
+from discoverex.domain.region import Region
 from discoverex.domain.scene import Scene
 from discoverex.models.types import ModelHandle
 
@@ -138,7 +139,7 @@ class _ReportWriter:
 
 def _fake_generated_objects(
     *,
-    regions: list[object],
+    regions: list[Region],
     candidate_path: Path,
     object_path: Path,
     mask_path: Path,
@@ -158,7 +159,7 @@ def _fake_generated_objects(
 
 def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     tmp_path: Path,
-    monkeypatch,
+    monkeypatch: Any,
 ) -> None:
     fx_model = _FxModel()
     object_model = _ObjectGeneratorModel()
@@ -243,7 +244,10 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     assert output_manifest["source_layers"]
     assert output_manifest["object_entries"]
     assert output_manifest["object_sources"]
-    assert output_manifest["layers"][1]["description"] == "aligned object render with alpha"
+    assert (
+        output_manifest["layers"][1]["description"]
+        == "aligned object render with alpha"
+    )
     assert output_manifest["layers"][1]["object_number"] == 1
     assert output_manifest["layers"][1]["center"] == [25.0, 40.0]
     assert (scene_dir / "outputs" / "layers" / "source-objects").exists()

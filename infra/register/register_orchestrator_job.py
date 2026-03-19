@@ -6,20 +6,26 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import yaml
-from branch_deployments import (
+from prefect.client.orchestration import SyncPrefectClient, get_client
+from prefect.client.schemas.filters import DeploymentFilter, DeploymentFilterName
+from prefect.settings import PREFECT_API_URL, temporary_settings
+
+if TYPE_CHECKING:
+    from infra.register.job_types import JobSpec, JobSpecInputs
+else:
+    JobSpec = dict[str, Any]
+    JobSpecInputs = dict[str, Any]
+
+from infra.register.branch_deployments import (
     DEFAULT_FLOW_KIND,
     deployment_name_for_branch,
     flow_entrypoint_for_kind,
 )
-from job_types import JobSpec, JobSpecInputs
-from prefect.client.orchestration import SyncPrefectClient, get_client
-from prefect.client.schemas.filters import DeploymentFilter, DeploymentFilterName
-from prefect.settings import PREFECT_API_URL, temporary_settings
-from settings import SETTINGS
+from infra.register.settings import SETTINGS
 
 V1_COMMANDS = ("gen-verify", "verify-only", "replay-eval")
 V2_COMMANDS = ("generate", "verify", "animate")
@@ -30,13 +36,7 @@ EXECUTION_PROFILES = (
     "generator-sdxl-gpu",
     "generator-pixart-gpu",
 )
-SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parents[1]
-SRC_DIR = REPO_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-DEFAULT_JOB_SPEC_DIR = SCRIPT_DIR / "job_specs"
-
+DEFAULT_JOB_SPEC_DIR = Path(__file__).resolve().parent / "job_specs"
 
 def _sanitize_name(value: str) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "-", value.strip())
@@ -56,7 +56,7 @@ def _default_config_name(command: str) -> str:
 
 
 def _mapped_command(command: str) -> str:
-    return {
+    mapped = {
         "gen-verify": "generate",
         "verify-only": "verify",
         "replay-eval": "animate",
@@ -64,6 +64,7 @@ def _mapped_command(command: str) -> str:
         "verify": "verify",
         "animate": "animate",
     }[command]
+    return mapped
 
 
 def _flow_kind_for_command(command: str) -> str:
@@ -439,7 +440,7 @@ def _resolved_job_name(args: argparse.Namespace) -> str:
 
 
 def _resolved_deployment_name_from_job_spec(
-    job_spec: JobSpec,
+    job_spec: JobSpec | dict[str, Any],
     explicit_deployment: str | None = None,
 ) -> str:
     explicit = str(explicit_deployment or "").strip()
@@ -449,7 +450,7 @@ def _resolved_deployment_name_from_job_spec(
     inputs = job_spec.get("inputs", {})
     command = str(inputs.get("command", "")).strip()
     # Fallback to engine_run if inputs missing? JobSpec doesn't have engine_run anymore.
-    
+
     if not command:
         return deployment_name_for_branch(SETTINGS.register_flow_ref or "dev")
     return deployment_name_for_branch(
@@ -458,17 +459,17 @@ def _resolved_deployment_name_from_job_spec(
     )
 
 
-def _extract_job_inputs(job_spec: dict[str, Any]) -> dict[str, Any]:
+def _extract_job_inputs(job_spec: JobSpec | dict[str, Any]) -> dict[str, Any]:
     payload = job_spec.get("inputs")
     if isinstance(payload, dict):
-        return payload
+        return dict(payload)
     payload = job_spec.get("engine_run")
     if isinstance(payload, dict):
-        return payload
+        return dict(payload)
     raise SystemExit("job spec requires inputs")
 
 
-def _resolve_job_spec_config(job_spec: dict[str, Any]) -> dict[str, Any]:
+def _resolve_job_spec_config(job_spec: JobSpec | dict[str, Any]) -> dict[str, Any]:
     from discoverex.config_loader import resolve_pipeline_config
 
     inputs = _extract_job_inputs(job_spec)
@@ -482,7 +483,9 @@ def _resolve_job_spec_config(job_spec: dict[str, Any]) -> dict[str, Any]:
     return resolved.model_dump(mode="python")
 
 
-def _enrich_job_spec_with_resolved_config(job_spec: dict[str, Any]) -> dict[str, Any]:
+def _enrich_job_spec_with_resolved_config(
+    job_spec: JobSpec | dict[str, Any],
+) -> dict[str, Any]:
     enriched = dict(job_spec)
     inputs = dict(_extract_job_inputs(job_spec))
     if inputs.get("resolved_config") is None:

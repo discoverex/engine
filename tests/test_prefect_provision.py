@@ -48,7 +48,15 @@ def test_provision_runtime_dependencies_uses_uv_sync_active(
         logger=_FakeLogger(),
     )
 
-    assert calls[0][0] == ["uv", "sync", "--frozen", "--extra", "tracking", "--extra", "storage"]
+    assert calls[0][0] == [
+        "uv",
+        "sync",
+        "--frozen",
+        "--extra",
+        "tracking",
+        "--extra",
+        "storage",
+    ]
     assert "VIRTUAL_ENV" not in calls[0][1]
     assert calls[0][1]["UV_PROJECT_ENVIRONMENT"] == str(tmp_path / ".venv")
 
@@ -163,7 +171,9 @@ def test_provision_runtime_dependencies_logs_uv_failure_details(
             logger=logger,
         )
 
-    assert logger.errors[0][0] == "dependency bootstrap command failed: %s (exit_code=%s)"
+    assert (
+        logger.errors[0][0] == "dependency bootstrap command failed: %s (exit_code=%s)"
+    )
     assert logger.errors[1][0] == "dependency bootstrap stdout:\n%s"
     assert "Prepared 98 packages" in str(logger.errors[1][1][0])
     assert logger.errors[2][0] == "dependency bootstrap stderr:\n%s"

@@ -57,7 +57,9 @@ def write_worker_artifact_manifest(
             {
                 "logical_name": canonical["logical_name"],
                 "relative_path": relative_text,
-                "content_type": _content_type_for_path(Path(canonical["absolute_path"])),
+                "content_type": _content_type_for_path(
+                    Path(canonical["absolute_path"])
+                ),
                 "mlflow_tag": canonical["mlflow_tag"],
             }
         )

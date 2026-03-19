@@ -50,6 +50,7 @@ from discoverex.application.use_cases.gen_verify.verification_pipeline import (
 )
 from discoverex.bootstrap import build_context
 from discoverex.config import PipelineConfig
+from discoverex.domain.region import Region
 from discoverex.domain.scene import Background, LayerBBox, LayerItem, LayerType, Scene
 from discoverex.models.types import HiddenRegionRequest
 from discoverex.runtime_logging import format_seconds, get_logger
@@ -177,12 +178,14 @@ def _generate_regions_stage(
     scene_dir: Path,
     object_prompt: str,
     object_negative_prompt: str,
-) -> tuple[list[Any], list[RegionPromptRecord]]:
+) -> tuple[list[Region], list[RegionPromptRecord]]:
     # 1. Detect regions (sequential load)
     hidden_handle = context.hidden_region_model.load(
         context.model_versions.hidden_region
     )
-    logger.info("loading hidden_region model version=%s", context.model_versions.hidden_region)
+    logger.info(
+        "loading hidden_region model version=%s", context.model_versions.hidden_region
+    )
     try:
         boxes = context.hidden_region_model.predict(
             hidden_handle,
@@ -197,7 +200,10 @@ def _generate_regions_stage(
         logger.info("unloading hidden_region model before object_generator")
         unload_model(context.hidden_region_model)
 
-    logger.info("loading object_generator model version=%s", context.model_versions.object_generator)
+    logger.info(
+        "loading object_generator model version=%s",
+        context.model_versions.object_generator,
+    )
     object_handle = context.object_generator_model.load(
         context.model_versions.object_generator
     )
@@ -238,11 +244,13 @@ def _detect_regions_stage(
     *,
     context: AppContextLike,
     background: Background,
-) -> list[Any]:
+) -> list[Region]:
     hidden_handle = context.hidden_region_model.load(
         context.model_versions.hidden_region
     )
-    logger.info("loading hidden_region model version=%s", context.model_versions.hidden_region)
+    logger.info(
+        "loading hidden_region model version=%s", context.model_versions.hidden_region
+    )
     try:
         boxes = context.hidden_region_model.predict(
             hidden_handle,
@@ -263,11 +271,14 @@ def _generate_objects_stage(
     *,
     context: AppContextLike,
     scene_dir: Path,
-    regions: list[Any],
+    regions: list[Region],
     object_prompt: str,
     object_negative_prompt: str,
 ) -> dict[str, GeneratedObjectAsset]:
-    logger.info("loading object_generator model version=%s", context.model_versions.object_generator)
+    logger.info(
+        "loading object_generator model version=%s",
+        context.model_versions.object_generator,
+    )
     object_handle = context.object_generator_model.load(
         context.model_versions.object_generator
     )
@@ -291,11 +302,11 @@ def _inpaint_regions_stage(
     context: AppContextLike,
     background: Background,
     scene_dir: Path,
-    regions: list[Any],
+    regions: list[Region],
     generated_objects: dict[str, GeneratedObjectAsset],
     object_prompt: str,
     object_negative_prompt: str,
-) -> tuple[list[Any], list[RegionPromptRecord]]:
+) -> tuple[list[Region], list[RegionPromptRecord]]:
     logger.info("loading inpaint model version=%s", context.model_versions.inpaint)
     inpaint_handle = context.inpaint_model.load(context.model_versions.inpaint)
     try:
@@ -319,7 +330,7 @@ def _build_scene_stage(
     *,
     context: AppContextLike,
     background: Background,
-    regions: list[Any],
+    regions: list[Region],
     run_ids: RunIds,
 ) -> Scene:
     return build_scene(

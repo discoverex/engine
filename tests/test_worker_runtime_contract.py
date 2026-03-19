@@ -35,8 +35,12 @@ def test_normalize_pipeline_config_for_worker_runtime_preserves_selected_adapter
     assert normalized.runtime.artifacts_root == str(
         (tmp_path / "engine-artifacts").resolve()
     )
-    assert normalized.adapters.artifact_store.target.endswith("MinioArtifactStoreAdapter")
-    assert normalized.adapters.metadata_store.target.endswith("PostgresMetadataStoreAdapter")
+    assert normalized.adapters.artifact_store.target.endswith(
+        "MinioArtifactStoreAdapter"
+    )
+    assert normalized.adapters.metadata_store.target.endswith(
+        "PostgresMetadataStoreAdapter"
+    )
     assert normalized.adapters.tracker.target.endswith("MLflowTrackerAdapter")
     assert normalized.adapters.report_writer.target.endswith("JsonReportWriterAdapter")
 
@@ -51,7 +55,14 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
     scene_path = saved_dir / "scene.json"
     verification_path = saved_dir / "verification.json"
     naturalness_path = saved_dir / "naturalness.json"
-    lottie_path = artifact_root / "scenes" / "scene-1" / "version-1" / "outputs" / "animation.lottie"
+    lottie_path = (
+        artifact_root
+        / "scenes"
+        / "scene-1"
+        / "version-1"
+        / "outputs"
+        / "animation.lottie"
+    )
     lottie_path.parent.mkdir(parents=True, exist_ok=True)
     scene_path.write_text("{}", encoding="utf-8")
     verification_path.write_text("{}", encoding="utf-8")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 from PIL import Image, ImageDraw
 
@@ -10,7 +11,7 @@ from discoverex.application.use_cases.naturalness_evaluation import (
     evaluate_scene_naturalness,
 )
 from discoverex.domain.goal import AnswerForm, Goal, GoalType
-from discoverex.domain.naturalness import NaturalnessRegionInput
+from discoverex.domain.naturalness import NaturalnessRegionInput, SelectedBBox
 from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
 from discoverex.domain.scene import (
     Answer,
@@ -24,7 +25,11 @@ from discoverex.domain.scene import (
     SceneMeta,
     SceneStatus,
 )
-from discoverex.domain.verification import FinalVerification, VerificationBundle, VerificationResult
+from discoverex.domain.verification import (
+    FinalVerification,
+    VerificationBundle,
+    VerificationResult,
+)
 
 
 def test_evaluate_naturalness_inputs_prefers_higher_scores_for_blended_region(
@@ -35,7 +40,7 @@ def test_evaluate_naturalness_inputs_prefers_higher_scores_for_blended_region(
     _make_scene_image(blended, object_fill=(122, 132, 142), outline=(122, 132, 142))
     _make_scene_image(harsh, object_fill=(255, 0, 0), outline=(255, 255, 255))
 
-    bbox = {"x": 28.0, "y": 28.0, "w": 24.0, "h": 24.0}
+    bbox = cast(SelectedBBox, {"x": 28.0, "y": 28.0, "w": 24.0, "h": 24.0})
     blended_score = evaluate_naturalness_inputs(
         [
             NaturalnessRegionInput(
@@ -58,7 +63,10 @@ def test_evaluate_naturalness_inputs_prefers_higher_scores_for_blended_region(
     )
 
     assert blended_score.overall_score > harsh_score.overall_score
-    assert blended_score.regions[0].seam_visibility < harsh_score.regions[0].seam_visibility
+    assert (
+        blended_score.regions[0].seam_visibility
+        < harsh_score.regions[0].seam_visibility
+    )
     assert blended_score.regions[0].saliency_lift < harsh_score.regions[0].saliency_lift
 
 
@@ -103,7 +111,9 @@ def test_evaluate_scene_naturalness_uses_scene_metadata(tmp_path: Path) -> None:
     assert 0.0 <= result.overall_score <= 1.0
 
 
-def _make_scene_image(path: Path, *, object_fill: tuple[int, int, int], outline: tuple[int, int, int]) -> None:
+def _make_scene_image(
+    path: Path, *, object_fill: tuple[int, int, int], outline: tuple[int, int, int]
+) -> None:
     image = Image.new("RGB", (80, 80), color=(120, 130, 140))
     draw = ImageDraw.Draw(image)
     draw.rectangle((28, 28, 52, 52), fill=object_fill, outline=outline, width=3)

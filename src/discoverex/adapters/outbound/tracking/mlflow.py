@@ -43,12 +43,34 @@ class MLflowTrackerAdapter:
                 return _run_id_from_active_run(run)
             for artifact in artifacts:
                 if artifact.exists():
-                    self._mlflow.log_artifact(str(artifact))
+                    self._log_artifact(artifact)
             return _run_id_from_active_run(run)
+
+    def _log_artifact(self, artifact: Path) -> None:
+        artifact_path = _mlflow_artifact_subdir(artifact)
+        if artifact_path is None:
+            self._mlflow.log_artifact(str(artifact))
+            return
+        try:
+            self._mlflow.log_artifact(str(artifact), artifact_path=artifact_path)
+        except TypeError:
+            self._mlflow.log_artifact(str(artifact))
 
 
 def _run_id_from_active_run(run: object) -> str | None:
     info = getattr(run, "info", None)
     run_id = getattr(info, "run_id", "")
     text = str(run_id).strip()
+    return text or None
+
+
+def _mlflow_artifact_subdir(artifact: Path) -> str | None:
+    parts = artifact.parts
+    if "scenes" not in parts:
+        return None
+    scenes_index = parts.index("scenes")
+    if len(parts) <= scenes_index + 4:
+        return None
+    relative_parent = Path(*parts[scenes_index + 3 : -1])
+    text = relative_parent.as_posix()
     return text or None
