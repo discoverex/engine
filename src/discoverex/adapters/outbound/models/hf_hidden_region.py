@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from discoverex.models.types import HiddenRegionRequest, ModelHandle
+from discoverex.runtime_logging import get_logger
 
 from .runtime import (
     apply_seed,
@@ -13,6 +14,8 @@ from .runtime import (
     resolve_runtime,
 )
 from .runtime_cleanup import clear_model_runtime
+
+logger = get_logger("discoverex.models.hidden_region")
 
 
 class HFHiddenRegionModel:
@@ -90,20 +93,40 @@ class HFHiddenRegionModel:
         request: HiddenRegionRequest,
     ) -> list[tuple[float, float, float, float]] | None:
         if not bool(handle.extra.get("runtime_available")):
+            logger.warning(
+                "hidden_region transformers path skipped: runtime unavailable reason=%s",
+                handle.extra.get("runtime_reason", ""),
+            )
             return None
         image_ref = request.image_ref
         if image_ref is None:
+            logger.warning(
+                "hidden_region transformers path skipped: image_ref is missing"
+            )
             return None
         image_path = Path(image_ref)
         if not image_path.exists():
+            logger.warning(
+                "hidden_region transformers path skipped: image path does not exist path=%s",
+                image_path,
+            )
             return None
         try:
             from PIL import Image
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "hidden_region transformers path skipped: failed to import PIL error=%s",
+                exc,
+            )
             return None
 
         runtime = resolve_runtime()
         if not runtime.available or runtime.transformers is None:
+            logger.warning(
+                "hidden_region transformers path skipped after runtime resolve: available=%s reason=%s",
+                runtime.available,
+                runtime.reason,
+            )
             return None
         try:
             import torch  # type: ignore
@@ -111,11 +134,23 @@ class HFHiddenRegionModel:
                 AutoImageProcessor,
                 AutoModelForObjectDetection,
             )
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "hidden_region transformers import failed model_id=%s revision=%s error=%s",
+                self.model_id,
+                self.revision,
+                exc,
+            )
             return None
 
         try:
             if self._detector is None:
+                logger.info(
+                    "loading hidden_region detector model_id=%s revision=%s device=%s",
+                    self.model_id,
+                    self.revision,
+                    handle.device,
+                )
                 self._image_processor = AutoImageProcessor.from_pretrained(  # type: ignore[no-untyped-call]
                     self.model_id,
                     revision=self.revision,
@@ -131,6 +166,10 @@ class HFHiddenRegionModel:
             detector = self._detector
             processor = self._image_processor
             if detector is None or processor is None:
+                logger.warning(
+                    "hidden_region detector unavailable after load model_id=%s",
+                    self.model_id,
+                )
                 return None
             image = Image.open(image_path).convert("RGB")
             inputs = processor(images=image, return_tensors="pt")
@@ -151,16 +190,30 @@ class HFHiddenRegionModel:
                 target_sizes=target_sizes,
             )
             preds = processed[0] if processed else {}
-        except Exception:
+        except Exception as exc:
+            logger.exception(
+                "hidden_region detector inference failed model_id=%s image=%s error=%s",
+                self.model_id,
+                image_path,
+                exc,
+            )
             return None
 
         if not isinstance(preds, dict):
+            logger.warning(
+                "hidden_region detector returned unexpected payload type=%s",
+                type(preds).__name__,
+            )
             return None
         width = max(1, request.width)
         height = max(1, request.height)
         boxes: list[tuple[float, float, float, float]] = []
         pred_boxes = preds.get("boxes")
         if pred_boxes is None:
+            logger.warning(
+                "hidden_region detector returned no boxes model_id=%s",
+                self.model_id,
+            )
             return None
         for box in pred_boxes[:3]:
             values = box.tolist() if hasattr(box, "tolist") else list(box)
@@ -172,6 +225,7 @@ class HFHiddenRegionModel:
             w = max(1.0, min(xmax, float(width)) - x)
             h = max(1.0, min(ymax, float(height)) - y)
             boxes.append((x, y, w, h))
+        logger.info("hidden_region detector produced %d candidate boxes", len(boxes))
         return boxes or None
 
     def unload(self) -> None:
