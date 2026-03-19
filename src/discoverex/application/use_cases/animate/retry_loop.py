@@ -1,5 +1,4 @@
 """Retry loop for WAN I2V animation generation."""
-
 from __future__ import annotations
 
 import logging
@@ -18,6 +17,7 @@ from discoverex.domain.animate import (
     VisionAnalysis,
 )
 
+from .retry_logger import RetryLogger
 from .retry_state import (
     CONSECUTIVE_FAIL_THRESHOLD,
     MOTION_ONLY_ISSUES,
@@ -27,7 +27,6 @@ from .retry_state import (
 )
 
 logger = logging.getLogger(__name__)
-
 
 @dataclass
 class RetryConfig:
@@ -69,6 +68,9 @@ class RetryLoop:
     ) -> RetryResult:
         state = LoopState(analysis=analysis, mask_path=mask_path)
         stem = image_path.stem
+        stats_file = output_dir / "validation_stats.txt"
+        self._log = RetryLogger(stats_file, stem)
+        self._log.start_image()
         for attempt in range(1, self._cfg.max_retries + 1):
             seed = random.randint(0, 2**32 - 1)
             video = self._try_generate(image_path, state, seed, stem, attempt, output_dir)
@@ -76,11 +78,13 @@ class RetryLoop:
                 continue
             val = self._num_val.validate(video, state.analysis, self._cfg.thresholds)
             if val.passed:
-                r = self._on_pass(video, image_path, state, attempt, seed)
+                r = self._on_pass(video, image_path, state, attempt, seed, val)
                 if r is not None:
+                    self._log.finish_image()
                     return r
             else:
-                self._on_fail(video, image_path, state, val, attempt)
+                self._on_fail(video, image_path, state, val, attempt, seed)
+        self._log.finish_image()
         return RetryResult(success=False, analysis=state.analysis, attempts=self._cfg.max_retries)
 
     def _try_generate(
@@ -102,7 +106,8 @@ class RetryLoop:
             return None
 
     def _on_pass(
-        self, video: Path, image: Path, s: LoopState, attempt: int, seed: int,
+        self, video: Path, image: Path, s: LoopState,
+        attempt: int, seed: int, val: AnimationValidation,
     ) -> RetryResult | None:
         ctx = AIValidationContext(
             current_fps=s.current_fps, current_scale=s.current_scale,
@@ -114,25 +119,26 @@ class RetryLoop:
             if not hard:
                 ai = AIValidationFix(passed=True, issues=ai.issues, reason="soft_pass")
         if ai.passed:
+            self._log.log_attempt(attempt, seed, s.current_fps, val, ai, success=True)
             return RetryResult(success=True, video_path=video, analysis=s.analysis, attempts=attempt, seed=seed)
         self._record_issues(ai.issues)
-        if self._should_switch(ai.issues, s):
-            self._switch_action(image, s)
-        else:
-            self._apply_adj(ai, s)
+        remedy, detail = self._resolve_remedy(ai, image, s)
+        self._log.log_attempt(attempt, seed, s.current_fps, val, ai, remedy, detail)
         return None
 
     def _on_fail(
         self, video: Path, image: Path, s: LoopState,
-        val: AnimationValidation, attempt: int,
+        val: AnimationValidation, attempt: int, seed: int,
     ) -> None:
         self._record_issues(val.failed_checks)
         if set(val.failed_checks) <= MOTION_ONLY_ISSUES:
             s.consecutive_nomotion += 1
             if attempt == 1 or s.consecutive_nomotion < CONSECUTIVE_FAIL_THRESHOLD:
+                self._log.log_attempt(attempt, seed, s.current_fps, val, remedy="seed_retry")
                 return
             s.consecutive_nomotion = 0
             self._switch_action(image, s)
+            self._log.log_attempt(attempt, seed, s.current_fps, val, remedy="action_switch", remedy_detail=s.analysis.action_desc)
             return
         s.consecutive_nomotion = 0
         ctx = AIValidationContext(
@@ -141,10 +147,18 @@ class RetryLoop:
         )
         ai = self._ai_val.validate(video, image, ctx)
         self._record_issues(ai.issues)
+        remedy, detail = self._resolve_remedy(ai, image, s)
+        self._log.log_attempt(attempt, seed, s.current_fps, val, ai, remedy, detail)
+
+    def _resolve_remedy(
+        self, ai: AIValidationFix, image: Path, s: LoopState,
+    ) -> tuple[str, str]:
         if self._should_switch(ai.issues, s):
             self._switch_action(image, s)
-        else:
-            self._apply_adj(ai, s)
+            return "action_switch", s.analysis.action_desc
+        self._apply_adj(ai, s)
+        self._log.log_ai_adjust(ai)
+        return "ai_adjust", ""
 
     def _switch_action(self, image: Path, s: LoopState) -> None:
         try:
@@ -152,6 +166,7 @@ class RetryLoop:
             s.analysis = new
             s.current_fps = new.frame_rate
             s.rebuild_base_prompts()
+            self._log.log_action_switch(new.action_desc)
             s.adj_positive = ""
             s.adj_negative = ""
             if s.mask_path:
@@ -182,5 +197,4 @@ class RetryLoop:
             s.consecutive_quality = 0
         return False
 
-    def _record_issues(self, issues: list[str]) -> None:
-        self._issue_counter.update(issues)
+    def _record_issues(self, issues: list[str]) -> None: self._issue_counter.update(issues)
