@@ -56,6 +56,7 @@ mask_refine_backend: rmbg_2_0
 rmbg_model_id: briaai/RMBG-2.0
 sam2_model_id: facebook/sam2-hiera-large
 ic_light_model_id: lllyasviel/ic-light
+ic_light_base_model_id: stabilityai/stable-diffusion-xl-base-1.0
 edge_blend_model_id: diffusers/stable-diffusion-xl-1.0-inpainting-0.1
 core_blend_model_id: diffusers/stable-diffusion-xl-1.0-inpainting-0.1
 final_polish_model_id: diffusers/stable-diffusion-xl-1.0-inpainting-0.1

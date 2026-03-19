@@ -14,6 +14,8 @@ from diffusers.models.unets.unet_2d_blocks import (
 )
 from tqdm import tqdm
 
+from .model_loading import load_state_dict_materialized
+
 
 def zero_module(module: torch.nn.Module) -> torch.nn.Module:
     for parameter in module.parameters():
@@ -181,7 +183,7 @@ class TransparentVAEDecoder(torch.nn.Module):
         super().__init__()
         state_dict = sf.load_file(filename)
         model = UNet1024(in_channels=3, out_channels=4)
-        model.load_state_dict(state_dict, strict=True)
+        load_state_dict_materialized(model, state_dict, strict=True)
         model.to(dtype=dtype)
         model.eval()
         self.model = model

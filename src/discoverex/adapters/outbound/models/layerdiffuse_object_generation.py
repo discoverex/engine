@@ -11,6 +11,7 @@ from discoverex.models.types import FxPrediction, FxRequest, ModelHandle
 from discoverex.runtime_logging import format_seconds, get_logger
 
 from .fx_param_parsing import as_float, as_int_or_none, as_positive_int, as_str
+from .model_loading import load_state_dict_materialized
 from .pipeline_memory import OffloadMode, configure_diffusers_pipeline
 from .runtime import (
     apply_seed,
@@ -236,7 +237,7 @@ class LayerDiffuseObjectGenerationModel:
                 key: base_state[key] + offset[key] if key in offset else base_state[key]
                 for key in base_state
             }
-            pipe.unet.load_state_dict(merged_state, strict=True)
+            load_state_dict_materialized(pipe.unet, merged_state, strict=True)
             self._layerdiffuse_applied = True
         self._pipe = configure_diffusers_pipeline(
             pipe,
