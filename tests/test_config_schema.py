@@ -116,11 +116,12 @@ def test_generator_pixart_gpu_v2_hidden_object_profile_loads_object_pipeline() -
     )
     inpaint_cfg = cfg.models.inpaint.model_dump(mode="python")
     assert inpaint_cfg["inpaint_mode"] == "layerdiffuse_hidden_object_v1"
-    assert inpaint_cfg["edge_blend_backend"] == "powerpaint_v2_sd15"
-    assert inpaint_cfg["final_polish_backend"] == "brushnet"
+    assert inpaint_cfg["edge_blend_backend"] == "sdxl_inpaint"
+    assert inpaint_cfg["final_polish_backend"] == "sdxl_inpaint"
     assert inpaint_cfg["mask_refine_backend"] == "rmbg_2_0"
     assert inpaint_cfg["rmbg_model_id"] == "briaai/RMBG-2.0"
     assert inpaint_cfg["ic_light_model_id"] == "lllyasviel/ic-light"
+    assert inpaint_cfg["relight_method"] == "basic"
     assert cfg.runtime.width == 1024
     assert cfg.runtime.height == 1024
 

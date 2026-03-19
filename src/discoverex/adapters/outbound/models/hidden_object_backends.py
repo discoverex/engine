@@ -28,9 +28,11 @@ class Rmbg20MaskRefiner:
         self,
         *,
         model_id: str,
+        revision: str = "main",
         runtime: BackendRuntime,
     ) -> None:
         self.model_id = model_id
+        self.revision = revision
         self.runtime = runtime
         self._model: Any | None = None
         self._image_processor: Any | None = None
@@ -47,7 +49,11 @@ class Rmbg20MaskRefiner:
 
         if self._image_processor is None:
             try:
-                self._image_processor = AutoImageProcessor.from_pretrained(self.model_id)
+                self._image_processor = AutoImageProcessor.from_pretrained(
+                    self.model_id,
+                    revision=self.revision,
+                    use_fast=True,
+                )
             except Exception as exc:
                 raise RuntimeError(
                     f"Failed to load RMBG 2.0 image processor: {self.model_id}"
@@ -63,8 +69,9 @@ class Rmbg20MaskRefiner:
             try:
                 model = AutoModelForImageSegmentation.from_pretrained(
                     self.model_id,
+                    revision=self.revision,
                     trust_remote_code=True,
-                    torch_dtype=torch_dtype,
+                    dtype=torch_dtype,
                 )
             except Exception as exc:
                 raise RuntimeError(f"Failed to load RMBG 2.0 model: {self.model_id}") from exc
@@ -363,7 +370,7 @@ class IcLightRelighter:
         try:
             pipe = AutoPipelineForImage2Image.from_pretrained(
                 self.base_model_id,
-                torch_dtype=torch_dtype,
+                dtype=torch_dtype,
             )
         except Exception as exc:
             self._raise_or_log(
@@ -460,13 +467,32 @@ class IcLightRelighter:
             return rgba
 
         relit = images[0]
-        if not isinstance(relit, Image.Image):
-            self._raise_or_log("IC-Light relight output is not a PIL image")
-            return rgba
-
         try:
+            if not isinstance(relit, Image.Image):
+                if hasattr(relit, "detach"):
+                    relit = relit.detach().cpu()
+                if hasattr(relit, "numpy"):
+                    import numpy as np  # type: ignore
+
+                    arr = relit.numpy()
+                    if arr.ndim == 4:
+                        arr = arr[0]
+                    if arr.ndim == 3 and arr.shape[0] in {1, 3, 4}:
+                        arr = np.moveaxis(arr, 0, -1)
+                    arr = np.asarray(arr)
+                    if arr.dtype != np.uint8:
+                        arr = np.clip(arr, 0, 255)
+                        if arr.max(initial=0) <= 1.0:
+                            arr = arr * 255.0
+                        arr = arr.astype("uint8")
+                    relit = Image.fromarray(arr)
+                else:
+                    self._raise_or_log("IC-Light relight output is not a PIL image")
+                    return rgba
             relit_rgba = relit.convert("RGBA")
-            relit_rgba.putalpha(rgba.getchannel("A"))
+            if relit_rgba.size != rgba.size:
+                relit_rgba = relit_rgba.resize(rgba.size, Image.Resampling.LANCZOS)
+            relit_rgba.putalpha(rgba.getchannel("A").resize(relit_rgba.size))
             return relit_rgba
         except Exception as exc:
             self._raise_or_log("Failed to rebuild RGBA output after relight", exc=exc)
@@ -513,7 +539,7 @@ class DiffusionObjectBlendBackend:
             torch_dtype = normalize_dtype(self.runtime.dtype, torch)
             pipe = AutoPipelineForInpainting.from_pretrained(
                 self.model_id,
-                torch_dtype=torch_dtype,
+                dtype=torch_dtype,
             )
             pipe = configure_diffusers_pipeline(
                 pipe,
