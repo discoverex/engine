@@ -17,6 +17,7 @@ from discoverex.application.use_cases.gen_verify.background_pipeline import (
 from discoverex.application.use_cases.gen_verify.composite_pipeline import compose_scene
 from discoverex.application.use_cases.gen_verify.model_lifecycle import unload_model
 from discoverex.application.use_cases.gen_verify.object_pipeline import (
+    GeneratedObjectAsset,
     generate_region_objects,
 )
 from discoverex.application.use_cases.gen_verify.persistence import (
@@ -217,6 +218,81 @@ def _generate_regions_stage(
             background=background,
             scene_dir=scene_dir,
             regions=regions_to_process,
+            generated_objects=generated_objects,
+            inpaint_handle=inpaint_handle,
+            object_prompt=object_prompt,
+            object_negative_prompt=object_negative_prompt,
+        )
+    finally:
+        unload_model(context.inpaint_model)
+
+
+@task(name="discoverex-generate-detect-regions", persist_result=False)
+def _detect_regions_stage(
+    *,
+    context: AppContextLike,
+    background: Background,
+) -> list[Any]:
+    hidden_handle = context.hidden_region_model.load(
+        context.model_versions.hidden_region
+    )
+    try:
+        boxes = context.hidden_region_model.predict(
+            hidden_handle,
+            HiddenRegionRequest(
+                image_ref=background.asset_ref,
+                width=background.width,
+                height=background.height,
+            ),
+        )
+        return build_candidate_regions(boxes)
+    finally:
+        unload_model(context.hidden_region_model)
+
+
+@task(name="discoverex-generate-objects", persist_result=False)
+def _generate_objects_stage(
+    *,
+    context: AppContextLike,
+    scene_dir: Path,
+    regions: list[Any],
+    object_prompt: str,
+    object_negative_prompt: str,
+) -> dict[str, GeneratedObjectAsset]:
+    object_handle = context.object_generator_model.load(
+        context.model_versions.object_generator
+    )
+    try:
+        return generate_region_objects(
+            context=context,
+            scene_dir=scene_dir,
+            regions=regions,
+            object_handle=object_handle,
+            object_prompt=object_prompt,
+            object_negative_prompt=object_negative_prompt,
+        )
+    finally:
+        unload_model(context.object_generator_model)
+
+
+@task(name="discoverex-generate-inpaint-regions", persist_result=False)
+def _inpaint_regions_stage(
+    *,
+    context: AppContextLike,
+    background: Background,
+    scene_dir: Path,
+    regions: list[Any],
+    generated_objects: dict[str, GeneratedObjectAsset],
+    object_prompt: str,
+    object_negative_prompt: str,
+) -> tuple[list[Any], list[RegionPromptRecord]]:
+    inpaint_handle = context.inpaint_model.load(context.model_versions.inpaint)
+    try:
+        return generate_regions(
+            context=context,
+            background=background,
+            scene_dir=scene_dir,
+            regions=regions,
             generated_objects=generated_objects,
             inpaint_handle=inpaint_handle,
             object_prompt=object_prompt,
@@ -451,10 +527,23 @@ def run_generate_flow(
     ).result()
     background = _materialize_background_asset.submit(background, scene_dir).result()
     logger.info("generate flow background ready asset_ref=%s", background.asset_ref)
-    regions, region_prompt_records = _generate_regions_stage.submit(
+    candidate_regions = _detect_regions_stage.submit(
+        context=context,
+        background=background,
+    ).result()
+    generated_objects = _generate_objects_stage.submit(
+        context=context,
+        scene_dir=scene_dir,
+        regions=candidate_regions,
+        object_prompt=object_prompt,
+        object_negative_prompt=object_negative_prompt,
+    ).result()
+    regions, region_prompt_records = _inpaint_regions_stage.submit(
         context=context,
         background=background,
         scene_dir=scene_dir,
+        regions=candidate_regions,
+        generated_objects=generated_objects,
         object_prompt=object_prompt,
         object_negative_prompt=object_negative_prompt,
     ).result()

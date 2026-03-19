@@ -8,6 +8,7 @@ from discoverex.bootstrap import build_context
 from discoverex.config import PipelineConfig
 
 from .generate import run_generate_flow
+from .generate_variant_pack import run_generate_inpaint_variant_pack_flow
 from .verify import run_verify_flow
 
 
@@ -34,6 +35,21 @@ def generate_v2_compat(
     execution_snapshot_path: Path | None = None,
 ) -> dict[str, str]:
     return run_generate_flow(
+        args=args,
+        config=config,
+        execution_snapshot=execution_snapshot,
+        execution_snapshot_path=execution_snapshot_path,
+    )
+
+
+def generate_inpaint_variant_pack(
+    *,
+    args: dict[str, Any],
+    config: PipelineConfig,
+    execution_snapshot: dict[str, Any] | None = None,
+    execution_snapshot_path: Path | None = None,
+) -> dict[str, Any]:
+    return run_generate_inpaint_variant_pack_flow(
         args=args,
         config=config,
         execution_snapshot=execution_snapshot,

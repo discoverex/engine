@@ -85,13 +85,18 @@ def _normalized_scenario(row: dict[str, Any], index: int) -> dict[str, str]:
         value = str(row.get(key, "")).strip()
         if value:
             output[key] = value
+    scenario_overrides = str(row.get("scenario_overrides", "")).strip()
+    if scenario_overrides:
+        output["scenario_overrides"] = scenario_overrides
     return output
 
 
 def _parameter_grid(spec: dict[str, Any]) -> list[tuple[str, list[str]]]:
     parameters = spec.get("parameters", {})
-    if not isinstance(parameters, dict) or not parameters:
-        raise SystemExit("sweep spec requires parameters mapping")
+    if parameters in (None, {}):
+        return []
+    if not isinstance(parameters, dict):
+        raise SystemExit("parameters must be a mapping when provided")
     grid: list[tuple[str, list[str]]] = []
     for name, values in parameters.items():
         if not isinstance(values, list) or not values:
@@ -101,6 +106,8 @@ def _parameter_grid(spec: dict[str, Any]) -> list[tuple[str, list[str]]]:
 
 
 def _combination_records(grid: list[tuple[str, list[str]]]) -> list[dict[str, str]]:
+    if not grid:
+        return [{"combo_id": "combo-001"}]
     keys = [name for name, _ in grid]
     value_lists = [values for _, values in grid]
     records: list[dict[str, str]] = []
@@ -118,6 +125,29 @@ def _fixed_overrides(spec: dict[str, Any]) -> list[str]:
     return [str(item) for item in values]
 
 
+def _variant_specs(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = spec.get("variants", [])
+    if raw in (None, []):
+        return []
+    if not isinstance(raw, list):
+        raise SystemExit("variants must be a list")
+    variants: list[dict[str, Any]] = []
+    for index, item in enumerate(raw, start=1):
+        if not isinstance(item, dict):
+            raise SystemExit("each variant must be an object")
+        variant_id = str(item.get("variant_id", "")).strip() or f"variant-{index:02d}"
+        overrides = item.get("overrides", [])
+        if not isinstance(overrides, list):
+            raise SystemExit(f"variant {variant_id} overrides must be a list")
+        variants.append(
+            {
+                "variant_id": variant_id,
+                "overrides": [str(value) for value in overrides if str(value).strip()],
+            }
+        )
+    return variants
+
+
 def _job_spec_for_case(
     *,
     base_job_spec: dict[str, Any],
@@ -127,12 +157,20 @@ def _job_spec_for_case(
     search_stage: str,
     experiment_name: str,
     fixed_overrides: list[str],
+    variant_specs: list[dict[str, Any]],
 ) -> dict[str, Any]:
     job_spec = deepcopy(base_job_spec)
     inputs = job_spec.setdefault("inputs", {})
     args = inputs.setdefault("args", {})
     overrides = list(inputs.get("overrides", []))
     overrides.extend(fixed_overrides)
+    scenario_overrides = str(scenario.get("scenario_overrides", "")).strip()
+    if scenario_overrides:
+        overrides.extend(
+            item.strip()
+            for item in scenario_overrides.split("||")
+            if item.strip()
+        )
     overrides.extend(f"{key}={value}" for key, value in combo.items() if key != "combo_id")
     overrides.append(f"adapters.tracker.experiment_name={experiment_name}")
     args.update(scenario)
@@ -140,7 +178,12 @@ def _job_spec_for_case(
     args["combo_id"] = combo["combo_id"]
     args["scenario_id"] = scenario["scenario_id"]
     args["search_stage"] = search_stage
+    if variant_specs:
+        args["variant_specs_json"] = json.dumps(variant_specs, ensure_ascii=True)
+        args["variant_count"] = len(variant_specs)
     inputs["args"] = args
+    if variant_specs:
+        overrides.append("flows/generate=inpaint_variant_pack")
     inputs["overrides"] = _dedupe(overrides)
     job_spec["job_name"] = (
         f"{sweep_id}--{search_stage}--{combo['combo_id']}--{scenario['scenario_id']}"
@@ -175,6 +218,7 @@ def build_sweep_manifest(spec_path: Path) -> dict[str, Any]:
     scenarios = _load_scenarios(spec, spec_path)
     combos = _combination_records(_parameter_grid(spec))
     fixed_overrides = _fixed_overrides(spec)
+    variant_specs = _variant_specs(spec)
     jobs: list[dict[str, Any]] = []
     for combo in combos:
         for scenario in scenarios:
@@ -186,12 +230,14 @@ def build_sweep_manifest(spec_path: Path) -> dict[str, Any]:
                 search_stage=search_stage,
                 experiment_name=experiment_name,
                 fixed_overrides=fixed_overrides,
+                variant_specs=variant_specs,
             )
             jobs.append(
                 {
                     "job_name": job_spec["job_name"],
                     "combo_id": combo["combo_id"],
                     "scenario_id": scenario["scenario_id"],
+                    "variant_count": len(variant_specs),
                     "overrides": job_spec["inputs"]["overrides"],
                     "job_spec": job_spec,
                 }
@@ -202,6 +248,7 @@ def build_sweep_manifest(spec_path: Path) -> dict[str, Any]:
         "experiment_name": experiment_name,
         "combo_count": len(combos),
         "scenario_count": len(scenarios),
+        "variant_count": len(variant_specs),
         "job_count": len(jobs),
         "jobs": jobs,
     }
@@ -257,6 +304,7 @@ def submit_manifest(
         "experiment_name": manifest["experiment_name"],
         "combo_count": manifest["combo_count"],
         "scenario_count": manifest["scenario_count"],
+        "variant_count": manifest.get("variant_count", 0),
         "job_count": manifest["job_count"],
         "deployment": resolved_deployment,
         "results": results,
