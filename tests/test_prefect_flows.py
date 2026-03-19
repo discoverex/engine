@@ -6,7 +6,6 @@ import os
 import sys
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 from prefect.runtime import flow_run
@@ -190,11 +189,18 @@ def test_dispatch_engine_job_calls_nested_generate_pipeline(
     )
     monkeypatch.setattr(
         "discoverex.application.flows.engine_entry.normalize_pipeline_config_for_worker_runtime",
-        lambda config: type("Cfg", (), {"runtime": type("Runtime", (), {"artifacts_root": str(tmp_path)})()})(),
+        lambda config: type(
+            "Cfg",
+            (),
+            {"runtime": type("Runtime", (), {"artifacts_root": str(tmp_path)})()},
+        )(),
     )
     monkeypatch.setattr(
         "discoverex.application.flows.engine_entry.build_execution_snapshot",
-        lambda **kwargs: {"command": kwargs["command"], "config_name": kwargs["config_name"]},
+        lambda **kwargs: {
+            "command": kwargs["command"],
+            "config_name": kwargs["config_name"],
+        },
     )
     monkeypatch.setattr(
         "discoverex.application.flows.engine_entry.write_execution_snapshot",
@@ -219,7 +225,9 @@ def test_dispatch_engine_job_calls_nested_generate_pipeline(
 
     assert captured["args"] == {"background_prompt": "harbor"}
     assert captured["execution_snapshot"]["command"] == "generate"
-    assert str(captured["execution_snapshot_path"]).endswith("resolved_execution_config.json")
+    assert str(captured["execution_snapshot_path"]).endswith(
+        "resolved_execution_config.json"
+    )
     assert result.payload["status"] == "completed"
     assert result.stdout == json.dumps(result.payload, ensure_ascii=True)
     assert result.stderr == ""
@@ -280,14 +288,16 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
         prefect_entrypoint,
         "engine_job_task",
         lambda payload, cwd, env: prefect_dispatch.DispatchResult(
-            payload=fake_run_engine_entry(**{
-                "command": mapped_command(str(payload.get("command", ""))),
-                "args": coerce_args(payload.get("args")),
-                "config_name": config_name(payload),
-                "config_dir": str(payload.get("config_dir") or "conf"),
-                "resolved_config": payload.get("resolved_config"),
-                "overrides": coerce_overrides(payload.get("overrides")),
-            }),
+            payload=fake_run_engine_entry(
+                **{
+                    "command": mapped_command(str(payload.get("command", ""))),
+                    "args": coerce_args(payload.get("args")),
+                    "config_name": config_name(payload),
+                    "config_dir": str(payload.get("config_dir") or "conf"),
+                    "resolved_config": payload.get("resolved_config"),
+                    "overrides": coerce_overrides(payload.get("overrides")),
+                }
+            ),
             stdout='{"status":"completed"}\n',
             stderr="",
         ),
@@ -334,11 +344,17 @@ def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
     assert output["flow_run_id"] == "flow-123"
     assert output["attempt"] == 1
     assert output["outputs_prefix"] == "jobs/flow-123/attempt-1/"
-    assert logged[0][0] == "prefect runtime import path: flow_module=%s dispatch_module=%s dispatch_source=%s"
+    assert (
+        logged[0][0]
+        == "prefect runtime import path: flow_module=%s dispatch_module=%s dispatch_source=%s"
+    )
     assert logged[1][0] == "engine flow start: %s"
     assert logged[-1][0] == "engine payload summary: %s"
     start_summary = json.loads(str(logged[1][1][0]))
-    assert start_summary["resolved_config"]["runtime"]["env"]["tracking_uri"] == "***REDACTED***"
+    assert (
+        start_summary["resolved_config"]["runtime"]["env"]["tracking_uri"]
+        == "***REDACTED***"
+    )
     assert "[discoverex-engine-flow] start" in capsys.readouterr().err
 
 

@@ -3,11 +3,12 @@ from __future__ import annotations
 import inspect
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from prefect import flow, get_run_logger
 from prefect.runtime import flow_run
 
+from infra.prefect import dispatch as prefect_dispatch
 from infra.prefect.artifacts import (
     FAILED_STATUSES,
     payload_status,
@@ -16,7 +17,7 @@ from infra.prefect.artifacts import (
     upload_worker_artifacts,
     write_local_artifacts,
 )
-from infra.prefect import dispatch as prefect_dispatch
+from infra.prefect.dispatch import EnginePayload
 from infra.prefect.job_spec import extract_inputs_payload, load_job_spec
 from infra.prefect.provision import provision_runtime_dependencies
 from infra.prefect.reporting import log_failure_summary, log_start_summary
@@ -39,16 +40,16 @@ _FLOW_KIND_BY_COMMAND: dict[str, FlowKind] = {
 
 
 def engine_job_task(
-    payload: dict[str, Any], cwd: Path, env: dict[str, str]
+    payload: EnginePayload, cwd: Path, env: dict[str, str]
 ) -> prefect_dispatch.DispatchResult:
     return prefect_dispatch.dispatch_engine_job(payload, cwd=cwd, env=env)
 
 
 def _coerce_command_for_deployment(
-    payload: dict[str, Any],
+    payload: EnginePayload,
     *,
     flow_kind: FlowKind | None,
-) -> dict[str, Any]:
+) -> EnginePayload:
     if flow_kind is None or flow_kind == "combined":
         return payload
     command = str(payload.get("command", "")).strip()
@@ -72,7 +73,7 @@ def _run_job_flow(
 ) -> dict[str, Any]:
     job_spec = load_job_spec(job_spec_json)
     payload = _coerce_command_for_deployment(
-        extract_inputs_payload(job_spec),
+        cast(EnginePayload, extract_inputs_payload(job_spec)),
         flow_kind=flow_kind,
     )
     return _run_job_flow_logic(
@@ -155,7 +156,7 @@ def run_combined_job_flow(
     if command == "gen-verify":
         logger.info("executing explicit gen-verify sequence")
         # 1. Generate
-        gen_payload = {**payload, "command": "generate"}
+        gen_payload = cast(EnginePayload, {**payload, "command": "generate"})
         gen_output = _run_job_flow_logic(
             job_spec_json=job_spec_json,
             payload=gen_payload,
@@ -170,7 +171,10 @@ def run_combined_job_flow(
         if scene_json:
             verify_args["scene_json"] = scene_json
 
-        verify_payload = {**payload, "command": "verify", "args": verify_args}
+        verify_payload = cast(
+            EnginePayload,
+            {**payload, "command": "verify", "args": verify_args},
+        )
         verify_output = _run_job_flow_logic(
             job_spec_json=job_spec_json,
             payload=verify_payload,
@@ -200,7 +204,7 @@ def run_combined_job_flow(
 def _run_job_flow_logic(
     *,
     job_spec_json: str,
-    payload: dict[str, Any],
+    payload: EnginePayload,
     resume_key: str | None,
     checkpoint_dir: str | None,
 ) -> dict[str, Any]:
@@ -234,7 +238,7 @@ def _run_job_flow_logic(
         log_start_summary(
             logger=logger,
             job_spec=job_spec,
-            payload=payload,
+            payload=cast(dict[str, Any], payload),
             env=env,
             resume_key=resume_key,
             checkpoint_dir=checkpoint_dir,
@@ -243,7 +247,7 @@ def _run_job_flow_logic(
 
         with patched_environ(env):
             provision_runtime_dependencies(
-                payload=payload,
+                payload=cast(dict[str, Any], payload),
                 cwd=ensure_repo_root(),
                 env=env,
                 logger=logger,

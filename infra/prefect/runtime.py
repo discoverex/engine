@@ -52,9 +52,10 @@ def coerce_env_map(raw: object) -> dict[str, str]:
 
 
 def ensure_worker_artifact_env(env: dict[str, str]) -> None:
-    if env.get(ARTIFACT_DIR_ENV, "").strip() and env.get(
-        ARTIFACT_MANIFEST_ENV, ""
-    ).strip():
+    if (
+        env.get(ARTIFACT_DIR_ENV, "").strip()
+        and env.get(ARTIFACT_MANIFEST_ENV, "").strip()
+    ):
         return
     base_dir = repo_root() / ".prefect-engine-artifacts"
     base_dir.mkdir(parents=True, exist_ok=True)

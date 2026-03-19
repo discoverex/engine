@@ -15,6 +15,7 @@ from infra.prefect.dispatch import dispatch_engine_job
 
 # --- 1. VRAM Configuration Test ---
 
+
 class _FakePipe:
     offload_mode: str | None
     sent_to_device: str | None
@@ -53,15 +54,19 @@ def test_vram_config_sequential_offload() -> None:
 
 # --- 2. Logging & Dispatch Error Test ---
 
-def test_dispatch_engine_job_captures_logs_on_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+
+def test_dispatch_engine_job_captures_logs_on_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Verify that subprocess failure logs are captured and raised in the exception."""
-    
+
     # 1. Mock subprocess.Popen
     class MockPopen:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             self.returncode = 1
             # Mock stdout/stderr streams
             import io
+
             self.stdout = io.StringIO("some stdout content\n")
             self.stderr = io.StringIO("CRITICAL ERROR: Out of memory\n")
 
@@ -73,10 +78,10 @@ def test_dispatch_engine_job_captures_logs_on_failure(monkeypatch: pytest.Monkey
             return 1
 
     monkeypatch.setattr(subprocess, "Popen", MockPopen)
-    
+
     # 2. Mock Prefect Logger (avoid context errors)
     monkeypatch.setattr("infra.prefect.dispatch.get_run_logger", lambda: MagicMock())
-    
+
     # 3. Mock python bin check
     venv_bin = tmp_path / ".venv" / "bin"
     venv_bin.mkdir(parents=True)
