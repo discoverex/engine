@@ -60,14 +60,7 @@ def test_run_engine_job_executes_engine_entry_directly(
         {
             "run_mode": "inline",
             "engine": "discoverex",
-            "entrypoint": [
-                "/bin/sh",
-                "-lc",
-                (
-                    "PYTHONPATH=src python -m "
-                    "discoverex.adapters.outbound.execution.launcher"
-                ),
-            ],
+            "entrypoint": ["prefect_flow.py:run_generate_job_flow"],
             "inputs": {
                 "contract_version": "v2",
                 "command": "generate",
@@ -147,14 +140,7 @@ def test_run_engine_job_prefers_inline_resolved_config(
         {
             "run_mode": "inline",
             "engine": "discoverex",
-            "entrypoint": [
-                "/bin/sh",
-                "-lc",
-                (
-                    "PYTHONPATH=src python -m "
-                    "discoverex.adapters.outbound.execution.launcher"
-                ),
-            ],
+            "entrypoint": ["prefect_flow.py:run_generate_job_flow"],
             "inputs": {
                 "contract_version": "v2",
                 "command": "generate",

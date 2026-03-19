@@ -110,11 +110,7 @@ def test_job_spec_requires_canonical_inputs() -> None:
         {
             "run_mode": "inline",
             "engine": "discoverex",
-            "entrypoint": [
-                "/bin/sh",
-                "-lc",
-                "python -m discoverex.adapters.outbound.execution.launcher",
-            ],
+            "entrypoint": ["prefect_flow.py:run_generate_job_flow"],
             "inputs": {
                 "contract_version": "v2",
                 "command": "generate",

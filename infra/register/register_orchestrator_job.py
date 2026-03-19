@@ -10,18 +10,16 @@ from typing import Any
 from uuid import UUID
 
 import yaml
-from branch_deployments import DEFAULT_FLOW_KIND, deployment_name_for_branch
+from branch_deployments import (
+    DEFAULT_FLOW_KIND,
+    deployment_name_for_branch,
+    flow_entrypoint_for_kind,
+)
 from job_types import JobSpec, JobSpecInputs
 from prefect.client.orchestration import SyncPrefectClient, get_client
 from prefect.client.schemas.filters import DeploymentFilter, DeploymentFilterName
 from prefect.settings import PREFECT_API_URL, temporary_settings
 from settings import SETTINGS
-
-DEFAULT_ENTRYPOINT = [
-    "/bin/sh",
-    "-lc",
-    "PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher",
-]
 
 V1_COMMANDS = ("gen-verify", "verify-only", "replay-eval")
 V2_COMMANDS = ("generate", "verify", "animate")
@@ -181,7 +179,6 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-mode", choices=("repo", "inline"), default="repo")
     parser.add_argument("--repo-url", default=SETTINGS.engine_repo_url)
     parser.add_argument("--ref", default=SETTINGS.engine_repo_ref or "main")
-    parser.add_argument("--entrypoint-shell-command", default=None)
     parser.add_argument("--job-name", default=None)
     parser.add_argument("--outputs-prefix", default=None)
     parser.add_argument("--contract-version", choices=("v1", "v2"), default="v2")
@@ -384,10 +381,8 @@ def _build_job_spec(args: argparse.Namespace) -> JobSpec:
 
     runtime_extras = _build_runtime_extras(args)
     overrides = [*_build_profile_overrides(args), *args.override]
-    entrypoint = DEFAULT_ENTRYPOINT
-    if args.entrypoint_shell_command:
-        entrypoint = ["/bin/sh", "-lc", args.entrypoint_shell_command]
-
+    flow_kind = _flow_kind_for_command(args.command)
+    entrypoint = [flow_entrypoint_for_kind(flow_kind)]
     inputs: JobSpecInputs = {
         "contract_version": args.contract_version,
         "command": args.command,

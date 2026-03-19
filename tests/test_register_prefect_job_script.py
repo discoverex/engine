@@ -51,9 +51,7 @@ def test_prefect_wrapper_dry_run_defaults_to_remote_worker_profile() -> None:
     assert payload["run_mode"] == "repo"
     assert payload["repo_url"] == "https://github.com/example/engine.git"
     assert payload["ref"] == "feat/real-job"
-    assert payload["entrypoint"][2] == (
-        "PYTHONPATH=src python -m discoverex.adapters.outbound.execution.launcher"
-    )
+    assert payload["entrypoint"] == ["prefect_flow.py:run_generate_job_flow"]
     assert payload["job_name"] == "generate--generate--generator-pixart-gpu"
     assert payload["inputs"]["overrides"] == [
         "profile=generator_pixart_gpu_v2_8gb",
