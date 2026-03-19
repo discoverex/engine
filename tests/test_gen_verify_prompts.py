@@ -241,12 +241,20 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     assert output_manifest["lottie_path"] == "animation.lottie"
     assert output_manifest["layers"]
     assert output_manifest["source_layers"]
+    assert output_manifest["object_entries"]
+    assert output_manifest["object_sources"]
+    assert output_manifest["layers"][1]["description"] == "aligned object render with alpha"
+    assert output_manifest["layers"][1]["object_number"] == 1
+    assert output_manifest["layers"][1]["center"] == [25.0, 40.0]
     assert (scene_dir / "outputs" / "layers" / "source-objects").exists()
     with ZipFile(lottie_path) as archive:
         names = set(archive.namelist())
+        animation = json.loads(archive.read("animations/scene.json").decode("utf-8"))
     assert "manifest.json" in names
     assert "animations/scene.json" in names
     assert any(name.startswith("images/") for name in names)
+    assert animation["metadata"]["object_entries"][0]["center"] == [25.0, 40.0]
+    assert animation["layers"][1]["nm"] == "object 1 center=(25.0, 40.0)"
     fx_request = cast(SimpleNamespace, fx_model.requests[0])
     inpaint_request = cast(SimpleNamespace, inpaint_model.requests[0])
     assert fx_request.mode == "background"
