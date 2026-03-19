@@ -227,6 +227,30 @@ def animate_command(
     _echo_json(payload)
 
 
+@app.command("serve")
+def serve_command(
+    port: int = typer.Option(5001, "--port", help="Server port"),
+    host: str = typer.Option("0.0.0.0", "--host", help="Server host"),
+    config_name: str = typer.Option("animate_comfyui", "--config-name"),
+    config_dir: str = typer.Option("conf", "--config-dir"),
+    override: list[str] = typer.Option([], "--override", "-o"),
+    verbose: bool = typer.Option(False, "--verbose"),
+) -> None:
+    """Start animate dashboard web server."""
+    configure_logging(verbose=verbose)
+    from discoverex.adapters.inbound.web.engine_server import create_app
+    from discoverex.bootstrap.factory import build_animate_context
+    from discoverex.config_loader import load_raw_animate_config
+
+    raw_config = load_raw_animate_config(
+        config_name=config_name, config_dir=config_dir, overrides=override,
+    )
+    orchestrator = build_animate_context(raw_config)
+    flask_app = create_app(orchestrator)
+    typer.echo(f"Dashboard: http://{host}:{port}/")
+    flask_app.run(host=host, port=port, debug=verbose)
+
+
 @app.command("e2e")
 def e2e_command(
     scenario: str = typer.Option(
