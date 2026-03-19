@@ -164,7 +164,19 @@ def register_extra_routes(
     def api_available_models() -> Any:
         import glob as g
 
+        # VRAM estimates by quantization suffix (GB)
+        _VRAM: dict[str, float] = {
+            "Q3_K_S": 6.5, "Q3_K_M": 7.0, "Q4_0": 8.3, "Q4_K_S": 8.75,
+            "Q4_1": 9.2, "Q4_K_M": 9.65, "Q5_K_S": 10.1, "Q5_0": 10.3,
+            "Q5_K_M": 10.6, "Q5_1": 11.0, "Q6_K": 11.8, "Q8_0": 15.0,
+        }
         comfyui_root = os.environ.get("COMFYUI_ROOT", os.path.expanduser("~/ComfyUI"))
         unet_dir = Path(comfyui_root) / "models" / "unet"
-        installed = {Path(f).name for f in g.glob(str(unet_dir / "*.gguf"))}
-        return jsonify({"installed": sorted(installed)})
+        models = []
+        for fp in sorted(Path(f) for f in g.glob(str(unet_dir / "*.gguf"))):
+            name = fp.name
+            size_gb = round(fp.stat().st_size / (1024**3), 1)
+            quant = name.replace(".gguf", "").rsplit("-", 1)[-1]
+            vram = _VRAM.get(quant, size_gb)
+            models.append({"name": name, "size_gb": size_gb, "vram_gb": vram})
+        return jsonify({"models": models})

@@ -378,15 +378,16 @@ let state = {
     const data = await res.json();
     const sel = document.getElementById('wanModel');
     sel.innerHTML = '';
-    const installed = data.installed || [];
-    if (installed.length === 0) {
+    const models = data.models || [];
+    if (models.length === 0) {
       sel.innerHTML = '<option value="">설치된 모델 없음</option>';
       return;
     }
-    installed.forEach((name, i) => {
+    models.forEach((m, i) => {
       const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name.replace('.gguf','');
+      opt.value = m.name;
+      const label = m.name.replace('.gguf','');
+      opt.textContent = `${label} (VRAM ${m.vram_gb}GB)`;
       if (i === 0) opt.selected = true;
       sel.appendChild(opt);
     });
