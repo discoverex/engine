@@ -70,12 +70,18 @@ requires = ["hatchling>=1.24.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/discoverex"]
+packages = ["src/discoverex", "infra"]
 
 [project.scripts]
 discoverex = "discoverex.adapters.inbound.cli.main:app"
 discoverex-orch-launcher = "discoverex.orchestrator_contract.launcher:main"
 discoverex-execution-launcher = "discoverex.adapters.outbound.execution.launcher:main"
+discoverex-build-job-spec = "infra.register.build_job_spec:main"
+discoverex-check-flow-run-status = "infra.register.check_flow_run_status:main"
+discoverex-deploy-prefect-flows = "infra.register.deploy_prefect_flows:main"
+discoverex-register-orchestrator-job = "infra.register.register_orchestrator_job:main"
+discoverex-register-prefect-job = "infra.register.register_prefect_job:main"
+discoverex-submit-job-spec = "infra.register.submit_job_spec:main"
 
 [tool.uv]
 index-url = "https://pypi.org/simple"

@@ -16,7 +16,7 @@ set +a
 
 cd "${ENGINE_ROOT}"
 
-python3 infra/register/register_prefect_job.py \
+python3 -m infra.register.register_prefect_job \
   --job-name quick-generate-1-https \
   --command generate \
   --execution-profile generator-pixart-gpu \
@@ -38,7 +38,7 @@ python3 infra/register/register_prefect_job.py \
   -o runtime.width=1024 \
   -o runtime.height=1024
 
-python3 infra/register/register_prefect_job.py \
+python3 -m infra.register.register_prefect_job \
   --job-name quick-generate-2-https \
   --command generate \
   --execution-profile generator-pixart-gpu \

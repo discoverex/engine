@@ -6,18 +6,35 @@ import json
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any, TypedDict, cast
 
-from branch_deployments import (
+from prefect import flow
+from prefect.runner.storage import GitRepository
+from prefect.settings import PREFECT_API_URL, temporary_settings
+
+from infra.register.branch_deployments import (
     DEFAULT_FLOW_KIND,
     SUPPORTED_FLOW_KINDS,
     deployment_name_for_branch,
     flow_entrypoint_for_kind,
 )
-from prefect import flow
-from prefect.runner.storage import GitRepository
-from prefect.settings import PREFECT_API_URL, temporary_settings
-from register_orchestrator_job import _extra_headers, _normalize_api_url
-from settings import SETTINGS, default_deployment_version
+from infra.register.register_orchestrator_job import _extra_headers, _normalize_api_url
+from infra.register.settings import SETTINGS, default_deployment_version
+
+
+class DeploymentMetadata(TypedDict, total=False):
+    deployment_name: str
+    deployment_id: str
+    engine: str
+    flow_kind: str
+    branch: str
+    repo_url: str
+    ref: str
+    entrypoint: str
+    work_pool_name: str
+    work_queue_name: str
+    deployment_version: str
+    deployment_suffix: str
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -28,7 +45,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--engine", default=SETTINGS.engine_name)
     parser.add_argument("--branch", required=True)
-    parser.add_argument("--flow-kind", choices=SUPPORTED_FLOW_KINDS, default=DEFAULT_FLOW_KIND)
+    parser.add_argument(
+        "--flow-kind", choices=SUPPORTED_FLOW_KINDS, default=DEFAULT_FLOW_KIND
+    )
     parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
     parser.add_argument("--work-pool-name", default=SETTINGS.prefect_work_pool)
     parser.add_argument("--flow-entrypoint", default=None)
@@ -60,15 +79,9 @@ def _is_commit_sha(value: str) -> bool:
 
 
 def _flow_source(repo_url: str, ref: str) -> GitRepository:
-    kwargs: dict[str, object] = {
-        "url": repo_url,
-        "pull_interval": None,
-    }
     if _is_commit_sha(ref):
-        kwargs["commit_sha"] = ref
-    else:
-        kwargs["branch"] = ref
-    return GitRepository(**kwargs)
+        return GitRepository(url=repo_url, pull_interval=None, commit_sha=ref)
+    return GitRepository(url=repo_url, pull_interval=None, branch=ref)
 
 
 def _deployment_metadata(
@@ -84,7 +97,7 @@ def _deployment_metadata(
     deployment_version: str,
     deployment_name: str | None,
     deployment_suffix: str,
-) -> dict[str, str]:
+) -> DeploymentMetadata:
     resolved_name = str(deployment_name or "").strip() or deployment_name_for_branch(
         branch,
         flow_kind=flow_kind,
@@ -146,6 +159,7 @@ def _deploy_remote_flow(
         source=_flow_source(repo_url, ref),
         entrypoint=flow_entrypoint,
     )
+    remote_flow = cast(Any, remote_flow)
     deployment_id = remote_flow.deploy(
         name=deployment_name,
         work_pool_name=work_pool_name,
@@ -165,7 +179,7 @@ def main() -> int:
     args = _build_parser().parse_args()
     if not args.prefect_api_url:
         raise SystemExit("--prefect-api-url is required unless PREFECT_API_URL is set")
-    deployment = _deployment_metadata(
+    deployment: DeploymentMetadata = _deployment_metadata(
         engine=args.engine,
         flow_kind=args.flow_kind,
         branch=args.branch,

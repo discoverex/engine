@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import importlib
 import json
 import os
 import sys
-from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "infra" / "register"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
+from infra.register import deploy_prefect_flows as _deploy_flows
 
-deploy_flows = importlib.import_module("deploy_prefect_flows")
+deploy_flows = cast(Any, _deploy_flows)
 
 
 def test_resolved_entrypoint_defaults_by_flow_kind() -> None:
@@ -178,6 +174,7 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
             _ = (exc_type, exc, tb)
 
     monkeypatch.setattr(deploy_flows, "_prefect_settings", lambda _url: _FakeContext())
+
     def _fake_deploy(**kwargs: Any) -> str:
         captured["deploy_kwargs"] = kwargs
         return "deployment-456"
@@ -225,11 +222,14 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
         "deployment_name": "discoverex-naturalness-experiment-feat-remote-source",
         "deployment_suffix": "",
     }
-    assert out["deployment_name"] == "discoverex-naturalness-experiment-feat-remote-source"
+    assert (
+        out["deployment_name"] == "discoverex-naturalness-experiment-feat-remote-source"
+    )
 
 
 def test_build_parser_marks_script_as_remote_source_registrar() -> None:
     parser = deploy_flows._build_parser()
+    assert parser.description is not None
     assert "remote-source Prefect deployment" in parser.description
     parsed = parser.parse_args(["--branch", "dev"])
     assert parsed.branch == "dev"

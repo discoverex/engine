@@ -4,11 +4,13 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 import yaml
-from register_orchestrator_job import submit_job_spec
-from settings import SETTINGS
+
+from infra.register.job_types import JobSpec
+from infra.register.register_orchestrator_job import submit_job_spec
+from infra.register.settings import SETTINGS
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -25,7 +27,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _load_job_spec(args: argparse.Namespace) -> dict[str, Any]:
+def _load_job_spec(args: argparse.Namespace) -> JobSpec:
     if bool(args.job_spec_file) == bool(args.job_spec_json):
         raise SystemExit("provide exactly one of --job-spec-file or --job-spec-json")
     if args.job_spec_file:
@@ -38,7 +40,7 @@ def _load_job_spec(args: argparse.Namespace) -> dict[str, Any]:
         raise SystemExit(f"invalid job spec (YAML/JSON): {exc}") from exc
     if not isinstance(payload, dict):
         raise SystemExit("job spec must decode to an object")
-    return payload
+    return cast(JobSpec, payload)
 
 
 def main() -> int:

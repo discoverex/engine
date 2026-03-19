@@ -6,12 +6,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from branch_deployments import DEFAULT_FLOW_KIND, deployment_name_for_branch
-from settings import SETTINGS
+from infra.register.branch_deployments import (
+    DEFAULT_FLOW_KIND,
+    deployment_name_for_branch,
+)
+from infra.register.settings import SETTINGS
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-ENGINE_ROOT = SCRIPT_DIR.parent.parent
-LOW_LEVEL_SCRIPT = SCRIPT_DIR / "register_orchestrator_job.py"
+ENGINE_ROOT = Path(__file__).resolve().parents[2]
+LOW_LEVEL_MODULE = "infra.register.register_orchestrator_job"
 
 
 def _git_output(*args: str) -> str:
@@ -27,11 +29,11 @@ def _git_output(*args: str) -> str:
 
 
 def _default_repo_url() -> str:
-    return SETTINGS.engine_repo_url or _git_output("remote", "get-url", "origin")
+    return str(SETTINGS.engine_repo_url or _git_output("remote", "get-url", "origin"))
 
 
 def _default_ref() -> str:
-    return SETTINGS.engine_repo_ref or _git_output("branch", "--show-current")
+    return str(SETTINGS.engine_repo_ref or _git_output("branch", "--show-current"))
 
 
 def _flow_kind_for_command(command: str) -> str:
@@ -135,7 +137,8 @@ def _build_forward_argv(args: argparse.Namespace) -> list[str]:
     )
     argv = [
         sys.executable,
-        str(LOW_LEVEL_SCRIPT),
+        "-m",
+        LOW_LEVEL_MODULE,
         "--deployment",
         deployment,
         "--engine",

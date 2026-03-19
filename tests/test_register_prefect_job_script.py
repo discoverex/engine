@@ -3,21 +3,16 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from pathlib import Path
 
-SCRIPT = (
-    Path(__file__).resolve().parents[1]
-    / "infra"
-    / "register"
-    / "register_prefect_job.py"
-)
+MODULE = "infra.register.register_prefect_job"
 
 
 def test_prefect_wrapper_dry_run_defaults_to_remote_worker_profile() -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--command",
             "generate",
@@ -83,7 +78,8 @@ def test_prefect_wrapper_allows_local_tiny_profile_override() -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--execution-profile",
             "local-tiny-cpu",
@@ -121,7 +117,8 @@ def test_prefect_wrapper_forwards_prompt_args() -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--command",
             "generate",
@@ -157,7 +154,8 @@ def test_prefect_wrapper_forwards_config_selection() -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            str(SCRIPT),
+            "-m",
+            MODULE,
             "--dry-run",
             "--command",
             "verify",
@@ -181,7 +179,7 @@ def test_prefect_wrapper_forwards_config_selection() -> None:
 
 def test_prefect_wrapper_help_marks_script_as_compatibility_helper() -> None:
     proc = subprocess.run(
-        [sys.executable, str(SCRIPT), "--help"],
+        [sys.executable, "-m", MODULE, "--help"],
         capture_output=True,
         text=True,
         check=False,

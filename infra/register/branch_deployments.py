@@ -36,7 +36,9 @@ def normalize_flow_kind(flow_kind: str) -> FlowKind:
     cleaned = str(flow_kind).strip().lower()
     if cleaned not in SUPPORTED_FLOW_KINDS:
         supported = ", ".join(SUPPORTED_FLOW_KINDS)
-        raise ValueError(f"unsupported flow_kind={flow_kind!r}; expected one of: {supported}")
+        raise ValueError(
+            f"unsupported flow_kind={flow_kind!r}; expected one of: {supported}"
+        )
     return cleaned  # type: ignore[return-value]
 
 

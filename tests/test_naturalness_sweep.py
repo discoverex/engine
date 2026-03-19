@@ -56,7 +56,10 @@ parameters:
     first = manifest["jobs"][0]
     assert first["job_spec"]["inputs"]["args"]["sweep_id"] == "test-sweep"
     assert first["job_spec"]["inputs"]["args"]["scenario_id"] in {"s1", "s2"}
-    assert "adapters.tracker.experiment_name=discoverex-naturalness-search" in first["job_spec"]["inputs"]["overrides"]
+    assert (
+        "adapters.tracker.experiment_name=discoverex-naturalness-search"
+        in first["job_spec"]["inputs"]["overrides"]
+    )
     assert first["job_spec"]["outputs_prefix"].startswith(
         "exp/discoverex-naturalness-search/test-sweep/"
     )
@@ -86,7 +89,10 @@ def test_submit_manifest_defaults_to_naturalness_deployment(monkeypatch) -> None
                 "job_name": "job-1",
                 "combo_id": "combo-001",
                 "scenario_id": "scene-001",
-                "job_spec": {"job_name": "job-1", "inputs": {"args": {}, "overrides": []}},
+                "job_spec": {
+                    "job_name": "job-1",
+                    "inputs": {"args": {}, "overrides": []},
+                },
             }
         ],
     }
@@ -105,7 +111,9 @@ def test_submit_manifest_defaults_to_naturalness_deployment(monkeypatch) -> None
     assert result["results"][0]["deployment"] == "discoverex-naturalness-experiment-dev"
 
 
-def test_build_sweep_manifest_supports_baseline_without_parameters(tmp_path: Path) -> None:
+def test_build_sweep_manifest_supports_baseline_without_parameters(
+    tmp_path: Path,
+) -> None:
     base_job_spec = tmp_path / "base.yaml"
     base_job_spec.write_text(
         """
@@ -152,7 +160,10 @@ scenarios:
     assert manifest["scenario_count"] == 2
     assert manifest["job_count"] == 2
     assert manifest["jobs"][0]["combo_id"] == "combo-001"
-    assert "runtime.model_runtime.seed=7" in manifest["jobs"][0]["job_spec"]["inputs"]["overrides"]
+    assert (
+        "runtime.model_runtime.seed=7"
+        in manifest["jobs"][0]["job_spec"]["inputs"]["overrides"]
+    )
 
 
 def test_build_sweep_manifest_supports_variant_pack_jobs(tmp_path: Path) -> None:
