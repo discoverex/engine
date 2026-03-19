@@ -182,6 +182,7 @@ def _generate_regions_stage(
     hidden_handle = context.hidden_region_model.load(
         context.model_versions.hidden_region
     )
+    logger.info("loading hidden_region model version=%s", context.model_versions.hidden_region)
     try:
         boxes = context.hidden_region_model.predict(
             hidden_handle,
@@ -193,8 +194,10 @@ def _generate_regions_stage(
         )
         regions_to_process = build_candidate_regions(boxes)
     finally:
+        logger.info("unloading hidden_region model before object_generator")
         unload_model(context.hidden_region_model)
 
+    logger.info("loading object_generator model version=%s", context.model_versions.object_generator)
     object_handle = context.object_generator_model.load(
         context.model_versions.object_generator
     )
@@ -208,9 +211,11 @@ def _generate_regions_stage(
             object_negative_prompt=object_negative_prompt,
         )
     finally:
+        logger.info("unloading object_generator model before inpaint")
         unload_model(context.object_generator_model)
 
     # 2. Blend generated objects into regions (sequential load)
+    logger.info("loading inpaint model version=%s", context.model_versions.inpaint)
     inpaint_handle = context.inpaint_model.load(context.model_versions.inpaint)
     try:
         return generate_regions(
@@ -224,6 +229,7 @@ def _generate_regions_stage(
             object_negative_prompt=object_negative_prompt,
         )
     finally:
+        logger.info("unloading inpaint model after region generation")
         unload_model(context.inpaint_model)
 
 
@@ -236,6 +242,7 @@ def _detect_regions_stage(
     hidden_handle = context.hidden_region_model.load(
         context.model_versions.hidden_region
     )
+    logger.info("loading hidden_region model version=%s", context.model_versions.hidden_region)
     try:
         boxes = context.hidden_region_model.predict(
             hidden_handle,
@@ -247,6 +254,7 @@ def _detect_regions_stage(
         )
         return build_candidate_regions(boxes)
     finally:
+        logger.info("unloading hidden_region model before object_generator")
         unload_model(context.hidden_region_model)
 
 
@@ -259,6 +267,7 @@ def _generate_objects_stage(
     object_prompt: str,
     object_negative_prompt: str,
 ) -> dict[str, GeneratedObjectAsset]:
+    logger.info("loading object_generator model version=%s", context.model_versions.object_generator)
     object_handle = context.object_generator_model.load(
         context.model_versions.object_generator
     )
@@ -272,6 +281,7 @@ def _generate_objects_stage(
             object_negative_prompt=object_negative_prompt,
         )
     finally:
+        logger.info("unloading object_generator model after object generation")
         unload_model(context.object_generator_model)
 
 
@@ -286,6 +296,7 @@ def _inpaint_regions_stage(
     object_prompt: str,
     object_negative_prompt: str,
 ) -> tuple[list[Any], list[RegionPromptRecord]]:
+    logger.info("loading inpaint model version=%s", context.model_versions.inpaint)
     inpaint_handle = context.inpaint_model.load(context.model_versions.inpaint)
     try:
         return generate_regions(
@@ -299,6 +310,7 @@ def _inpaint_regions_stage(
             object_negative_prompt=object_negative_prompt,
         )
     finally:
+        logger.info("unloading inpaint model after region generation")
         unload_model(context.inpaint_model)
 
 

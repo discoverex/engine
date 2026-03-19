@@ -124,6 +124,7 @@ class HFHiddenRegionModel:
                 self._detector = AutoModelForObjectDetection.from_pretrained(
                     self.model_id,
                     revision=self.revision,
+                    low_cpu_mem_usage=False,
                 )
                 if handle.device:
                     self._detector = self._detector.to(handle.device)
