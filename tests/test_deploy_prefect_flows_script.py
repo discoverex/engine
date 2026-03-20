@@ -86,6 +86,25 @@ def test_deployment_job_variables_requires_worker_env(monkeypatch: Any) -> None:
         raise AssertionError("expected missing worker env validation")
 
 
+def test_deployment_job_variables_passes_huggingface_tokens(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setenv("PREFECT_API_URL", "https://prefect.example/api")
+    monkeypatch.setenv("STORAGE_API_URL", "https://storage.example")
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://mlflow.example")
+    monkeypatch.setenv("HF_TOKEN", "hf-token")
+    monkeypatch.setenv("HUGGINGFACE_HUB_TOKEN", "hub-token")
+    monkeypatch.setenv("HUGGINGFACE_TOKEN", "legacy-token")
+
+    variables = deploy_flows._deployment_job_variables(
+        work_pool_name="discoverex-fixed-process"
+    )
+
+    assert variables["env"]["HF_TOKEN"] == "hf-token"
+    assert variables["env"]["HUGGINGFACE_HUB_TOKEN"] == "hub-token"
+    assert variables["env"]["HUGGINGFACE_TOKEN"] == "legacy-token"
+
+
 def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> None:
     captured: dict[str, Any] = {}
 

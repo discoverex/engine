@@ -304,6 +304,35 @@ def test_build_runtime_env_merges_runtime_extra_env(
     assert env["UV_CACHE_DIR"] == "/cache/uv"
 
 
+def test_build_runtime_env_preserves_huggingface_auth_from_worker_env(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("HF_TOKEN", "hf-token")
+    monkeypatch.setenv("HUGGINGFACE_HUB_TOKEN", "hub-token")
+    monkeypatch.setenv("HUGGINGFACE_TOKEN", "legacy-token")
+    monkeypatch.setattr("infra.prefect.runtime.repo_root", lambda: tmp_path)
+
+    env = build_runtime_env(
+        job_spec={
+            "engine": "discoverex",
+            "run_mode": "inline",
+            "job_name": "job-1",
+            "env": {},
+            "inputs": {"runtime": {"extra_env": {}}},
+        },
+        flow_run_id="flow-1",
+        attempt=1,
+        outputs_prefix="jobs/flow-1/attempt-1/",
+        resume_key=None,
+        checkpoint_dir=None,
+    )
+
+    assert env["HF_TOKEN"] == "hf-token"
+    assert env["HUGGINGFACE_HUB_TOKEN"] == "hub-token"
+    assert env["HUGGINGFACE_TOKEN"] == "legacy-token"
+
+
 def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

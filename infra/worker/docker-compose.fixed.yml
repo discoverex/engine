@@ -27,6 +27,9 @@ services:
       MODEL_CACHE_DIR: /var/lib/discoverex/cache/models
       UV_CACHE_DIR: /var/lib/discoverex/cache/uv
       HF_HOME: /var/lib/discoverex/cache/models/hf
+      HF_TOKEN: ${HF_TOKEN:-}
+      HUGGINGFACE_HUB_TOKEN: ${HUGGINGFACE_HUB_TOKEN:-}
+      HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:-}
       PREFECT_WORKER_LIMIT: ${PREFECT_WORKER_LIMIT:-1}
     volumes:
       - ${WORKER_RUNTIME_DIR:-../../runtime/worker}:/var/lib/discoverex

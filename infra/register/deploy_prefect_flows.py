@@ -166,6 +166,12 @@ def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
         ("MODEL_CACHE_DIR", "/var/lib/discoverex/cache/models"),
         ("UV_CACHE_DIR", "/var/lib/discoverex/cache/uv"),
         ("HF_HOME", "/var/lib/discoverex/cache/models/hf"),
+        ("HF_TOKEN", os.environ.get("HF_TOKEN", "")),
+        (
+            "HUGGINGFACE_HUB_TOKEN",
+            os.environ.get("HUGGINGFACE_HUB_TOKEN", ""),
+        ),
+        ("HUGGINGFACE_TOKEN", os.environ.get("HUGGINGFACE_TOKEN", "")),
         ("ORCHESTRATOR_CHECKPOINT_DIR", "/var/lib/discoverex/checkpoints"),
         ("NVIDIA_VISIBLE_DEVICES", "all"),
     )
