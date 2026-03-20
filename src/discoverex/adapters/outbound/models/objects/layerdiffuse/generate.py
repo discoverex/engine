@@ -6,6 +6,8 @@ from typing import Any
 
 from PIL import Image  # type: ignore
 
+from .load import load_sdxl_decode_components, load_sdxl_denoise_components, load_sdxl_text_components
+
 
 def _debug(message: str) -> None:
     print(f"[layerdiffuse-debug] {message}", file=sys.stderr, flush=True)
@@ -209,8 +211,10 @@ def _decode_latents_to_rgba_images(*, pipe: Any, latents: Any) -> list[Image.Ima
 
 
 def _decode_latents_with_components(*, runtime: Any, execution_device: Any, latents: Any) -> list[Image.Image]:
-    _move_component(getattr(runtime, "vae", None), execution_device)
-    decoded = runtime.vae.decode(latents, return_dict=False)[0]
+    decode_runtime = load_sdxl_decode_components(spec=runtime)
+    _move_component(decode_runtime.vae, execution_device)
+    decoded = decode_runtime.vae.decode(latents, return_dict=False)[0]
+    _move_component(decode_runtime.vae, "cpu")
     return _to_rgba_images(decoded)
 
 
@@ -279,14 +283,83 @@ def _build_prompt_embeds_with_components(
     negative_prompts: str | list[str],
     guidance_scale: float,
 ) -> tuple[Any, Any, Any, Any]:
-    _move_component(getattr(runtime, "text_encoder", None), execution_device)
-    _move_component(getattr(runtime, "text_encoder_2", None), execution_device)
-    return _build_prompt_embeds(
-        pipe=runtime.pipe,
-        execution_device=execution_device,
-        prompts=prompts,
-        negative_prompts=negative_prompts,
-        guidance_scale=guidance_scale,
+    import torch  # type: ignore
+
+    text_runtime = load_sdxl_text_components(spec=runtime)
+    _move_component(text_runtime.text_encoder, execution_device)
+    _move_component(text_runtime.text_encoder_2, execution_device)
+
+    prompt_list = [prompts] if isinstance(prompts, str) else prompts
+    negative_list = [negative_prompts] if isinstance(negative_prompts, str) else negative_prompts
+    prompt_2_list = prompt_list
+    negative_2_list = negative_list
+    batch_size = len(prompt_list)
+
+    _debug("encode_prompt:start")
+    prompt_embeds_list: list[Any] = []
+    pooled_prompt_embeds = None
+    for current_prompts, tokenizer, text_encoder in (
+        (prompt_list, text_runtime.tokenizer, text_runtime.text_encoder),
+        (prompt_2_list, text_runtime.tokenizer_2, text_runtime.text_encoder_2),
+    ):
+        text_inputs = tokenizer(
+            current_prompts,
+            padding="max_length",
+            max_length=tokenizer.model_max_length,
+            truncation=True,
+            return_tensors="pt",
+        )
+        encoded = text_encoder(text_inputs.input_ids.to(execution_device), output_hidden_states=True)
+        if pooled_prompt_embeds is None and encoded[0].ndim == 2:
+            pooled_prompt_embeds = encoded[0]
+        prompt_embeds_list.append(encoded.hidden_states[-2])
+
+    prompt_embeds = torch.concat(prompt_embeds_list, dim=-1)
+    negative_prompt_embeds = None
+    negative_pooled_prompt_embeds = None
+    if guidance_scale > 1.0:
+        negative_prompt_embeds_list: list[Any] = []
+        for current_prompts, tokenizer, text_encoder in (
+            (negative_list, text_runtime.tokenizer, text_runtime.text_encoder),
+            (negative_2_list, text_runtime.tokenizer_2, text_runtime.text_encoder_2),
+        ):
+            negative_inputs = tokenizer(
+                current_prompts,
+                padding="max_length",
+                max_length=tokenizer.model_max_length,
+                truncation=True,
+                return_tensors="pt",
+            )
+            encoded = text_encoder(
+                negative_inputs.input_ids.to(execution_device),
+                output_hidden_states=True,
+            )
+            if negative_pooled_prompt_embeds is None and encoded[0].ndim == 2:
+                negative_pooled_prompt_embeds = encoded[0]
+            negative_prompt_embeds_list.append(encoded.hidden_states[-2])
+        negative_prompt_embeds = torch.concat(negative_prompt_embeds_list, dim=-1)
+    _debug("encode_prompt:end")
+
+    prompt_embeds = prompt_embeds.to(dtype=text_runtime.text_encoder_2.dtype, device=execution_device)
+    bs_embed, seq_len, _ = prompt_embeds.shape
+    prompt_embeds = prompt_embeds.repeat(1, 1, 1).view(bs_embed, seq_len, -1)
+    pooled_prompt_embeds = pooled_prompt_embeds.repeat(1, 1).view(bs_embed, -1)
+
+    if guidance_scale > 1.0 and negative_prompt_embeds is not None and negative_pooled_prompt_embeds is not None:
+        negative_prompt_embeds = negative_prompt_embeds.to(
+            dtype=text_runtime.text_encoder_2.dtype,
+            device=execution_device,
+        )
+        negative_prompt_embeds = negative_prompt_embeds.repeat(1, 1, 1).view(batch_size, seq_len, -1)
+        negative_pooled_prompt_embeds = negative_pooled_prompt_embeds.repeat(1, 1).view(batch_size, -1)
+
+    _move_component(text_runtime.text_encoder, "cpu")
+    _move_component(text_runtime.text_encoder_2, "cpu")
+    return (
+        prompt_embeds,
+        negative_prompt_embeds,
+        pooled_prompt_embeds,
+        negative_pooled_prompt_embeds,
     )
 
 
@@ -384,44 +457,59 @@ def _sample_latents_with_components(
         negative_prompts=negative_prompts,
         guidance_scale=guidance_scale,
     )
-    _offload_component_runtime(runtime=runtime, include_text=True, include_unet=False, include_vae=False)
     _debug("text_components:offloaded")
 
     batch_size = len(prompts) if isinstance(prompts, list) else 1
     num_images_per_prompt = 1
     do_cfg = guidance_scale > 1.0
-    _move_component(runtime.unet, execution_device)
+    denoise_runtime = load_sdxl_denoise_components(spec=runtime)
+    _move_component(denoise_runtime.unet, execution_device)
     _debug(
         "component_runtime:devices "
         f"execution_device={execution_device} "
-        f"text_encoder={_module_device(runtime.text_encoder)} "
-        f"text_encoder_2={_module_device(runtime.text_encoder_2)} "
-        f"unet={_module_device(runtime.unet)} "
-        f"vae={_module_device(runtime.vae)}"
+        f"text_encoder=cpu "
+        f"text_encoder_2=cpu "
+        f"unet={_module_device(denoise_runtime.unet)} "
+        f"vae=not_loaded"
     )
 
-    runtime.scheduler.set_timesteps(num_inference_steps, device=execution_device)
-    timesteps = runtime.scheduler.timesteps
-    latents = runtime.pipe.prepare_latents(
-        batch_size * num_images_per_prompt,
-        runtime.unet.config.in_channels,
-        height,
-        width,
-        prompt_embeds.dtype,
-        execution_device,
-        generator,
-        None,
-    )
-    extra_step_kwargs = runtime.pipe.prepare_extra_step_kwargs(generator, 0.0)
-    add_text_embeds = pooled_prompt_embeds
-    text_encoder_projection_dim = int(runtime.text_encoder_2.config.projection_dim)
-    add_time_ids = runtime.pipe._get_add_time_ids(
-        (height, width),
-        (0, 0),
-        (height, width),
+    denoise_runtime.scheduler.set_timesteps(num_inference_steps, device=execution_device)
+    timesteps = denoise_runtime.scheduler.timesteps
+    latents = torch.randn(
+        (
+            batch_size * num_images_per_prompt,
+            denoise_runtime.unet.config.in_channels,
+            int(height) // 8,
+            int(width) // 8,
+        ),
+        generator=generator,
+        device=execution_device,
         dtype=prompt_embeds.dtype,
-        text_encoder_projection_dim=text_encoder_projection_dim,
     )
+    latents = latents * denoise_runtime.scheduler.init_noise_sigma
+    extra_step_kwargs: dict[str, Any] = {}
+    step_parameters = set(inspect.signature(denoise_runtime.scheduler.step).parameters.keys())
+    if "generator" in step_parameters:
+        extra_step_kwargs["generator"] = generator
+    if "eta" in step_parameters:
+        extra_step_kwargs["eta"] = 0.0
+    add_text_embeds = pooled_prompt_embeds
+    text_encoder_projection_dim = 1280
+    add_time_ids = torch.tensor(
+        [[height, width, 0, 0, height, width]],
+        dtype=prompt_embeds.dtype,
+        device=execution_device,
+    )
+    expected_add_embed_dim = denoise_runtime.unet.add_embedding.linear_1.in_features
+    passed_add_embed_dim = (
+        denoise_runtime.unet.config.addition_time_embed_dim * add_time_ids.shape[-1]
+        + text_encoder_projection_dim
+    )
+    if expected_add_embed_dim != passed_add_embed_dim:
+        raise ValueError(
+            "component staged add_time_ids dimension mismatch "
+            f"expected={expected_add_embed_dim} got={passed_add_embed_dim}"
+        )
     negative_add_time_ids = add_time_ids
     if do_cfg:
         prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
@@ -438,19 +526,22 @@ def _sample_latents_with_components(
         f"add_time_ids={_tensor_device(add_time_ids)}"
     )
     timestep_cond = None
-    if runtime.unet.config.time_cond_proj_dim is not None:
+    if denoise_runtime.unet.config.time_cond_proj_dim is not None:
         guidance_scale_tensor = torch.tensor(guidance_scale - 1).repeat(batch_size * num_images_per_prompt)
-        timestep_cond = runtime.pipe.get_guidance_scale_embedding(
-            guidance_scale_tensor,
-            embedding_dim=runtime.unet.config.time_cond_proj_dim,
-        ).to(device=execution_device, dtype=latents.dtype)
+        half_dim = denoise_runtime.unet.config.time_cond_proj_dim // 2
+        emb = torch.log(torch.tensor(10000.0, device=execution_device)) / (half_dim - 1)
+        emb = torch.exp(torch.arange(half_dim, dtype=latents.dtype, device=execution_device) * -emb)
+        timestep_cond = guidance_scale_tensor.to(latents.dtype).to(execution_device)[:, None] * emb[None, :]
+        timestep_cond = torch.cat([torch.sin(timestep_cond), torch.cos(timestep_cond)], dim=1)
+        if denoise_runtime.unet.config.time_cond_proj_dim % 2 == 1:
+            timestep_cond = torch.nn.functional.pad(timestep_cond, (0, 1))
 
     _debug("denoise_components:start")
     for timestep in timesteps:
         latent_model_input = torch.cat([latents] * 2) if do_cfg else latents
-        latent_model_input = runtime.scheduler.scale_model_input(latent_model_input, timestep)
+        latent_model_input = denoise_runtime.scheduler.scale_model_input(latent_model_input, timestep)
         added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}
-        noise_pred = runtime.unet(
+        noise_pred = denoise_runtime.unet(
             latent_model_input,
             timestep,
             encoder_hidden_states=prompt_embeds,
@@ -463,7 +554,7 @@ def _sample_latents_with_components(
             noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
             noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
         latents_dtype = latents.dtype
-        latents = runtime.scheduler.step(
+        latents = denoise_runtime.scheduler.step(
             noise_pred,
             timestep,
             latents,
@@ -473,7 +564,7 @@ def _sample_latents_with_components(
         if latents.dtype != latents_dtype and getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
             latents = latents.to(latents_dtype)
     _debug("denoise_components:end")
-    _offload_component_runtime(runtime=runtime, include_text=False, include_unet=True, include_vae=False)
+    _move_component(denoise_runtime.unet, "cpu")
     _debug("unet_components:offloaded")
     _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
     return latents

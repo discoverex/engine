@@ -252,13 +252,21 @@ def test_generate_rgba_component_staged_offloads_text_and_unet() -> None:
 
     fake_torch = SimpleNamespace(
         Generator=lambda device="cpu": _FakeGenerator(),
-        tensor=lambda value: _FakeTensor(value),
+        tensor=lambda value, **kwargs: _FakeTensor(value),
         cat=lambda tensors, dim=0: tensors[0],
+        concat=lambda tensors, dim=0: tensors[0],
+        randn=lambda shape, generator=None, device=None, dtype=None: _FakeTensor("latents", shape=shape),
+        log=lambda value: _FakeTensor("log", shape=(1,), ndim=1),
+        exp=lambda value: _FakeTensor("exp", shape=(1,), ndim=1),
+        arange=lambda end, dtype=None, device=None: _FakeTensor("arange", shape=(1,), ndim=1),
+        sin=lambda value: _FakeTensor("sin"),
+        cos=lambda value: _FakeTensor("cos"),
         cuda=SimpleNamespace(
             is_available=lambda: False,
             empty_cache=lambda: None,
         ),
         backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: False)),
+        nn=SimpleNamespace(functional=SimpleNamespace(pad=lambda value, pad: value)),
     )
     original_torch = sys.modules.get("torch")
     sys.modules["torch"] = fake_torch
@@ -266,13 +274,18 @@ def test_generate_rgba_component_staged_offloads_text_and_unet() -> None:
     class _FakeTensor:
         dtype = "float16"
 
-        def __init__(self, value: object) -> None:
+        def __init__(self, value: object, *, shape: tuple[int, ...] = (1, 77, 16), ndim: int | None = None) -> None:
             self.value = value
+            self.shape = shape
+            self.ndim = ndim if ndim is not None else len(shape)
 
         def to(self, *args: object, **kwargs: object) -> "_FakeTensor":
             return self
 
         def repeat(self, *args: object) -> "_FakeTensor":
+            return self
+
+        def view(self, *args: object) -> "_FakeTensor":
             return self
 
         def chunk(self, count: int) -> tuple["_FakeTensor", "_FakeTensor"]:
@@ -297,17 +310,19 @@ def test_generate_rgba_component_staged_offloads_text_and_unet() -> None:
         def __init__(self) -> None:
             self.moves: list[str] = []
             self.config = SimpleNamespace(projection_dim=1280)
+            self.dtype = "float16"
 
         def to(self, device: str) -> "_FakeEncoder":
             self.moves.append(device)
             return self
 
     class _FakeUnet:
-        config = SimpleNamespace(in_channels=4, time_cond_proj_dim=None)
+        config = SimpleNamespace(in_channels=4, time_cond_proj_dim=None, addition_time_embed_dim=256)
 
         def __init__(self) -> None:
             self.moves: list[str] = []
             self.calls: int = 0
+            self.add_embedding = SimpleNamespace(linear_1=SimpleNamespace(in_features=5376))
 
         def to(self, device: str) -> "_FakeUnet":
             self.moves.append(device)
@@ -320,6 +335,7 @@ def test_generate_rgba_component_staged_offloads_text_and_unet() -> None:
     class _FakeScheduler:
         def __init__(self) -> None:
             self.timesteps = [1]
+            self.init_noise_sigma = 1.0
 
         def set_timesteps(self, num_inference_steps: int, device: str | None = None) -> None:
             self.timesteps = [1]
@@ -347,54 +363,50 @@ def test_generate_rgba_component_staged_offloads_text_and_unet() -> None:
         def decode(self, latents: object, return_dict: bool = False) -> tuple[list[Image.Image]]:
             return ([Image.new("RGBA", (384, 384), color=(0, 0, 0, 255))],)
 
-    class _FakePipe:
+    class _FakeTokenizer:
+        model_max_length = 77
+
+        def __call__(self, prompts: object, **kwargs: object) -> SimpleNamespace:
+            return SimpleNamespace(input_ids=_FakeTensor("input_ids"))
+
+    text_encoder = _FakeEncoder()
+    text_encoder_2 = _FakeEncoder()
+    unet = _FakeUnet()
+    scheduler = _FakeScheduler()
+    vae = _FakeVAE()
+
+    class _FakeEncoderOutput:
         def __init__(self) -> None:
-            self._execution_device = "cuda"
-            self.text_encoder = _FakeEncoder()
-            self.text_encoder_2 = _FakeEncoder()
-            self.unet = _FakeUnet()
-            self.scheduler = _FakeScheduler()
-            self.vae = _FakeVAE()
+            self.hidden_states = [_FakeTensor("h0"), _FakeTensor("h1"), _FakeTensor("h2")]
 
-        def encode_prompt(self, **kwargs: object) -> tuple[_FakeTensor, _FakeTensor, _FakeTensor, _FakeTensor]:
-            return (_FakeTensor("prompt"), _FakeTensor("negative"), _FakeTensor("pooled"), _FakeTensor("negative_pooled"))
+        def __getitem__(self, idx: int) -> _FakeTensor:
+            return _FakeTensor("pooled", shape=(1, 16), ndim=2)
 
-        def prepare_latents(
-            self,
-            batch_size: int,
-            channels: int,
-            height: int,
-            width: int,
-            dtype: object,
-            device: str,
-            generator: object,
-            latents: object,
-        ) -> _FakeTensor:
-            return _FakeTensor("latents")
+    class _FakeTextModel(_FakeEncoder):
+        def __call__(self, input_ids: object, output_hidden_states: bool = True) -> _FakeEncoderOutput:
+            return _FakeEncoderOutput()
 
-        def prepare_extra_step_kwargs(self, generator: object, eta: float) -> dict[str, object]:
-            return {}
+    text_model = _FakeTextModel()
+    text_model_2 = _FakeTextModel()
+    runtime = SimpleNamespace()
 
-        def _get_add_time_ids(
-            self,
-            original_size: tuple[int, int],
-            crops_coords_top_left: tuple[int, int],
-            target_size: tuple[int, int],
-            dtype: object,
-            text_encoder_projection_dim: int,
-        ) -> _FakeTensor:
-            return _FakeTensor("time_ids")
-
-    pipe = _FakePipe()
-    runtime = SimpleNamespace(
-        pipe=pipe,
-        tokenizer=object(),
-        tokenizer_2=object(),
-        text_encoder=pipe.text_encoder,
-        text_encoder_2=pipe.text_encoder_2,
-        unet=pipe.unet,
-        scheduler=pipe.scheduler,
-        vae=pipe.vae,
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.generate.load_sdxl_text_components",
+        lambda spec: SimpleNamespace(
+            tokenizer=_FakeTokenizer(),
+            tokenizer_2=_FakeTokenizer(),
+            text_encoder=text_model,
+            text_encoder_2=text_model_2,
+        ),
+    )
+    monkeypatch.setattr(
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.generate.load_sdxl_denoise_components",
+        lambda spec: SimpleNamespace(unet=unet, scheduler=scheduler),
+    )
+    monkeypatch.setattr(
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.generate.load_sdxl_decode_components",
+        lambda spec: SimpleNamespace(vae=vae),
     )
     model = type(
         "_Model",
@@ -420,16 +432,17 @@ def test_generate_rgba_component_staged_offloads_text_and_unet() -> None:
             guidance_scale=5.0,
         )
     finally:
+        monkeypatch.undo()
         if original_torch is None:
             sys.modules.pop("torch", None)
         else:
             sys.modules["torch"] = original_torch
 
     assert image.mode == "RGBA"
-    assert pipe.text_encoder.moves == ["cuda", "cpu"]
-    assert pipe.text_encoder_2.moves == ["cuda", "cpu"]
-    assert pipe.unet.moves == ["cuda", "cpu"]
-    assert pipe.vae.moves == ["cuda", "cpu"]
+    assert text_model.moves == ["cuda", "cpu"]
+    assert text_model_2.moves == ["cuda", "cpu"]
+    assert unet.moves == ["cuda", "cpu"]
+    assert vae.moves == ["cuda", "cpu"]
 
 
 def test_to_rgba_image_converts_tensor_output() -> None:
