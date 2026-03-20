@@ -32,6 +32,7 @@ def generate_region_objects(
     object_handle: ModelHandle,
     object_prompt: str,
     object_negative_prompt: str,
+    object_generation_size: int = _OBJECT_GENERATION_SIZE,
     max_vram_gb: float | None = None,
 ) -> dict[str, GeneratedObjectAsset]:
     masker = SamObjectMaskExtractor(
@@ -58,8 +59,8 @@ def generate_region_objects(
                     region_id=region.region_id,
                     index=batch_index,
                     total=total_regions,
-                    width=_OBJECT_GENERATION_SIZE,
-                    height=_OBJECT_GENERATION_SIZE,
+                    width=object_generation_size,
+                    height=object_generation_size,
                 )
             started = perf_counter()
             batch_prediction = None
@@ -71,8 +72,8 @@ def generate_region_objects(
                         params={
                             "output_paths": [str(path) for path in batch_paths],
                             "prompts": [object_generation_prompt(prompt) for prompt in batch_prompts],
-                            "width": _OBJECT_GENERATION_SIZE,
-                            "height": _OBJECT_GENERATION_SIZE,
+                            "width": object_generation_size,
+                            "height": object_generation_size,
                             "seed": context.runtime.model_runtime.seed,
                             "negative_prompt": object_negative_prompt or _DEFAULT_OBJECT_NEGATIVE,
                             "num_inference_steps": _OBJECT_GENERATION_STEPS,
@@ -94,8 +95,8 @@ def generate_region_objects(
                             mode="object_generation",
                             params={
                                 "output_path": str(candidate_path),
-                                "width": _OBJECT_GENERATION_SIZE,
-                                "height": _OBJECT_GENERATION_SIZE,
+                                "width": object_generation_size,
+                                "height": object_generation_size,
                                 "seed": context.runtime.model_runtime.seed,
                                 "prompt": object_generation_prompt(region_prompt),
                                 "negative_prompt": object_negative_prompt
