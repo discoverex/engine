@@ -1,0 +1,52 @@
+defaults:
+  - replay_eval
+  - override flows/animate: animate_pipeline
+  - _self_
+
+# --- Animate pipeline: WAN 2.2 TI2V-5B Low VRAM profile ---
+# WAN 2.2 5B (GGUF Q4_K_S) + 텍스트 인코더 CPU 오프로드 + WAN 2.2 VAE
+# CLIPVision 불필요 (Wan22ImageToVideoLatent가 VAE encode로 이미지 처리)
+# Expected VRAM: ~6.6GB
+models:
+  mode_classifier:
+    _target_: discoverex.adapters.outbound.models.gemini_mode_classifier.GeminiModeClassifier
+    model: ${oc.env:GEMINI_MODEL,gemini-2.5-flash}
+    max_retries: 3
+  vision_analyzer:
+    _target_: discoverex.adapters.outbound.models.gemini_vision_analyzer.GeminiVisionAnalyzer
+    model: ${oc.env:GEMINI_MODEL,gemini-2.5-flash}
+    max_retries: 3
+  animation_generation:
+    _target_: discoverex.adapters.outbound.models.comfyui_wan_generator.ComfyUIWanGenerator
+    base_url: ${oc.env:COMFYUI_URL,http://127.0.0.1:8188}
+    workflow_path: ${oc.env:COMFYUI_WORKFLOW_PATH,conf/workflows/wan22_ti2v_lowvram.json}
+    steps: 20
+    width: 480
+    height: 480
+    timeout_upload: 30
+    timeout_poll: 1800
+    poll_interval: 2.0
+    free_between_attempts: false
+  ai_validator:
+    _target_: discoverex.adapters.outbound.models.gemini_ai_validator.GeminiAIValidator
+    model: ${oc.env:GEMINI_MODEL,gemini-2.5-flash}
+    max_retries: 2
+  post_motion_classifier:
+    _target_: discoverex.adapters.outbound.models.gemini_post_motion.GeminiPostMotionClassifier
+    model: ${oc.env:GEMINI_MODEL,gemini-2.5-flash}
+    max_retries: 2
+
+animate_adapters:
+  bg_remover:
+    _target_: discoverex.adapters.outbound.animate.bg_remover.RembgBgRemover
+    model_name: u2net
+  numerical_validator:
+    _target_: discoverex.adapters.outbound.animate.numerical_validator.NumericalAnimationValidator
+  mask_generator:
+    _target_: discoverex.adapters.outbound.animate.mask_generator.PilMaskGenerator
+  keyframe_generator:
+    _target_: discoverex.adapters.outbound.animate.keyframe_generator.PilKeyframeGenerator
+  format_converter:
+    _target_: discoverex.adapters.outbound.animate.format_converter.MultiFormatConverter
+
+max_retries: 7
