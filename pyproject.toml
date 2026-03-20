@@ -70,7 +70,7 @@ requires = ["hatchling>=1.24.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/discoverex", "infra"]
+packages = ["src/discoverex", "infra", "delivery"]
 
 [project.scripts]
 discoverex = "discoverex.adapters.inbound.cli.main:app"
