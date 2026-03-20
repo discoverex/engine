@@ -498,7 +498,10 @@ def generate_rgba(
     pipe_bundle = model._load_pipeline(handle)
     runtime_kind, runtime = _unwrap_runtime(pipe_bundle)
     _debug(f"pipeline:loaded kind={runtime_kind}")
-    execution_device = getattr(getattr(runtime, "pipe", runtime), "_execution_device", handle.device)
+    if runtime_kind == "component_staged":
+        execution_device = getattr(handle, "device", getattr(model, "device", "cuda"))
+    else:
+        execution_device = getattr(getattr(runtime, "pipe", runtime), "_execution_device", handle.device)
     _debug(
         "runtime:config "
         f"handle_device={getattr(handle, 'device', 'unknown')} "
