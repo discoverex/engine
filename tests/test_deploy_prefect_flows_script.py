@@ -21,26 +21,15 @@ def test_resolved_entrypoint_defaults_by_flow_kind() -> None:
     )
 
 
-def test_flow_source_uses_commit_sha_for_full_hash() -> None:
-    source = deploy_flows._flow_source(
-        "https://github.com/example/engine.git",
-        "1234567890abcdef1234567890abcdef12345678",
-    )
+def test_load_flow_imports_entrypoint_object(monkeypatch: Any) -> None:
+    class _Module:
+        run_generate_job_flow = object()
 
-    assert source._url == "https://github.com/example/engine.git"
-    assert source._commit_sha == "1234567890abcdef1234567890abcdef12345678"
-    assert source._branch is None
+    monkeypatch.setattr(deploy_flows.importlib, "import_module", lambda _name: _Module())
 
+    loaded = deploy_flows._load_flow("prefect_flow:run_generate_job_flow")
 
-def test_flow_source_uses_branch_for_non_commit_ref() -> None:
-    source = deploy_flows._flow_source(
-        "https://github.com/example/engine.git",
-        "feat/remote-source",
-    )
-
-    assert source._url == "https://github.com/example/engine.git"
-    assert source._branch == "feat/remote-source"
-    assert source._commit_sha is None
+    assert loaded is _Module.run_generate_job_flow
 
 
 def test_prefect_settings_sets_headers_temporarily(monkeypatch: Any) -> None:
@@ -78,27 +67,26 @@ def test_prefect_settings_sets_headers_temporarily(monkeypatch: Any) -> None:
         assert os.environ["PREFECT_CLIENT_CUSTOM_HEADERS"] == previous
 
 
-def test_deploy_remote_flow_uses_from_source_and_deploy(monkeypatch: Any) -> None:
+def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> None:
     captured: dict[str, Any] = {}
 
-    class _FakeRemoteFlow:
+    class _FakeFlow:
         def deploy(self, **kwargs: Any) -> str:
             captured["deploy_kwargs"] = kwargs
             return "deployment-123"
 
-    def _fake_from_source(*, source: Any, entrypoint: str) -> _FakeRemoteFlow:
-        captured["source"] = source
+    fake_flow = _FakeFlow()
+
+    def _fake_load_flow(entrypoint: str) -> _FakeFlow:
         captured["entrypoint"] = entrypoint
-        return _FakeRemoteFlow()
+        return fake_flow
 
-    monkeypatch.setattr(deploy_flows.flow, "from_source", _fake_from_source)
+    monkeypatch.setattr(deploy_flows, "_load_flow", _fake_load_flow)
 
-    deployment_id = deploy_flows._deploy_remote_flow(
+    deployment_id = deploy_flows._deploy_embedded_flow(
         engine="discoverex",
         flow_kind="generate",
         branch="feat/remote-source",
-        repo_url="https://github.com/example/engine.git",
-        ref="feat/remote-source",
         flow_entrypoint="prefect_flow.py:run_generate_job_flow",
         work_pool_name="gpu-pool",
         work_queue_name="gpu-fixed",
@@ -109,8 +97,6 @@ def test_deploy_remote_flow_uses_from_source_and_deploy(monkeypatch: Any) -> Non
 
     assert deployment_id == "deployment-123"
     assert captured["entrypoint"] == "prefect_flow.py:run_generate_job_flow"
-    assert captured["source"]._url == "https://github.com/example/engine.git"
-    assert captured["source"]._branch == "feat/remote-source"
     assert captured["deploy_kwargs"] == {
         "name": "discoverex-naturalness-experiment-feat-remote-source",
         "work_pool_name": "gpu-pool",
@@ -155,7 +141,7 @@ def test_main_dry_run_prints_remote_deployment_metadata(
         "repo_url": "https://github.com/discoverex/engine.git",
         "ref": "dev",
         "entrypoint": "prefect_flow.py:run_verify_job_flow",
-        "work_pool_name": "local-process",
+        "work_pool_name": "discoverex-fixed",
         "work_queue_name": "gpu-fixed",
         "deployment_version": out["deployment_version"],
         "deployment_suffix": "",
@@ -181,7 +167,7 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
 
     monkeypatch.setattr(
         deploy_flows,
-        "_deploy_remote_flow",
+        "_deploy_embedded_flow",
         _fake_deploy,
     )
     monkeypatch.setattr(
@@ -213,10 +199,8 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
         "engine": "discoverex",
         "flow_kind": "generate",
         "branch": "feat/remote-source",
-        "repo_url": "https://github.com/example/engine.git",
-        "ref": "main",
         "flow_entrypoint": "prefect_flow.py:run_generate_job_flow",
-        "work_pool_name": "local-process",
+        "work_pool_name": "discoverex-fixed",
         "work_queue_name": "gpu-fixed",
         "deployment_version": out["deployment_version"],
         "deployment_name": "discoverex-naturalness-experiment-feat-remote-source",
@@ -230,7 +214,7 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
 def test_build_parser_marks_script_as_remote_source_registrar() -> None:
     parser = deploy_flows._build_parser()
     assert parser.description is not None
-    assert "remote-source Prefect deployment" in parser.description
+    assert "embedded-source Prefect deployment" in parser.description
     parsed = parser.parse_args(["--branch", "dev"])
     assert parsed.branch == "dev"
     assert parsed.flow_kind == "combined"

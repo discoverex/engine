@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any, TypedDict, cast
 
-from prefect import flow
-from prefect.runner.storage import GitRepository
 from prefect.settings import PREFECT_API_URL, temporary_settings
 
 from infra.register.branch_deployments import (
@@ -40,7 +39,7 @@ class DeploymentMetadata(TypedDict, total=False):
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Register a remote-source Prefect deployment for an engine flow kind."
+            "Register an embedded-source Prefect deployment for an engine flow kind."
         )
     )
     parser.add_argument("--engine", default=SETTINGS.engine_name)
@@ -69,19 +68,6 @@ def _resolved_entrypoint(flow_kind: str, cli_value: str | None) -> str:
     if explicit:
         return explicit
     return flow_entrypoint_for_kind(flow_kind)
-
-
-def _is_commit_sha(value: str) -> bool:
-    text = value.strip().lower()
-    if len(text) != 40:
-        return False
-    return all(ch in "0123456789abcdef" for ch in text)
-
-
-def _flow_source(repo_url: str, ref: str) -> GitRepository:
-    if _is_commit_sha(ref):
-        return GitRepository(url=repo_url, pull_interval=None, commit_sha=ref)
-    return GitRepository(url=repo_url, pull_interval=None, branch=ref)
 
 
 def _deployment_metadata(
@@ -141,13 +127,17 @@ def _prefect_settings(prefect_api_url: str) -> Iterator[None]:
             os.environ["PREFECT_CLIENT_CUSTOM_HEADERS"] = previous_headers
 
 
-def _deploy_remote_flow(
+def _load_flow(entrypoint: str) -> Any:
+    module_name, attr_name = entrypoint.split(":", 1)
+    module = importlib.import_module(module_name)
+    return getattr(module, attr_name)
+
+
+def _deploy_embedded_flow(
     *,
     engine: str,
     flow_kind: str,
     branch: str,
-    repo_url: str,
-    ref: str,
     flow_entrypoint: str,
     work_pool_name: str,
     work_queue_name: str,
@@ -155,12 +145,8 @@ def _deploy_remote_flow(
     deployment_name: str,
     deployment_suffix: str,
 ) -> str:
-    remote_flow = flow.from_source(
-        source=_flow_source(repo_url, ref),
-        entrypoint=flow_entrypoint,
-    )
-    remote_flow = cast(Any, remote_flow)
-    deployment_id = remote_flow.deploy(
+    embedded_flow = cast(Any, _load_flow(flow_entrypoint))
+    deployment_id = embedded_flow.deploy(
         name=deployment_name,
         work_pool_name=work_pool_name,
         work_queue_name=work_queue_name,
@@ -196,12 +182,10 @@ def main() -> int:
         print(json.dumps(deployment, ensure_ascii=True))
         return 0
     with _prefect_settings(args.prefect_api_url):
-        deployment["deployment_id"] = _deploy_remote_flow(
+        deployment["deployment_id"] = _deploy_embedded_flow(
             engine=args.engine,
             flow_kind=args.flow_kind,
             branch=args.branch,
-            repo_url=args.repo_url,
-            ref=deployment["ref"],
             flow_entrypoint=deployment["entrypoint"],
             work_pool_name=args.work_pool_name,
             work_queue_name=args.work_queue_name,
