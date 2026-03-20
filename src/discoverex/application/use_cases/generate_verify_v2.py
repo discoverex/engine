@@ -21,7 +21,10 @@ from discoverex.application.use_cases.gen_verify.background_pipeline import (
     build_background_from_inputs,
 )
 from discoverex.application.use_cases.gen_verify.composite_pipeline import compose_scene
-from discoverex.application.use_cases.gen_verify.model_lifecycle import unload_model
+from discoverex.application.use_cases.gen_verify.model_lifecycle import (
+    stage_gpu_barrier,
+    unload_model,
+)
 from discoverex.application.use_cases.gen_verify.object_pipeline import (
     GeneratedObjectAsset,
     generate_region_objects,
@@ -92,10 +95,12 @@ def run(
         background_prompt=background_prompt or None,
         background_negative_prompt=background_negative_prompt or None,
     )
+    stage_gpu_barrier("after_background_pipeline")
 
     if config.region_selection.strategy == "legacy_detr":
         candidate_regions = _detect_regions_legacy(context=context, background=background)
         candidate_regions = candidate_regions[: config.object_variants.default_count]
+        stage_gpu_barrier("after_hidden_region_detection")
         generated_objects = _generate_objects(
             context=context,
             scene_dir=scene_dir,
@@ -116,6 +121,7 @@ def run(
             object_prompt=object_prompt,
             object_negative_prompt=object_negative_prompt,
         )
+        stage_gpu_barrier("after_object_generation")
         candidate_regions = _select_regions_patch_similarity(
             config=config,
             background=background,
@@ -132,6 +138,8 @@ def run(
                 regions=candidate_regions,
                 generated_objects=generated_objects,
             )
+    if config.region_selection.strategy == "legacy_detr":
+        stage_gpu_barrier("after_object_generation")
 
     regions, region_prompt_records = _generate_regions(
         context=context,
@@ -142,6 +150,7 @@ def run(
         object_prompt=object_prompt,
         object_negative_prompt=object_negative_prompt,
     )
+    stage_gpu_barrier("after_inpaint_region_generation")
     scene = build_scene(
         background=background,
         regions=regions,
@@ -162,10 +171,13 @@ def run(
         final_prompt=final_prompt,
         final_negative_prompt=final_negative_prompt,
     )
+    stage_gpu_barrier("after_fx_composite")
     scene.composite.final_image_ref = composite.image_ref
     _finalize_layers(scene=scene, background=background, fx_input_ref=fx_input_ref)
     _verify_scene(context=context, scene=scene)
+    stage_gpu_barrier("after_scene_verification")
     _verify_regions(context=context, scene=scene, scene_dir=scene_dir)
+    stage_gpu_barrier("after_region_verification")
     _persist_outputs(
         context=context,
         scene=scene,
