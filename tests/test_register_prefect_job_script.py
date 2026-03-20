@@ -111,7 +111,7 @@ def test_prefect_wrapper_allows_local_tiny_profile_override() -> None:
         "models/hidden_region=tiny_torch",
         "models/inpaint=tiny_torch",
         "models/perception=tiny_torch",
-        "models/fx=copy_image",
+        "models/fx=tiny_sd_cpu",
     ]
 
 

@@ -205,7 +205,7 @@ def test_register_script_local_tiny_profile_adds_worker_overrides_and_env() -> N
         "models/hidden_region=tiny_torch",
         "models/inpaint=tiny_torch",
         "models/perception=tiny_torch",
-        "models/fx=copy_image",
+        "models/fx=tiny_sd_cpu",
     ]
     assert payload["inputs"]["runtime"]["extra_env"] == {}
     assert payload["env"] == {

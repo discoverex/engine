@@ -295,7 +295,7 @@ def _build_profile_overrides(args: argparse.Namespace) -> list[str]:
                 "models/hidden_region=tiny_torch",
                 "models/inpaint=tiny_torch",
                 "models/perception=tiny_torch",
-                "models/fx=copy_image",
+                "models/fx=tiny_sd_cpu",
             ]
         )
     elif args.execution_profile == "remote-gpu-hf":
