@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 # mypy: ignore-errors
+from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -26,6 +27,12 @@ from .runtime_cleanup import clear_model_runtime
 logger = get_logger("discoverex.models.layerdiffuse_object")
 
 
+@dataclass(slots=True)
+class LayerDiffuseRuntimeBundle:
+    kind: str
+    payload: Any
+
+
 class LayerDiffuseObjectGenerationModel:
     def __init__(
         self,
@@ -44,6 +51,7 @@ class LayerDiffuseObjectGenerationModel:
         enable_xformers_memory_efficient_attention: bool = False,
         enable_fp8_layerwise_casting: bool = False,
         enable_channels_last: bool = False,
+        runtime_strategy: str = "pipeline",
         default_prompt: str = "isolated single object on a transparent background",
         default_negative_prompt: str = "busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact",
         default_num_inference_steps: int = 30,
@@ -65,12 +73,13 @@ class LayerDiffuseObjectGenerationModel:
         self.enable_xformers_memory_efficient_attention = enable_xformers_memory_efficient_attention
         self.enable_fp8_layerwise_casting = enable_fp8_layerwise_casting
         self.enable_channels_last = enable_channels_last
+        self.runtime_strategy = runtime_strategy
         self.default_prompt = default_prompt
         self.default_negative_prompt = default_negative_prompt
         self.default_num_inference_steps = default_num_inference_steps
         self.default_guidance_scale = default_guidance_scale
         self.weights_cache_dir = str(resolve_shared_cache_dir(weights_cache_dir))
-        self._pipe: Any | None = None
+        self._pipe: LayerDiffuseRuntimeBundle | None = None
         self._transparent_decoder: Any | None = None
         self._layerdiffuse_applied = False
 
@@ -180,7 +189,10 @@ class LayerDiffuseObjectGenerationModel:
 
     def _load_pipeline(self, handle: ModelHandle) -> Any:
         if self._pipe is None:
-            self._pipe = load_pipeline(model=self, handle=handle)
+            self._pipe = LayerDiffuseRuntimeBundle(
+                kind=self.runtime_strategy,
+                payload=load_pipeline(model=self, handle=handle),
+            )
         return self._pipe
 
     def _load_transparent_decoder(self, handle: ModelHandle) -> Any:

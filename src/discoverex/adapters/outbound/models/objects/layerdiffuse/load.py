@@ -1,9 +1,22 @@
 from __future__ import annotations
 
 # mypy: ignore-errors
+from dataclasses import dataclass
 from typing import Any
 
 from ...pipeline_memory import configure_diffusers_pipeline
+
+
+@dataclass(slots=True)
+class SdxlLayerDiffuseComponents:
+    pipe: Any
+    tokenizer: Any
+    tokenizer_2: Any
+    text_encoder: Any
+    text_encoder_2: Any
+    unet: Any
+    scheduler: Any
+    vae: Any
 
 
 def load_pipeline(*, model: Any, handle: Any) -> Any:
@@ -16,6 +29,7 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
 
     torch_dtype = torch.float32 if "32" in handle.dtype else torch.float16
     is_sdxl = "xl" in str(model.model_id).lower() or "sdxl" in str(model.model_id).lower()
+    runtime_strategy = str(getattr(model, "runtime_strategy", "pipeline") or "pipeline")
     if is_sdxl:
         transparent_vae = TransparentVAEDecoder.from_pretrained(
             "madebyollin/sdxl-vae-fp16-fix",
@@ -74,6 +88,21 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
             )
             load_lora_to_unet(pipe.unet, lora_path, frames=1)
         model._layerdiffuse_applied = True
+    if is_sdxl and runtime_strategy == "component_staged":
+        try:
+            pipe.to("cpu")
+        except Exception:
+            pass
+        return SdxlLayerDiffuseComponents(
+            pipe=pipe,
+            tokenizer=pipe.tokenizer,
+            tokenizer_2=pipe.tokenizer_2,
+            text_encoder=pipe.text_encoder,
+            text_encoder_2=pipe.text_encoder_2,
+            unet=pipe.unet,
+            scheduler=pipe.scheduler,
+            vae=pipe.vae,
+        )
     effective_offload_mode = model.offload_mode
     standard_sdxl_base = str(model.model_id) == "stabilityai/stable-diffusion-xl-base-1.0"
     if is_sdxl and not standard_sdxl_base and effective_offload_mode == "sequential":

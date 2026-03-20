@@ -14,6 +14,7 @@ enable_vae_tiling: ${runtime.model_runtime.enable_vae_tiling}
 enable_xformers_memory_efficient_attention: ${runtime.model_runtime.enable_xformers_memory_efficient_attention}
 enable_fp8_layerwise_casting: ${runtime.model_runtime.enable_fp8_layerwise_casting}
 enable_channels_last: ${runtime.model_runtime.enable_channels_last}
+runtime_strategy: component_staged
 strict_runtime: true
 default_prompt: "isolated single object on a transparent background"
 default_negative_prompt: "busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact"

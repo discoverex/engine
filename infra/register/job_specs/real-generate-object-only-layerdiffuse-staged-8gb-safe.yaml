@@ -21,15 +21,15 @@ inputs:
     - runtime.model_runtime.batch_size=1
     - runtime.model_runtime.enable_vae_slicing=true
     - runtime.model_runtime.enable_vae_tiling=true
-    - models/object_generator=layerdiffuse
-    - models.object_generator.model_id=digiplay/Juggernaut_final
+    - models/object_generator=layerdiffuse_standard_sdxl
     - models.object_generator.dtype=float16
     - models.object_generator.precision=fp16
+    - models.object_generator.offload_mode=none
     - models/hidden_region=dummy
     - models/perception=dummy
     - models/inpaint=dummy
     - models/fx=dummy
-    - runtime.model_runtime.offload_mode=sequential
+    - runtime.model_runtime.offload_mode=none
   runtime:
     mode: worker
     bootstrap_mode: none

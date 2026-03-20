@@ -9,6 +9,7 @@ from PIL import Image
 
 from discoverex.adapters.outbound.models.layerdiffuse_object_generation import (
     LayerDiffuseObjectGenerationModel,
+    LayerDiffuseRuntimeBundle,
 )
 from discoverex.adapters.outbound.models.objects.layerdiffuse.generate import (
     _sample_latents,
@@ -235,6 +236,200 @@ def test_generate_rgba_fails_when_vram_limit_is_exceeded() -> None:
             sys.modules.pop("torch", None)
         else:
             sys.modules["torch"] = original_torch
+
+
+def test_generate_rgba_component_staged_offloads_text_and_unet() -> None:
+    class _FakeGenerator:
+        def manual_seed(self, seed: int) -> "_FakeGenerator":
+            return self
+
+    class _FakeNoGrad:
+        def __enter__(self) -> None:
+            return None
+
+        def __exit__(self, exc_type: object, exc: object, tb: object) -> bool:
+            return False
+
+    fake_torch = SimpleNamespace(
+        Generator=lambda device="cpu": _FakeGenerator(),
+        tensor=lambda value: _FakeTensor(value),
+        cat=lambda tensors, dim=0: tensors[0],
+        cuda=SimpleNamespace(
+            is_available=lambda: False,
+            empty_cache=lambda: None,
+        ),
+        backends=SimpleNamespace(mps=SimpleNamespace(is_available=lambda: False)),
+    )
+    original_torch = sys.modules.get("torch")
+    sys.modules["torch"] = fake_torch
+
+    class _FakeTensor:
+        dtype = "float16"
+
+        def __init__(self, value: object) -> None:
+            self.value = value
+
+        def to(self, *args: object, **kwargs: object) -> "_FakeTensor":
+            return self
+
+        def repeat(self, *args: object) -> "_FakeTensor":
+            return self
+
+        def chunk(self, count: int) -> tuple["_FakeTensor", "_FakeTensor"]:
+            return (self, self)
+
+        def __sub__(self, other: object) -> "_FakeTensor":
+            return self
+
+        def __rsub__(self, other: object) -> "_FakeTensor":
+            return self
+
+        def __mul__(self, other: object) -> "_FakeTensor":
+            return self
+
+        def __rmul__(self, other: object) -> "_FakeTensor":
+            return self
+
+        def __add__(self, other: object) -> "_FakeTensor":
+            return self
+
+    class _FakeEncoder:
+        def __init__(self) -> None:
+            self.moves: list[str] = []
+            self.config = SimpleNamespace(projection_dim=1280)
+
+        def to(self, device: str) -> "_FakeEncoder":
+            self.moves.append(device)
+            return self
+
+    class _FakeUnet:
+        config = SimpleNamespace(in_channels=4, time_cond_proj_dim=None)
+
+        def __init__(self) -> None:
+            self.moves: list[str] = []
+            self.calls: int = 0
+
+        def to(self, device: str) -> "_FakeUnet":
+            self.moves.append(device)
+            return self
+
+        def __call__(self, *args: object, **kwargs: object) -> tuple[_FakeTensor]:
+            self.calls += 1
+            return (_FakeTensor("noise"),)
+
+    class _FakeScheduler:
+        def __init__(self) -> None:
+            self.timesteps = [1]
+
+        def set_timesteps(self, num_inference_steps: int, device: str | None = None) -> None:
+            self.timesteps = [1]
+
+        def scale_model_input(self, latent_model_input: _FakeTensor, timestep: int) -> _FakeTensor:
+            return latent_model_input
+
+        def step(
+            self,
+            noise_pred: _FakeTensor,
+            timestep: int,
+            latents: _FakeTensor,
+            **kwargs: object,
+        ) -> tuple[_FakeTensor]:
+            return (latents,)
+
+    class _FakeVAE:
+        def __init__(self) -> None:
+            self.moves: list[str] = []
+
+        def to(self, device: str) -> "_FakeVAE":
+            self.moves.append(device)
+            return self
+
+        def decode(self, latents: object, return_dict: bool = False) -> tuple[list[Image.Image]]:
+            return ([Image.new("RGBA", (384, 384), color=(0, 0, 0, 255))],)
+
+    class _FakePipe:
+        def __init__(self) -> None:
+            self._execution_device = "cuda"
+            self.text_encoder = _FakeEncoder()
+            self.text_encoder_2 = _FakeEncoder()
+            self.unet = _FakeUnet()
+            self.scheduler = _FakeScheduler()
+            self.vae = _FakeVAE()
+
+        def encode_prompt(self, **kwargs: object) -> tuple[_FakeTensor, _FakeTensor, _FakeTensor, _FakeTensor]:
+            return (_FakeTensor("prompt"), _FakeTensor("negative"), _FakeTensor("pooled"), _FakeTensor("negative_pooled"))
+
+        def prepare_latents(
+            self,
+            batch_size: int,
+            channels: int,
+            height: int,
+            width: int,
+            dtype: object,
+            device: str,
+            generator: object,
+            latents: object,
+        ) -> _FakeTensor:
+            return _FakeTensor("latents")
+
+        def prepare_extra_step_kwargs(self, generator: object, eta: float) -> dict[str, object]:
+            return {}
+
+        def _get_add_time_ids(
+            self,
+            original_size: tuple[int, int],
+            crops_coords_top_left: tuple[int, int],
+            target_size: tuple[int, int],
+            dtype: object,
+            text_encoder_projection_dim: int,
+        ) -> _FakeTensor:
+            return _FakeTensor("time_ids")
+
+    pipe = _FakePipe()
+    runtime = SimpleNamespace(
+        pipe=pipe,
+        tokenizer=object(),
+        tokenizer_2=object(),
+        text_encoder=pipe.text_encoder,
+        text_encoder_2=pipe.text_encoder_2,
+        unet=pipe.unet,
+        scheduler=pipe.scheduler,
+        vae=pipe.vae,
+    )
+    model = type(
+        "_Model",
+        (),
+        {
+            "_load_pipeline": staticmethod(
+                lambda handle: LayerDiffuseRuntimeBundle(kind="component_staged", payload=runtime)
+            ),
+        },
+    )()
+    handle = type("_Handle", (), {"device": "cuda"})()
+
+    try:
+        image = generate_rgba(
+            model=model,
+            handle=handle,
+            prompt="object",
+            negative_prompt="bad",
+            width=384,
+            height=384,
+            seed=None,
+            num_inference_steps=3,
+            guidance_scale=5.0,
+        )
+    finally:
+        if original_torch is None:
+            sys.modules.pop("torch", None)
+        else:
+            sys.modules["torch"] = original_torch
+
+    assert image.mode == "RGBA"
+    assert pipe.text_encoder.moves == ["cuda", "cpu"]
+    assert pipe.text_encoder_2.moves == ["cuda", "cpu"]
+    assert pipe.unet.moves == ["cuda", "cpu"]
+    assert pipe.vae.moves == ["cuda", "cpu"]
 
 
 def test_to_rgba_image_converts_tensor_output() -> None:

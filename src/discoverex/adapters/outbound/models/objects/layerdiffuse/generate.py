@@ -11,6 +11,21 @@ def _debug(message: str) -> None:
     print(f"[layerdiffuse-debug] {message}", file=sys.stderr, flush=True)
 
 
+def _unwrap_runtime(pipe_or_bundle: Any) -> tuple[str, Any]:
+    kind = str(getattr(pipe_or_bundle, "kind", "pipeline") or "pipeline")
+    payload = getattr(pipe_or_bundle, "payload", pipe_or_bundle)
+    return kind, payload
+
+
+def _move_component(component: Any, device: Any) -> None:
+    if component is None:
+        return
+    try:
+        component.to(device)
+    except Exception:
+        return
+
+
 def _to_rgba_image(image: Any) -> Image.Image:
     if isinstance(image, Image.Image):
         return image.convert("RGBA")
@@ -123,6 +138,22 @@ def _offload_decode_stack(*, pipe: Any, decoder: Any) -> None:
         torch.cuda.empty_cache()
 
 
+def _offload_component_runtime(*, runtime: Any, include_text: bool, include_unet: bool, include_vae: bool) -> None:
+    if include_text:
+        _move_component(getattr(runtime, "text_encoder", None), "cpu")
+        _move_component(getattr(runtime, "text_encoder_2", None), "cpu")
+    if include_unet:
+        _move_component(getattr(runtime, "unet", None), "cpu")
+    if include_vae:
+        _move_component(getattr(runtime, "vae", None), "cpu")
+    try:
+        import torch  # type: ignore
+    except Exception:
+        return
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 def _prepare_decode_stack(*, pipe: Any, execution_device: Any) -> None:
     try:
         import torch  # type: ignore
@@ -154,6 +185,12 @@ def _prepare_decode_stack(*, pipe: Any, execution_device: Any) -> None:
 
 def _decode_latents_to_rgba_images(*, pipe: Any, latents: Any) -> list[Image.Image]:
     decoded = pipe.vae.decode(latents, return_dict=False)[0]
+    return _to_rgba_images(decoded)
+
+
+def _decode_latents_with_components(*, runtime: Any, execution_device: Any, latents: Any) -> list[Image.Image]:
+    _move_component(getattr(runtime, "vae", None), execution_device)
+    decoded = runtime.vae.decode(latents, return_dict=False)[0]
     return _to_rgba_images(decoded)
 
 
@@ -211,6 +248,25 @@ def _build_prompt_embeds(
         negative_prompt_embeds,
         pooled_prompt_embeds,
         negative_pooled_prompt_embeds,
+    )
+
+
+def _build_prompt_embeds_with_components(
+    *,
+    runtime: Any,
+    execution_device: Any,
+    prompts: str | list[str],
+    negative_prompts: str | list[str],
+    guidance_scale: float,
+) -> tuple[Any, Any, Any, Any]:
+    _move_component(getattr(runtime, "text_encoder", None), execution_device)
+    _move_component(getattr(runtime, "text_encoder_2", None), execution_device)
+    return _build_prompt_embeds(
+        pipe=runtime.pipe,
+        execution_device=execution_device,
+        prompts=prompts,
+        negative_prompts=negative_prompts,
+        guidance_scale=guidance_scale,
     )
 
 
@@ -277,6 +333,117 @@ def _sample_latents(
     return latents
 
 
+def _sample_latents_with_components(
+    *,
+    runtime: Any,
+    prompts: str | list[str],
+    negative_prompts: str | list[str],
+    width: int,
+    height: int,
+    generator: Any,
+    num_inference_steps: int,
+    guidance_scale: float,
+    execution_device: Any,
+    max_vram_gb: float | None,
+) -> Any:
+    import torch  # type: ignore
+
+    _debug(
+        "sample_latents_components:start "
+        f"width={width} height={height} steps={num_inference_steps} guidance={guidance_scale}"
+    )
+    (
+        prompt_embeds,
+        negative_prompt_embeds,
+        pooled_prompt_embeds,
+        negative_pooled_prompt_embeds,
+    ) = _build_prompt_embeds_with_components(
+        runtime=runtime,
+        execution_device=execution_device,
+        prompts=prompts,
+        negative_prompts=negative_prompts,
+        guidance_scale=guidance_scale,
+    )
+    _offload_component_runtime(runtime=runtime, include_text=True, include_unet=False, include_vae=False)
+    _debug("text_components:offloaded")
+
+    batch_size = len(prompts) if isinstance(prompts, list) else 1
+    num_images_per_prompt = 1
+    do_cfg = guidance_scale > 1.0
+    _move_component(runtime.unet, execution_device)
+
+    runtime.scheduler.set_timesteps(num_inference_steps, device=execution_device)
+    timesteps = runtime.scheduler.timesteps
+    latents = runtime.pipe.prepare_latents(
+        batch_size * num_images_per_prompt,
+        runtime.unet.config.in_channels,
+        height,
+        width,
+        prompt_embeds.dtype,
+        execution_device,
+        generator,
+        None,
+    )
+    extra_step_kwargs = runtime.pipe.prepare_extra_step_kwargs(generator, 0.0)
+    add_text_embeds = pooled_prompt_embeds
+    text_encoder_projection_dim = int(runtime.text_encoder_2.config.projection_dim)
+    add_time_ids = runtime.pipe._get_add_time_ids(
+        (height, width),
+        (0, 0),
+        (height, width),
+        dtype=prompt_embeds.dtype,
+        text_encoder_projection_dim=text_encoder_projection_dim,
+    )
+    negative_add_time_ids = add_time_ids
+    if do_cfg:
+        prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
+        add_text_embeds = torch.cat([negative_pooled_prompt_embeds, add_text_embeds], dim=0)
+        add_time_ids = torch.cat([negative_add_time_ids, add_time_ids], dim=0)
+    prompt_embeds = prompt_embeds.to(execution_device)
+    add_text_embeds = add_text_embeds.to(execution_device)
+    add_time_ids = add_time_ids.to(execution_device).repeat(batch_size * num_images_per_prompt, 1)
+    timestep_cond = None
+    if runtime.unet.config.time_cond_proj_dim is not None:
+        guidance_scale_tensor = torch.tensor(guidance_scale - 1).repeat(batch_size * num_images_per_prompt)
+        timestep_cond = runtime.pipe.get_guidance_scale_embedding(
+            guidance_scale_tensor,
+            embedding_dim=runtime.unet.config.time_cond_proj_dim,
+        ).to(device=execution_device, dtype=latents.dtype)
+
+    _debug("denoise_components:start")
+    for timestep in timesteps:
+        latent_model_input = torch.cat([latents] * 2) if do_cfg else latents
+        latent_model_input = runtime.scheduler.scale_model_input(latent_model_input, timestep)
+        added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}
+        noise_pred = runtime.unet(
+            latent_model_input,
+            timestep,
+            encoder_hidden_states=prompt_embeds,
+            timestep_cond=timestep_cond,
+            cross_attention_kwargs=None,
+            added_cond_kwargs=added_cond_kwargs,
+            return_dict=False,
+        )[0]
+        if do_cfg:
+            noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+            noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+        latents_dtype = latents.dtype
+        latents = runtime.scheduler.step(
+            noise_pred,
+            timestep,
+            latents,
+            **extra_step_kwargs,
+            return_dict=False,
+        )[0]
+        if latents.dtype != latents_dtype and getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+            latents = latents.to(latents_dtype)
+    _debug("denoise_components:end")
+    _offload_component_runtime(runtime=runtime, include_text=False, include_unet=True, include_vae=False)
+    _debug("unet_components:offloaded")
+    _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
+    return latents
+
+
 def generate_rgba(
     *,
     model: Any,
@@ -293,30 +460,50 @@ def generate_rgba(
     import torch  # type: ignore
 
     _debug(f"generate_rgba:start model_id={getattr(model, 'model_id', 'unknown')}")
-    pipe = model._load_pipeline(handle)
-    _debug("pipeline:loaded")
-    execution_device = getattr(pipe, "_execution_device", handle.device)
+    pipe_bundle = model._load_pipeline(handle)
+    runtime_kind, runtime = _unwrap_runtime(pipe_bundle)
+    _debug(f"pipeline:loaded kind={runtime_kind}")
+    execution_device = getattr(getattr(runtime, "pipe", runtime), "_execution_device", handle.device)
     generator = None if seed is None else torch.Generator(device="cpu").manual_seed(seed)
-    latents = _sample_latents(
-        pipe=pipe,
-        prompts=prompt,
-        negative_prompts=negative_prompt,
-        width=width,
-        height=height,
-        generator=generator,
-        num_inference_steps=num_inference_steps,
-        guidance_scale=guidance_scale,
-        execution_device=execution_device,
-        max_vram_gb=max_vram_gb,
-    )
-    _debug("decode:prepare")
-    _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
-    _debug("decode:start")
-    images = _decode_latents_to_rgba_images(pipe=pipe, latents=latents)
-    _debug("decode:end")
+    if runtime_kind == "component_staged":
+        latents = _sample_latents_with_components(
+            runtime=runtime,
+            prompts=prompt,
+            negative_prompts=negative_prompt,
+            width=width,
+            height=height,
+            generator=generator,
+            num_inference_steps=num_inference_steps,
+            guidance_scale=guidance_scale,
+            execution_device=execution_device,
+            max_vram_gb=max_vram_gb,
+        )
+        _debug("decode_components:start")
+        images = _decode_latents_with_components(runtime=runtime, execution_device=execution_device, latents=latents)
+        _debug("decode_components:end")
+        _offload_component_runtime(runtime=runtime, include_text=False, include_unet=False, include_vae=True)
+        _debug("vae_components:offloaded")
+    else:
+        latents = _sample_latents(
+            pipe=runtime,
+            prompts=prompt,
+            negative_prompts=negative_prompt,
+            width=width,
+            height=height,
+            generator=generator,
+            num_inference_steps=num_inference_steps,
+            guidance_scale=guidance_scale,
+            execution_device=execution_device,
+            max_vram_gb=max_vram_gb,
+        )
+        _debug("decode:prepare")
+        _prepare_decode_stack(pipe=runtime, execution_device=execution_device)
+        _debug("decode:start")
+        images = _decode_latents_to_rgba_images(pipe=runtime, latents=latents)
+        _debug("decode:end")
+        _offload_decode_stack(pipe=runtime, decoder=None)
+        _debug("decode_stack:offloaded")
     image = images[0]
-    _offload_decode_stack(pipe=pipe, decoder=None)
-    _debug("decode_stack:offloaded")
     return _to_rgba_image(image)
 
 
@@ -343,12 +530,15 @@ def generate_rgba_batch(
         "generate_rgba_batch:start "
         f"model_id={getattr(model, 'model_id', 'unknown')} count={len(prompts)}"
     )
-    pipe = model._load_pipeline(handle)
-    _debug("pipeline:loaded")
-    execution_device = getattr(pipe, "_execution_device", handle.device)
+    pipe_bundle = model._load_pipeline(handle)
+    runtime_kind, runtime = _unwrap_runtime(pipe_bundle)
+    _debug(f"pipeline:loaded kind={runtime_kind}")
+    if runtime_kind == "component_staged":
+        raise RuntimeError("component_staged runtime only supports single-image generation")
+    execution_device = getattr(runtime, "_execution_device", handle.device)
     generator = None if seed is None else torch.Generator(device="cpu").manual_seed(seed)
     latents = _sample_latents(
-        pipe=pipe,
+        pipe=runtime,
         prompts=prompts,
         negative_prompts=negative_prompts,
         width=width,
@@ -360,10 +550,10 @@ def generate_rgba_batch(
         max_vram_gb=max_vram_gb,
     )
     _debug("decode:prepare")
-    _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
+    _prepare_decode_stack(pipe=runtime, execution_device=execution_device)
     _debug("decode:start")
-    images = _decode_latents_to_rgba_images(pipe=pipe, latents=latents)
+    images = _decode_latents_to_rgba_images(pipe=runtime, latents=latents)
     _debug("decode:end")
-    _offload_decode_stack(pipe=pipe, decoder=None)
+    _offload_decode_stack(pipe=runtime, decoder=None)
     _debug("decode_stack:offloaded")
     return _to_rgba_images(images)
