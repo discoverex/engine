@@ -19,7 +19,7 @@ logger = get_logger("discoverex.generate.objects")
 _DEFAULT_OBJECT_NEGATIVE = (
     "busy scene, environment, multiple objects, floor, wall, clutter, blurry, artifact"
 )
-_OBJECT_GENERATION_SIZE = 512
+_OBJECT_GENERATION_SIZE = 384
 _OBJECT_GENERATION_STEPS = 30
 _OBJECT_GENERATION_GUIDANCE = 5.0
 

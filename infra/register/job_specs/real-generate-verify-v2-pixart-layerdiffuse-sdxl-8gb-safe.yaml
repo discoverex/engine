@@ -29,7 +29,6 @@ inputs:
     - models/object_generator=layerdiffuse
     - models.object_generator.dtype=float16
     - models.object_generator.precision=fp16
-    - runtime.model_runtime.enable_fp8_layerwise_casting=true
     - models/hidden_region=dummy
     - models/inpaint=sdxl_gpu_layerdiffuse_hidden_object_v1
     - models/perception=hf
