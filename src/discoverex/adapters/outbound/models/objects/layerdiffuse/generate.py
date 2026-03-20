@@ -26,6 +26,26 @@ def _move_component(component: Any, device: Any) -> None:
         return
 
 
+def _module_device(component: Any) -> str:
+    if component is None:
+        return "missing"
+    try:
+        parameter = next(component.parameters())
+    except Exception:
+        return "unknown"
+    try:
+        return str(parameter.device)
+    except Exception:
+        return "unknown"
+
+
+def _tensor_device(value: Any) -> str:
+    try:
+        return str(value.device)
+    except Exception:
+        return "unknown"
+
+
 def _to_rgba_image(image: Any) -> Image.Image:
     if isinstance(image, Image.Image):
         return image.convert("RGBA")
@@ -371,6 +391,14 @@ def _sample_latents_with_components(
     num_images_per_prompt = 1
     do_cfg = guidance_scale > 1.0
     _move_component(runtime.unet, execution_device)
+    _debug(
+        "component_runtime:devices "
+        f"execution_device={execution_device} "
+        f"text_encoder={_module_device(runtime.text_encoder)} "
+        f"text_encoder_2={_module_device(runtime.text_encoder_2)} "
+        f"unet={_module_device(runtime.unet)} "
+        f"vae={_module_device(runtime.vae)}"
+    )
 
     runtime.scheduler.set_timesteps(num_inference_steps, device=execution_device)
     timesteps = runtime.scheduler.timesteps
@@ -402,6 +430,13 @@ def _sample_latents_with_components(
     prompt_embeds = prompt_embeds.to(execution_device)
     add_text_embeds = add_text_embeds.to(execution_device)
     add_time_ids = add_time_ids.to(execution_device).repeat(batch_size * num_images_per_prompt, 1)
+    _debug(
+        "component_runtime:tensors "
+        f"latents={_tensor_device(latents)} "
+        f"prompt_embeds={_tensor_device(prompt_embeds)} "
+        f"add_text_embeds={_tensor_device(add_text_embeds)} "
+        f"add_time_ids={_tensor_device(add_time_ids)}"
+    )
     timestep_cond = None
     if runtime.unet.config.time_cond_proj_dim is not None:
         guidance_scale_tensor = torch.tensor(guidance_scale - 1).repeat(batch_size * num_images_per_prompt)
@@ -464,6 +499,13 @@ def generate_rgba(
     runtime_kind, runtime = _unwrap_runtime(pipe_bundle)
     _debug(f"pipeline:loaded kind={runtime_kind}")
     execution_device = getattr(getattr(runtime, "pipe", runtime), "_execution_device", handle.device)
+    _debug(
+        "runtime:config "
+        f"handle_device={getattr(handle, 'device', 'unknown')} "
+        f"execution_device={execution_device} "
+        f"runtime_kind={runtime_kind} "
+        f"width={width} height={height} steps={num_inference_steps} guidance={guidance_scale}"
+    )
     generator = None if seed is None else torch.Generator(device="cpu").manual_seed(seed)
     if runtime_kind == "component_staged":
         latents = _sample_latents_with_components(
