@@ -81,10 +81,13 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
             )
             load_lora_to_unet(pipe.unet, lora_path, frames=1)
         model._layerdiffuse_applied = True
+    effective_offload_mode = model.offload_mode
+    if is_sdxl and effective_offload_mode == "sequential":
+        effective_offload_mode = "model"
     return configure_diffusers_pipeline(
         pipe,
         handle=handle,
-        offload_mode=model.offload_mode,
+        offload_mode=effective_offload_mode,
         enable_attention_slicing=model.enable_attention_slicing,
         enable_vae_slicing=model.enable_vae_slicing,
         enable_vae_tiling=model.enable_vae_tiling,
