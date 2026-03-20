@@ -27,6 +27,10 @@ inputs:
     - runtime.background_upscale_factor=2
     - models/background_generator=pixart_sigma_8gb
     - models/object_generator=layerdiffuse
+    - models.object_generator.model_id=stabilityai/sdxl-turbo
+    - models.object_generator.default_num_inference_steps=3
+    - models.object_generator.dtype=float16
+    - models.object_generator.precision=fp16
     - models/hidden_region=dummy
     - models/inpaint=sdxl_gpu_layerdiffuse_hidden_object_v1
     - models/perception=hf
