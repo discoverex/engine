@@ -90,6 +90,7 @@ def load_and_inject(
 
 _WIDGET_KEYS: dict[str, list[str]] = {
     "CLIPLoader": ["clip_name", "type", "device"],
+    "CLIPLoaderGGUF": ["clip_name", "type"],
     "CLIPVisionLoader": ["clip_name"],
     "VAELoader": ["vae_name"],
     "UnetLoaderGGUF": ["unet_name"],
