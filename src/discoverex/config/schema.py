@@ -42,7 +42,7 @@ class RegionSelectionConfig(BaseModel):
     strategy: Literal["patch_similarity_v2", "legacy_detr"] = "patch_similarity_v2"
     max_regions: int = 3
     iou_threshold: float = 0.12
-    stride_ratio: float = 0.4
+    stride_ratio: float = 0.3
     scale_factors: list[float] = Field(default_factory=lambda: [1.0, 1.15])
 
 
@@ -50,7 +50,7 @@ class ObjectVariantsConfig(BaseModel):
     default_count: int = 3
     rotation_degrees: list[float] = Field(default_factory=lambda: [-12.0, 0.0, 12.0])
     scale_factors: list[float] = Field(default_factory=lambda: [0.95, 1.0])
-    max_variants_per_object: int = 6
+    max_variants_per_object: int = 8
     canvas_padding: int = 12
 
 
@@ -59,7 +59,7 @@ class PatchSimilarityConfig(BaseModel):
     lbp_weight: float = 0.20
     gabor_weight: float = 0.0
     hog_weight: float = 0.25
-    top_k_candidates: int = 24
+    top_k_candidates: int = 48
     lbp_points: int = 16
     lbp_radius: int = 2
     gabor_frequencies: list[float] = Field(default_factory=lambda: [0.12, 0.2])
