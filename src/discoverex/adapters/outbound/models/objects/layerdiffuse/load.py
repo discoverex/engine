@@ -62,16 +62,9 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
     )
     if not model._layerdiffuse_applied:
         if is_sdxl:
-            state_dict, network_alphas = pipeline_cls.lora_state_dict(
+            pipe.load_lora_weights(
                 lora_repo,
                 weight_name=lora_weight_name,
-                cache_dir=model.weights_cache_dir,
-            )
-            pipeline_cls.load_lora_into_unet(
-                state_dict,
-                network_alphas,
-                pipe.unet,
-                _pipeline=pipe,
             )
         else:
             lora_path = hf_hub_download(
