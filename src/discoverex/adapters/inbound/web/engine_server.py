@@ -1,8 +1,4 @@
-"""Engine animate dashboard — Flask REST API wrapping engine ports.
-
-Drop-in replacement for sprite_gen's wan_server.py.
-Serves wan_dashboard.html and routes API calls through engine adapters.
-"""
+"""Engine animate dashboard — Flask REST API (wan_server.py replacement)."""
 
 from __future__ import annotations
 
@@ -19,7 +15,11 @@ from flask_cors import CORS  # type: ignore[import-untyped]
 
 from discoverex.domain.animate_keyframe import KeyframeConfig
 
-from .engine_server_helpers import get_comfyui_progress, video_list
+from .engine_server_helpers import (
+    build_keyframe_only_lottie,
+    get_comfyui_progress,
+    video_list,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,6 @@ _jobs: dict[str, dict[str, Any]] = {}
 
 
 def create_app(orchestrator: Any) -> Flask:
-    """Initialize Flask app with engine orchestrator."""
     global _orchestrator  # noqa: PLW0603
     _orchestrator = orchestrator
     DIR_MOTION.mkdir(parents=True, exist_ok=True)
@@ -53,7 +52,6 @@ def create_app(orchestrator: Any) -> Flask:
 # ------------------------------------------------------------------
 # Dashboard
 # ------------------------------------------------------------------
-
 
 @_app.route("/")
 def index() -> Response | tuple[str, int]:
@@ -105,6 +103,14 @@ def api_classify() -> Any:
             resp["keyframe_config"] = kf.model_dump()
         except Exception as e:
             logger.warning("[Classify] keyframe generation failed: %s", e)
+
+        # Generate single-frame Lottie from original image (no video needed)
+        lottie_result = build_keyframe_only_lottie(
+            img, stem, DIR_MOTION, _orchestrator.format_converter,
+        )
+        if lottie_result:
+            resp["lottie_path"] = lottie_result["lottie_path"]
+            resp["lottie_info"] = lottie_result["lottie_info"]
 
     return jsonify(resp)
 

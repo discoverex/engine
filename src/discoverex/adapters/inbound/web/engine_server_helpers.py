@@ -1,8 +1,4 @@
-"""Helper routes and utilities for engine_server.
-
-Handles: file serving, browse, stats, thumbnails, classify_motion,
-export_combined, export_lottie, generate_keyframe.
-"""
+"""Helper utilities for engine_server."""
 
 from __future__ import annotations
 
@@ -27,7 +23,6 @@ _MIME = {
 
 
 def video_list(motion_dir: Path, stem: str) -> list[dict[str, Any]]:
-    """Glob MP4s matching stem pattern (supports _attempt* and _a* naming)."""
     if stem == "*":
         patterns = [str(motion_dir / "*.mp4")]
     else:
@@ -52,7 +47,6 @@ def video_list(motion_dir: Path, stem: str) -> list[dict[str, Any]]:
 
 
 def resolve_media_path(filepath: str, output_dir: Path) -> Path | None:
-    """Resolve relative/absolute file path for serving."""
     if filepath.startswith("home/"):
         filepath = "/" + filepath
     p = Path(filepath)
@@ -73,7 +67,6 @@ def resolve_media_path(filepath: str, output_dir: Path) -> Path | None:
 
 
 def serve_media(filepath: str, output_dir: Path) -> Any:
-    """Serve a media file with correct MIME type."""
     resolved = resolve_media_path(filepath, output_dir)
     if not resolved:
         return jsonify({"error": "file not found"}), 404
@@ -82,7 +75,6 @@ def serve_media(filepath: str, output_dir: Path) -> Any:
 
 
 def extract_thumbnail(filepath: str, output_dir: Path) -> Any:
-    """Extract first frame of video as PNG thumbnail."""
     resolved = resolve_media_path(filepath, output_dir)
     if not resolved:
         return jsonify({"error": "file not found"}), 404
@@ -101,7 +93,6 @@ def extract_thumbnail(filepath: str, output_dir: Path) -> Any:
 
 
 def browse_dir(directory: str) -> Any:
-    """Browse directory entries for file picker."""
     target = Path(os.path.expanduser(directory or "~"))
     if not target.is_dir():
         return jsonify({"error": "not a directory"}), 400
@@ -126,7 +117,6 @@ def browse_dir(directory: str) -> Any:
 
 
 def parse_stats(stats_file: Path, stem: str | None = None) -> dict[str, Any]:
-    """Parse validation_stats.txt (JSONL) for statistics."""
     if not stats_file.exists():
         return {"total": 0, "success": 0, "fail": 0, "attempts": []}
     records = []
@@ -157,7 +147,6 @@ def parse_stats(stats_file: Path, stem: str | None = None) -> dict[str, Any]:
 
 
 def get_comfyui_progress() -> dict[str, Any] | None:
-    """Read progress from ComfyUIClient shared state."""
     try:
         from discoverex.adapters.outbound.models.comfyui_client import ComfyUIClient
 
@@ -169,8 +158,30 @@ def get_comfyui_progress() -> dict[str, Any] | None:
     return None
 
 
+def build_keyframe_only_lottie(
+    img: Path, stem: str, motion_dir: Path, converter: Any,
+) -> dict[str, Any] | None:
+    try:
+        from PIL import Image
+        out_dir = motion_dir / f"{stem}_transparent"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        frame = out_dir / f"{stem}_frame_0000.png"
+        pil = Image.open(img).convert("RGBA")
+        pil.save(frame, "PNG")
+        result = converter.convert([frame], preset="original", fps=1)
+        lp = result.lottie_path
+        if lp and Path(str(lp)).exists():
+            w, h = pil.size
+            sz = round(Path(str(lp)).stat().st_size / (1024 * 1024), 1)
+            return {"lottie_path": str(lp), "lottie_info": {
+                "fps": 1, "frame_count": 1, "duration_ms": 1000,
+                "width": w, "height": h, "file_size_mb": sz}}
+    except Exception as e:
+        logger.warning("[Classify] keyframe-only lottie failed: %s", e)
+    return None
+
+
 def resolve_lottie(raw: str, output_dir: Path) -> Path | None:
-    """Resolve lottie path — absolute, CWD-relative, or output_dir-relative."""
     p = Path(raw)
     if p.is_absolute() and p.exists():
         return p
