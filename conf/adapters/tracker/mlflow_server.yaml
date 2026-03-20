@@ -1,4 +1,4 @@
 # @package adapters.tracker
 _target_: discoverex.adapters.outbound.tracking.mlflow.MLflowTrackerAdapter
-tracking_uri: http://127.0.0.1:5000
+tracking_uri: ${runtime.env.tracking_uri}
 experiment_name: discoverex-core

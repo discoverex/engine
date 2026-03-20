@@ -30,7 +30,7 @@ class RegisterSettings(BaseSettings):
     engine_repo_ref: str = "dev"
     engine_execution_profile: str = "generator-pixart-gpu"
 
-    mlflow_tracking_uri: str = "http://127.0.0.1:5000"
+    mlflow_tracking_uri: str = ""
     mlflow_s3_endpoint_url: str = ""
 
     aws_access_key_id: str = ""

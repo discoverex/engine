@@ -97,11 +97,11 @@ class RuntimeModelConfig(BaseModel):
 
 class RuntimeEnvConfig(BaseModel):
     artifact_bucket: str = "discoverex-artifacts"
-    s3_endpoint_url: str = "http://127.0.0.1:9000"
-    aws_access_key_id: str = "minioadmin"
-    aws_secret_access_key: str = "minioadmin"
+    s3_endpoint_url: str = ""
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
     metadata_db_url: str = ""
-    tracking_uri: str = "http://127.0.0.1:5000"
+    tracking_uri: str = ""
 
 
 class RuntimeConfig(BaseModel):
