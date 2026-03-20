@@ -6,6 +6,33 @@ from typing import Any
 from PIL import Image  # type: ignore
 
 
+def _to_rgba_image(image: Any) -> Image.Image:
+    if isinstance(image, Image.Image):
+        return image.convert("RGBA")
+    try:
+        import numpy as np  # type: ignore
+        import torch  # type: ignore
+    except Exception as exc:  # pragma: no cover - runtime dependency guard
+        raise TypeError(f"unsupported image output type={type(image)!r}") from exc
+    if isinstance(image, torch.Tensor):
+        tensor = image.detach().float().cpu()
+        if tensor.ndim == 4:
+            tensor = tensor[0]
+        if tensor.ndim != 3:
+            raise TypeError(f"unsupported tensor image shape={tuple(tensor.shape)!r}")
+        if tensor.shape[0] in (3, 4):
+            tensor = tensor.permute(1, 2, 0)
+        array = tensor.numpy()
+        if array.dtype != np.uint8:
+            array = ((array + 1.0) / 2.0 if array.min() < 0 else array).clip(0.0, 1.0)
+            array = (array * 255.0).round().astype(np.uint8)
+        if array.shape[-1] == 3:
+            alpha = np.full((*array.shape[:2], 1), 255, dtype=np.uint8)
+            array = np.concatenate([array, alpha], axis=-1)
+        return Image.fromarray(array, mode="RGBA")
+    return Image.fromarray(image, mode="RGBA")
+
+
 def _raise_if_vram_limit_exceeded(*, limit_gb: float | None) -> None:
     if limit_gb is None or limit_gb <= 0:
         return
@@ -135,6 +162,4 @@ def generate_rgba(
     images = result[0] if isinstance(result, tuple) else result
     image = images[0] if isinstance(images, list) else images
     _offload_decode_stack(pipe=pipe, decoder=None)
-    if isinstance(image, Image.Image):
-        return image.convert("RGBA")
-    return Image.fromarray(image, mode="RGBA")
+    return _to_rgba_image(image)

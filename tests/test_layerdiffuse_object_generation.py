@@ -11,6 +11,7 @@ from discoverex.adapters.outbound.models.layerdiffuse_object_generation import (
     LayerDiffuseObjectGenerationModel,
 )
 from discoverex.adapters.outbound.models.objects.layerdiffuse.generate import (
+    _to_rgba_image,
     generate_rgba,
 )
 from discoverex.adapters.outbound.models.runtime import RuntimeResolution
@@ -230,6 +231,36 @@ def test_generate_rgba_fails_when_vram_limit_is_exceeded() -> None:
             sys.modules.pop("torch", None)
         else:
             sys.modules["torch"] = original_torch
+
+
+def test_to_rgba_image_converts_tensor_output() -> None:
+    torch = pytest.importorskip("torch")
+    tensor = torch.tensor(
+        [
+            [
+                [-1.0, 1.0],
+                [0.0, 0.5],
+            ],
+            [
+                [-1.0, 0.0],
+                [1.0, 0.5],
+            ],
+            [
+                [1.0, -1.0],
+                [0.0, 0.5],
+            ],
+            [
+                [1.0, 1.0],
+                [1.0, 1.0],
+            ],
+        ],
+        dtype=torch.float32,
+    )
+
+    image = _to_rgba_image(tensor)
+
+    assert image.mode == "RGBA"
+    assert image.size == (2, 2)
 
 
 def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
