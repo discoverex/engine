@@ -10,7 +10,7 @@ if [ "${PREFECT_CLIENT_CUSTOM_HEADERS:-}" = "" ]; then
 fi
 
 eval "$(
-  python -m infra.worker.client_env shell --default-queue "${PREFECT_WORK_QUEUE:-gpu-fixed}"
+  /opt/venv/bin/python -m infra.worker.client_env shell --default-queue "${PREFECT_WORK_QUEUE:-gpu-fixed}"
 )"
 
 POOL="${PREFECT_WORK_POOL:-discoverex-fixed}"
@@ -24,7 +24,7 @@ CHECKPOINT_DIR="${ORCHESTRATOR_CHECKPOINT_DIR:-${RUNTIME_ROOT}/checkpoints}"
 MODEL_CACHE_DIR="${MODEL_CACHE_DIR:-${CACHE_DIR}/models}"
 UV_CACHE_DIR="${UV_CACHE_DIR:-${CACHE_DIR}/uv}"
 SUMMARY="$(
-  python -m infra.worker.client_env summary --default-queue "${PRIMARY_QUEUE}"
+  /opt/venv/bin/python -m infra.worker.client_env summary --default-queue "${PRIMARY_QUEUE}"
 )"
 
 export DISCOVEREX_WORKER_RUNTIME_DIR="${RUNTIME_ROOT}"
@@ -37,9 +37,9 @@ export PYTHONPATH="/app:/app/src:${PYTHONPATH:-}"
 
 mkdir -p "${CHECKPOINT_DIR}" "${CACHE_DIR}" "${MODEL_CACHE_DIR}" "${UV_CACHE_DIR}" "${HF_HOME}"
 
-python -c "from infra.worker.work_queues import ensure_work_pool_and_queues; ensure_work_pool_and_queues(work_pool='${POOL}', primary_queue='${PRIMARY_QUEUE}', batch_queue='${BATCH_QUEUE}')"
+/opt/venv/bin/python -c "from infra.worker.work_queues import ensure_work_pool_and_queues; ensure_work_pool_and_queues(work_pool='${POOL}', primary_queue='${PRIMARY_QUEUE}', batch_queue='${BATCH_QUEUE}')"
 
-set -- prefect worker start --pool "${POOL}" --type process --limit "${WORKER_LIMIT}"
+set -- /opt/venv/bin/prefect worker start --pool "${POOL}" --type process --limit "${WORKER_LIMIT}"
 OLD_IFS="${IFS}"
 IFS=','
 for queue in ${WORK_QUEUES}; do
