@@ -36,6 +36,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY prefect_flow.py /app/prefect_flow.py
 COPY conf /app/conf
+COPY delivery /app/delivery
 COPY infra /app/infra
 COPY src /app/src
 

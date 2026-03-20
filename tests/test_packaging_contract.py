@@ -13,3 +13,9 @@ def test_wheel_includes_delivery_package() -> None:
 
     assert "delivery" in packages
 
+
+def test_worker_dockerfile_embeds_delivery_sources() -> None:
+    dockerfile_path = Path(__file__).resolve().parents[1] / "infra/worker/Dockerfile"
+    dockerfile = dockerfile_path.read_text(encoding="utf-8")
+
+    assert "COPY delivery /app/delivery" in dockerfile
