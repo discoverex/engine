@@ -62,6 +62,7 @@ def upload_worker_artifacts(
     *,
     flow_run_id: str,
     attempt: int,
+    parsed: dict[str, Any],
     local_paths: dict[str, str],
     require_manifest: bool,
     logger: Any,
@@ -70,6 +71,7 @@ def upload_worker_artifacts(
         logger.info("storage upload skipped: STORAGE_API_URL not configured")
         return {}
     from discoverex.orchestrator_contract.output_uploads import (
+        link_uploaded_artifacts,
         upload_engine_artifacts,
         upload_outputs,
     )
@@ -95,6 +97,14 @@ def upload_worker_artifacts(
         payload["engine_manifest_uri"] = engine_uploaded.manifest_uri
     if engine_uploaded.artifact_uris:
         payload["engine_artifact_uris"] = engine_uploaded.artifact_uris
+    linkage = link_uploaded_artifacts(
+        payload=parsed,
+        uploaded_uris=payload,
+        engine_mlflow_tags=engine_uploaded.mlflow_tags,
+    )
+    payload["mlflow_linkage_status"] = linkage.status
+    if linkage.linked_tags:
+        payload["mlflow_linked_tags"] = linkage.linked_tags
     return {key: value for key, value in payload.items() if value}
 
 
@@ -132,6 +142,7 @@ def summarize_payload(parsed: dict[str, Any]) -> dict[str, str]:
         "result_uri",
         "manifest_uri",
         "engine_manifest_uri",
+        "mlflow_linkage_status",
     )
     summary = {
         key: string_value(parsed.get(key))

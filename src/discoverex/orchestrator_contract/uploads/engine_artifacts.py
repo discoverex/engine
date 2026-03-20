@@ -25,7 +25,11 @@ def upload_engine_artifacts(
             raise RuntimeError(
                 f"successful engine run must write manifest: {manifest_path}"
             )
-        return EngineUploadResult(artifact_uris={}, manifest_uri="")
+        return EngineUploadResult(
+            artifact_uris={},
+            manifest_uri="",
+            mlflow_tags={},
+        )
     manifest = EngineArtifactManifest.model_validate_json(
         manifest_path.read_text(encoding="utf-8")
     )
@@ -62,6 +66,13 @@ def upload_engine_artifacts(
         str(manifest_row["url"]),
         json.dumps(payload, ensure_ascii=True, indent=2).encode("utf-8"),
     )
+    mlflow_tags = {
+        str(item.mlflow_tag): uploaded[item.logical_name]
+        for item in manifest.artifacts
+        if item.mlflow_tag
+    }
     return EngineUploadResult(
-        artifact_uris=uploaded, manifest_uri=str(manifest_row["object_uri"])
+        artifact_uris=uploaded,
+        manifest_uri=str(manifest_row["object_uri"]),
+        mlflow_tags=mlflow_tags,
     )

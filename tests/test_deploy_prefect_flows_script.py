@@ -74,13 +74,31 @@ def test_prefect_settings_sets_headers_temporarily(monkeypatch: Any) -> None:
         assert os.environ["PREFECT_CLIENT_CUSTOM_HEADERS"] == previous
 
 
+def test_deployment_job_variables_requires_worker_env(monkeypatch: Any) -> None:
+    for key in ("PREFECT_API_URL", "STORAGE_API_URL", "MLFLOW_TRACKING_URI"):
+        monkeypatch.delenv(key, raising=False)
+
+    try:
+        deploy_flows._deployment_job_variables(work_pool_name="discoverex-fixed")
+    except RuntimeError as exc:
+        assert "PREFECT_API_URL, STORAGE_API_URL, MLFLOW_TRACKING_URI" in str(exc)
+    else:
+        raise AssertionError("expected missing worker env validation")
+
+
 def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> None:
     captured: dict[str, Any] = {}
 
-    class _FakeFlow:
+    class _FakeSourcedFlow:
         def deploy(self, **kwargs: Any) -> str:
             captured["deploy_kwargs"] = kwargs
             return "deployment-123"
+
+    class _FakeFlow:
+        def from_source(self, *, source: str, entrypoint: str) -> _FakeSourcedFlow:
+            captured["source"] = source
+            captured["source_entrypoint"] = entrypoint
+            return _FakeSourcedFlow()
 
     fake_flow = _FakeFlow()
 
@@ -92,7 +110,7 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
     monkeypatch.setattr(
         deploy_flows,
         "_deployment_job_variables",
-        lambda: {
+        lambda work_pool_name: {
             "env": {"PREFECT_API_URL": "https://prefect.example/api"},
             "volumes": ["/tmp/runtime:/var/lib/discoverex"],
             "container_create_kwargs": {
@@ -117,6 +135,8 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
 
     assert deployment_id == "deployment-123"
     assert captured["entrypoint"] == "prefect_flow.py:run_generate_job_flow"
+    assert captured["source"] == "/app"
+    assert captured["source_entrypoint"] == "prefect_flow.py:run_generate_job_flow"
     assert captured["deploy_kwargs"] == {
         "name": "discoverex-naturalness-experiment-feat-remote-source",
         "work_pool_name": "gpu-pool",
@@ -191,7 +211,7 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
     monkeypatch.setattr(
         deploy_flows,
         "_deployment_job_variables",
-        lambda: {
+        lambda work_pool_name: {
             "env": {"PREFECT_API_URL": "https://prefect.example/api"},
             "volumes": ["/tmp/runtime:/var/lib/discoverex"],
             "container_create_kwargs": {
@@ -250,6 +270,51 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
     assert (
         out["deployment_name"] == "discoverex-naturalness-experiment-feat-remote-source"
     )
+
+
+def test_deploy_embedded_flow_omits_image_for_process_pool(monkeypatch: Any) -> None:
+    captured: dict[str, Any] = {}
+
+    class _FakeSourcedFlow:
+        def deploy(self, **kwargs: Any) -> str:
+            captured["deploy_kwargs"] = kwargs
+            return "deployment-789"
+
+    class _FakeFlow:
+        def from_source(self, *, source: str, entrypoint: str) -> _FakeSourcedFlow:
+            captured["source"] = source
+            captured["source_entrypoint"] = entrypoint
+            return _FakeSourcedFlow()
+
+    monkeypatch.setattr(deploy_flows, "_load_flow", lambda _entrypoint: _FakeFlow())
+    monkeypatch.setattr(
+        deploy_flows,
+        "_deployment_job_variables",
+        lambda work_pool_name: {
+            "env": {"PREFECT_API_URL": "https://prefect.example/api"},
+            "working_dir": "/app",
+        },
+    )
+
+    deployment_id = deploy_flows._deploy_embedded_flow(
+        engine="discoverex",
+        flow_kind="generate",
+        branch="feat/process",
+        flow_entrypoint="prefect_flow.py:run_generate_job_flow",
+        work_pool_name="discoverex-fixed-process",
+        work_queue_name="discoverex-fixed-process",
+        image="discoverex-worker:local",
+        deployment_version="20260312120000",
+        deployment_name="discoverex-generate-feat-process",
+        deployment_suffix="",
+    )
+
+    assert deployment_id == "deployment-789"
+    assert "image" not in captured["deploy_kwargs"]
+    assert captured["deploy_kwargs"]["job_variables"] == {
+        "env": {"PREFECT_API_URL": "https://prefect.example/api"},
+        "working_dir": "/app",
+    }
 
 
 def test_build_parser_marks_script_as_remote_source_registrar() -> None:

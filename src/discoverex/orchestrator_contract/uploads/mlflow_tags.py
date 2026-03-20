@@ -1,0 +1,163 @@
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass
+from typing import Any, TypedDict, cast
+from urllib import error, request
+from urllib.parse import urlsplit
+
+from pydantic import BaseModel, ConfigDict
+
+
+class UploadedArtifactUris(TypedDict, total=False):
+    stdout_uri: str
+    stderr_uri: str
+    result_uri: str
+    manifest_uri: str
+    engine_manifest_uri: str
+
+
+class MlflowTagUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    value: str
+
+
+class MlflowTagUpdateBatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    tags: list[MlflowTagUpdate]
+
+
+@dataclass(frozen=True)
+class MlflowTagLinkageResult:
+    status: str
+    linked_tags: dict[str, str]
+
+
+def link_uploaded_artifacts(
+    *,
+    payload: dict[str, Any],
+    uploaded_uris: UploadedArtifactUris,
+    engine_mlflow_tags: dict[str, str],
+) -> MlflowTagLinkageResult:
+    run_id = str(payload.get("mlflow_run_id", "")).strip()
+    if not run_id:
+        return MlflowTagLinkageResult(status="skipped_missing_run_id", linked_tags={})
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "").strip()
+    if not tracking_uri:
+        return MlflowTagLinkageResult(
+            status="skipped_missing_tracking_uri",
+            linked_tags={},
+        )
+    tags = _build_tag_updates(
+        uploaded_uris=uploaded_uris,
+        engine_mlflow_tags=engine_mlflow_tags,
+    )
+    if not tags:
+        return MlflowTagLinkageResult(status="skipped_no_tags", linked_tags={})
+    batch = MlflowTagUpdateBatch(
+        run_id=run_id,
+        tags=[
+            MlflowTagUpdate(key=key, value=value)
+            for key, value in sorted(tags.items())
+        ],
+    )
+    _apply_mlflow_tags(tracking_uri=tracking_uri, batch=batch)
+    return MlflowTagLinkageResult(status="linked", linked_tags=tags)
+
+
+def _build_tag_updates(
+    *,
+    uploaded_uris: UploadedArtifactUris,
+    engine_mlflow_tags: dict[str, str],
+) -> dict[str, str]:
+    tags: dict[str, str] = {}
+    for payload_key, tag_key in (
+        ("stdout_uri", "artifact_stdout_uri"),
+        ("stderr_uri", "artifact_stderr_uri"),
+        ("result_uri", "artifact_result_uri"),
+        ("manifest_uri", "artifact_manifest_uri"),
+        ("engine_manifest_uri", "artifact_engine_manifest_uri"),
+    ):
+        value = str(uploaded_uris.get(payload_key, "")).strip()
+        if value:
+            tags[tag_key] = value
+    for key, value in engine_mlflow_tags.items():
+        tag_key = str(key).strip()
+        tag_value = str(value).strip()
+        if tag_key and tag_value:
+            tags[tag_key] = tag_value
+    return tags
+
+
+def _apply_mlflow_tags(*, tracking_uri: str, batch: MlflowTagUpdateBatch) -> None:
+    scheme = urlsplit(tracking_uri).scheme.lower()
+    if scheme in {"http", "https"}:
+        _apply_remote_mlflow_tags(tracking_uri=tracking_uri, batch=batch)
+        return
+    _apply_local_mlflow_tags(tracking_uri=tracking_uri, batch=batch)
+
+
+def _apply_remote_mlflow_tags(
+    *,
+    tracking_uri: str,
+    batch: MlflowTagUpdateBatch,
+) -> None:
+    for tag in batch.tags:
+        payload = {
+            "run_id": batch.run_id,
+            "key": tag.key,
+            "value": tag.value,
+        }
+        body = json.dumps(payload, ensure_ascii=True).encode("utf-8")
+        req = request.Request(
+            f"{tracking_uri.rstrip('/')}/api/2.0/mlflow/runs/set-tag",
+            method="POST",
+            data=body,
+            headers=_mlflow_headers(),
+        )
+        try:
+            with request.urlopen(req, timeout=60) as resp:
+                resp.read()
+        except error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(
+                "mlflow remote tag update failed "
+                f"run_id={batch.run_id} tag={tag.key} status={exc.code} detail={detail}"
+            ) from exc
+
+
+def _apply_local_mlflow_tags(
+    *,
+    tracking_uri: str,
+    batch: MlflowTagUpdateBatch,
+) -> None:
+    try:
+        import mlflow  # type: ignore
+        from mlflow.tracking import MlflowClient  # type: ignore
+    except Exception as exc:
+        raise RuntimeError(
+            "mlflow dependency is required for local MLflow tag linkage. "
+            "Install with `uv sync --extra tracking`."
+        ) from exc
+    mlflow.set_tracking_uri(tracking_uri)
+    client = MlflowClient(tracking_uri=tracking_uri)
+    for tag in batch.tags:
+        client.set_tag(batch.run_id, tag.key, tag.value)
+
+
+def _mlflow_headers() -> dict[str, str]:
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "discoverex-worker-mlflow-linkage/1.0",
+    }
+    cf_id = os.getenv("CF_ACCESS_CLIENT_ID", "").strip()
+    cf_secret = os.getenv("CF_ACCESS_CLIENT_SECRET", "").strip()
+    if cf_id and cf_secret:
+        headers["CF-Access-Client-Id"] = cf_id
+        headers["CF-Access-Client-Secret"] = cf_secret
+    return cast(dict[str, str], headers)

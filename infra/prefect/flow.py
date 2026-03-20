@@ -279,6 +279,7 @@ def _run_job_flow_logic(
             upload_worker_artifacts(
                 flow_run_id=flow_run_id,
                 attempt=attempt,
+                parsed=parsed,
                 local_paths=local_paths,
                 require_manifest=payload_status(parsed) not in FAILED_STATUSES,
                 logger=logger,

@@ -284,7 +284,7 @@ def _build_engine_args(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _build_profile_overrides(args: argparse.Namespace) -> list[str]:
-    overrides: list[str] = []
+    overrides: list[str] = _worker_runtime_adapter_overrides(args)
     if args.execution_profile == "local-tiny-cpu":
         overrides.extend(
             [
@@ -340,6 +340,16 @@ def _build_profile_overrides(args: argparse.Namespace) -> list[str]:
     return overrides
 
 
+def _worker_runtime_adapter_overrides(args: argparse.Namespace) -> list[str]:
+    runtime_mode = str(getattr(args, "run_mode", "")).strip()
+    if runtime_mode != "inline":
+        return []
+    return [
+        "adapters/artifact_store=local",
+        "adapters/tracker=mlflow_server",
+    ]
+
+
 def _build_runtime_env(args: argparse.Namespace) -> dict[str, str]:
     return _parse_kv_pairs(args.runtime_env)
 
@@ -382,6 +392,10 @@ def _build_job_spec(args: argparse.Namespace) -> JobSpec:
 
     runtime_extras = _build_runtime_extras(args)
     overrides = [*_build_profile_overrides(args), *args.override]
+    _validate_worker_runtime_overrides(
+        overrides=overrides,
+        run_mode=args.run_mode,
+    )
     flow_kind = _flow_kind_for_command(args.command)
     entrypoint = [flow_entrypoint_for_kind(flow_kind)]
     inputs: JobSpecInputs = {
@@ -413,6 +427,31 @@ def _build_job_spec(args: argparse.Namespace) -> JobSpec:
         "env": _build_runner_env(args),
         "outputs_prefix": args.outputs_prefix,
     }
+
+
+def _validate_worker_runtime_overrides(
+    *,
+    overrides: list[str],
+    run_mode: str,
+) -> None:
+    if run_mode != "inline":
+        return
+    artifact_store = _override_value(overrides, "adapters/artifact_store")
+    if artifact_store and artifact_store != "local":
+        raise SystemExit(
+            "worker runtime requires adapters/artifact_store=local"
+        )
+    tracker = _override_value(overrides, "adapters/tracker")
+    if tracker and tracker != "mlflow_server":
+        raise SystemExit("worker runtime requires adapters/tracker=mlflow_server")
+
+
+def _override_value(overrides: list[str], key: str) -> str | None:
+    prefix = f"{key}="
+    for raw in reversed(overrides):
+        if raw.startswith(prefix):
+            return raw.removeprefix(prefix).strip()
+    return None
 
 
 def _resolved_config_name(args: argparse.Namespace) -> str:

@@ -45,6 +45,8 @@ def test_prefect_wrapper_dry_run_defaults_to_remote_worker_profile() -> None:
     assert payload["entrypoint"] == ["prefect_flow.py:run_generate_job_flow"]
     assert payload["job_name"] == "generate--generate--generator-pixart-gpu"
     assert payload["inputs"]["overrides"] == [
+        "adapters/artifact_store=local",
+        "adapters/tracker=mlflow_server",
         "profile=generator_pixart_gpu_v2_8gb",
         "runtime/model_runtime=gpu",
         "flows/generate=v2",
@@ -100,6 +102,8 @@ def test_prefect_wrapper_allows_local_tiny_profile_override() -> None:
     ]
     assert payload["job_name"] == "generate--generate--local-tiny-cpu"
     assert payload["inputs"]["overrides"] == [
+        "adapters/artifact_store=local",
+        "adapters/tracker=mlflow_server",
         "runtime/model_runtime=cpu",
         "models/background_generator=tiny_sd_cpu",
         "models/hidden_region=tiny_torch",

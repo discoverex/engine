@@ -135,7 +135,8 @@ def _load_flow(entrypoint: str) -> Any:
     return getattr(module, attr_name)
 
 
-def _deployment_job_variables() -> dict[str, Any]:
+def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
+    _validate_required_worker_env()
     runtime_root = SETTINGS.prefect_work_runtime_dir
     env_pairs = (
         ("PREFECT_API_URL", os.environ.get("PREFECT_API_URL", "")),
@@ -169,6 +170,11 @@ def _deployment_job_variables() -> dict[str, Any]:
         ("NVIDIA_VISIBLE_DEVICES", "all"),
     )
     env = {key: value for key, value in env_pairs if value}
+    if _is_process_work_pool(work_pool_name):
+        return {
+            "env": env,
+            "working_dir": "/app",
+        }
     return {
         "env": env,
         "volumes": [f"{runtime_root}:/var/lib/discoverex"],
@@ -185,6 +191,25 @@ def _deployment_job_variables() -> dict[str, Any]:
     }
 
 
+def _is_process_work_pool(work_pool_name: str) -> bool:
+    normalized = work_pool_name.strip().lower()
+    return normalized.endswith("-process") or "process" in normalized
+
+
+def _validate_required_worker_env() -> None:
+    missing = [
+        name
+        for name in ("PREFECT_API_URL", "STORAGE_API_URL", "MLFLOW_TRACKING_URI")
+        if not os.environ.get(name, "").strip()
+    ]
+    if missing:
+        missing_text = ", ".join(missing)
+        raise RuntimeError(
+            "worker deployment requires environment variables: "
+            f"{missing_text}"
+        )
+
+
 def _deploy_embedded_flow(
     *,
     engine: str,
@@ -199,19 +224,25 @@ def _deploy_embedded_flow(
     deployment_suffix: str,
 ) -> str:
     embedded_flow = cast(Any, _load_flow(flow_entrypoint))
-    deployment_id = embedded_flow.deploy(
-        name=deployment_name,
-        work_pool_name=work_pool_name,
-        image=image,
-        work_queue_name=work_queue_name,
-        job_variables=_deployment_job_variables(),
-        build=False,
-        push=False,
-        description=f"Execute the {flow_kind} flow for branch {branch!r}.",
-        tags=[engine, flow_kind, branch],
-        version=deployment_version,
-        print_next_steps=False,
+    sourced_flow = embedded_flow.from_source(
+        source="/app",
+        entrypoint=flow_entrypoint,
     )
+    deploy_kwargs: dict[str, Any] = {
+        "name": deployment_name,
+        "work_pool_name": work_pool_name,
+        "work_queue_name": work_queue_name,
+        "job_variables": _deployment_job_variables(work_pool_name=work_pool_name),
+        "build": False,
+        "push": False,
+        "description": f"Execute the {flow_kind} flow for branch {branch!r}.",
+        "tags": [engine, flow_kind, branch],
+        "version": deployment_version,
+        "print_next_steps": False,
+    }
+    if not _is_process_work_pool(work_pool_name):
+        deploy_kwargs["image"] = image
+    deployment_id = sourced_flow.deploy(**deploy_kwargs)
     return str(deployment_id)
 
 
