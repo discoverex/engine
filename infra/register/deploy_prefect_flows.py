@@ -129,6 +129,8 @@ def _prefect_settings(prefect_api_url: str) -> Iterator[None]:
 
 def _load_flow(entrypoint: str) -> Any:
     module_name, attr_name = entrypoint.split(":", 1)
+    if module_name.endswith(".py"):
+        module_name = module_name[:-3]
     module = importlib.import_module(module_name)
     return getattr(module, attr_name)
 

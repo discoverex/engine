@@ -25,10 +25,17 @@ def test_load_flow_imports_entrypoint_object(monkeypatch: Any) -> None:
     class _Module:
         run_generate_job_flow = object()
 
-    monkeypatch.setattr(deploy_flows.importlib, "import_module", lambda _name: _Module())
+    captured: dict[str, Any] = {}
 
-    loaded = deploy_flows._load_flow("prefect_flow:run_generate_job_flow")
+    def _fake_import_module(name: str) -> _Module:
+        captured["module_name"] = name
+        return _Module()
 
+    monkeypatch.setattr(deploy_flows.importlib, "import_module", _fake_import_module)
+
+    loaded = deploy_flows._load_flow("prefect_flow.py:run_generate_job_flow")
+
+    assert captured["module_name"] == "prefect_flow"
     assert loaded is _Module.run_generate_job_flow
 
 
