@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import inspect
+import sys
 from typing import Any
 
 from PIL import Image  # type: ignore
+
+
+def _debug(message: str) -> None:
+    print(f"[layerdiffuse-debug] {message}", file=sys.stderr, flush=True)
 
 
 def _to_rgba_image(image: Any) -> Image.Image:
@@ -160,6 +165,7 @@ def _build_prompt_embeds(
     negative_prompts: str | list[str],
     guidance_scale: float,
 ) -> tuple[Any, Any, Any, Any]:
+    _debug("encode_prompt:start")
     prompt_embeds = None
     negative_prompt_embeds = None
     pooled_prompt_embeds = None
@@ -185,6 +191,7 @@ def _build_prompt_embeds(
     if "negative_prompt_2" in encode_signature.parameters:
         encode_kwargs["negative_prompt_2"] = negative_prompts
     encoded = encode_prompt(**encode_kwargs)
+    _debug("encode_prompt:end")
     if isinstance(encoded, tuple) and len(encoded) == 4:
         (
             prompt_embeds,
@@ -220,6 +227,10 @@ def _sample_latents(
     execution_device: Any,
     max_vram_gb: float | None,
 ) -> Any:
+    _debug(
+        "sample_latents:start "
+        f"width={width} height={height} steps={num_inference_steps} guidance={guidance_scale}"
+    )
     (
         prompt_embeds,
         negative_prompt_embeds,
@@ -234,6 +245,7 @@ def _sample_latents(
     )
     if prompt_embeds is not None:
         _offload_text_encoders(pipe=pipe)
+        _debug("text_encoders:offloaded")
         _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
     call_signature = inspect.signature(pipe.__call__)
     pipe_kwargs: dict[str, Any] = {
@@ -254,10 +266,13 @@ def _sample_latents(
         pipe_kwargs["pooled_prompt_embeds"] = pooled_prompt_embeds
     if "negative_pooled_prompt_embeds" in call_signature.parameters:
         pipe_kwargs["negative_pooled_prompt_embeds"] = negative_pooled_prompt_embeds
+    _debug("denoise:start")
     result = pipe(**pipe_kwargs)
+    _debug("denoise:end")
     _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
     latents = result[0] if isinstance(result, tuple) else result
     _offload_unet_stack(pipe=pipe)
+    _debug("unet:offloaded")
     _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
     return latents
 
@@ -277,13 +292,11 @@ def generate_rgba(
 ) -> Any:
     import torch  # type: ignore
 
+    _debug(f"generate_rgba:start model_id={getattr(model, 'model_id', 'unknown')}")
     pipe = model._load_pipeline(handle)
+    _debug("pipeline:loaded")
     execution_device = getattr(pipe, "_execution_device", handle.device)
     generator = None if seed is None else torch.Generator(device="cpu").manual_seed(seed)
-    prompt_embeds = None
-    negative_prompt_embeds = None
-    pooled_prompt_embeds = None
-    negative_pooled_prompt_embeds = None
     latents = _sample_latents(
         pipe=pipe,
         prompts=prompt,
@@ -296,10 +309,14 @@ def generate_rgba(
         execution_device=execution_device,
         max_vram_gb=max_vram_gb,
     )
+    _debug("decode:prepare")
     _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
+    _debug("decode:start")
     images = _decode_latents_to_rgba_images(pipe=pipe, latents=latents)
+    _debug("decode:end")
     image = images[0]
     _offload_decode_stack(pipe=pipe, decoder=None)
+    _debug("decode_stack:offloaded")
     return _to_rgba_image(image)
 
 
@@ -322,7 +339,12 @@ def generate_rgba_batch(
         return []
     if len(prompts) != len(negative_prompts):
         raise ValueError("prompts and negative_prompts must have the same length")
+    _debug(
+        "generate_rgba_batch:start "
+        f"model_id={getattr(model, 'model_id', 'unknown')} count={len(prompts)}"
+    )
     pipe = model._load_pipeline(handle)
+    _debug("pipeline:loaded")
     execution_device = getattr(pipe, "_execution_device", handle.device)
     generator = None if seed is None else torch.Generator(device="cpu").manual_seed(seed)
     latents = _sample_latents(
@@ -337,7 +359,11 @@ def generate_rgba_batch(
         execution_device=execution_device,
         max_vram_gb=max_vram_gb,
     )
+    _debug("decode:prepare")
     _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
+    _debug("decode:start")
     images = _decode_latents_to_rgba_images(pipe=pipe, latents=latents)
+    _debug("decode:end")
     _offload_decode_stack(pipe=pipe, decoder=None)
+    _debug("decode_stack:offloaded")
     return _to_rgba_images(images)
