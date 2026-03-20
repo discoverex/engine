@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 from time import perf_counter
@@ -443,8 +445,7 @@ def _find_best_patch(
 ) -> dict[str, Any]:
     best: dict[str, Any] | None = None
     height, width = background_image.shape[:2]
-    candidate_cache: dict[tuple[int, int], list[dict[str, Any]]] = {}
-    variant_feature_cache: dict[tuple[str, int, int], dict[str, np.ndarray]] = {}
+    variant_tasks: list[tuple[str, np.ndarray, tuple[int, int]]] = []
     for variant in variants:
         rgba = variant["image"]
         variant_id = str(variant["variant_id"])
@@ -453,47 +454,63 @@ def _find_best_patch(
         for scale_factor in config.region_selection.scale_factors:
             scaled_w = min(width, max(1, int(round(patch_w * scale_factor))))
             scaled_h = min(height, max(1, int(round(patch_h * scale_factor))))
-            cache_key = (scaled_w, scaled_h)
-            candidates = candidate_cache.get(cache_key)
-            if candidates is None:
-                candidates = _build_patch_candidates(
-                    config=config,
-                    background_image=background_image,
-                    patch_size=cache_key,
-                )
-                candidate_cache[cache_key] = candidates
-            variant_cache_key = (variant_id, scaled_w, scaled_h)
-            variant_features = variant_feature_cache.get(variant_cache_key)
-            if variant_features is None:
-                variant_features = _extract_feature_bundle(
-                    np.asarray(
-                        rgba.resize(
-                            (scaled_w, scaled_h), Image.Resampling.LANCZOS
-                        ).convert("RGB")
-                    ),
-                    config=config,
-                )
-                variant_feature_cache[variant_cache_key] = variant_features
-            for candidate in candidates:
-                bbox = candidate["bbox"]
-                if any(
-                    bbox_iou(bbox, taken) > config.region_selection.iou_threshold
-                    for taken in selected_boxes
-                ):
-                    continue
-                feature_scores = _score_feature_bundle(
-                    config=config,
-                    variant_features=variant_features,
-                    patch_features=candidate["features"],
-                )
-                score = sum(feature_scores.values())
-                if best is None or score > float(best["score"]):
-                    best = {
-                        "bbox": bbox,
-                        "score": score,
-                        "variant_id": variant_id,
-                        "feature_scores": feature_scores,
-                    }
+            resized = np.asarray(
+                rgba.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS).convert("RGB")
+            )
+            variant_tasks.append((variant_id, resized, (scaled_w, scaled_h)))
+
+    cache_keys = sorted({patch_size for _, _, patch_size in variant_tasks})
+    max_workers = max(1, min(len(cache_keys) + len(variant_tasks), os.cpu_count() or 1, 8))
+
+    def _candidate_job(patch_size: tuple[int, int]) -> tuple[tuple[int, int], list[dict[str, Any]]]:
+        return (
+            patch_size,
+            _build_patch_candidates(
+                config=config,
+                background_image=background_image,
+                patch_size=patch_size,
+            ),
+        )
+
+    def _variant_job(
+        variant_id: str,
+        resized_rgb: np.ndarray,
+        patch_size: tuple[int, int],
+    ) -> tuple[tuple[str, tuple[int, int]], dict[str, np.ndarray]]:
+        return (
+            (variant_id, patch_size),
+            _extract_feature_bundle(resized_rgb, config=config),
+        )
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        candidate_cache = dict(executor.map(_candidate_job, cache_keys))
+        variant_feature_cache = dict(
+            executor.map(lambda task: _variant_job(*task), variant_tasks)
+        )
+
+    for variant_id, _, patch_size in variant_tasks:
+        candidates = candidate_cache[patch_size]
+        variant_features = variant_feature_cache[(variant_id, patch_size)]
+        for candidate in candidates:
+            bbox = candidate["bbox"]
+            if any(
+                bbox_iou(bbox, taken) > config.region_selection.iou_threshold
+                for taken in selected_boxes
+            ):
+                continue
+            feature_scores = _score_feature_bundle(
+                config=config,
+                variant_features=variant_features,
+                patch_features=candidate["features"],
+            )
+            score = sum(feature_scores.values())
+            if best is None or score > float(best["score"]):
+                best = {
+                    "bbox": bbox,
+                    "score": score,
+                    "variant_id": variant_id,
+                    "feature_scores": feature_scores,
+                }
     if best is None:
         raise RuntimeError("patch_similarity_v2 could not find a valid candidate patch")
     return best
