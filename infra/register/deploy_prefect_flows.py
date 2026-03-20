@@ -154,7 +154,11 @@ def _deploy_embedded_flow(
         work_pool_name=work_pool_name,
         image=image,
         work_queue_name=work_queue_name,
-        job_variables={},
+        job_variables={
+            "container_create_kwargs": {
+                "entrypoint": "",
+            },
+        },
         build=False,
         push=False,
         description=f"Execute the {flow_kind} flow for branch {branch!r}.",

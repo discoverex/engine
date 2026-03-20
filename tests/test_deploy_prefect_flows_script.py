@@ -110,7 +110,11 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
         "work_pool_name": "gpu-pool",
         "image": "discoverex-worker:local",
         "work_queue_name": "gpu-fixed",
-        "job_variables": {},
+        "job_variables": {
+            "container_create_kwargs": {
+                "entrypoint": "",
+            },
+        },
         "build": False,
         "push": False,
         "description": "Execute the generate flow for branch 'feat/remote-source'.",
