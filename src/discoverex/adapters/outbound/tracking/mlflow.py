@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Any, cast
 from urllib import error, request
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 
 class MLflowTrackerAdapter:
@@ -80,6 +80,7 @@ class MLflowTrackerAdapter:
     ) -> str | None:
         experiment_id = self._ensure_remote_experiment()
         run = self._mlflow_request(
+            "POST",
             "/api/2.0/mlflow/runs/create",
             {
                 "experiment_id": experiment_id,
@@ -110,23 +111,33 @@ class MLflowTrackerAdapter:
             "tags": [],
         }
         if batch["params"] or batch["metrics"]:
-            self._mlflow_request("/api/2.0/mlflow/runs/log-batch", batch)
+            self._mlflow_request("POST", "/api/2.0/mlflow/runs/log-batch", batch)
         self._mlflow_request(
+            "POST",
             "/api/2.0/mlflow/runs/update",
             {"run_id": run_id, "status": "FINISHED"},
         )
         return run_id
 
     def _ensure_remote_experiment(self) -> str:
-        lookup = self._mlflow_request(
-            "/api/2.0/mlflow/experiments/get-by-name",
-            {"experiment_name": self._experiment_name},
-        )
+        try:
+            lookup = self._mlflow_request(
+                "GET",
+                (
+                    "/api/2.0/mlflow/experiments/get-by-name?"
+                    + urlencode({"experiment_name": self._experiment_name})
+                ),
+            )
+        except RuntimeError as exc:
+            if not _is_missing_experiment_error(exc):
+                raise
+            lookup = {}
         experiment = cast(dict[str, Any], lookup.get("experiment", {}))
         experiment_id = str(experiment.get("experiment_id", "")).strip()
         if experiment_id:
             return experiment_id
         created = self._mlflow_request(
+            "POST",
             "/api/2.0/mlflow/experiments/create",
             {"name": self._experiment_name},
         )
@@ -135,12 +146,21 @@ class MLflowTrackerAdapter:
             raise RuntimeError("mlflow remote create_experiment response missing id")
         return experiment_id
 
-    def _mlflow_request(self, path: str, payload: dict[str, object]) -> dict[str, Any]:
+    def _mlflow_request(
+        self,
+        method: str,
+        path: str,
+        payload: dict[str, object] | None = None,
+    ) -> dict[str, Any]:
         url = f"{self._tracking_uri.rstrip('/')}{path}"
-        body = json.dumps(payload, ensure_ascii=True).encode("utf-8")
+        body = (
+            json.dumps(payload, ensure_ascii=True).encode("utf-8")
+            if payload is not None
+            else None
+        )
         req = request.Request(
             url,
-            method="POST",
+            method=method,
             data=body,
             headers=_mlflow_headers(),
         )
@@ -198,3 +218,10 @@ def _string_value(value: object) -> str:
 
 def _timestamp_millis() -> int:
     return int(time.time() * 1000)
+
+
+def _is_missing_experiment_error(exc: RuntimeError) -> bool:
+    text = str(exc)
+    return "status=404" in text and (
+        "RESOURCE_DOES_NOT_EXIST" in text or "get-by-name" in text
+    )
