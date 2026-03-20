@@ -89,6 +89,18 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
         return fake_flow
 
     monkeypatch.setattr(deploy_flows, "_load_flow", _fake_load_flow)
+    monkeypatch.setattr(
+        deploy_flows,
+        "_deployment_job_variables",
+        lambda: {
+            "env": {"PREFECT_API_URL": "https://prefect.example/api"},
+            "volumes": ["/tmp/runtime:/var/lib/discoverex"],
+            "container_create_kwargs": {
+                "entrypoint": "",
+                "device_requests": [{"count": -1, "capabilities": [["gpu"]]}],
+            },
+        },
+    )
 
     deployment_id = deploy_flows._deploy_embedded_flow(
         engine="discoverex",
@@ -111,8 +123,11 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
         "image": "discoverex-worker:local",
         "work_queue_name": "gpu-fixed",
         "job_variables": {
+            "env": {"PREFECT_API_URL": "https://prefect.example/api"},
+            "volumes": ["/tmp/runtime:/var/lib/discoverex"],
             "container_create_kwargs": {
                 "entrypoint": "",
+                "device_requests": [{"count": -1, "capabilities": [["gpu"]]}],
             },
         },
         "build": False,
@@ -173,6 +188,18 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
             _ = (exc_type, exc, tb)
 
     monkeypatch.setattr(deploy_flows, "_prefect_settings", lambda _url: _FakeContext())
+    monkeypatch.setattr(
+        deploy_flows,
+        "_deployment_job_variables",
+        lambda: {
+            "env": {"PREFECT_API_URL": "https://prefect.example/api"},
+            "volumes": ["/tmp/runtime:/var/lib/discoverex"],
+            "container_create_kwargs": {
+                "entrypoint": "",
+                "device_requests": [{"count": -1, "capabilities": [["gpu"]]}],
+            },
+        },
+    )
 
     def _fake_deploy(**kwargs: Any) -> str:
         captured["deploy_kwargs"] = kwargs

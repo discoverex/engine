@@ -135,6 +135,59 @@ def _load_flow(entrypoint: str) -> Any:
     return getattr(module, attr_name)
 
 
+def _deployment_job_variables() -> dict[str, Any]:
+    runtime_root = SETTINGS.prefect_work_runtime_dir
+    env = {
+        key: value
+        for key in (
+            ("PREFECT_API_URL", os.environ.get("PREFECT_API_URL", "")),
+            (
+                "PREFECT_CLIENT_CUSTOM_HEADERS",
+                os.environ.get("PREFECT_CLIENT_CUSTOM_HEADERS", ""),
+            ),
+            ("CF_ACCESS_CLIENT_ID", os.environ.get("CF_ACCESS_CLIENT_ID", "")),
+            (
+                "CF_ACCESS_CLIENT_SECRET",
+                os.environ.get("CF_ACCESS_CLIENT_SECRET", ""),
+            ),
+            ("STORAGE_API_URL", os.environ.get("STORAGE_API_URL", "")),
+            ("MLFLOW_TRACKING_URI", os.environ.get("MLFLOW_TRACKING_URI", "")),
+            (
+                "MLFLOW_S3_ENDPOINT_URL",
+                os.environ.get("MLFLOW_S3_ENDPOINT_URL", ""),
+            ),
+            ("AWS_ACCESS_KEY_ID", os.environ.get("AWS_ACCESS_KEY_ID", "")),
+            (
+                "AWS_SECRET_ACCESS_KEY",
+                os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+            ),
+            ("ARTIFACT_BUCKET", os.environ.get("ARTIFACT_BUCKET", "")),
+            ("DISCOVEREX_WORKER_RUNTIME_DIR", "/var/lib/discoverex"),
+            ("DISCOVEREX_CACHE_DIR", "/var/lib/discoverex/cache"),
+            ("MODEL_CACHE_DIR", "/var/lib/discoverex/cache/models"),
+            ("UV_CACHE_DIR", "/var/lib/discoverex/cache/uv"),
+            ("HF_HOME", "/var/lib/discoverex/cache/models/hf"),
+            ("ORCHESTRATOR_CHECKPOINT_DIR", "/var/lib/discoverex/checkpoints"),
+            ("NVIDIA_VISIBLE_DEVICES", "all"),
+        )
+        if value
+    }
+    return {
+        "env": env,
+        "volumes": [f"{runtime_root}:/var/lib/discoverex"],
+        "container_create_kwargs": {
+            "entrypoint": "",
+            "extra_hosts": {"host.docker.internal": "host-gateway"},
+            "device_requests": [
+                {
+                    "count": -1,
+                    "capabilities": [["gpu"]],
+                }
+            ],
+        },
+    }
+
+
 def _deploy_embedded_flow(
     *,
     engine: str,
@@ -154,11 +207,7 @@ def _deploy_embedded_flow(
         work_pool_name=work_pool_name,
         image=image,
         work_queue_name=work_queue_name,
-        job_variables={
-            "container_create_kwargs": {
-                "entrypoint": "",
-            },
-        },
+        job_variables=_deployment_job_variables(),
         build=False,
         push=False,
         description=f"Execute the {flow_kind} flow for branch {branch!r}.",
