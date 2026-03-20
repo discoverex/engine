@@ -18,7 +18,7 @@ inputs:
     - profile=generator_pixart_gpu_v2_hidden_object
     - runtime/model_runtime=gpu
     - flows/generate=object_only_staged
-    - runtime.model_runtime.batch_size=3
+    - runtime.model_runtime.batch_size=1
     - runtime.model_runtime.enable_vae_slicing=true
     - runtime.model_runtime.enable_vae_tiling=true
     - models/object_generator=layerdiffuse
