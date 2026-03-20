@@ -32,6 +32,7 @@ def generate_region_objects(
     object_handle: ModelHandle,
     object_prompt: str,
     object_negative_prompt: str,
+    max_vram_gb: float | None = None,
 ) -> dict[str, GeneratedObjectAsset]:
     masker = SamObjectMaskExtractor(
         device=context.runtime.model_runtime.device,
@@ -70,6 +71,7 @@ def generate_region_objects(
                         or _DEFAULT_OBJECT_NEGATIVE,
                         "num_inference_steps": _OBJECT_GENERATION_STEPS,
                         "guidance_scale": _OBJECT_GENERATION_GUIDANCE,
+                        "max_vram_gb": max_vram_gb,
                     },
                 ),
             )

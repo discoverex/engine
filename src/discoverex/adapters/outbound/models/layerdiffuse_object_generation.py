@@ -118,6 +118,11 @@ class LayerDiffuseObjectGenerationModel:
             seed=as_int_or_none(request.params.get("seed"), fallback=self.seed),
             num_inference_steps=as_positive_int(request.params.get("num_inference_steps"), fallback=self.default_num_inference_steps),
             guidance_scale=as_float(request.params.get("guidance_scale"), fallback=self.default_guidance_scale),
+            max_vram_gb=(
+                as_float(request.params.get("max_vram_gb"), fallback=0.0)
+                if request.params.get("max_vram_gb") is not None
+                else None
+            ),
         )
         path.parent.mkdir(parents=True, exist_ok=True)
         image.save(path)

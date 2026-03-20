@@ -4,6 +4,9 @@ from pathlib import Path
 from typing import Any
 
 from discoverex.application.use_cases import run_replay_eval
+from discoverex.application.use_cases.generate_object_only import (
+    run as run_generate_object_only,
+)
 from discoverex.bootstrap import build_context
 from discoverex.config import PipelineConfig
 
@@ -56,6 +59,26 @@ def generate_verify_v2(
         execution_snapshot_path=execution_snapshot_path,
     )
     return run_generate_verify_v2(
+        args=args,
+        config=config,
+        context=context,
+        execution_snapshot_path=execution_snapshot_path,
+    )
+
+
+def generate_object_only(
+    *,
+    args: dict[str, Any],
+    config: PipelineConfig,
+    execution_snapshot: dict[str, Any] | None = None,
+    execution_snapshot_path: Path | None = None,
+) -> dict[str, Any]:
+    context = build_context(
+        config=config,
+        execution_snapshot=execution_snapshot,
+        execution_snapshot_path=execution_snapshot_path,
+    )
+    return run_generate_object_only(
         args=args,
         config=config,
         context=context,
