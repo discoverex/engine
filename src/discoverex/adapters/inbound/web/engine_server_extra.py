@@ -178,11 +178,19 @@ def register_extra_routes(
     def api_available_models() -> Any:
         import glob as g
 
-        # VRAM estimates by quantization suffix (GB)
-        _VRAM: dict[str, float] = {
+        # VRAM estimates: (model_params, quant) → GB
+        # 14B models (wan2.1-i2v-14b)
+        _VRAM_14B: dict[str, float] = {
             "Q3_K_S": 6.5, "Q3_K_M": 7.0, "Q4_0": 8.3, "Q4_K_S": 8.75,
             "Q4_1": 9.2, "Q4_K_M": 9.65, "Q5_K_S": 10.1, "Q5_0": 10.3,
             "Q5_K_M": 10.6, "Q5_1": 11.0, "Q6_K": 11.8, "Q8_0": 15.0,
+        }
+        # 5B models (wan2.2-ti2v-5b)
+        _VRAM_5B: dict[str, float] = {
+            "Q2_K": 2.5, "Q3_K_S": 3.0, "Q3_K_M": 3.5, "Q4_0": 4.0,
+            "Q4_K_S": 4.0, "Q4_1": 4.5, "Q4_K_M": 4.5, "Q5_K_S": 5.0,
+            "Q5_0": 5.0, "Q5_K_M": 5.0, "Q5_1": 5.0, "Q6_K": 5.5,
+            "Q8_0": 6.5,
         }
         comfyui_root = os.environ.get("COMFYUI_ROOT", os.path.expanduser("~/ComfyUI"))
         unet_dir = Path(comfyui_root) / "models" / "unet"
@@ -191,6 +199,10 @@ def register_extra_routes(
             name = fp.name
             size_gb = round(fp.stat().st_size / (1024**3), 1)
             quant = name.replace(".gguf", "").rsplit("-", 1)[-1]
-            vram = _VRAM.get(quant, size_gb)
+            nl = name.lower()
+            if "5b" in nl:
+                vram = _VRAM_5B.get(quant, size_gb)
+            else:
+                vram = _VRAM_14B.get(quant, size_gb)
             models.append({"name": name, "size_gb": size_gb, "vram_gb": vram})
         return jsonify({"models": models})
