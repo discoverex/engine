@@ -199,11 +199,13 @@ def test_register_script_local_tiny_profile_adds_worker_overrides_and_env() -> N
         "adapters/artifact_store=local",
         "adapters/tracker=mlflow_server",
         "runtime/model_runtime=cpu",
+        "runtime.width=256",
+        "runtime.height=256",
         "models/background_generator=tiny_sd_cpu",
         "models/hidden_region=tiny_torch",
         "models/inpaint=tiny_torch",
         "models/perception=tiny_torch",
-        "models/fx=tiny_sd_cpu",
+        "models/fx=copy_image",
     ]
     assert payload["inputs"]["runtime"]["extra_env"] == {}
     assert payload["env"] == {

@@ -289,11 +289,13 @@ def _build_profile_overrides(args: argparse.Namespace) -> list[str]:
         overrides.extend(
             [
                 "runtime/model_runtime=cpu",
+                "runtime.width=256",
+                "runtime.height=256",
                 "models/background_generator=tiny_sd_cpu",
                 "models/hidden_region=tiny_torch",
                 "models/inpaint=tiny_torch",
                 "models/perception=tiny_torch",
-                "models/fx=tiny_sd_cpu",
+                "models/fx=copy_image",
             ]
         )
     elif args.execution_profile == "remote-gpu-hf":

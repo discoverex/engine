@@ -105,11 +105,13 @@ def test_prefect_wrapper_allows_local_tiny_profile_override() -> None:
         "adapters/artifact_store=local",
         "adapters/tracker=mlflow_server",
         "runtime/model_runtime=cpu",
+        "runtime.width=256",
+        "runtime.height=256",
         "models/background_generator=tiny_sd_cpu",
         "models/hidden_region=tiny_torch",
         "models/inpaint=tiny_torch",
         "models/perception=tiny_torch",
-        "models/fx=tiny_sd_cpu",
+        "models/fx=copy_image",
     ]
 
 
