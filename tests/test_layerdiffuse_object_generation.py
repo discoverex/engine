@@ -11,6 +11,7 @@ from discoverex.adapters.outbound.models.layerdiffuse_object_generation import (
     LayerDiffuseObjectGenerationModel,
 )
 from discoverex.adapters.outbound.models.objects.layerdiffuse.generate import (
+    _sample_latents,
     _to_rgba_image,
     generate_rgba,
 )
@@ -99,6 +100,9 @@ def test_generate_rgba_precomputes_prompt_embeds_and_offloads_text_encoders() ->
                 self.moves.append((str(args[0]), self.dtype))
             return self
 
+        def decode(self, latents: object, return_dict: bool = False) -> tuple[list[Image.Image]]:
+            return ([Image.new("RGBA", (384, 384), color=(0, 0, 0, 255))],)
+
     class _FakePipe:
         def __init__(self) -> None:
             self._execution_device = "cuda"
@@ -114,7 +118,7 @@ def test_generate_rgba_precomputes_prompt_embeds_and_offloads_text_encoders() ->
 
         def __call__(self, **kwargs: object) -> object:
             self.pipe_calls.append(kwargs)
-            return ([Image.new("RGBA", (384, 384), color=(0, 0, 0, 255))],)
+            return ("latents",)
 
     pipe = _FakePipe()
     model = type(
@@ -261,6 +265,68 @@ def test_to_rgba_image_converts_tensor_output() -> None:
 
     assert image.mode == "RGBA"
     assert image.size == (2, 2)
+
+
+def test_sample_latents_offloads_unet_after_sampling() -> None:
+    class _FakeGenerator:
+        def manual_seed(self, seed: int) -> "_FakeGenerator":
+            return self
+
+    class _FakeUnet:
+        def __init__(self) -> None:
+            self.moves: list[str] = []
+
+        def to(self, device: str) -> "_FakeUnet":
+            self.moves.append(device)
+            return self
+
+    class _FakeEncoder:
+        def to(self, device: str) -> "_FakeEncoder":
+            return self
+
+    class _FakePipe:
+        def __init__(self) -> None:
+            self._execution_device = "cuda"
+            self.text_encoder = _FakeEncoder()
+            self.text_encoder_2 = _FakeEncoder()
+            self.unet = _FakeUnet()
+            self.call_kwargs: dict[str, object] = {}
+
+        def encode_prompt(self, **kwargs: object) -> tuple[str, str]:
+            return ("prompt", "negative")
+
+        def __call__(self, **kwargs: object) -> tuple[str]:
+            self.call_kwargs = kwargs
+            return ("latents",)
+
+    fake_torch = SimpleNamespace(
+        Generator=lambda device="cpu": _FakeGenerator(),
+        cuda=SimpleNamespace(is_available=lambda: False, empty_cache=lambda: None),
+    )
+    original_torch = sys.modules.get("torch")
+    sys.modules["torch"] = fake_torch
+    pipe = _FakePipe()
+    try:
+        latents = _sample_latents(
+            pipe=pipe,
+            prompts=["a", "b"],
+            negative_prompts=["x", "y"],
+            width=512,
+            height=512,
+            generator=None,
+            num_inference_steps=10,
+            guidance_scale=5.0,
+            execution_device="cuda",
+            max_vram_gb=None,
+        )
+    finally:
+        if original_torch is None:
+            sys.modules.pop("torch", None)
+        else:
+            sys.modules["torch"] = original_torch
+
+    assert latents == "latents"
+    assert pipe.unet.moves == ["cpu"]
 
 
 def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
