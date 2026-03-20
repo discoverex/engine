@@ -141,7 +141,56 @@ uv run discoverex serve --port 5001 --config-name animate_comfyui_lowvram
 
 ---
 
-## 7. 모델 전체 현황
+## 7. VAE 채널 불일치 수정 (48ch 문제)
+
+### 증상
+
+lowvram 프로필로 첫 실행 시 VAEDecode에서 에러 발생:
+
+```
+RuntimeError: Given groups=1, weight of size [16, 16, 1, 1, 1],
+expected input[1, 48, 9, 60, 60] to have 16 channels, but got 48 channels instead
+```
+
+### 원인
+
+WAN 2.1과 WAN 2.2는 **latent space 채널 수가 다름**:
+
+| 항목 | WAN 2.1 | WAN 2.2 |
+|------|---------|---------|
+| latent 채널 | 16 channels | **48 channels** |
+| VAE | `wan_2.1_vae.safetensors` (243MB) | `Wan2.2_VAE.pth` (2.7GB) |
+
+초기 lowvram 워크플로우에서 WAN 2.1 VAE를 그대로 사용하여,
+WAN 2.2 모델이 생성한 48ch latent를 16ch VAE가 디코딩하려다 실패.
+
+### 수정
+
+`wan22_i2v_lowvram.json`의 VAELoader 노드를 WAN 2.2 전용 VAE로 교체:
+
+```
+VAELoader (node 3):
+  수정 전: wan_2.1_vae.safetensors (16ch, 243MB)
+  수정 후: Wan2.2_VAE.pth (48ch, 2.7GB)
+```
+
+### 다운로드
+
+```
+소스: https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B/resolve/main/Wan2.2_VAE.pth
+위치: ~/ComfyUI/models/vae/Wan2.2_VAE.pth (2.7GB)
+```
+
+### 기존 영향
+
+| 파일 | 영향 |
+|------|------|
+| `wan21_i2v.json` (기존 워크플로우) | ❌ 변경 없음 — `wan_2.1_vae.safetensors` 그대로 |
+| `wan22_i2v_lowvram.json` | ✅ VAE 교체 |
+
+---
+
+## 8. 모델 전체 현황
 
 ### UNet (diffusion) 모델
 
@@ -157,14 +206,62 @@ uv run discoverex serve --port 5001 --config-name animate_comfyui_lowvram
 | 모델 | 크기 | VRAM | 용도 |
 |------|------|------|------|
 | umt5_xxl_fp8_e4m3fn_scaled.safetensors | 6.3GB | ~4.5GB | 기존 기본 |
-| **umt5-xxl-encoder-Q5_K_M.gguf** | **3.2GB** | **~2.5GB** | **저VRAM** |
+| **umt5-xxl-encoder-Q5_K_M.gguf** | **3.2GB** | **~5.1GB (FP16 디퀀타이즈)** | **저VRAM (주의사항 참조)** |
+
+### VAE
+
+| 모델 | 크기 | latent 채널 | 용도 |
+|------|------|------------|------|
+| wan_2.1_vae.safetensors | 243MB | 16ch | WAN 2.1 전용 |
+| **Wan2.2_VAE.pth** | **2.7GB** | **48ch** | **WAN 2.2 전용** |
 
 ---
 
-## 8. 프로필별 예상 VRAM 비교
+## 9. GGUF 텍스트 인코더 VRAM 주의사항
 
-| 프로필 | UNet | 텍스트 인코더 | 기타 | 합계 |
-|--------|------|-------------|------|------|
-| `animate_comfyui` (14B) | 6.5GB | 4.5GB | 3.0GB | **~14GB** |
-| `animate_comfyui` (14B Q3_K_S) | 6.5GB | 4.5GB | 3.0GB | **~14GB** |
-| `animate_comfyui_lowvram` (5B) | 3.1GB | 2.5GB | 3.0GB | **~8.6GB** |
+### 실측 결과
+
+GGUF 텍스트 인코더가 예상보다 VRAM을 많이 사용:
+
+| 항목 | 예상 | 실측 | 원인 |
+|------|------|------|------|
+| umt5-xxl Q5_K_M GGUF | ~2.5GB | **~5.1GB** | GPU 로드 시 FP16으로 디퀀타이즈 |
+
+ComfyUI-GGUF 플러그인은 UNet은 양자화 상태로 GPU 연산이 가능하지만,
+텍스트 인코더는 **FP16으로 풀어서 로드**하는 구현 한계가 있음.
+결과적으로 FP8 safetensors(4.5GB)보다 오히려 **더 큰 5.1GB** 사용.
+
+### 실측 VRAM 사용 내역 (lowvram 프로필)
+
+| 구성 요소 | VRAM |
+|----------|------|
+| CLIPVision | 1,208MB |
+| 텍스트 인코더 (GGUF → FP16) | 5,129MB |
+| VAE (WAN 2.2) | 242MB |
+| WAN22 5B Q4_K | 3,055MB |
+| **합계** | **~9.6GB** |
+
+### 추가 최적화 방향
+
+텍스트 인코더를 CPU 오프로드하면 VRAM ~6GB로 감소 가능:
+
+| 구성 요소 | CPU 오프로드 시 |
+|----------|---------------|
+| CLIPVision | 1,208MB |
+| 텍스트 인코더 | **0MB** (CPU) |
+| VAE (WAN 2.2) | 242MB |
+| WAN22 5B Q4_K | 3,055MB |
+| **합계** | **~4.5GB** |
+
+이는 CLIPLoader(GGUF)의 `device` 파라미터를 `cpu`로 설정하여 구현 가능.
+현재는 미적용 상태이며, 필요 시 워크플로우에 반영 가능.
+
+---
+
+## 10. 프로필별 VRAM 비교 (실측 반영)
+
+| 프로필 | UNet | 텍스트 인코더 | VAE | CLIP Vision | 합계 |
+|--------|------|-------------|-----|-------------|------|
+| `animate_comfyui` (14B Q3_K_S) | 6.5GB | 4.5GB (FP8) | 0.24GB | 1.2GB | **~12.4GB** |
+| `animate_comfyui_lowvram` (5B) | 3.1GB | 5.1GB (GGUF→FP16) | 0.24GB | 1.2GB | **~9.6GB** |
+| lowvram + CPU 오프로드 (미적용) | 3.1GB | 0GB (CPU) | 0.24GB | 1.2GB | **~4.5GB** |
