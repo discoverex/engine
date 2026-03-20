@@ -9,6 +9,10 @@ from discoverex.runtime_logging import get_logger
 logger = get_logger("discoverex.model_lifecycle")
 
 
+def _stdout_debug(message: str) -> None:
+    print(f"[discoverex-debug] {message}", flush=True)
+
+
 def stage_gpu_barrier(stage_name: str) -> None:
     gc.collect()
     try:
@@ -42,6 +46,9 @@ def stage_gpu_barrier(stage_name: str) -> None:
         stage_name,
         allocated_gb,
         reserved_gb,
+    )
+    _stdout_debug(
+        f"gpu_barrier stage={stage_name} allocated_gb={allocated_gb:.3f} reserved_gb={reserved_gb:.3f}"
     )
 
 

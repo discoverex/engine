@@ -68,6 +68,10 @@ from discoverex.runtime_logging import format_seconds, get_logger
 logger = get_logger("discoverex.generate.v2")
 
 
+def _stdout_debug(message: str) -> None:
+    print(f"[discoverex-debug] {message}", flush=True)
+
+
 def run(
     *,
     args: dict[str, Any],
@@ -96,6 +100,7 @@ def run(
         background_prompt=background_prompt or None,
         background_negative_prompt=background_negative_prompt or None,
     )
+    _stdout_debug("generate_verify_v2 background_complete")
     stage_gpu_barrier("after_background_pipeline")
 
     if config.region_selection.strategy == "legacy_detr":
@@ -124,16 +129,21 @@ def run(
             object_negative_prompt=object_negative_prompt,
             object_generation_size=object_generation_size,
         )
+        _stdout_debug("generate_verify_v2 object_generation_complete")
         stage_gpu_barrier("after_object_generation")
         candidate_regions = _select_regions_patch_similarity(
             config=config,
             background=background,
             generated_objects=list(generated_objects.values()),
         )
+        _stdout_debug(
+            f"generate_verify_v2 patch_selection_complete selected={len(candidate_regions)}"
+        )
         generated_objects = {
             region.region_id: generated_objects[region.region_id] for region in candidate_regions
         }
         if config.color_harmonization.enabled:
+            _stdout_debug("generate_verify_v2 harmonization_start")
             generated_objects = _harmonize_objects(
                 config=config,
                 scene_dir=scene_dir,
@@ -141,6 +151,7 @@ def run(
                 regions=candidate_regions,
                 generated_objects=generated_objects,
             )
+            _stdout_debug("generate_verify_v2 harmonization_complete")
     if config.region_selection.strategy == "legacy_detr":
         stage_gpu_barrier("after_object_generation")
 
@@ -153,6 +164,7 @@ def run(
         object_prompt=object_prompt,
         object_negative_prompt=object_negative_prompt,
     )
+    _stdout_debug("generate_verify_v2 inpaint_complete")
     stage_gpu_barrier("after_inpaint_region_generation")
     scene = build_scene(
         background=background,
@@ -174,12 +186,15 @@ def run(
         final_prompt=final_prompt,
         final_negative_prompt=final_negative_prompt,
     )
+    _stdout_debug("generate_verify_v2 composite_complete")
     stage_gpu_barrier("after_fx_composite")
     scene.composite.final_image_ref = composite.image_ref
     _finalize_layers(scene=scene, background=background, fx_input_ref=fx_input_ref)
     _verify_scene(context=context, scene=scene)
+    _stdout_debug("generate_verify_v2 scene_verification_complete")
     stage_gpu_barrier("after_scene_verification")
     _verify_regions(context=context, scene=scene, scene_dir=scene_dir)
+    _stdout_debug("generate_verify_v2 region_verification_complete")
     stage_gpu_barrier("after_region_verification")
     _persist_outputs(
         context=context,
@@ -194,6 +209,7 @@ def run(
         fx_input_ref=fx_input_ref,
         composite_artifact=composite.artifact_path,
     )
+    _stdout_debug("generate_verify_v2 persist_complete")
     logger.info(
         "generate_verify_v2 completed scene_id=%s version_id=%s duration=%s strategy=%s",
         scene.meta.scene_id,
@@ -320,6 +336,7 @@ def _generate_objects(
 ) -> dict[str, GeneratedObjectAsset]:
     generated: dict[str, GeneratedObjectAsset] = {}
     for region in regions:
+        _stdout_debug(f"generate_verify_v2 object_region_load start region={region.region_id}")
         handle = context.object_generator_model.load(context.model_versions.object_generator)
         try:
             generated.update(
@@ -335,6 +352,7 @@ def _generate_objects(
             )
         finally:
             unload_model(context.object_generator_model)
+            _stdout_debug(f"generate_verify_v2 object_region_unload end region={region.region_id}")
     return generated
 
 

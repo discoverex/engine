@@ -16,6 +16,10 @@ from .types import GeneratedObjectAsset
 
 logger = get_logger("discoverex.generate.objects")
 
+
+def _stdout_debug(message: str) -> None:
+    print(f"[discoverex-debug] {message}", flush=True)
+
 _DEFAULT_OBJECT_NEGATIVE = (
     "busy scene, environment, multiple objects, floor, wall, clutter, blurry, artifact"
 )
@@ -65,6 +69,9 @@ def generate_region_objects(
             started = perf_counter()
             batch_prediction = None
             if batch_size > 1 and hasattr(context.object_generator_model, "predict_batch"):
+                _stdout_debug(
+                    f"object_batch_predict start batch_start={batch_start + 1} batch_size={len(batch_regions)} size={object_generation_size}"
+                )
                 batch_prediction = context.object_generator_model.predict_batch(
                     object_handle,
                     FxRequest(
@@ -82,6 +89,9 @@ def generate_region_objects(
                         },
                     ),
                 )
+                _stdout_debug(
+                    f"object_batch_predict end batch_start={batch_start + 1} saved={len(list(batch_prediction.get('output_paths') or []))}"
+                )
             saved_paths = list(batch_prediction.get("output_paths") or []) if batch_prediction else []
             for offset, region in enumerate(batch_regions):
                 index = batch_start + offset + 1
@@ -89,6 +99,9 @@ def generate_region_objects(
                 output_prefix = scene_dir / "assets" / "objects" / f"{region.region_id}"
                 candidate_path = batch_paths[offset]
                 if not saved_paths:
+                    _stdout_debug(
+                        f"object_predict start region={region.region_id} index={index} size={object_generation_size}"
+                    )
                     prediction = context.object_generator_model.predict(
                         object_handle,
                         FxRequest(
@@ -107,22 +120,37 @@ def generate_region_objects(
                             },
                         ),
                     )
+                    _stdout_debug(
+                        f"object_predict end region={region.region_id} index={index}"
+                    )
                     generated_ref = str(prediction.get("output_path") or candidate_path)
                 else:
                     generated_ref = saved_paths[offset]
+                _stdout_debug(
+                    f"mask_extract start region={region.region_id} index={index} image={generated_ref}"
+                )
                 masked = masker.extract(
                     image_path=generated_ref,
                     output_prefix=output_prefix,
                 )
+                _stdout_debug(
+                    f"mask_extract end region={region.region_id} index={index} source={masked.get('mask_source', 'unknown')}"
+                )
                 mask_path, raw_alpha_path = relocate_mask_assets(
                     scene_dir=scene_dir,
                     masked=masked,
+                )
+                _stdout_debug(
+                    f"placement_build start region={region.region_id} index={index}"
                 )
                 placement = build_placement_assets(
                     context=context,
                     object_path=Path(str(masked["object"])),
                     mask_path=mask_path,
                     raw_alpha_path=raw_alpha_path,
+                )
+                _stdout_debug(
+                    f"placement_build end region={region.region_id} index={index} width={placement.width} height={placement.height}"
                 )
                 generated[region.region_id] = GeneratedObjectAsset(
                     region_id=region.region_id,
