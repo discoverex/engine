@@ -143,6 +143,7 @@ def _deploy_embedded_flow(
     flow_entrypoint: str,
     work_pool_name: str,
     work_queue_name: str,
+    image: str,
     deployment_version: str,
     deployment_name: str,
     deployment_suffix: str,
@@ -151,6 +152,7 @@ def _deploy_embedded_flow(
     deployment_id = embedded_flow.deploy(
         name=deployment_name,
         work_pool_name=work_pool_name,
+        image=image,
         work_queue_name=work_queue_name,
         job_variables={},
         build=False,
@@ -191,6 +193,7 @@ def main() -> int:
             flow_entrypoint=deployment["entrypoint"],
             work_pool_name=args.work_pool_name,
             work_queue_name=args.work_queue_name,
+            image=SETTINGS.prefect_work_image,
             deployment_version=args.deployment_version,
             deployment_name=deployment["deployment_name"],
             deployment_suffix=args.deployment_suffix,

@@ -15,6 +15,7 @@ class RegisterSettings(BaseSettings):
     prefect_project_name: str = "discoverex-engine"
     prefect_work_pool: str = "discoverex-fixed"
     prefect_work_queue: str = "gpu-fixed"
+    prefect_work_image: str = "discoverex-worker:local"
     register_flow_entrypoint: str = "prefect_flow.py:run_combined_job_flow"
     register_flow_ref: str = "dev"
     register_deployment_version: str = ""

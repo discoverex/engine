@@ -97,6 +97,7 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
         flow_entrypoint="prefect_flow.py:run_generate_job_flow",
         work_pool_name="gpu-pool",
         work_queue_name="gpu-fixed",
+        image="discoverex-worker:local",
         deployment_version="20260312120000",
         deployment_name="discoverex-naturalness-experiment-feat-remote-source",
         deployment_suffix="naturalness",
@@ -107,6 +108,7 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
     assert captured["deploy_kwargs"] == {
         "name": "discoverex-naturalness-experiment-feat-remote-source",
         "work_pool_name": "gpu-pool",
+        "image": "discoverex-worker:local",
         "work_queue_name": "gpu-fixed",
         "job_variables": {},
         "build": False,
@@ -209,6 +211,7 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
         "flow_entrypoint": "prefect_flow.py:run_generate_job_flow",
         "work_pool_name": "discoverex-fixed",
         "work_queue_name": "gpu-fixed",
+        "image": "discoverex-worker:local",
         "deployment_version": out["deployment_version"],
         "deployment_name": "discoverex-naturalness-experiment-feat-remote-source",
         "deployment_suffix": "",
