@@ -70,7 +70,7 @@ def load_and_inject(
             node["inputs"]["pingpong"] = pingpong
         elif ctype == "LoadImage":
             node["inputs"]["image"] = image_filename
-        elif ctype in ("WanImageToVideo", "Wan22ImageToVideoLatent"):
+        elif ctype == "WanImageToVideo":
             node["inputs"]["width"] = width
             node["inputs"]["height"] = height
         elif ctype == "UnetLoaderGGUF" and model_name:
@@ -97,7 +97,6 @@ _WIDGET_KEYS: dict[str, list[str]] = {
     "CLIPTextEncode": ["text"],
     "CLIPVisionEncode": ["crop"],
     "WanImageToVideo": ["width", "height", "length", "batch_size"],
-    "Wan22ImageToVideoLatent": ["width", "height", "length", "batch_size"],
     "KSampler": [
         "seed", "control_after_generate", "steps", "cfg",
         "sampler_name", "scheduler", "denoise",
