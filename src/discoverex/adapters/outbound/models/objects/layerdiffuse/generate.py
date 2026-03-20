@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 from PIL import Image  # type: ignore
@@ -81,39 +82,55 @@ def generate_rgba(
     negative_pooled_prompt_embeds = None
     encode_prompt = getattr(pipe, "encode_prompt", None)
     if callable(encode_prompt):
-        encoded = encode_prompt(
-            prompt=prompt,
-            prompt_2=None,
-            device=execution_device,
-            num_images_per_prompt=1,
-            do_classifier_free_guidance=guidance_scale > 1.0,
-            negative_prompt=negative_prompt,
-            negative_prompt_2=None,
-        )
-        (
-            prompt_embeds,
-            negative_prompt_embeds,
-            pooled_prompt_embeds,
-            negative_pooled_prompt_embeds,
-        ) = encoded
+        encode_signature = inspect.signature(encode_prompt)
+        encode_kwargs: dict[str, Any] = {
+            "prompt": prompt,
+            "device": execution_device,
+            "num_images_per_prompt": 1,
+            "do_classifier_free_guidance": guidance_scale > 1.0,
+            "negative_prompt": negative_prompt,
+        }
+        if "prompt_2" in encode_signature.parameters:
+            encode_kwargs["prompt_2"] = None
+        if "negative_prompt_2" in encode_signature.parameters:
+            encode_kwargs["negative_prompt_2"] = None
+        encoded = encode_prompt(**encode_kwargs)
+        if isinstance(encoded, tuple) and len(encoded) == 4:
+            (
+                prompt_embeds,
+                negative_prompt_embeds,
+                pooled_prompt_embeds,
+                negative_pooled_prompt_embeds,
+            ) = encoded
+        elif isinstance(encoded, tuple) and len(encoded) == 2:
+            prompt_embeds, negative_prompt_embeds = encoded
+        else:
+            raise TypeError(
+                "unsupported encode_prompt return contract "
+                f"type={type(encoded)!r} len={len(encoded) if isinstance(encoded, tuple) else 'n/a'}"
+            )
         _offload_text_encoders(pipe=pipe)
         _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
-    result = pipe(
-        prompt=None if prompt_embeds is not None else prompt,
-        negative_prompt=None if negative_prompt_embeds is not None else negative_prompt,
-        num_inference_steps=num_inference_steps,
-        num_images_per_prompt=1,
-        guidance_scale=guidance_scale,
-        width=width,
-        height=height,
-        generator=generator,
-        output_type="latent",
-        prompt_embeds=prompt_embeds,
-        negative_prompt_embeds=negative_prompt_embeds,
-        pooled_prompt_embeds=pooled_prompt_embeds,
-        negative_pooled_prompt_embeds=negative_pooled_prompt_embeds,
-        return_dict=False,
-    )
+    call_signature = inspect.signature(pipe.__call__)
+    pipe_kwargs: dict[str, Any] = {
+        "prompt": None if prompt_embeds is not None else prompt,
+        "negative_prompt": None if negative_prompt_embeds is not None else negative_prompt,
+        "num_inference_steps": num_inference_steps,
+        "num_images_per_prompt": 1,
+        "guidance_scale": guidance_scale,
+        "width": width,
+        "height": height,
+        "generator": generator,
+        "output_type": "latent",
+        "prompt_embeds": prompt_embeds,
+        "negative_prompt_embeds": negative_prompt_embeds,
+        "return_dict": False,
+    }
+    if "pooled_prompt_embeds" in call_signature.parameters:
+        pipe_kwargs["pooled_prompt_embeds"] = pooled_prompt_embeds
+    if "negative_pooled_prompt_embeds" in call_signature.parameters:
+        pipe_kwargs["negative_pooled_prompt_embeds"] = negative_pooled_prompt_embeds
+    result = pipe(**pipe_kwargs)
     _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
     images = result[0] if isinstance(result, tuple) else result
     image = images[0] if isinstance(images, list) else images
