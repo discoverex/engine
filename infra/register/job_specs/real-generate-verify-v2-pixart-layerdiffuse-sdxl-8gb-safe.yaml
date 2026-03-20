@@ -1,4 +1,4 @@
-run_mode: inline
+run_mode: repo
 engine: discoverex
 entrypoint:
   - prefect_flow.py:run_generate_job_flow
@@ -27,7 +27,7 @@ inputs:
     - runtime.background_upscale_factor=2
     - models/background_generator=pixart_sigma_8gb
     - models/object_generator=layerdiffuse
-    - models/hidden_region=hf
+    - models/hidden_region=dummy
     - models/inpaint=sdxl_gpu_layerdiffuse_hidden_object_v1
     - models/perception=hf
     - models/fx=copy_image
