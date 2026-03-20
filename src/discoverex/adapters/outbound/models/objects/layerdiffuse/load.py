@@ -1,37 +1,43 @@
 from __future__ import annotations
 
 # mypy: ignore-errors
-import importlib
 from typing import Any
 
-from ...model_loading import load_state_dict_materialized
 from ...pipeline_memory import configure_diffusers_pipeline
-from .cache import ATTN_OFFSET_URL, TRANSPARENT_DECODER_URL, download_weight
 
 
 def load_pipeline(*, model: Any, handle: Any) -> Any:
-    import safetensors.torch as sf  # type: ignore
     import torch  # type: ignore
-    from diffusers import (  # type: ignore
-        AutoPipelineForText2Image,
-        DPMSolverMultistepScheduler,
-    )
+    from diffusers import StableDiffusionXLPipeline  # type: ignore
+    from huggingface_hub import hf_hub_download  # type: ignore
+    from safetensors.torch import load_file  # type: ignore
+    from .rootonchair_vae import TransparentVAEDecoder
 
-    pipe = AutoPipelineForText2Image.from_pretrained(
-        model.model_id,
-        revision=model.revision,
-        dtype=torch.float32 if "32" in handle.dtype else torch.float16,
-        variant="fp16" if "16" in handle.dtype else None,
+    torch_dtype = torch.float32 if "32" in handle.dtype else torch.float16
+    transparent_vae = TransparentVAEDecoder.from_pretrained(
+        "madebyollin/sdxl-vae-fp16-fix",
+        torch_dtype=torch_dtype,
     )
-    pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config, use_karras_sigmas=True, algorithm_type="dpmsolver++", solver_order=2)
-    attn_path = download_weight(cache_dir=model.weights_cache_dir, url=ATTN_OFFSET_URL, filename="ld_diffusers_sdxl_attn.safetensors")
+    transparent_vae.config.force_upcast = False
+    decoder_path = hf_hub_download(
+        repo_id="LayerDiffusion/layerdiffusion-v1",
+        filename="vae_transparent_decoder.safetensors",
+        cache_dir=model.weights_cache_dir,
+    )
+    transparent_vae.set_transparent_decoder(load_file(decoder_path))
+    pipe = StableDiffusionXLPipeline.from_pretrained(
+        model.model_id,
+        vae=transparent_vae,
+        revision=model.revision,
+        torch_dtype=torch_dtype,
+        variant="fp16" if "16" in handle.dtype else None,
+        use_safetensors=True,
+        add_watermarker=False,
+    )
     if not model._layerdiffuse_applied:
-        offset = sf.load_file(str(attn_path))
-        base_state = pipe.unet.state_dict()
-        load_state_dict_materialized(
-            pipe.unet,
-            {key: base_state[key] + offset[key] if key in offset else base_state[key] for key in base_state},
-            strict=True,
+        pipe.load_lora_weights(
+            "rootonchair/diffuser_layerdiffuse",
+            weight_name="diffuser_layer_xl_transparent_attn.safetensors",
         )
         model._layerdiffuse_applied = True
     return configure_diffusers_pipeline(
@@ -48,15 +54,5 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
 
 
 def load_transparent_decoder(*, model: Any, handle: Any) -> Any:
-    import torch  # type: ignore
-
-    transparent_vae = importlib.import_module("discoverex.adapters.outbound.models.layerdiffuse_transparent_vae")
-    decoder_path = download_weight(
-        cache_dir=model.weights_cache_dir,
-        url=TRANSPARENT_DECODER_URL,
-        filename="ld_diffusers_sdxl_vae_transparent_decoder.safetensors",
-    )
-    return transparent_vae.TransparentVAEDecoder(
-        str(decoder_path),
-        dtype=torch.float32 if "32" in handle.dtype else torch.float16,
-    )
+    _ = (model, handle)
+    return None

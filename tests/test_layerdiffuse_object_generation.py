@@ -4,7 +4,6 @@ from pathlib import Path
 import sys
 from types import SimpleNamespace
 
-import numpy as np
 import pytest
 from PIL import Image
 
@@ -99,27 +98,6 @@ def test_generate_rgba_precomputes_prompt_embeds_and_offloads_text_encoders() ->
                 self.moves.append((str(args[0]), self.dtype))
             return self
 
-    class _FakeDecoder:
-        def __init__(self) -> None:
-            self.moves: list[tuple[str, str] | str] = []
-
-        def to(self, *args: object, **kwargs: object) -> "_FakeDecoder":
-            if "device" in kwargs and "dtype" in kwargs:
-                self.moves.append((str(kwargs["device"]), str(kwargs["dtype"])))
-            elif args:
-                self.moves.append(str(args[0]))
-            return self
-
-        def __call__(self, vae: object, latents: object) -> tuple[list[object], list[object]]:
-            return ([np.array([[[0, 0, 0, 255]]], dtype=np.uint8)], [])
-
-    class _FakeLatents:
-        def to(self, *, device: str, dtype: str) -> "_FakeLatents":
-            return self
-
-        def __truediv__(self, divisor: float) -> "_FakeLatents":
-            return self
-
     class _FakePipe:
         def __init__(self) -> None:
             self._execution_device = "cuda"
@@ -135,16 +113,15 @@ def test_generate_rgba_precomputes_prompt_embeds_and_offloads_text_encoders() ->
 
         def __call__(self, **kwargs: object) -> object:
             self.pipe_calls.append(kwargs)
-            return type("_Result", (), {"images": _FakeLatents()})()
+            return ([Image.new("RGBA", (384, 384), color=(0, 0, 0, 255))],)
 
     pipe = _FakePipe()
-    decoder = _FakeDecoder()
     model = type(
         "_Model",
         (),
         {
             "_load_pipeline": staticmethod(lambda handle: pipe),
-            "_load_transparent_decoder": staticmethod(lambda handle: decoder),
+            "_load_transparent_decoder": staticmethod(lambda handle: None),
         },
     )()
     handle = type("_Handle", (), {"device": "cuda"})()
@@ -176,7 +153,6 @@ def test_generate_rgba_precomputes_prompt_embeds_and_offloads_text_encoders() ->
     assert pipe.pipe_calls[0]["num_images_per_prompt"] == 1
     assert pipe.pipe_calls[0]["prompt_embeds"] == "prompt"
     assert ("cpu", "float16") in pipe.vae.moves
-    assert "cpu" in decoder.moves
 
 
 def test_generate_rgba_fails_when_vram_limit_is_exceeded() -> None:

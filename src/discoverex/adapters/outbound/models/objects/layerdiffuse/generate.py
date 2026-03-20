@@ -112,14 +112,12 @@ def generate_rgba(
         negative_prompt_embeds=negative_prompt_embeds,
         pooled_prompt_embeds=pooled_prompt_embeds,
         negative_pooled_prompt_embeds=negative_pooled_prompt_embeds,
+        return_dict=False,
     )
     _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
-    latents = result.images
-    decoder = model._load_transparent_decoder(handle)
-    vae = pipe.vae.to(device=execution_device, dtype=pipe.vae.dtype)
-    decoder = decoder.to(device=execution_device, dtype=pipe.vae.dtype)
-    latents = latents.to(device=execution_device, dtype=pipe.vae.dtype) / vae.config.scaling_factor
-    rgba_images, _ = decoder(vae, latents)
-    _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
-    _offload_decode_stack(pipe=pipe, decoder=decoder)
-    return Image.fromarray(rgba_images[0], mode="RGBA")
+    images = result[0] if isinstance(result, tuple) else result
+    image = images[0] if isinstance(images, list) else images
+    _offload_decode_stack(pipe=pipe, decoder=None)
+    if isinstance(image, Image.Image):
+        return image.convert("RGBA")
+    return Image.fromarray(image, mode="RGBA")
