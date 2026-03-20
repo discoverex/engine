@@ -4,8 +4,8 @@ defaults:
   - _self_
 
 # --- Animate pipeline: Low VRAM profile ---
-# WAN 2.2 TI2V-5B (GGUF Q4_K_S) + UMT5-XXL GGUF text encoder
-# Expected VRAM: ~6GB (vs ~10GB with standard profile)
+# WAN 2.1 I2V 14B + 텍스트 인코더 CPU 오프로드
+# Expected VRAM: ~8GB (vs ~12GB with standard profile)
 models:
   mode_classifier:
     _target_: discoverex.adapters.outbound.models.gemini_mode_classifier.GeminiModeClassifier
@@ -18,7 +18,7 @@ models:
   animation_generation:
     _target_: discoverex.adapters.outbound.models.comfyui_wan_generator.ComfyUIWanGenerator
     base_url: ${oc.env:COMFYUI_URL,http://127.0.0.1:8188}
-    workflow_path: ${oc.env:COMFYUI_WORKFLOW_PATH,conf/workflows/wan22_i2v_lowvram.json}
+    workflow_path: ${oc.env:COMFYUI_WORKFLOW_PATH,conf/workflows/wan21_i2v_lowvram.json}
     steps: 20
     width: 480
     height: 480
