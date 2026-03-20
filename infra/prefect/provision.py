@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any, Literal, cast
 
-BootstrapModeName = Literal["auto", "uv", "pip"]
+BootstrapModeName = Literal["auto", "uv", "pip", "none"]
 
 
 def provision_runtime_dependencies(
@@ -29,7 +29,9 @@ def provision_runtime_dependencies(
         extras,
         sys.executable,
     )
-    if mode == "uv":
+    if mode == "none":
+        logger.info("engine dependency bootstrap skipped")
+    elif mode == "uv":
         _bootstrap_with_uv(cwd=cwd, env=env, extras=extras, logger=logger)
     else:
         _bootstrap_with_pip(cwd=cwd, env=env, extras=extras, logger=logger)
@@ -46,7 +48,7 @@ def _runtime_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _runtime_bootstrap_mode(runtime: dict[str, Any]) -> BootstrapModeName:
     mode = str(runtime.get("bootstrap_mode", "auto")).strip() or "auto"
-    if mode not in {"auto", "uv", "pip"}:
+    if mode not in {"auto", "uv", "pip", "none"}:
         raise RuntimeError(f"unsupported bootstrap_mode={mode}")
     return cast(BootstrapModeName, mode)
 
@@ -64,7 +66,7 @@ def _runtime_extras(runtime: dict[str, Any]) -> list[str]:
 
 
 def _pick_mode(mode: BootstrapModeName) -> BootstrapModeName:
-    if mode in {"uv", "pip"}:
+    if mode in {"uv", "pip", "none"}:
         return mode
     if shutil.which("uv"):
         return "uv"
@@ -135,9 +137,10 @@ def _install_env(env: dict[str, str], cwd: Path) -> dict[str, str]:
         str(_resolve_model_cache_dir(env=install_env, default_base=cache_root)),
     )
     install_env.pop("VIRTUAL_ENV", None)
-    install_env["UV_PROJECT_ENVIRONMENT"] = str(cwd / ".venv")
+    install_env.setdefault("UV_PROJECT_ENVIRONMENT", str(cwd / ".venv"))
     Path(install_env["UV_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
     Path(install_env["MODEL_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
+    Path(install_env["UV_PROJECT_ENVIRONMENT"]).mkdir(parents=True, exist_ok=True)
     return install_env
 
 

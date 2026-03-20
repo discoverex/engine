@@ -118,6 +118,38 @@ def test_provision_runtime_dependencies_skips_non_worker_mode(
     )
 
 
+def test_provision_runtime_dependencies_skips_bootstrap_for_none_mode(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: pytest.fail("subprocess.run should not be called"),
+    )
+    src_dir = tmp_path / "src"
+    site_packages = tmp_path / ".venv" / "lib" / "python3.11" / "site-packages"
+    src_dir.mkdir(parents=True)
+    site_packages.mkdir(parents=True)
+
+    provision.provision_runtime_dependencies(
+        payload={"runtime": {"mode": "worker", "bootstrap_mode": "none"}},
+        cwd=tmp_path,
+        env={},
+        logger=_FakeLogger(),
+    )
+
+
+def test_install_env_respects_explicit_uv_project_environment(tmp_path: Path) -> None:
+    mounted_venv = tmp_path / "mounted" / ".venv"
+
+    install_env = provision._install_env(
+        {"UV_PROJECT_ENVIRONMENT": str(mounted_venv)},
+        tmp_path,
+    )
+
+    assert install_env["UV_PROJECT_ENVIRONMENT"] == str(mounted_venv)
+
+
 class _FakeLogger:
     def __init__(self) -> None:
         self.errors: list[tuple[str, tuple[object, ...]]] = []

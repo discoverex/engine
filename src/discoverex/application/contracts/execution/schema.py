@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 EngineCommandV1 = Literal["gen-verify", "verify-only", "replay-eval"]
 EngineCommandV2 = Literal["generate", "verify", "animate"]
 RuntimeMode = Literal["worker", "local", "local_debug"]
-BootstrapMode = Literal["auto", "uv", "pip"]
+BootstrapMode = Literal["auto", "uv", "pip", "none"]
 RepoStrategy = Literal["none", "ensure", "update"]
 DepsStrategy = Literal["none", "ensure", "sync"]
 WorkspaceStrategy = Literal["reuse", "fresh"]
