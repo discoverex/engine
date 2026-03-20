@@ -69,8 +69,14 @@ def fixed_ps() -> None:
 
 
 @fixed_app.command("logs")
-def fixed_logs(tail: int = typer.Option(120, "--tail")) -> None:
-    raise typer.Exit(_compose_fixed(["logs", f"--tail={tail}"]))
+def fixed_logs(
+    tail: int = typer.Option(120, "--tail"),
+    follow: bool = typer.Option(False, "-f", "--follow"),
+) -> None:
+    args = ["logs", f"--tail={tail}"]
+    if follow:
+        args.append("-f")
+    raise typer.Exit(_compose_fixed(args))
 
 
 @fixed_app.command("build")

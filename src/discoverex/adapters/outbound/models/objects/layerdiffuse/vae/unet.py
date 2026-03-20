@@ -103,6 +103,12 @@ class UNet1024(ModelMixin, ConfigMixin):
         self.conv_out = nn.Conv2d(block_out_channels[0], out_channels, 3, padding=1)
 
     def forward(self, x: torch.Tensor, latent: torch.Tensor) -> torch.Tensor:
+        conv_in_weight = self.conv_in.weight
+        latent_conv_weight = self.latent_conv_in.weight
+        if x.dtype != conv_in_weight.dtype or x.device != conv_in_weight.device:
+            x = x.to(device=conv_in_weight.device, dtype=conv_in_weight.dtype)
+        if latent.dtype != latent_conv_weight.dtype or latent.device != latent_conv_weight.device:
+            latent = latent.to(device=latent_conv_weight.device, dtype=latent_conv_weight.dtype)
         sample_latent = self.latent_conv_in(latent)
         sample = self.conv_in(x)
         down_block_res_samples: tuple[torch.Tensor, ...] = (sample,)

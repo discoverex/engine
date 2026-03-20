@@ -51,3 +51,19 @@ def test_worker_fixed_logs_forwards_tail(monkeypatch) -> None:  # type: ignore[n
 
     assert result.exit_code == 0
     assert captured["args"] == ["logs", "--tail=50"]
+
+
+def test_worker_fixed_logs_forwards_follow(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def _fake_compose_fixed(args: list[str]) -> int:
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.worker._compose_fixed", _fake_compose_fixed)
+
+    result = runner.invoke(app, ["fixed", "logs", "--tail", "50", "-f"])
+
+    assert result.exit_code == 0
+    assert captured["args"] == ["logs", "--tail=50", "-f"]

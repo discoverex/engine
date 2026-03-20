@@ -80,6 +80,14 @@ MinIO의 Scene 번들 내용을 검사합니다.
 ./bin/cli legacy check-minio --bucket-name scenes --bundle-key path/to/bundle
 ```
 
+## Worker 로그 확인
+
+embedded worker 로그는 tail 또는 follow 모드로 볼 수 있습니다.
+```bash
+./bin/cli worker fixed logs --tail 120
+./bin/cli worker fixed logs --tail 120 -f
+```
+
 ## 엔진 E2E 검증
 
 로컬 검증 하네스는 엔진 CLI로 바로 실행할 수 있습니다.
