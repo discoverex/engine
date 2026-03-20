@@ -14,7 +14,7 @@ inputs:
     background_negative_prompt: blurry, low quality, artifact
     object_prompt: butterfly | antique brass key | crystal wine glass
     object_negative_prompt: blurry, low quality, artifact
-    object_generation_size: 384
+    object_generation_size: 512
     final_prompt: polished playable hidden object scene, keep inserted objects matched to the background painting style, lighting direction, palette, texture, and scene atmosphere
     final_negative_prompt: blurry, low quality, artifact
     object_count: 3
