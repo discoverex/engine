@@ -1,7 +1,5 @@
-run_mode: repo
+run_mode: inline
 engine: discoverex
-repo_url: https://github.com/discoverex/engine.git
-ref: fix/generation-flow
 entrypoint:
   - prefect_flow.py:run_generate_job_flow
 config: null
@@ -36,7 +34,7 @@ inputs:
     - runtime.model_runtime.offload_mode=sequential
   runtime:
     mode: worker
-    bootstrap_mode: auto
+    bootstrap_mode: none
     extras:
       - tracking
       - storage
