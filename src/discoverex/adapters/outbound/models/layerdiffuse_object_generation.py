@@ -10,7 +10,7 @@ from discoverex.runtime_logging import format_seconds, get_logger
 
 from .fx_param_parsing import as_float, as_int_or_none, as_positive_int, as_str
 from .objects.layerdiffuse.cache import resolve_shared_cache_dir
-from .objects.layerdiffuse.generate import generate_rgba
+from .objects.layerdiffuse.generate import generate_rgba, generate_rgba_batch
 from .objects.layerdiffuse.load import load_pipeline, load_transparent_decoder
 from .pipeline_memory import OffloadMode
 from .runtime import (
@@ -128,6 +128,52 @@ class LayerDiffuseObjectGenerationModel:
         image.save(path)
         logger.info("layerdiffuse object image saved path=%s duration=%s", path, format_seconds(started))
         return {"fx": request.mode or "object_generation", "output_path": str(path)}
+
+    def predict_batch(self, handle: ModelHandle, request: FxRequest) -> FxPrediction:
+        started = perf_counter()
+        output_paths = [Path(str(path)) for path in list(request.params.get("output_paths") or [])]
+        prompts = [str(prompt) for prompt in list(request.params.get("prompts") or [])]
+        if not output_paths:
+            raise ValueError("FxRequest.params.output_paths is required")
+        if len(output_paths) != len(prompts):
+            raise ValueError("output_paths and prompts must have the same length")
+        negative_prompt = as_str(
+            request.params.get("negative_prompt"),
+            fallback=self.default_negative_prompt,
+        )
+        images = generate_rgba_batch(
+            model=self,
+            handle=handle,
+            prompts=prompts,
+            negative_prompts=[negative_prompt] * len(prompts),
+            width=as_positive_int(request.params.get("width"), fallback=512),
+            height=as_positive_int(request.params.get("height"), fallback=512),
+            seed=as_int_or_none(request.params.get("seed"), fallback=self.seed),
+            num_inference_steps=as_positive_int(
+                request.params.get("num_inference_steps"),
+                fallback=self.default_num_inference_steps,
+            ),
+            guidance_scale=as_float(
+                request.params.get("guidance_scale"),
+                fallback=self.default_guidance_scale,
+            ),
+            max_vram_gb=(
+                as_float(request.params.get("max_vram_gb"), fallback=0.0)
+                if request.params.get("max_vram_gb") is not None
+                else None
+            ),
+        )
+        saved_paths: list[str] = []
+        for path, image in zip(output_paths, images, strict=True):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            image.save(path)
+            saved_paths.append(str(path))
+        logger.info(
+            "layerdiffuse object batch saved count=%s duration=%s",
+            len(saved_paths),
+            format_seconds(started),
+        )
+        return {"fx": request.mode or "object_generation", "output_paths": saved_paths}
 
     def _generate_rgba(self, **kwargs: Any) -> Any:
         return generate_rgba(model=self, **kwargs)

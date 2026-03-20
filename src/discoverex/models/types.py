@@ -71,6 +71,7 @@ class FxRequest(BaseModel):
 class FxPrediction(TypedDict, total=False):
     fx: str
     output_path: str
+    output_paths: list[str]
     image_ref: str
     composite_image_ref: str
     artifact_path: str
