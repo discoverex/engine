@@ -362,6 +362,9 @@ def _select_regions_patch_similarity(
     background: Background,
     generated_objects: list[GeneratedObjectAsset],
 ) -> list[Region]:
+    _stdout_debug(
+        f"generate_verify_v2 patch_selection_start generated={len(generated_objects)}"
+    )
     background_image = np.asarray(Image.open(background.asset_ref).convert("RGB"))
     selected_boxes: list[tuple[float, float, float, float]] = []
     regions: list[Region] = []
@@ -390,6 +393,10 @@ def _select_regions_patch_similarity(
             version=1,
         )
         regions.append(region)
+        _stdout_debug(
+            f"generate_verify_v2 patch_selection_region region={asset.region_id} variant={best['variant_id']} score={float(best['score']):.4f}"
+        )
+    _stdout_debug(f"generate_verify_v2 patch_selection_end selected={len(regions)}")
     return regions
 
 
@@ -663,6 +670,7 @@ def _harmonize_objects(
     regions: list[Region],
     generated_objects: dict[str, GeneratedObjectAsset],
 ) -> dict[str, GeneratedObjectAsset]:
+    _stdout_debug(f"generate_verify_v2 harmonize_internal_start regions={len(regions)}")
     background_image = np.asarray(Image.open(background.asset_ref).convert("RGB"))
     output: dict[str, GeneratedObjectAsset] = {}
     for region in regions:
@@ -686,6 +694,10 @@ def _harmonize_objects(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         harmonized.save(output_path)
         output[region.region_id] = replace(asset, object_ref=str(output_path))
+        _stdout_debug(
+            f"generate_verify_v2 harmonize_internal_region region={region.region_id}"
+        )
+    _stdout_debug(f"generate_verify_v2 harmonize_internal_end regions={len(output)}")
     return output
 
 
@@ -715,9 +727,10 @@ def _generate_regions(
     object_prompt: str,
     object_negative_prompt: str,
 ) -> tuple[list[Region], list[RegionPromptRecord]]:
+    _stdout_debug(f"generate_verify_v2 generate_regions_start regions={len(regions)}")
     handle = context.inpaint_model.load(context.model_versions.inpaint)
     try:
-        return generate_regions(
+        result = generate_regions(
             context=context,
             background=background,
             scene_dir=scene_dir,
@@ -727,6 +740,10 @@ def _generate_regions(
             object_prompt=object_prompt,
             object_negative_prompt=object_negative_prompt,
         )
+        _stdout_debug(
+            f"generate_verify_v2 generate_regions_end regions={len(result[0])}"
+        )
+        return result
     finally:
         unload_model(context.inpaint_model)
 
@@ -739,9 +756,10 @@ def _compose_scene(
     final_prompt: str,
     final_negative_prompt: str,
 ) -> CompositeResolution:
+    _stdout_debug("generate_verify_v2 compose_start")
     fx_handle = context.fx_model.load(context.model_versions.fx)
     try:
-        return compose_scene(
+        result = compose_scene(
             context=context,
             background_asset_ref=background_asset_ref,
             scene_dir=scene_dir,
@@ -749,19 +767,24 @@ def _compose_scene(
             prompt=final_prompt or "polished hidden object puzzle final render",
             negative_prompt=final_negative_prompt or "blurry, low quality, artifact",
         )
+        _stdout_debug(f"generate_verify_v2 compose_end image_ref={result.image_ref}")
+        return result
     finally:
         unload_model(context.fx_model)
 
 
 def _verify_scene(*, context: AppContextLike, scene: Scene) -> None:
+    _stdout_debug("generate_verify_v2 verify_scene_start")
     handle = context.perception_model.load(context.model_versions.perception)
     try:
         verify_scene(scene=scene, context=context, perception_handle=handle)
     finally:
         unload_model(context.perception_model)
+    _stdout_debug("generate_verify_v2 verify_scene_end")
 
 
 def _verify_regions(*, context: AppContextLike, scene: Scene, scene_dir: Path) -> None:
+    _stdout_debug("generate_verify_v2 verify_regions_start")
     handle = context.perception_model.load(context.model_versions.perception)
     try:
         image = Image.open(scene.composite.final_image_ref).convert("RGB")
@@ -796,6 +819,7 @@ def _verify_regions(*, context: AppContextLike, scene: Scene, scene_dir: Path) -
             region.attributes["verify_pass"] = result.pass_
     finally:
         unload_model(context.perception_model)
+    _stdout_debug("generate_verify_v2 verify_regions_end")
 
 
 def _persist_outputs(
@@ -812,6 +836,7 @@ def _persist_outputs(
     fx_input_ref: str,
     composite_artifact: Path | None,
 ) -> None:
+    _stdout_debug("generate_verify_v2 persist_start")
     prompt_bundle = PromptBundle(
         input_mode=background_prompt_record.mode,
         background=background_prompt_record.model_copy(
@@ -844,6 +869,7 @@ def _persist_outputs(
         naturalness_artifact=naturalness_report,
         extra_params=build_prompt_tracking_params(prompt_bundle),
     )
+    _stdout_debug("generate_verify_v2 persist_end")
 
 
 def _finalize_layers(scene: Scene, background: Background, fx_input_ref: str) -> None:
