@@ -13,7 +13,7 @@ class RegisterSettings(BaseSettings):
     prefect_api_url: str = ""
     prefect_deployment_prefix: str = "discoverex-engine"
     prefect_project_name: str = "discoverex-engine"
-    prefect_work_pool: str = "local-process"
+    prefect_work_pool: str = "discoverex-fixed"
     prefect_work_queue: str = "gpu-fixed"
     register_flow_entrypoint: str = "prefect_flow.py:run_combined_job_flow"
     register_flow_ref: str = "dev"
@@ -26,7 +26,7 @@ class RegisterSettings(BaseSettings):
     engine_repo_ref: str = "dev"
     engine_execution_profile: str = "generator-pixart-gpu"
 
-    mlflow_tracking_uri: str = "http://127.0.0.1:38080"
+    mlflow_tracking_uri: str = "http://127.0.0.1:5000"
     mlflow_s3_endpoint_url: str = ""
 
     aws_access_key_id: str = ""

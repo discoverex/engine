@@ -68,9 +68,7 @@ def _runtime_extras(runtime: dict[str, Any]) -> list[str]:
 def _pick_mode(mode: BootstrapModeName) -> BootstrapModeName:
     if mode in {"uv", "pip", "none"}:
         return mode
-    if shutil.which("uv"):
-        return "uv"
-    return "pip"
+    return "none"
 
 
 def _bootstrap_with_uv(

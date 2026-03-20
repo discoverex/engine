@@ -17,8 +17,10 @@ class JobRuntime(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     mode: RuntimeMode = "worker"
-    bootstrap_mode: BootstrapMode = "auto"
-    extras: list[str] = Field(default_factory=lambda: ["tracking", "storage"])
+    bootstrap_mode: BootstrapMode = "none"
+    extras: list[str] = Field(
+        default_factory=lambda: ["tracking", "storage", "ml-gpu"]
+    )
     extra_env: dict[str, str] = Field(default_factory=dict)
     repo_strategy: RepoStrategy = "none"
     deps_strategy: DepsStrategy = "none"

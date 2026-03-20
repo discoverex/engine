@@ -177,7 +177,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
     parser.add_argument("--deployment", default=None)
     parser.add_argument("--engine", default="discoverex")
-    parser.add_argument("--run-mode", choices=("repo", "inline"), default="repo")
+    parser.add_argument("--run-mode", choices=("repo", "inline"), default="inline")
     parser.add_argument("--repo-url", default=SETTINGS.engine_repo_url)
     parser.add_argument("--ref", default=SETTINGS.engine_repo_ref or "main")
     parser.add_argument("--job-name", default=None)
@@ -203,8 +203,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--override", "-o", action="append", default=[])
     parser.add_argument(
         "--bootstrap-mode",
-        choices=("auto", "uv", "pip"),
-        default="auto",
+        choices=("auto", "uv", "pip", "none"),
+        default="none",
     )
     parser.add_argument("--runtime-extra", action="append", default=[])
     parser.add_argument("--runtime-env", action="append", default=[])
@@ -347,8 +347,8 @@ def _build_runtime_env(args: argparse.Namespace) -> dict[str, str]:
 def _build_runner_env(args: argparse.Namespace) -> dict[str, str]:
     env = _parse_kv_pairs(args.runner_env)
     optional_env = {
-        "cf_access_client_id": args.cf_access_client_id,
-        "cf_access_client_secret": args.cf_access_client_secret,
+        "CF_ACCESS_CLIENT_ID": args.cf_access_client_id,
+        "CF_ACCESS_CLIENT_SECRET": args.cf_access_client_secret,
     }
     for key, value in optional_env.items():
         if value:
@@ -396,6 +396,9 @@ def _build_job_spec(args: argparse.Namespace) -> JobSpec:
             "bootstrap_mode": args.bootstrap_mode,
             "extras": runtime_extras,
             "extra_env": _build_runtime_env(args),
+            "repo_strategy": "none",
+            "deps_strategy": "none",
+            "workspace_strategy": "reuse",
         },
     }
     return {

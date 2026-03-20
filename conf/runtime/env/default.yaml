@@ -4,4 +4,4 @@ s3_endpoint_url: ${oc.env:MLFLOW_S3_ENDPOINT_URL,http://127.0.0.1:9000}
 aws_access_key_id: ${oc.env:AWS_ACCESS_KEY_ID,minioadmin}
 aws_secret_access_key: ${oc.env:AWS_SECRET_ACCESS_KEY,minioadmin}
 metadata_db_url: ${oc.env:METADATA_DB_URL,""}
-tracking_uri: ${oc.env:MLFLOW_TRACKING_URI,http://127.0.0.1:38080}
+tracking_uri: ${oc.env:MLFLOW_TRACKING_URI,http://127.0.0.1:5000}

@@ -33,8 +33,9 @@ def test_register_script_dry_run_builds_repo_job_spec() -> None:
     )
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
-    assert payload["run_mode"] == "repo"
-    assert payload["repo_url"] == "https://github.com/example/engine.git"
+    assert payload["run_mode"] == "inline"
+    assert payload["repo_url"] is None
+    assert payload["ref"] is None
     assert payload["entrypoint"] == ["prefect_flow.py:run_generate_job_flow"]
     assert payload["inputs"]["contract_version"] == "v2"
     assert payload["inputs"]["command"] == "generate"
@@ -203,8 +204,8 @@ def test_register_script_local_tiny_profile_adds_worker_overrides_and_env() -> N
     ]
     assert payload["inputs"]["runtime"]["extra_env"] == {}
     assert payload["env"] == {
-        "cf_access_client_id": "cf-client-id",
-        "cf_access_client_secret": "cf-client-secret",
+        "CF_ACCESS_CLIENT_ID": "cf-client-id",
+        "CF_ACCESS_CLIENT_SECRET": "cf-client-secret",
     }
     assert payload["inputs"]["runtime"]["extras"] == [
         "tracking",

@@ -13,27 +13,15 @@ import infra.prefect.provision as provision
 def test_provision_runtime_dependencies_uses_uv_sync_active(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    calls: list[tuple[list[str], dict[str, str]]] = []
-    (tmp_path / "uv.lock").write_text("", encoding="utf-8")
-    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/uv")
-
-    def fake_run(
-        cmd: list[str],
-        *,
-        cwd: Path,
-        env: dict[str, str],
-        check: bool,
-        capture_output: bool,
-        text: bool,
-    ) -> object:
-        calls.append((cmd, env.copy()))
-        assert cwd == tmp_path
-        assert check is False
-        assert capture_output is True
-        assert text is True
-        return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: pytest.fail("subprocess.run should not be called"),
+    )
+    src_dir = tmp_path / "src"
+    site_packages = tmp_path / ".venv" / "lib" / "python3.11" / "site-packages"
+    src_dir.mkdir(parents=True)
+    site_packages.mkdir(parents=True)
 
     provision.provision_runtime_dependencies(
         payload={
@@ -48,42 +36,20 @@ def test_provision_runtime_dependencies_uses_uv_sync_active(
         logger=_FakeLogger(),
     )
 
-    assert calls[0][0] == [
-        "uv",
-        "sync",
-        "--frozen",
-        "--extra",
-        "tracking",
-        "--extra",
-        "storage",
-    ]
-    assert "VIRTUAL_ENV" not in calls[0][1]
-    assert calls[0][1]["UV_PROJECT_ENVIRONMENT"] == str(tmp_path / ".venv")
+    assert str(src_dir) in sys.path
+    assert str(site_packages) in sys.path
 
 
 def test_provision_runtime_dependencies_falls_back_to_pip(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    calls: list[list[str]] = []
-    monkeypatch.setattr(shutil, "which", lambda name: None)
-
-    def fake_run(
-        cmd: list[str],
-        *,
-        cwd: Path,
-        env: dict[str, str],
-        check: bool,
-        capture_output: bool,
-        text: bool,
-    ) -> object:
-        calls.append(cmd)
-        assert cwd == tmp_path
-        assert check is False
-        assert capture_output is True
-        assert text is True
-        return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: pytest.fail("subprocess.run should not be called"),
+    )
+    src_dir = tmp_path / "src"
+    src_dir.mkdir(parents=True)
 
     provision.provision_runtime_dependencies(
         payload={
@@ -98,7 +64,7 @@ def test_provision_runtime_dependencies_falls_back_to_pip(
         logger=_FakeLogger(),
     )
 
-    assert calls[0] == [sys.executable, "-m", "pip", "install", "-e", ".[tracking]"]
+    assert str(src_dir) in sys.path
 
 
 def test_provision_runtime_dependencies_skips_non_worker_mode(

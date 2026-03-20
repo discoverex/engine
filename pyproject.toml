@@ -82,6 +82,7 @@ discoverex-deploy-prefect-flows = "infra.register.deploy_prefect_flows:main"
 discoverex-register-orchestrator-job = "infra.register.register_orchestrator_job:main"
 discoverex-register-prefect-job = "infra.register.register_prefect_job:main"
 discoverex-submit-job-spec = "infra.register.submit_job_spec:main"
+discoverex-worker = "infra.worker.start:main"
 
 [tool.uv]
 index-url = "https://pypi.org/simple"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from urllib import request
 from pathlib import Path
 
 import pytest
@@ -72,11 +73,46 @@ def test_mlflow_tracker_logs_artifacts_for_local_tracking(
     assert fake.tags == {"run_name": "generate"}
 
 
-def test_mlflow_tracker_uses_tags_for_remote_tracking(
+def test_mlflow_tracker_uses_direct_remote_api_with_cf_headers(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    fake = _FakeMLflow()
-    monkeypatch.setitem(sys.modules, "mlflow", fake)
+    calls: list[tuple[str, dict[str, str], dict[str, object]]] = []
+
+    class _FakeResponse:
+        def __init__(self, payload: dict[str, object]) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            import json
+
+            return json.dumps(self._payload, ensure_ascii=True).encode("utf-8")
+
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:  # type: ignore[no-untyped-def]
+            _ = (exc_type, exc, tb)
+
+    def _fake_urlopen(req: request.Request, timeout: int = 60) -> _FakeResponse:
+        import json
+
+        body = req.data.decode("utf-8") if isinstance(req.data, bytes) else ""
+        payload = json.loads(body) if body else {}
+        headers = dict(req.header_items())
+        calls.append((req.full_url, headers, payload))
+        if req.full_url.endswith("/experiments/get-by-name"):
+            return _FakeResponse({"experiment": {"experiment_id": "exp-123"}})
+        if req.full_url.endswith("/runs/create"):
+            return _FakeResponse({"run": {"info": {"run_id": "run-123"}}})
+        if req.full_url.endswith("/runs/log-batch"):
+            return _FakeResponse({})
+        if req.full_url.endswith("/runs/update"):
+            return _FakeResponse({})
+        raise AssertionError(req.full_url)
+
+    monkeypatch.setattr(request, "urlopen", _fake_urlopen)
+    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "cf-id")
+    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "cf-secret")
 
     scene_json = tmp_path / "scene.json"
     scene_json.write_text("{}", encoding="utf-8")
@@ -102,5 +138,13 @@ def test_mlflow_tracker_uses_tags_for_remote_tracking(
     )
 
     assert run_id == "run-123"
-    assert fake.logged_artifacts == []
-    assert fake.tags == {"run_name": "generate"}
+    assert [url.rsplit("/", 1)[-1] for url, _, _ in calls] == [
+        "get-by-name",
+        "create",
+        "log-batch",
+        "update",
+    ]
+    assert calls[0][1]["Cf-access-client-id"] == "cf-id"
+    assert calls[0][1]["Cf-access-client-secret"] == "cf-secret"
+    assert calls[1][2]["tags"] == [{"key": "mlflow.runName", "value": "generate"}]
+    assert calls[2][2]["run_id"] == "run-123"
