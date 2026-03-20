@@ -12,6 +12,7 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
     from huggingface_hub import hf_hub_download  # type: ignore
     from safetensors.torch import load_file  # type: ignore
     from .rootonchair_vae import TransparentVAEDecoder
+    from .rootonchair_sd15.loaders import load_lora_to_unet
 
     torch_dtype = torch.float32 if "32" in handle.dtype else torch.float16
     is_sdxl = "xl" in str(model.model_id).lower() or "sdxl" in str(model.model_id).lower()
@@ -60,10 +61,18 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
         **pipeline_kwargs,
     )
     if not model._layerdiffuse_applied:
-        pipe.load_lora_weights(
-            lora_repo,
-            weight_name=lora_weight_name,
-        )
+        if is_sdxl:
+            pipe.load_lora_weights(
+                lora_repo,
+                weight_name=lora_weight_name,
+            )
+        else:
+            lora_path = hf_hub_download(
+                repo_id=lora_repo,
+                filename=lora_weight_name,
+                cache_dir=model.weights_cache_dir,
+            )
+            load_lora_to_unet(pipe.unet, lora_path, frames=1)
         model._layerdiffuse_applied = True
     return configure_diffusers_pipeline(
         pipe,

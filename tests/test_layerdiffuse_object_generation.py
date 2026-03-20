@@ -230,3 +230,108 @@ def test_generate_rgba_fails_when_vram_limit_is_exceeded() -> None:
             sys.modules.pop("torch", None)
         else:
             sys.modules["torch"] = original_torch
+
+
+def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: dict[str, object] = {}
+
+    class _FakeTransparentVAE:
+        config = SimpleNamespace(force_upcast=True)
+
+        def set_transparent_decoder(self, state_dict: object) -> None:
+            calls["decoder_state_dict"] = state_dict
+
+        @classmethod
+        def from_pretrained(cls, *args: object, **kwargs: object) -> "_FakeTransparentVAE":
+            calls["vae_from_pretrained"] = (args, kwargs)
+            return cls()
+
+    class _FakePipe:
+        def __init__(self) -> None:
+            self.unet = object()
+
+        @classmethod
+        def from_pretrained(cls, *args: object, **kwargs: object) -> "_FakePipe":
+            calls["pipe_from_pretrained"] = (args, kwargs)
+            return cls()
+
+        def load_lora_weights(self, *args: object, **kwargs: object) -> None:
+            raise AssertionError("sd15 path should use custom loader")
+
+    def _fake_hf_hub_download(*, repo_id: str, filename: str, cache_dir: str) -> str:
+        calls.setdefault("downloads", []).append((repo_id, filename, cache_dir))
+        return f"/tmp/{filename}"
+
+    fake_torch = SimpleNamespace(float16="float16", float32="float32")
+    fake_diffusers = SimpleNamespace(
+        StableDiffusionPipeline=_FakePipe,
+        StableDiffusionXLPipeline=_FakePipe,
+    )
+    fake_hf = SimpleNamespace(hf_hub_download=_fake_hf_hub_download)
+    fake_safetensors_torch = SimpleNamespace(load_file=lambda path: {"path": path})
+    fake_rootonchair_vae = SimpleNamespace(TransparentVAEDecoder=_FakeTransparentVAE)
+
+    def _fake_configure(pipe: object, **kwargs: object) -> object:
+        calls["configure"] = kwargs
+        return pipe
+
+    def _fake_load_lora_to_unet(unet: object, model_path: str, frames: int = 1) -> None:
+        calls["custom_loader"] = (unet, model_path, frames)
+
+    fake_rootonchair_loader = SimpleNamespace(load_lora_to_unet=_fake_load_lora_to_unet)
+
+    original_modules = {
+        name: sys.modules.get(name)
+        for name in (
+            "torch",
+            "diffusers",
+            "huggingface_hub",
+            "safetensors.torch",
+            "discoverex.adapters.outbound.models.objects.layerdiffuse.rootonchair_vae",
+            "discoverex.adapters.outbound.models.objects.layerdiffuse.rootonchair_sd15.loaders",
+        )
+    }
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "diffusers", fake_diffusers)
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+    monkeypatch.setitem(sys.modules, "safetensors.torch", fake_safetensors_torch)
+    monkeypatch.setitem(
+        sys.modules,
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.rootonchair_vae",
+        fake_rootonchair_vae,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.rootonchair_sd15.loaders",
+        fake_rootonchair_loader,
+    )
+
+    model = SimpleNamespace(
+        model_id="digiplay/Juggernaut_final",
+        revision="main",
+        weights_cache_dir=".cache/layerdiffuse",
+        _layerdiffuse_applied=False,
+        offload_mode="sequential",
+        enable_attention_slicing=True,
+        enable_vae_slicing=True,
+        enable_vae_tiling=True,
+        enable_xformers_memory_efficient_attention=True,
+        enable_fp8_layerwise_casting=False,
+        enable_channels_last=True,
+    )
+    handle = SimpleNamespace(dtype="float16")
+
+    monkeypatch.setattr(
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.load.configure_diffusers_pipeline",
+        _fake_configure,
+    )
+    from discoverex.adapters.outbound.models.objects.layerdiffuse import load as layerdiffuse_load
+
+    pipe = layerdiffuse_load.load_pipeline(model=model, handle=handle)
+
+    assert isinstance(pipe, _FakePipe)
+    assert calls["custom_loader"][1] == "/tmp/layer_sd15_transparent_attn.safetensors"
+    assert calls["custom_loader"][2] == 1
+    assert calls["configure"]["offload_mode"] == "sequential"
