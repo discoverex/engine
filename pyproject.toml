@@ -38,6 +38,7 @@ ml-gpu = [
     "accelerate>=1.12.0",
     "basicsr>=1.4.2",
     "diffusers>=0.35.2",
+    "einops>=0.8.1",
     "kornia>=0.8.1",
     "peft>=0.18.0",
     "pillow>=11.3.0",
