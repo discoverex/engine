@@ -39,6 +39,7 @@ ml-gpu = [
     "basicsr>=1.4.2",
     "diffusers>=0.35.2",
     "kornia>=0.8.1",
+    "peft>=0.18.0",
     "pillow>=11.3.0",
     "protobuf>=6.33.5",
     "realesrgan>=0.3.0",
