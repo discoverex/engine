@@ -318,19 +318,24 @@ def _generate_objects(
     object_negative_prompt: str,
     object_generation_size: int,
 ) -> dict[str, GeneratedObjectAsset]:
-    handle = context.object_generator_model.load(context.model_versions.object_generator)
-    try:
-        return generate_region_objects(
-            context=context,
-            scene_dir=scene_dir,
-            regions=regions,
-            object_handle=handle,
-            object_prompt=object_prompt,
-            object_negative_prompt=object_negative_prompt,
-            object_generation_size=object_generation_size,
-        )
-    finally:
-        unload_model(context.object_generator_model)
+    generated: dict[str, GeneratedObjectAsset] = {}
+    for region in regions:
+        handle = context.object_generator_model.load(context.model_versions.object_generator)
+        try:
+            generated.update(
+                generate_region_objects(
+                    context=context,
+                    scene_dir=scene_dir,
+                    regions=[region],
+                    object_handle=handle,
+                    object_prompt=object_prompt,
+                    object_negative_prompt=object_negative_prompt,
+                    object_generation_size=object_generation_size,
+                )
+            )
+        finally:
+            unload_model(context.object_generator_model)
+    return generated
 
 
 def _select_regions_patch_similarity(
