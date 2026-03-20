@@ -118,6 +118,35 @@ def _offload_decode_stack(*, pipe: Any, decoder: Any) -> None:
         torch.cuda.empty_cache()
 
 
+def _prepare_decode_stack(*, pipe: Any, execution_device: Any) -> None:
+    try:
+        import torch  # type: ignore
+        from accelerate.hooks import remove_hook_from_module  # type: ignore
+    except Exception:
+        torch = None
+        remove_hook_from_module = None
+    vae = getattr(pipe, "vae", None)
+    if vae is None:
+        return
+    if callable(remove_hook_from_module):
+        try:
+            remove_hook_from_module(vae, recurse=True)
+        except Exception:
+            pass
+    try:
+        vae.to(execution_device)
+    except Exception:
+        pass
+    decoder = getattr(vae, "transparent_decoder", None)
+    if decoder is not None:
+        try:
+            decoder.to(execution_device)
+        except Exception:
+            pass
+    if torch is not None and torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 def _decode_latents_to_rgba_images(*, pipe: Any, latents: Any) -> list[Image.Image]:
     decoded = pipe.vae.decode(latents, return_dict=False)[0]
     return _to_rgba_images(decoded)
@@ -269,6 +298,7 @@ def generate_rgba(
         execution_device=execution_device,
         max_vram_gb=max_vram_gb,
     )
+    _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
     images = _decode_latents_to_rgba_images(pipe=pipe, latents=latents)
     image = images[0]
     _offload_decode_stack(pipe=pipe, decoder=None)
@@ -309,6 +339,7 @@ def generate_rgba_batch(
         execution_device=execution_device,
         max_vram_gb=max_vram_gb,
     )
+    _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
     images = _decode_latents_to_rgba_images(pipe=pipe, latents=latents)
     _offload_decode_stack(pipe=pipe, decoder=None)
     return _to_rgba_images(images)
