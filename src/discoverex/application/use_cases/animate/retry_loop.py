@@ -1,10 +1,10 @@
 """Retry loop for WAN I2V animation generation."""
 from __future__ import annotations
 
+import gc
 import logging
 import random
 from collections import Counter
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +13,6 @@ from discoverex.domain.animate import (
     AIValidationFix,
     AnimationGenerationParams,
     AnimationValidation,
-    AnimationValidationThresholds,
     VisionAnalysis,
 )
 
@@ -24,23 +23,9 @@ from .retry_state import (
     QUALITY_ISSUES,
     SOFT_ISSUES,
     LoopState,
+    RetryConfig,
+    RetryResult,
 )
-
-logger = logging.getLogger(__name__)
-
-@dataclass
-class RetryConfig:
-    max_retries: int = 7
-    initial_scale: float = 0.65
-    thresholds: AnimationValidationThresholds = field(default_factory=AnimationValidationThresholds)
-
-@dataclass
-class RetryResult:
-    success: bool
-    video_path: Path | None = None
-    analysis: VisionAnalysis | None = None
-    attempts: int = 0
-    seed: int = 0
 class RetryLoop:
     """Generation + validation retry loop with AI feedback."""
 
@@ -84,6 +69,7 @@ class RetryLoop:
                     return r
             else:
                 self._on_fail(video, image_path, state, val, attempt, seed)
+            gc.collect()
         self._log.finish_image()
         return RetryResult(success=False, analysis=state.analysis, attempts=self._cfg.max_retries)
 

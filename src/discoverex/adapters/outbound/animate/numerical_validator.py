@@ -10,6 +10,7 @@ Dependencies: PIL, numpy, ffmpeg (subprocess).
 
 from __future__ import annotations
 
+import gc
 import logging
 from pathlib import Path
 
@@ -119,6 +120,9 @@ class NumericalAnimationValidator:
             scores["char_brightness_drift"] = round(char_bright * 255)
             if char_bright > BG_DRIFT_THRESHOLD:
                 failed.append("background_color_change")
+
+        del frames
+        gc.collect()
 
         return AnimationValidation(
             passed=len(failed) == 0, failed_checks=failed, scores=scores,

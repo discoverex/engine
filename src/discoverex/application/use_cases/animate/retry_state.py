@@ -2,10 +2,26 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from discoverex.domain.animate import VisionAnalysis
+from discoverex.domain.animate import AnimationValidationThresholds, VisionAnalysis
+
+
+@dataclass
+class RetryConfig:
+    max_retries: int = 7
+    initial_scale: float = 0.65
+    thresholds: AnimationValidationThresholds = field(default_factory=AnimationValidationThresholds)
+
+
+@dataclass
+class RetryResult:
+    success: bool
+    video_path: Path | None = None
+    analysis: VisionAnalysis | None = None
+    attempts: int = 0
+    seed: int = 0
 
 ISSUE_NEGATIVE_MAP: dict[str, str] = {
     "ghosting": "残影，鬼影，半透明残像，画面闪烁，细节闪烁",
