@@ -1,8 +1,7 @@
 strategy: patch_similarity_v2
 max_regions: 3
 iou_threshold: 0.12
-stride_ratio: 0.25
+stride_ratio: 0.4
 scale_factors:
-  - 0.85
   - 1.0
   - 1.15

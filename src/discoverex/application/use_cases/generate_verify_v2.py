@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import heapq
 import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
@@ -445,6 +446,13 @@ def _find_best_patch(
 ) -> dict[str, Any]:
     best: dict[str, Any] | None = None
     height, width = background_image.shape[:2]
+    coarse_feature_names = ("lab", "lbp")
+    fine_feature_names = tuple(
+        name
+        for name in ("hog", "gabor")
+        if getattr(config.patch_similarity, f"{name}_weight", 0.0) > 0.0
+    )
+    top_k = max(1, int(config.patch_similarity.top_k_candidates))
     variant_tasks: list[tuple[str, np.ndarray, tuple[int, int]]] = []
     for variant in variants:
         rgba = variant["image"]
@@ -454,10 +462,11 @@ def _find_best_patch(
         for scale_factor in config.region_selection.scale_factors:
             scaled_w = min(width, max(1, int(round(patch_w * scale_factor))))
             scaled_h = min(height, max(1, int(round(patch_h * scale_factor))))
+            bucket_size = _bucket_patch_size((scaled_w, scaled_h), config=config)
             resized = np.asarray(
-                rgba.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS).convert("RGB")
+                rgba.resize(bucket_size, Image.Resampling.LANCZOS).convert("RGB")
             )
-            variant_tasks.append((variant_id, resized, (scaled_w, scaled_h)))
+            variant_tasks.append((variant_id, resized, bucket_size))
 
     cache_keys = sorted({patch_size for _, _, patch_size in variant_tasks})
     max_workers = max(1, min(len(cache_keys) + len(variant_tasks), os.cpu_count() or 1, 8))
@@ -479,7 +488,11 @@ def _find_best_patch(
     ) -> tuple[tuple[str, tuple[int, int]], dict[str, np.ndarray]]:
         return (
             (variant_id, patch_size),
-            _extract_feature_bundle(resized_rgb, config=config),
+            _extract_feature_bundle(
+                resized_rgb,
+                config=config,
+                feature_names=coarse_feature_names,
+            ),
         )
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -491,7 +504,8 @@ def _find_best_patch(
     for variant_id, _, patch_size in variant_tasks:
         candidates = candidate_cache[patch_size]
         variant_features = variant_feature_cache[(variant_id, patch_size)]
-        for candidate in candidates:
+        coarse_ranked: list[tuple[float, int, dict[str, Any], dict[str, float]]] = []
+        for candidate_index, candidate in enumerate(candidates):
             bbox = candidate["bbox"]
             if any(
                 bbox_iou(bbox, taken) > config.region_selection.iou_threshold
@@ -501,8 +515,59 @@ def _find_best_patch(
             feature_scores = _score_feature_bundle(
                 config=config,
                 variant_features=variant_features,
-                patch_features=candidate["features"],
+                patch_features=candidate["coarse_features"],
+                feature_names=coarse_feature_names,
             )
+            score = sum(feature_scores.values())
+            entry = (score, candidate_index, candidate, feature_scores)
+            if len(coarse_ranked) < top_k:
+                heapq.heappush(coarse_ranked, entry)
+            else:
+                heapq.heappushpop(coarse_ranked, entry)
+        if not coarse_ranked:
+            continue
+        _stdout_debug(
+            "generate_verify_v2 patch_selection_coarse "
+            f"variant={variant_id} candidates={len(candidates)} top_k={len(coarse_ranked)}"
+        )
+        fine_variant_features: dict[str, np.ndarray] = {}
+        if fine_feature_names:
+            resized_rgb = next(
+                resized_rgb
+                for current_variant_id, resized_rgb, current_patch_size in variant_tasks
+                if current_variant_id == variant_id and current_patch_size == patch_size
+            )
+            fine_variant_features = _extract_feature_bundle(
+                resized_rgb,
+                config=config,
+                feature_names=fine_feature_names,
+            )
+        for _, _, candidate, coarse_scores in sorted(
+            coarse_ranked,
+            key=lambda item: item[0],
+            reverse=True,
+        ):
+            bbox = candidate["bbox"]
+            feature_scores = dict(coarse_scores)
+            if fine_feature_names:
+                left = int(bbox[0])
+                top = int(bbox[1])
+                patch_w = int(bbox[2])
+                patch_h = int(bbox[3])
+                patch = background_image[top : top + patch_h, left : left + patch_w]
+                patch_features = _extract_feature_bundle(
+                    patch,
+                    config=config,
+                    feature_names=fine_feature_names,
+                )
+                feature_scores.update(
+                    _score_feature_bundle(
+                        config=config,
+                        variant_features=fine_variant_features,
+                        patch_features=patch_features,
+                        feature_names=fine_feature_names,
+                    )
+                )
             score = sum(feature_scores.values())
             if best is None or score > float(best["score"]):
                 best = {
@@ -514,6 +579,24 @@ def _find_best_patch(
     if best is None:
         raise RuntimeError("patch_similarity_v2 could not find a valid candidate patch")
     return best
+
+
+def _bucket_patch_size(
+    patch_size: tuple[int, int],
+    *,
+    config: PipelineConfig,
+) -> tuple[int, int]:
+    bucket = max(16, config.patch_similarity.min_patch_side // 2)
+    width, height = patch_size
+    quantized_w = max(
+        config.patch_similarity.min_patch_side,
+        int(round(width / bucket) * bucket),
+    )
+    quantized_h = max(
+        config.patch_similarity.min_patch_side,
+        int(round(height / bucket) * bucket),
+    )
+    return (quantized_w, quantized_h)
 
 
 def _build_patch_candidates(
@@ -535,7 +618,11 @@ def _build_patch_candidates(
             candidates.append(
                 {
                     "bbox": (float(left), float(top), float(patch_w), float(patch_h)),
-                    "features": _extract_feature_bundle(patch, config=config),
+                    "coarse_features": _extract_feature_bundle(
+                        patch,
+                        config=config,
+                        feature_names=("lab", "lbp"),
+                    ),
                 }
             )
     return candidates
@@ -545,13 +632,18 @@ def _extract_feature_bundle(
     image: np.ndarray,
     *,
     config: PipelineConfig,
+    feature_names: tuple[str, ...] = ("lab", "lbp", "gabor", "hog"),
 ) -> dict[str, np.ndarray]:
-    return {
-        "lab": _normalize_feature_vector(_lab_features(image)),
-        "lbp": _normalize_feature_vector(_lbp_features(image, config=config)),
-        "gabor": _normalize_feature_vector(_gabor_features(image, config=config)),
-        "hog": _normalize_feature_vector(_hog_features(image, config=config)),
-    }
+    bundle: dict[str, np.ndarray] = {}
+    if "lab" in feature_names:
+        bundle["lab"] = _normalize_feature_vector(_lab_features(image))
+    if "lbp" in feature_names:
+        bundle["lbp"] = _normalize_feature_vector(_lbp_features(image, config=config))
+    if "gabor" in feature_names:
+        bundle["gabor"] = _normalize_feature_vector(_gabor_features(image, config=config))
+    if "hog" in feature_names:
+        bundle["hog"] = _normalize_feature_vector(_hog_features(image, config=config))
+    return bundle
 
 
 def _score_feature_bundle(
@@ -559,33 +651,28 @@ def _score_feature_bundle(
     config: PipelineConfig,
     variant_features: dict[str, np.ndarray],
     patch_features: dict[str, np.ndarray],
+    feature_names: tuple[str, ...],
 ) -> dict[str, float]:
-    weights = {
+    all_weights = {
         "lab": config.patch_similarity.lab_weight,
         "lbp": config.patch_similarity.lbp_weight,
         "gabor": config.patch_similarity.gabor_weight,
         "hog": config.patch_similarity.hog_weight,
     }
-    weight_total = max(1e-8, float(sum(weights.values())))
+    weights = {
+        name: all_weights[name]
+        for name in feature_names
+        if name in variant_features and name in patch_features and all_weights[name] > 0.0
+    }
+    weight_total = max(1e-8, float(sum(all_weights.values())))
     scores = {
-        "lab": _normalized_similarity(
-            _cosine_similarity(variant_features["lab"], patch_features["lab"])
-        ),
-        "lbp": _cosine_similarity(
-            variant_features["lbp"],
-            patch_features["lbp"],
-        ),
-        "gabor": _cosine_similarity(
-            variant_features["gabor"],
-            patch_features["gabor"],
-        ),
-        "hog": _cosine_similarity(
-            variant_features["hog"],
-            patch_features["hog"],
-        ),
+        name: _normalized_similarity(
+            _cosine_similarity(variant_features[name], patch_features[name])
+        )
+        for name in weights
     }
     return {
-        name: (_normalized_similarity(score) * weights[name]) / weight_total
+        name: (scores[name] * weights[name]) / weight_total
         for name, score in scores.items()
     }
 

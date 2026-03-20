@@ -1,7 +1,8 @@
 lab_weight: 0.35
 lbp_weight: 0.20
-gabor_weight: 0.20
+gabor_weight: 0.0
 hog_weight: 0.25
+top_k_candidates: 24
 lbp_points: 16
 lbp_radius: 2
 gabor_frequencies:
