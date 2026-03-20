@@ -29,6 +29,7 @@ inputs:
     - models/object_generator=layerdiffuse_standard_sdxl
     - models.object_generator.dtype=float16
     - models.object_generator.precision=fp16
+    - models.object_generator.offload_mode=model
     - models/hidden_region=dummy
     - models/inpaint=sdxl_gpu_layerdiffuse_hidden_object_v1
     - models/perception=hf
