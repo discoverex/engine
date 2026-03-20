@@ -181,11 +181,9 @@ def _build_prompt_embeds(
         "negative_prompt": negative_prompts,
     }
     if "prompt_2" in encode_signature.parameters:
-        encode_kwargs["prompt_2"] = None if isinstance(prompts, str) else [None] * len(prompts)
+        encode_kwargs["prompt_2"] = prompts
     if "negative_prompt_2" in encode_signature.parameters:
-        encode_kwargs["negative_prompt_2"] = (
-            None if isinstance(prompts, str) else [None] * len(prompts)
-        )
+        encode_kwargs["negative_prompt_2"] = negative_prompts
     encoded = encode_prompt(**encode_kwargs)
     if isinstance(encoded, tuple) and len(encoded) == 4:
         (
