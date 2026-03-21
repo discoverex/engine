@@ -33,6 +33,8 @@ def _run_perception_verification(
 
 
 def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
+    flow_run_id = context.settings.execution.flow_run_id.strip()
+    flow_run_name = context.settings.execution.flow_run_name.strip()
     perception_version = scene.meta.model_versions.get(
         "perception", context.model_versions.perception
     )
@@ -97,9 +99,11 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
         ],
     )
     tracking_run_id = context.tracker.log_pipeline_run(
-        run_name="verify_only",
+        run_name=flow_run_id or "verify_only",
         params={
             **build_tracking_params(context.execution_snapshot),
+            "prefect.flow_run_id": flow_run_id,
+            "prefect.flow_run_name": flow_run_name,
             "scene_id": scene.meta.scene_id,
             "version_id": scene.meta.version_id,
             "pipeline_run_id": scene.meta.pipeline_run_id,

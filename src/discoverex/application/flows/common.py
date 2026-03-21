@@ -36,6 +36,8 @@ def build_scene_payload(
     execution_config_path: str | None = None,
     mlflow_run_id: str | None = None,
     effective_tracking_uri: str | None = None,
+    flow_run_id: str | None = None,
+    artifact_prefix: str | None = None,
 ) -> dict[str, str]:
     payload = {
         "scene_id": scene.meta.scene_id,
@@ -55,6 +57,10 @@ def build_scene_payload(
         payload["mlflow_run_id"] = mlflow_run_id
     if effective_tracking_uri:
         payload["effective_tracking_uri"] = effective_tracking_uri
+    if flow_run_id:
+        payload["flow_run_id"] = flow_run_id
+    if artifact_prefix:
+        payload["artifact_prefix"] = artifact_prefix
     failure_reason = (scene.verification.final.failure_reason or "").strip()
     if scene.meta.status.value == "failed" and failure_reason:
         payload["failure_reason"] = failure_reason

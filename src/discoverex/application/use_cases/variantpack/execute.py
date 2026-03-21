@@ -105,6 +105,7 @@ def execute_variant(
         str(variant_snapshot_path),
         getattr(variant_context, "tracking_run_id", None),
         variant_context.settings.tracking.uri,
+        variant_context.settings.execution.flow_run_id,
     )
     payload["variant_id"] = variant_id
     payload["saved_dir"] = str(saved_dir)

@@ -15,6 +15,8 @@ from discoverex.orchestrator_contract.worker_runtime import (
 def run_replay_eval(
     scene_json_paths: Sequence[Path | str], context: AppContextLike
 ) -> Path:
+    flow_run_id = context.settings.execution.flow_run_id.strip()
+    flow_run_name = context.settings.execution.flow_run_name.strip()
     report_dir = context.artifacts_root / "reports"
 
     summary: list[dict[str, object]] = []
@@ -49,9 +51,11 @@ def run_replay_eval(
             after_scores.append(float(after_total_score))
     avg_after = sum(after_scores) / len(after_scores) if after_scores else 0.0
     tracking_run_id = context.tracker.log_pipeline_run(
-        run_name="replay_eval",
+        run_name=flow_run_id or "replay_eval",
         params={
             **build_tracking_params(context.execution_snapshot),
+            "prefect.flow_run_id": flow_run_id,
+            "prefect.flow_run_name": flow_run_name,
             "input_scene_count": len(scene_json_paths),
         },
         metrics={"avg_after_total_score": avg_after},

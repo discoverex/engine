@@ -152,6 +152,7 @@ def animate_replay_eval(
     if getattr(context, "tracking_run_id", None):
         payload["mlflow_run_id"] = str(context.tracking_run_id)
     payload["effective_tracking_uri"] = settings.tracking.uri
+    payload["flow_run_id"] = settings.execution.flow_run_id
     return payload
 
 

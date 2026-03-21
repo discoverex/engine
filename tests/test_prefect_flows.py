@@ -12,6 +12,7 @@ from prefect.runtime import flow_run
 
 import infra.prefect.dispatch as prefect_dispatch
 import infra.prefect.flow as prefect_entrypoint
+from infra.prefect.artifacts import summarize_payload
 from discoverex.application.flows.run_engine_job import run_engine_job
 from discoverex.config_loader import load_pipeline_config
 from discoverex.settings import build_settings
@@ -179,6 +180,26 @@ def test_repo_root_prefect_entrypoint_exposes_run_job_flow(
     assert module.run_generate_job_flow is prefect_entrypoint.run_generate_job_flow
     assert module.run_combined_job_flow.name == "discoverex-combined-flow"
     assert module.run_combined_job_flow is prefect_entrypoint.run_combined_job_flow
+
+
+def test_summarize_payload_includes_tracking_and_artifact_ids() -> None:
+    summary = summarize_payload(
+        {
+            "status": "approved",
+            "flow_run_id": "prefect-flow-123",
+            "attempt": 1,
+            "artifact_bucket": "orchestrator-artifacts",
+            "artifact_prefix": "jobs/prefect-flow-123/attempt-1/",
+            "mlflow_run_id": "mlflow-run-123",
+            "effective_tracking_uri": "https://mlflow.example.com",
+        }
+    )
+
+    assert summary["flow_run_id"] == "prefect-flow-123"
+    assert summary["artifact_bucket"] == "orchestrator-artifacts"
+    assert summary["artifact_prefix"] == "jobs/prefect-flow-123/attempt-1/"
+    assert summary["mlflow_run_id"] == "mlflow-run-123"
+    assert summary["effective_tracking_uri"] == "https://mlflow.example.com"
 
 
 def test_dispatch_engine_job_calls_nested_generate_pipeline(

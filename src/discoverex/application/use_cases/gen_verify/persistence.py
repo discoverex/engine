@@ -121,6 +121,8 @@ def track_run(
     extra_params: dict[str, str] | None = None,
 ) -> str | None:
     started = perf_counter()
+    flow_run_id = context.settings.execution.flow_run_id.strip()
+    flow_run_name = context.settings.execution.flow_run_name.strip()
     execution_snapshot = getattr(context, "execution_snapshot", None)
     execution_snapshot_path = getattr(context, "execution_snapshot_path", None)
     output_exports = export_output_bundle(
@@ -146,9 +148,11 @@ def track_run(
     )
 
     tracking_run_id = context.tracker.log_pipeline_run(
-        run_name="gen_verify",
+        run_name=flow_run_id or "gen_verify",
         params={
             **build_tracking_params(execution_snapshot),
+            "prefect.flow_run_id": flow_run_id,
+            "prefect.flow_run_name": flow_run_name,
             "scene_id": scene.meta.scene_id,
             "version_id": scene.meta.version_id,
             "pipeline_run_id": scene.meta.pipeline_run_id,

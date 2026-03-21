@@ -82,6 +82,10 @@ class MLflowTrackerAdapter:
         metrics: dict[str, float],
     ) -> str | None:
         experiment_id = self._ensure_remote_experiment()
+        prefect_flow_run_id = _string_value(params.get("prefect.flow_run_id", "")).strip()
+        prefect_flow_run_name = _string_value(
+            params.get("prefect.flow_run_name", "")
+        ).strip()
         run = self._mlflow_request(
             "POST",
             "/api/2.0/mlflow/runs/create",
@@ -89,6 +93,16 @@ class MLflowTrackerAdapter:
                 "experiment_id": experiment_id,
                 "tags": [
                     {"key": "mlflow.runName", "value": run_name},
+                    *(
+                        [{"key": "prefect.flow_run_id", "value": prefect_flow_run_id}]
+                        if prefect_flow_run_id
+                        else []
+                    ),
+                    *(
+                        [{"key": "prefect.flow_run_name", "value": prefect_flow_run_name}]
+                        if prefect_flow_run_name
+                        else []
+                    ),
                 ],
             },
         )
@@ -102,7 +116,8 @@ class MLflowTrackerAdapter:
                 f"tracking_uri={self._tracking_uri} "
                 f"experiment={self._experiment_name} "
                 f"run_id={run_id} "
-                f"run_name={run_name}"
+                f"run_name={run_name} "
+                f"prefect_flow_run_id={prefect_flow_run_id}"
             ),
             flush=True,
         )
