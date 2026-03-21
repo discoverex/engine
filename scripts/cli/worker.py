@@ -30,6 +30,18 @@ def _compose_fixed(args: list[str]) -> int:
 
 def _ensure_runtime_dirs() -> None:
     runtime_root = REPO_ROOT / "runtime" / "worker"
+    if FIXED_ENV.exists():
+        for line in FIXED_ENV.read_text(encoding="utf-8").splitlines():
+            if not line.startswith("WORKER_RUNTIME_DIR="):
+                continue
+            raw = line.split("=", 1)[1].strip()
+            if not raw:
+                break
+            candidate = Path(raw).expanduser()
+            runtime_root = (
+                candidate if candidate.is_absolute() else (REPO_ROOT / candidate)
+            )
+            break
     for path in (
         runtime_root,
         runtime_root / "cache",

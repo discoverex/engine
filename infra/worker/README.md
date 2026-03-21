@@ -18,5 +18,9 @@ Optional env:
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `ARTIFACT_BUCKET`
+- `DISCOVEREX_SOURCE_ROOT` default `../..`
+- `WORKER_RUNTIME_DIR` default `../../runtime/worker`
 
-The worker image embeds the repo source and installs `tracking`, `storage`, and `ml-gpu` extras at build time.
+The fixed worker mounts the repo root at `/app` and the runtime directory at
+`/var/lib/discoverex`. The image still installs `tracking`, `storage`, and
+`ml-gpu` extras at build time.

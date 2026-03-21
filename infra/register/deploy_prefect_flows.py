@@ -145,9 +145,16 @@ def _deployment_source_root() -> str:
     return str(REPO_ROOT)
 
 
+def _deployment_runtime_root() -> str:
+    override = os.environ.get("DISCOVEREX_DEPLOY_RUNTIME_ROOT", "").strip()
+    if override:
+        return override
+    return SETTINGS.prefect_work_runtime_dir
+
+
 def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
     _validate_required_worker_env()
-    runtime_root = SETTINGS.prefect_work_runtime_dir
+    runtime_root = _deployment_runtime_root()
     process_working_dir = (
         os.environ.get("DISCOVEREX_DEPLOY_WORKING_DIR", "").strip() or "/app"
     )
@@ -196,7 +203,10 @@ def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
         }
     return {
         "env": env,
-        "volumes": [f"{runtime_root}:/var/lib/discoverex"],
+        "volumes": [
+            f"{_deployment_source_root()}:/app",
+            f"{runtime_root}:/var/lib/discoverex",
+        ],
         "container_create_kwargs": {
             "entrypoint": "",
             "extra_hosts": {"host.docker.internal": "host-gateway"},

@@ -106,6 +106,23 @@ def test_deployment_job_variables_passes_huggingface_tokens(
     assert variables["working_dir"] == "/app"
 
 
+def test_deployment_job_variables_mounts_source_and_runtime_roots(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setenv("PREFECT_API_URL", "https://prefect.example/api")
+    monkeypatch.setenv("STORAGE_API_URL", "https://storage.example")
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://mlflow.example")
+    monkeypatch.setenv("DISCOVEREX_DEPLOY_SOURCE_ROOT", "/mnt/d/engine")
+    monkeypatch.setenv("DISCOVEREX_DEPLOY_RUNTIME_ROOT", "/mnt/d/runtime")
+
+    variables = deploy_flows._deployment_job_variables(work_pool_name="discoverex-fixed")
+
+    assert variables["volumes"] == [
+        "/mnt/d/engine:/app",
+        "/mnt/d/runtime:/var/lib/discoverex",
+    ]
+
+
 def test_deployment_job_variables_uses_working_dir_override(
     monkeypatch: Any,
 ) -> None:
@@ -201,6 +218,12 @@ def test_deployment_source_root_uses_env_override(monkeypatch: Any) -> None:
     monkeypatch.setenv("DISCOVEREX_DEPLOY_SOURCE_ROOT", "/app")
 
     assert deploy_flows._deployment_source_root() == "/app"
+
+
+def test_deployment_runtime_root_uses_env_override(monkeypatch: Any) -> None:
+    monkeypatch.setenv("DISCOVEREX_DEPLOY_RUNTIME_ROOT", "/mnt/d/runtime")
+
+    assert deploy_flows._deployment_runtime_root() == "/mnt/d/runtime"
 
 
 def test_main_dry_run_prints_remote_deployment_metadata(

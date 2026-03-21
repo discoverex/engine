@@ -32,4 +32,5 @@ services:
       HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:-}
       PREFECT_WORKER_LIMIT: ${PREFECT_WORKER_LIMIT:-1}
     volumes:
+      - ${DISCOVEREX_SOURCE_ROOT:-../..}:/app
       - ${WORKER_RUNTIME_DIR:-../../runtime/worker}:/var/lib/discoverex
