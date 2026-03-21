@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 
@@ -16,25 +15,12 @@ from .prompts import object_generation_prompt, resolve_object_prompts
 from .types import GeneratedObjectAsset
 
 logger = get_logger("discoverex.generate.objects")
-
-
-def _stdout_debug(message: str) -> None:
-    print(f"[discoverex-debug] {message}", flush=True)
-
 _DEFAULT_OBJECT_NEGATIVE = (
     "busy scene, environment, multiple objects, floor, wall, clutter, blurry, artifact"
 )
 _OBJECT_GENERATION_SIZE = 512
 _OBJECT_GENERATION_STEPS = 30
 _OBJECT_GENERATION_GUIDANCE = 5.0
-
-
-@dataclass(frozen=True)
-class _GeneratedCandidate:
-    region: Region
-    index: int
-    prompt: str
-    candidate_ref: str
 
 
 def generate_region_objects(
@@ -53,7 +39,6 @@ def generate_region_objects(
         dtype=context.runtime.model_runtime.dtype,
     )
     generated: dict[str, GeneratedObjectAsset] = {}
-    generated_candidates: list[_GeneratedCandidate] = []
     total_regions = len(regions)
     object_prompts = resolve_object_prompts(object_prompt, total_regions=total_regions)
     try:
@@ -79,9 +64,6 @@ def generate_region_objects(
             started = perf_counter()
             batch_prediction = None
             if batch_size > 1 and hasattr(context.object_generator_model, "predict_batch"):
-                _stdout_debug(
-                    f"object_batch_predict start batch_start={batch_start + 1} batch_size={len(batch_regions)} size={object_generation_size}"
-                )
                 batch_prediction = context.object_generator_model.predict_batch(
                     object_handle,
                     FxRequest(
@@ -99,22 +81,13 @@ def generate_region_objects(
                         },
                     ),
                 )
-                _stdout_debug(
-                    f"object_batch_predict end batch_start={batch_start + 1} saved={len(list(batch_prediction.get('output_paths') or []))}"
-                )
             saved_paths = list(batch_prediction.get("output_paths") or []) if batch_prediction else []
             for offset, region in enumerate(batch_regions):
                 index = batch_start + offset + 1
                 region_prompt = batch_prompts[offset]
+                output_prefix = scene_dir / "assets" / "objects" / f"{region.region_id}"
                 candidate_path = batch_paths[offset]
                 if not saved_paths:
-                    _stdout_debug(
-                        "object_predict start "
-                        f"region={region.region_id} index={index} size={object_generation_size} "
-                        f"prompt={region_prompt!r} negative_prompt={(object_negative_prompt or _DEFAULT_OBJECT_NEGATIVE)!r} "
-                        f"steps={_OBJECT_GENERATION_STEPS} guidance={_OBJECT_GENERATION_GUIDANCE} "
-                        f"seed={context.runtime.model_runtime.seed}"
-                    )
                     prediction = context.object_generator_model.predict(
                         object_handle,
                         FxRequest(
@@ -133,101 +106,61 @@ def generate_region_objects(
                             },
                         ),
                     )
-                    _stdout_debug(
-                        f"object_predict end region={region.region_id} index={index}"
-                    )
                     generated_ref = str(prediction.get("output_path") or candidate_path)
                 else:
                     generated_ref = saved_paths[offset]
-                generated_candidates.append(
-                    _GeneratedCandidate(
-                        region=region,
-                        index=index,
-                        prompt=region_prompt,
-                        candidate_ref=generated_ref,
-                    )
+                masked = masker.extract(
+                    image_path=generated_ref,
+                    output_prefix=output_prefix,
+                )
+                mask_path, raw_alpha_path = relocate_mask_assets(
+                    scene_dir=scene_dir,
+                    masked=masked,
+                )
+                placement = build_placement_assets(
+                    context=context,
+                    object_path=Path(str(masked["object"])),
+                    mask_path=mask_path,
+                    raw_alpha_path=raw_alpha_path,
+                )
+                generated[region.region_id] = GeneratedObjectAsset(
+                    region_id=region.region_id,
+                    candidate_ref=generated_ref,
+                    object_ref=str(placement.object_path),
+                    object_mask_ref=str(placement.mask_path),
+                    width=placement.width,
+                    height=placement.height,
+                    raw_alpha_mask_ref=str(placement.raw_alpha_path),
+                    mask_source=str(masked.get("mask_source", "unknown")),
+                    tight_bbox=placement.tight_bbox,
+                    object_prompt=region_prompt,
+                    object_negative_prompt=object_negative_prompt
+                    or _DEFAULT_OBJECT_NEGATIVE,
+                    object_model_id=str(getattr(object_handle, "model_id", "") or ""),
+                    object_sampler=str(
+                        getattr(context.object_generator_model, "sampler", "") or ""
+                    ),
+                    object_steps=_OBJECT_GENERATION_STEPS,
+                    object_guidance_scale=_OBJECT_GENERATION_GUIDANCE,
+                    object_seed=context.runtime.model_runtime.seed,
+                )
+                emit_progress_event(
+                    stage="object_generation",
+                    status="completed",
+                    region_id=region.region_id,
+                    index=index,
+                    total=total_regions,
+                    candidate_image_ref=generated_ref,
+                    object_image_ref=str(placement.object_path),
+                    object_mask_ref=str(placement.mask_path),
                 )
                 logger.info(
-                    "object generation candidate completed region=%s candidate=%s duration=%s",
+                    "object generation completed region=%s candidate=%s object=%s duration=%s",
                     region.region_id,
                     generated_ref,
+                    placement.object_path,
                     format_seconds(started),
                 )
-        for candidate in generated_candidates:
-            region = candidate.region
-            index = candidate.index
-            output_prefix = scene_dir / "assets" / "objects" / f"{region.region_id}"
-            started = perf_counter()
-            _stdout_debug(
-                f"mask_extract start region={region.region_id} index={index} image={candidate.candidate_ref}"
-            )
-            masked = masker.extract(
-                image_path=candidate.candidate_ref,
-                output_prefix=output_prefix,
-            )
-            _stdout_debug(
-                "mask_extract end "
-                f"region={region.region_id} index={index} "
-                f"source={masked.get('mask_source', 'unknown')} "
-                f"alpha_has_signal={masked.get('alpha_has_signal', False)} "
-                f"alpha_bbox={masked.get('alpha_bbox', '')} "
-                f"alpha_nonzero_ratio={masked.get('alpha_nonzero_ratio', 0.0)} "
-                f"alpha_mean={masked.get('alpha_mean', 0.0)}"
-            )
-            mask_path, raw_alpha_path = relocate_mask_assets(
-                scene_dir=scene_dir,
-                masked=masked,
-            )
-            _stdout_debug(
-                f"placement_build start region={region.region_id} index={index}"
-            )
-            placement = build_placement_assets(
-                context=context,
-                object_path=Path(str(masked["object"])),
-                mask_path=mask_path,
-                raw_alpha_path=raw_alpha_path,
-            )
-            _stdout_debug(
-                f"placement_build end region={region.region_id} index={index} width={placement.width} height={placement.height}"
-            )
-            generated[region.region_id] = GeneratedObjectAsset(
-                region_id=region.region_id,
-                candidate_ref=candidate.candidate_ref,
-                object_ref=str(placement.object_path),
-                object_mask_ref=str(placement.mask_path),
-                width=placement.width,
-                height=placement.height,
-                raw_alpha_mask_ref=str(placement.raw_alpha_path),
-                mask_source=str(masked.get("mask_source", "unknown")),
-                tight_bbox=placement.tight_bbox,
-                object_prompt=candidate.prompt,
-                object_negative_prompt=object_negative_prompt
-                or _DEFAULT_OBJECT_NEGATIVE,
-                object_model_id=str(getattr(object_handle, "model_id", "") or ""),
-                object_sampler=str(
-                    getattr(context.object_generator_model, "sampler", "") or ""
-                ),
-                object_steps=_OBJECT_GENERATION_STEPS,
-                object_guidance_scale=_OBJECT_GENERATION_GUIDANCE,
-                object_seed=context.runtime.model_runtime.seed,
-            )
-            emit_progress_event(
-                stage="object_generation",
-                status="completed",
-                region_id=region.region_id,
-                index=index,
-                total=total_regions,
-                candidate_image_ref=candidate.candidate_ref,
-                object_image_ref=str(placement.object_path),
-                object_mask_ref=str(placement.mask_path),
-            )
-            logger.info(
-                "object generation completed region=%s candidate=%s object=%s duration=%s",
-                region.region_id,
-                candidate.candidate_ref,
-                placement.object_path,
-                format_seconds(started),
-            )
     finally:
         masker.unload()
     return generated

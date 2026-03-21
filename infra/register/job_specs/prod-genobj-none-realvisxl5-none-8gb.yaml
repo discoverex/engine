@@ -36,7 +36,7 @@ inputs:
     - models/perception=dummy
     - models/inpaint=dummy
     - models/fx=dummy
-    - runtime.model_runtime.offload_mode=sequential
+    - runtime.model_runtime.offload_mode=none
   runtime:
     mode: worker
     bootstrap_mode: none

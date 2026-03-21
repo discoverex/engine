@@ -85,26 +85,6 @@ def _offload_text_encoders(*, pipe: Any) -> None:
         torch.cuda.empty_cache()
 
 
-def _prepare_text_encoders(*, pipe: Any, execution_device: Any) -> None:
-    try:
-        from accelerate.hooks import remove_hook_from_module  # type: ignore
-    except Exception:
-        remove_hook_from_module = None
-    for component_name in ("text_encoder", "text_encoder_2"):
-        component = getattr(pipe, component_name, None)
-        if component is None:
-            continue
-        if callable(remove_hook_from_module):
-            try:
-                remove_hook_from_module(component, recurse=True)
-            except Exception:
-                pass
-        try:
-            component.to(execution_device)
-        except Exception:
-            continue
-
-
 def _offload_unet_stack(*, pipe: Any) -> None:
     try:
         import torch  # type: ignore
@@ -192,7 +172,6 @@ def _build_prompt_embeds(
             pooled_prompt_embeds,
             negative_pooled_prompt_embeds,
         )
-    _prepare_text_encoders(pipe=pipe, execution_device=execution_device)
     encode_signature = inspect.signature(encode_prompt)
     encode_kwargs: dict[str, Any] = {
         "prompt": prompts,
