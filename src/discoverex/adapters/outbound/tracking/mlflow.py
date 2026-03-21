@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import json
-import logging
 import time
 from pathlib import Path
 from typing import Any, cast
 from urllib import error, request
 from urllib.parse import urlencode, urlsplit
-
-logger = logging.getLogger("discoverex.mlflow.tracker")
 
 
 class MLflowTrackerAdapter:
@@ -99,12 +96,15 @@ class MLflowTrackerAdapter:
         run_id = str(cast(dict[str, Any], info).get("run_id", "")).strip()
         if not run_id:
             raise RuntimeError("mlflow remote create_run response missing run_id")
-        logger.info(
-            "mlflow remote run created tracking_uri=%s experiment=%s run_id=%s run_name=%s",
-            self._tracking_uri,
-            self._experiment_name,
-            run_id,
-            run_name,
+        print(
+            (
+                "mlflow remote run created "
+                f"tracking_uri={self._tracking_uri} "
+                f"experiment={self._experiment_name} "
+                f"run_id={run_id} "
+                f"run_name={run_name}"
+            ),
+            flush=True,
         )
         batch = {
             "run_id": run_id,
