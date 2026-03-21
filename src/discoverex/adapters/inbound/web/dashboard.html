@@ -255,6 +255,7 @@ html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--sa
         <div class="btn-row" style="margin-top:8px">
           <button class="btn btn-sm" onclick="exportCombinedLottie()" style="background:rgba(52,211,153,.15);color:var(--green);border:1px solid rgba(52,211,153,.3)">📦 통합 Lottie</button>
           <button class="btn btn-sm" onclick="exportLottieOnly()" style="background:rgba(56,189,248,.15);color:var(--accent);border:1px solid rgba(56,189,248,.3)">🎬 모션 Lottie만</button>
+          <button class="btn btn-sm" onclick="exportHtmlViewer()" style="background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.3)">🌐 HTML 뷰어</button>
         </div>
       </div>
 
@@ -1051,6 +1052,69 @@ async function exportLottieOnly() {
   } catch (e) {
     alert('Lottie 다운로드 오류: ' + e.message);
   }
+}
+
+async function exportHtmlViewer() {
+  const lottiePath = state.lottieData && state.lottieData.lottie_path;
+  if (!lottiePath) { alert('모션 Lottie가 없습니다.'); return; }
+  const kfData = state.currentKfData || state.originalKfData;
+  if (!kfData || !kfData.keyframes) { alert('키프레임이 없습니다.'); return; }
+
+  // Fetch motion Lottie JSON
+  let lottieJson;
+  try {
+    const res = await fetch(`${API}/api/files/${lottiePath}`);
+    lottieJson = await res.json();
+  } catch (e) { alert('모션 Lottie 로드 실패: ' + e.message); return; }
+
+  const objSize = parseInt(document.getElementById('kfObjScale').value) || 80;
+  const stageW = 800;
+  const stageH = 600;
+  const waFrames = kfData.keyframes.map(kf => ({
+    offset: kf.t,
+    transform: `translate(${kf.translateX||0}px, ${kf.translateY||0}px) `
+             + `rotate(${kf.rotate||0}deg) `
+             + `scaleX(${kf.scaleX||1}) scaleY(${kf.scaleY||1})`,
+    opacity: kf.opacity !== undefined ? kf.opacity : 1,
+  }));
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${state.stem || 'animation'} Viewer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"><\/script>
+<style>
+body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#1a1a2e}
+#stage{width:${stageW}px;height:${stageH}px;position:relative;overflow:hidden;
+  background:repeating-conic-gradient(#1e2235 0% 25%,#171b2b 0% 50%) 50%/16px 16px;
+  border-radius:12px;border:1px solid #333}
+#outer{position:absolute;width:${objSize}px;height:${objSize}px;
+  left:${(stageW-objSize)/2}px;top:${stageH-objSize-20}px}
+#inner{width:100%;height:100%}
+</style></head><body>
+<div id="stage"><div id="outer"><div id="inner"></div></div></div>
+<script>
+const lottieData = ${JSON.stringify(lottieJson)};
+const kfFrames = ${JSON.stringify(waFrames)};
+const dur = ${kfData.duration_ms || 1200};
+const easing = '${kfData.easing === "spring" ? "ease-out" : (kfData.easing || "ease-in-out")}';
+
+bodymovin.loadAnimation({
+  container: document.getElementById('inner'),
+  renderer: 'svg', loop: true, autoplay: true,
+  animationData: JSON.parse(JSON.stringify(lottieData)),
+});
+
+const outer = document.getElementById('outer');
+function play() {
+  outer.animate(kfFrames, {
+    duration: dur, easing: easing, iterations: 1, fill: 'none',
+  }).onfinish = () => { outer.style.transform = ''; play(); };
+}
+play();
+<\/script></body></html>`;
+
+  const blob = new Blob([html], {type: 'text/html'});
+  _downloadBlob(blob, (state.stem || 'animation') + '_viewer.html');
+  log('HTML 뷰어 내보내기 완료 — 브라우저에서 열면 프리뷰와 동일하게 재생');
 }
 
 function _downloadBlob(blob, filename) {
