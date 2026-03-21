@@ -90,6 +90,22 @@ def apply_keyframes_to_lottie(lottie: dict[str, Any], kf_data: dict[str, Any]) -
         for layer in result.get("layers", []):
             layer["op"] = total
 
+    # Multi-frame Lottie (MOTION_NEEDED): upsample to _KF_FPS so keyframe
+    # wrapper runs at 60 fps — matching the browser CSS animate() preview.
+    # Motion frames are held proportionally (e.g. each 16-fps frame spans
+    # ~3-4 frames at 60 fps), preserving the original playback duration.
+    elif fps < _KF_FPS:
+        scale = _KF_FPS / fps
+        new_total = round(total * scale)
+        for layer in result.get("layers", []):
+            layer["ip"] = round(layer.get("ip", 0) * scale)
+            layer["op"] = round(layer.get("op", 0) * scale)
+        result["fr"] = _KF_FPS
+        result["ip"] = 0
+        result["op"] = new_total
+        fps = _KF_FPS
+        total = new_total
+
     if total <= 0:
         return result
     keyframes = kf_data.get("keyframes", [])
