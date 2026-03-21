@@ -32,3 +32,4 @@ mlflow.db
 .vscode/
 
 *.log
+*.deb
