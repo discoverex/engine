@@ -14,6 +14,7 @@ import infra.prefect.dispatch as prefect_dispatch
 import infra.prefect.flow as prefect_entrypoint
 from discoverex.application.flows.run_engine_job import run_engine_job
 from discoverex.config_loader import load_pipeline_config
+from discoverex.settings import build_settings
 from infra.prefect.job_spec import (
     coerce_args,
     coerce_overrides,
@@ -72,6 +73,7 @@ def test_run_engine_job_executes_engine_entry_directly(
 
     assert captured["command"] == "generate"
     assert captured["config_name"] == "generate"
+    assert isinstance(captured["resolved_settings"], dict)
     assert payload["ok"] is True
     assert payload["preparation"]["mode"] == "worker"
 
@@ -108,6 +110,7 @@ def test_run_engine_job_accepts_bare_engine_payload(
     )
 
     assert captured["command"] == "generate"
+    assert isinstance(captured["resolved_settings"], dict)
     assert payload["preparation"]["mode"] == "worker"
     assert payload["run_mode"] == "inline"
 
@@ -153,7 +156,13 @@ def test_run_engine_job_prefers_inline_resolved_config(
         cwd=tmp_path,
     )
 
-    assert captured["resolved_config"] == resolved
+    assert captured["resolved_settings"] == build_settings(
+        config_name="ignored",
+        config_dir=str(Path(__file__).resolve().parents[1] / "missing-conf-dir"),
+        overrides=[],
+        resolved_config=resolved,
+        env=dict(os.environ),
+    ).model_dump(mode="python")
     assert payload["ok"] is True
 
 
@@ -217,6 +226,12 @@ def test_dispatch_engine_job_calls_nested_generate_pipeline(
             "command": "generate",
             "config_name": "generate",
             "config_dir": "conf",
+            "resolved_settings": build_settings(
+                config_name="generate",
+                config_dir="conf",
+                overrides=["profile=generator_pixart_gpu_v2_hidden_object"],
+                env={},
+            ).model_dump(mode="python"),
             "args": {"background_prompt": "harbor"},
             "overrides": ["profile=generator_pixart_gpu_v2_hidden_object"],
         },

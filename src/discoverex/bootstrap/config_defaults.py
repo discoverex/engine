@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from discoverex.config import PipelineConfig
-from discoverex.settings import AppSettings, coerce_settings
+from discoverex.settings import AppSettings
 
 
 def resolve_config(
-    config: AppSettings | PipelineConfig | dict[str, Any] | None,
+    config: AppSettings | dict[str, Any] | None,
 ) -> AppSettings:
     if config is None:
         raise ValueError("config must not be None")
-    return coerce_settings(config)
+    if isinstance(config, AppSettings):
+        return config
+    if isinstance(config, dict) and "pipeline" in config:
+        return AppSettings.model_validate(config)
+    raise TypeError("runtime context requires resolved AppSettings")

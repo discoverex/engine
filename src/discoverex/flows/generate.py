@@ -54,6 +54,7 @@ from discoverex.domain.region import Region
 from discoverex.domain.scene import Background, LayerBBox, LayerItem, LayerType, Scene
 from discoverex.models.types import HiddenRegionRequest
 from discoverex.runtime_logging import format_seconds, get_logger
+from discoverex.settings import AppSettings
 
 from .common import build_scene_payload
 
@@ -62,12 +63,12 @@ logger = get_logger("discoverex.generate.flow")
 
 @task(name="discoverex-generate-context", persist_result=False)
 def _build_context(
-    config: PipelineConfig,
+    settings: AppSettings,
     execution_snapshot: dict[str, Any] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> AppContextLike:
     return build_context(
-        config=config,
+        settings=settings,
         execution_snapshot=execution_snapshot,
         execution_snapshot_path=execution_snapshot_path,
     )
@@ -504,6 +505,11 @@ def run_generate_flow(
     execution_snapshot: dict[str, Any] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> dict[str, str]:
+    if not execution_snapshot or not isinstance(
+        execution_snapshot.get("resolved_settings"), dict
+    ):
+        raise RuntimeError("generate flow requires resolved_settings in execution snapshot")
+    settings = AppSettings.model_validate(execution_snapshot["resolved_settings"])
     started = perf_counter()
     background_asset_ref = str(args.get("background_asset_ref", "") or "")
     background_prompt = str(args.get("background_prompt", "") or "")
@@ -519,7 +525,7 @@ def run_generate_flow(
         bool(final_prompt),
     )
     context = _build_context.submit(
-        config,
+        settings,
         execution_snapshot,
         execution_snapshot_path,
     ).result()
@@ -623,4 +629,5 @@ def run_generate_flow(
         config.runtime.artifacts_root,
         str(execution_snapshot_path) if execution_snapshot_path is not None else None,
         getattr(context, "tracking_run_id", None),
+        settings.tracking.uri,
     )

@@ -7,6 +7,7 @@ from typing import Any
 from prefect import flow
 
 from discoverex.runtime_logging import format_seconds, get_logger
+from discoverex.settings import AppSettings
 
 from .common import build_error_payload
 from .engine import (
@@ -32,7 +33,6 @@ def engine_entry_flow(
     config_name: str,
     config_dir: str = "conf",
     overrides: list[str] | None = None,
-    resolved_config: object | None = None,
     resolved_settings: object | None = None,
 ) -> dict[str, Any]:
     started = perf_counter()
@@ -42,12 +42,9 @@ def engine_entry_flow(
         config_name,
         len(overrides or []),
     )
-    settings = build_app_settings(
-        config_name=config_name,
-        config_dir=config_dir,
-        overrides=overrides or [],
-        resolved_config=resolved_config if resolved_settings is None else resolved_settings,
-    )
+    if not isinstance(resolved_settings, dict):
+        raise RuntimeError("engine entry requires resolved_settings")
+    settings = AppSettings.model_validate(resolved_settings)
     settings = settings.model_copy(
         update={
             "pipeline": normalize_pipeline_config_for_worker_runtime(settings.pipeline)
@@ -121,7 +118,6 @@ def run_engine_entry(
         config_name=config_name,
         config_dir=config_dir,
         overrides=overrides,
-        resolved_config=resolved_config,
         resolved_settings=resolved_settings,
     )
 
@@ -133,7 +129,6 @@ def run_prefect_engine_entry_flow(
     config_name: str,
     config_dir: str = "conf",
     overrides: list[str] | None = None,
-    resolved_config: object | None = None,
     resolved_settings: object | None = None,
 ) -> dict[str, Any]:
     return run_engine_entry(
@@ -142,6 +137,5 @@ def run_prefect_engine_entry_flow(
         config_name=config_name,
         config_dir=config_dir,
         overrides=overrides,
-        resolved_config=resolved_config,
         resolved_settings=resolved_settings,
     )

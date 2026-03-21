@@ -7,7 +7,7 @@ from hydra.utils import instantiate
 
 from discoverex.adapters.outbound.bundle_store import LocalJsonBundleStore
 from discoverex.application.use_cases.validator import ValidatorOrchestrator
-from discoverex.config import PipelineConfig, ValidatorPipelineConfig
+from discoverex.config import ValidatorPipelineConfig
 from discoverex.domain.services.verification import ScoringWeights
 from discoverex.models.types import ModelHandle
 from discoverex.settings import AppSettings
@@ -34,12 +34,12 @@ def _build_env_defaults(settings: AppSettings) -> dict[str, str]:
 
 
 def build_context(
-    config: AppSettings | PipelineConfig | dict[str, Any] | None = None,
+    settings: AppSettings | dict[str, Any] | None = None,
     *,
     execution_snapshot: dict[str, object] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> AppContext:
-    settings = resolve_config(config)
+    settings = resolve_config(settings)
     cfg = settings.pipeline
     artifacts_root = Path(cfg.runtime.artifacts_root)
     env_defaults = _build_env_defaults(settings)

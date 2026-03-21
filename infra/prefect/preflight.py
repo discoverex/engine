@@ -8,18 +8,11 @@ from urllib.parse import urlsplit
 from discoverex.settings import AppSettings, build_settings
 
 
-def validate_runtime_services(
+def resolve_runtime_settings(
     *,
     payload: dict[str, Any],
     env: dict[str, str],
-    logger: Any,
-) -> None:
-    settings = _build_payload_settings(payload=payload, env=env)
-    _validate_mlflow(settings=settings, logger=logger)
-    _validate_storage(settings=settings, logger=logger)
-
-
-def _build_payload_settings(*, payload: dict[str, Any], env: dict[str, str]) -> AppSettings:
+) -> AppSettings:
     resolved = payload.get("resolved_settings")
     if resolved is None:
         resolved = payload.get("resolved_config")
@@ -30,6 +23,21 @@ def _build_payload_settings(*, payload: dict[str, Any], env: dict[str, str]) -> 
         resolved_config=resolved,
         env=env,
     )
+
+
+def validate_runtime_services(
+    *,
+    settings: AppSettings | None = None,
+    payload: dict[str, Any] | None = None,
+    env: dict[str, str] | None = None,
+    logger: Any,
+) -> None:
+    if settings is None:
+        if payload is None or env is None:
+            raise TypeError("validate_runtime_services requires settings or payload+env")
+        settings = resolve_runtime_settings(payload=payload, env=env)
+    _validate_mlflow(settings=settings, logger=logger)
+    _validate_storage(settings=settings, logger=logger)
 
 
 def _validate_mlflow(*, settings: AppSettings, logger: Any) -> None:

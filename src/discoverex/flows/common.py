@@ -13,6 +13,7 @@ def build_scene_payload(
     artifacts_root: str,
     execution_config_path: str | None = None,
     mlflow_run_id: str | None = None,
+    effective_tracking_uri: str | None = None,
 ) -> dict[str, str]:
     payload = {
         "scene_id": scene.meta.scene_id,
@@ -30,6 +31,8 @@ def build_scene_payload(
         payload["execution_config"] = execution_config_path
     if mlflow_run_id:
         payload["mlflow_run_id"] = mlflow_run_id
+    if effective_tracking_uri:
+        payload["effective_tracking_uri"] = effective_tracking_uri
     return payload
 
 

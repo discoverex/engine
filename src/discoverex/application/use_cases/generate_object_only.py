@@ -83,6 +83,7 @@ def run(
         payload["execution_config"] = str(execution_snapshot_path)
     if getattr(context, "tracking_run_id", None):
         payload["mlflow_run_id"] = str(context.tracking_run_id)
+    payload["effective_tracking_uri"] = context.settings.tracking.uri
     return payload
 
 

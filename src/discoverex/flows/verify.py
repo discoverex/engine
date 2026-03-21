@@ -9,6 +9,7 @@ from discoverex.application.use_cases import run_verify_only
 from discoverex.bootstrap import build_context
 from discoverex.config import PipelineConfig
 from discoverex.domain.scene import Scene
+from discoverex.settings import AppSettings
 
 from .common import build_scene_payload
 
@@ -20,12 +21,12 @@ def _load_scene(scene_json: str) -> Scene:
 
 @task(name="discoverex-verify-context", persist_result=False)
 def _build_context(
-    config: PipelineConfig,
+    settings: AppSettings,
     execution_snapshot: dict[str, Any] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> Any:
     return build_context(
-        config=config,
+        settings=settings,
         execution_snapshot=execution_snapshot,
         execution_snapshot_path=execution_snapshot_path,
     )
@@ -44,10 +45,15 @@ def run_verify_flow(
     execution_snapshot: dict[str, Any] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> dict[str, str]:
+    if not execution_snapshot or not isinstance(
+        execution_snapshot.get("resolved_settings"), dict
+    ):
+        raise RuntimeError("verify flow requires resolved_settings in execution snapshot")
+    settings = AppSettings.model_validate(execution_snapshot["resolved_settings"])
     scene_json = str(args["scene_json"])
     scene = _load_scene.submit(scene_json).result()
     context = _build_context.submit(
-        config,
+        settings,
         execution_snapshot,
         execution_snapshot_path,
     ).result()
@@ -57,4 +63,5 @@ def run_verify_flow(
         config.runtime.artifacts_root,
         str(execution_snapshot_path) if execution_snapshot_path is not None else None,
         getattr(context, "tracking_run_id", None),
+        settings.tracking.uri,
     )

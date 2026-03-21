@@ -19,7 +19,7 @@ from infra.prefect.artifacts import (
 )
 from infra.prefect.dispatch import EnginePayload
 from infra.prefect.job_spec import extract_inputs_payload, load_job_spec
-from infra.prefect.preflight import validate_runtime_services
+from infra.prefect.preflight import resolve_runtime_settings, validate_runtime_services
 from infra.prefect.provision import provision_runtime_dependencies
 from infra.prefect.reporting import log_failure_summary, log_start_summary
 from infra.prefect.runtime import (
@@ -235,6 +235,11 @@ def _run_job_flow_logic(
             resume_key=resume_key,
             checkpoint_dir=checkpoint_dir,
         )
+        settings = resolve_runtime_settings(
+            payload=cast(dict[str, Any], payload),
+            env=env,
+        )
+        payload["resolved_settings"] = settings.model_dump(mode="python")
 
         log_start_summary(
             logger=logger,
@@ -246,8 +251,7 @@ def _run_job_flow_logic(
             outputs_prefix=output_prefix,
         )
         validate_runtime_services(
-            payload=cast(dict[str, Any], payload),
-            env=env,
+            settings=settings,
             logger=logger,
         )
 

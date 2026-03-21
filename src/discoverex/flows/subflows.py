@@ -9,6 +9,7 @@ from discoverex.application.use_cases.generate_object_only import (
 )
 from discoverex.bootstrap import build_context
 from discoverex.config import PipelineConfig
+from discoverex.settings import AppSettings
 
 from .generate import run_generate_flow
 from .generate_variant_pack import run_generate_inpaint_variant_pack_flow
@@ -53,8 +54,13 @@ def generate_verify_v2(
     execution_snapshot: dict[str, Any] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> dict[str, str]:
+    if not execution_snapshot or not isinstance(
+        execution_snapshot.get("resolved_settings"), dict
+    ):
+        raise RuntimeError("generate_verify_v2 requires resolved_settings in execution snapshot")
+    settings = AppSettings.model_validate(execution_snapshot["resolved_settings"])
     context = build_context(
-        config=config,
+        settings=settings,
         execution_snapshot=execution_snapshot,
         execution_snapshot_path=execution_snapshot_path,
     )
@@ -73,8 +79,13 @@ def generate_object_only(
     execution_snapshot: dict[str, Any] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> dict[str, Any]:
+    if not execution_snapshot or not isinstance(
+        execution_snapshot.get("resolved_settings"), dict
+    ):
+        raise RuntimeError("generate_object_only requires resolved_settings in execution snapshot")
+    settings = AppSettings.model_validate(execution_snapshot["resolved_settings"])
     context = build_context(
-        config=config,
+        settings=settings,
         execution_snapshot=execution_snapshot,
         execution_snapshot_path=execution_snapshot_path,
     )
@@ -123,9 +134,14 @@ def animate_replay_eval(
     execution_snapshot: dict[str, Any] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> dict[str, str]:
+    if not execution_snapshot or not isinstance(
+        execution_snapshot.get("resolved_settings"), dict
+    ):
+        raise RuntimeError("animate_replay_eval requires resolved_settings in execution snapshot")
+    settings = AppSettings.model_validate(execution_snapshot["resolved_settings"])
     scene_jsons = [str(item) for item in args.get("scene_jsons", [])]
     context = build_context(
-        config=config,
+        settings=settings,
         execution_snapshot=execution_snapshot,
         execution_snapshot_path=execution_snapshot_path,
     )
@@ -135,6 +151,7 @@ def animate_replay_eval(
         payload["execution_config"] = str(execution_snapshot_path)
     if getattr(context, "tracking_run_id", None):
         payload["mlflow_run_id"] = str(context.tracking_run_id)
+    payload["effective_tracking_uri"] = settings.tracking.uri
     return payload
 
 
