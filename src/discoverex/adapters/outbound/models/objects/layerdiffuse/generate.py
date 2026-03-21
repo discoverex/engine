@@ -289,7 +289,7 @@ def generate_rgba(
     import torch  # type: ignore
 
     pipe = model._load_pipeline(handle)
-    execution_device = getattr(pipe, "_execution_device", handle.device)
+    execution_device = handle.device or getattr(pipe, "_execution_device", "cpu")
     generator = None if seed is None else torch.Generator(device="cpu").manual_seed(seed)
     prompt_embeds = None
     negative_prompt_embeds = None
@@ -334,7 +334,7 @@ def generate_rgba_batch(
     if len(prompts) != len(negative_prompts):
         raise ValueError("prompts and negative_prompts must have the same length")
     pipe = model._load_pipeline(handle)
-    execution_device = getattr(pipe, "_execution_device", handle.device)
+    execution_device = handle.device or getattr(pipe, "_execution_device", "cpu")
     generator = None if seed is None else torch.Generator(device="cpu").manual_seed(seed)
     latents = _sample_latents(
         pipe=pipe,
