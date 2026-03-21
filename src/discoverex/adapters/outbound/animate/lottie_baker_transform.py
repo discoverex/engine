@@ -1,9 +1,9 @@
-"""Lottie Baker transform — per-layer keyframe injection.
+"""Lottie Baker transform — null-parent keyframe injection.
 
-Applies keyframe transforms directly to each image layer (no precomp).
-This avoids the precomp rendering overhead that causes frame drops when
-many base64 PNG layers are composited at 60 fps.  Structure matches
-test B (direct layer + fr=60) which was confirmed smoothest.
+Creates an invisible null layer (ty=3) with the animated keyframe
+transforms, and parents all image layers to it.  This gives the
+smoothness of a single animated element (test B) while keeping the
+64 image layers static (test F).
 """
 
 from __future__ import annotations
@@ -24,53 +24,10 @@ _BEZIER: dict[str, tuple[float, float, float, float]] = {
 _KF_FPS = 60
 
 
-def _cubic_bezier(t: float, x1: float, y1: float, x2: float, y2: float) -> float:
-    """Solve CSS cubic-bezier via Newton's method."""
-    u = t
-    for _ in range(12):
-        bx = 3 * x1 * u * (1 - u) ** 2 + 3 * x2 * u**2 * (1 - u) + u**3
-        dbx = (
-            3 * x1 * (1 - u) ** 2
-            - 6 * x1 * u * (1 - u)
-            + 6 * x2 * u * (1 - u)
-            - 3 * x2 * u**2
-            + 3 * u**2
-        )
-        if abs(dbx) < 1e-14:
-            break
-        u = max(0.0, min(1.0, u - (bx - t) / dbx))
-    return 3 * y1 * u * (1 - u) ** 2 + 3 * y2 * u**2 * (1 - u) + u**3
-
-
-def _eval_at(
-    keyframes: list[dict[str, Any]],
-    t_norm: float,
-    bez: tuple[float, float, float, float],
-    t_scale: float,
-) -> dict[str, float]:
-    """Evaluate the CSS keyframe animation at normalized time t ∈ [0,1]."""
-    seg_s, seg_e = keyframes[0], keyframes[-1]
-    for j in range(len(keyframes) - 1):
-        if float(keyframes[j].get("t", 0)) <= t_norm <= float(keyframes[j + 1].get("t", 0)):
-            seg_s, seg_e = keyframes[j], keyframes[j + 1]
-            break
-    ts, te = float(seg_s.get("t", 0)), float(seg_e.get("t", 0))
-    local = (t_norm - ts) / (te - ts) if te != ts else 1.0
-    eased = _cubic_bezier(local, *bez)
-    defaults: dict[str, float] = {"scaleX": 1.0, "scaleY": 1.0, "opacity": 1.0}
-    out: dict[str, float] = {}
-    for p in ("translateX", "translateY", "rotate", "scaleX", "scaleY", "opacity"):
-        d = defaults.get(p, 0.0)
-        v0, v1 = float(seg_s.get(p, d)), float(seg_e.get(p, d))
-        v = v0 + (v1 - v0) * eased
-        out[p] = v * t_scale if p in ("translateX", "translateY") else v
-    return out
-
-
 def apply_keyframes_to_lottie(
     lottie: dict[str, Any], kf_data: dict[str, Any],
 ) -> dict[str, Any]:
-    """Apply keyframe transforms directly to each image layer (no precomp)."""
+    """Inject keyframes via null parent layer — no precomp, no per-layer anim."""
     result = copy.deepcopy(lottie)
     w = result.get("w", 480)
     h = result.get("h", 480)
@@ -118,47 +75,91 @@ def apply_keyframes_to_lottie(
 
     anchor_x, anchor_y = w / 2.0, h / 2.0
     cx, cy = canvas_w / 2.0, canvas_h / 2.0
-    bez = _BEZIER.get(kf_data.get("easing", "ease-in-out"), _BEZIER["ease-in-out"])
 
-    # --- Apply transforms to each layer directly (no precomp) ---
-    # Each layer gets the transform values for its visibility window.
-    # Linear bezier within the tiny window (~62.5 ms) is visually identical
-    # to the global easing curve.  At any moment only 1 layer is active,
-    # so rendering cost equals test-B (single image + fr=60).
-    lin1: dict[str, Any] = {"x": [0.33], "y": [0.33]}
-    lin3: dict[str, Any] = {"x": [0.33, 0.33, 0.33], "y": [0.33, 0.33, 0.33]}
+    # --- Build null layer with bezier keyframes ---
+    easing = kf_data.get("easing", "ease-in-out")
+    x1, y1, x2, y2 = _BEZIER.get(easing, _BEZIER["ease-in-out"])
+    bez1: dict[str, Any] = {"x": [x1], "y": [y1]}
+    bzi1: dict[str, Any] = {"x": [x2], "y": [y2]}
+    bez3: dict[str, Any] = {"x": [x1, x1, x1], "y": [y1, y1, y1]}
+    bzi3: dict[str, Any] = {"x": [x2, x2, x2], "y": [y2, y2, y2]}
 
+    pos, rot, scl, opa = _build_sparse_kfs(
+        keyframes, total, t_scale, cx, cy, bez1, bzi1, bez3, bzi3,
+    )
+
+    null_ind = 9999
+    null_layer: dict[str, Any] = {
+        "ddd": 0, "ind": null_ind, "ty": 3, "nm": "keyframe_ctrl",
+        "sr": 1,
+        "ks": {
+            "o": {"a": 1, "k": opa} if len(opa) > 1 else {"a": 0, "k": 100},
+            "r": {"a": 1, "k": rot} if len(rot) > 1 else {"a": 0, "k": 0},
+            "p": {"a": 1, "k": pos} if len(pos) > 1 else {"a": 0, "k": [cx, cy, 0]},
+            "a": {"a": 0, "k": [anchor_x, anchor_y, 0]},
+            "s": {"a": 1, "k": scl} if len(scl) > 1 else {"a": 0, "k": [100, 100, 100]},
+        },
+        "ip": 0, "op": total, "st": 0,
+    }
+
+    # Parent all image layers to the null — they keep static transforms
     for layer in result.get("layers", []):
-        lip = float(layer.get("ip", 0))
-        lop = float(layer.get("op", 0))
-        t0 = lip / total if total else 0
-        t1 = lop / total if total else 0
-        vs = _eval_at(keyframes, t0, bez, t_scale)
-        ve = _eval_at(keyframes, t1, bez, t_scale)
+        layer["parent"] = null_ind
 
-        layer["ks"]["p"] = {"a": 1, "k": [
-            {"t": lip, "s": [cx + vs["translateX"], cy + vs["translateY"], 0],
-             "e": [cx + ve["translateX"], cy + ve["translateY"], 0],
-             "o": lin3, "i": lin3},
-            {"t": lop, "s": [cx + ve["translateX"], cy + ve["translateY"], 0]},
-        ]}
-        layer["ks"]["a"] = {"a": 0, "k": [anchor_x, anchor_y, 0]}
-        layer["ks"]["r"] = {"a": 1, "k": [
-            {"t": lip, "s": [vs["rotate"]], "e": [ve["rotate"]],
-             "o": lin1, "i": lin1},
-            {"t": lop, "s": [ve["rotate"]]},
-        ]}
-        layer["ks"]["s"] = {"a": 1, "k": [
-            {"t": lip,
-             "s": [vs["scaleX"] * 100, vs["scaleY"] * 100, 100],
-             "e": [ve["scaleX"] * 100, ve["scaleY"] * 100, 100],
-             "o": lin3, "i": lin3},
-            {"t": lop, "s": [ve["scaleX"] * 100, ve["scaleY"] * 100, 100]},
-        ]}
-        layer["ks"]["o"] = {"a": 1, "k": [
-            {"t": lip, "s": [vs["opacity"] * 100], "e": [ve["opacity"] * 100],
-             "o": lin1, "i": lin1},
-            {"t": lop, "s": [ve["opacity"] * 100]},
-        ]}
-
+    result["layers"].insert(0, null_layer)
     return result
+
+
+def _build_sparse_kfs(
+    keyframes: list[dict[str, Any]],
+    total: int,
+    t_scale: float,
+    cx: float,
+    cy: float,
+    bez_o1: dict[str, Any],
+    bez_i1: dict[str, Any],
+    bez_o3: dict[str, Any],
+    bez_i3: dict[str, Any],
+) -> tuple[list[Any], list[Any], list[Any], list[Any]]:
+    """Convert sparse CSS keyframes to Lottie keyframes with bezier."""
+    pos: list[Any] = []
+    rot: list[Any] = []
+    scl: list[Any] = []
+    opa: list[Any] = []
+
+    for idx, kf in enumerate(keyframes):
+        t = round(float(kf.get("t", 0)) * total)
+        tx = kf.get("translateX", 0.0) * t_scale
+        ty = kf.get("translateY", 0.0) * t_scale
+
+        p: dict[str, Any] = {"t": t, "s": [cx + tx, cy + ty, 0]}
+        r: dict[str, Any] = {"t": t, "s": [kf.get("rotate", 0.0)]}
+        s: dict[str, Any] = {
+            "t": t,
+            "s": [kf.get("scaleX", 1.0) * 100, kf.get("scaleY", 1.0) * 100, 100],
+        }
+        o: dict[str, Any] = {"t": t, "s": [kf.get("opacity", 1.0) * 100]}
+
+        if idx < len(keyframes) - 1:
+            nk = keyframes[idx + 1]
+            ntx = nk.get("translateX", 0.0) * t_scale
+            nty = nk.get("translateY", 0.0) * t_scale
+            p["e"] = [cx + ntx, cy + nty, 0]
+            p["o"] = bez_o3
+            p["i"] = bez_i3
+            r["e"] = [nk.get("rotate", 0.0)]
+            r["o"] = bez_o1
+            r["i"] = bez_i1
+            s["e"] = [nk.get("scaleX", 1.0) * 100, nk.get("scaleY", 1.0) * 100, 100]
+            s["o"] = bez_o3
+            s["i"] = bez_i3
+            o["e"] = [nk.get("opacity", 1.0) * 100]
+            o["o"] = bez_o1
+            o["i"] = bez_i1
+
+        pos.append(p)
+        rot.append(r)
+        scl.append(s)
+        opa.append(o)
+
+    return pos, rot, scl, opa
