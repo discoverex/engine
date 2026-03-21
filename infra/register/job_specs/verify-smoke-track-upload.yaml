@@ -17,7 +17,7 @@ inputs:
     - +models/background_upscaler=dummy
     - +models/object_generator=dummy
     - adapters/artifact_store=local
-    - adapters/tracker=mlflow_local
+    - adapters/tracker=mlflow_server
     - adapters/metadata_store=local_json
     - adapters/report_writer=local_json
     - runtime.artifacts_root=artifacts
@@ -27,6 +27,7 @@ inputs:
     extras:
       - tracking
       - storage
+      - ml-gpu
       - validator
     extra_env: {}
 env: {}

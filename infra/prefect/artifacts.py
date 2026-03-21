@@ -68,7 +68,8 @@ def upload_worker_artifacts(
     require_manifest: bool,
     logger: Any,
 ) -> dict[str, Any]:
-    if not os.getenv("STORAGE_API_URL", "").strip():
+    settings = _settings_from_payload(parsed)
+    if settings is None or not settings.storage.storage_api_url.strip():
         logger.info("storage upload skipped: STORAGE_API_URL not configured")
         return {}
     from discoverex.orchestrator_contract.output_uploads import (
@@ -81,14 +82,14 @@ def upload_worker_artifacts(
         flow_run_id=flow_run_id,
         attempt=attempt,
         local_paths=local_paths,
-        settings=_settings_from_payload(parsed),
+        settings=settings,
     )
     engine_uploaded = upload_engine_artifacts(
         flow_run_id=flow_run_id,
         attempt=attempt,
         local_paths=local_paths,
         require_manifest=require_manifest,
-        settings=_settings_from_payload(parsed),
+        settings=settings,
     )
     payload: dict[str, Any] = {
         "stdout_uri": uploaded.get("stdout"),
@@ -104,7 +105,7 @@ def upload_worker_artifacts(
         payload=parsed,
         uploaded_uris=payload,
         engine_mlflow_tags=engine_uploaded.mlflow_tags,
-        settings=_settings_from_payload(parsed),
+        settings=settings,
     )
     payload["mlflow_linkage_status"] = linkage.status
     if linkage.linked_tags:
@@ -172,7 +173,93 @@ def _settings_from_payload(parsed: dict[str, Any]) -> AppSettings | dict[str, An
         snapshot = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
-    settings = snapshot.get("resolved_settings")
-    if not isinstance(settings, dict):
+    resolved = snapshot.get("resolved_settings")
+    if not isinstance(resolved, dict):
         return None
-    return settings
+    try:
+        settings = AppSettings.model_validate(resolved)
+    except Exception:
+        return None
+    return _merge_worker_env(settings)
+
+
+def _merge_worker_env(settings: AppSettings) -> AppSettings:
+    env = os.environ
+    storage = settings.storage.model_copy(
+        update={
+            "storage_api_url": _env_override(
+                env,
+                "STORAGE_API_URL",
+                current=settings.storage.storage_api_url,
+            ),
+            "artifact_bucket": _env_override(
+                env,
+                "ARTIFACT_BUCKET",
+                current=settings.storage.artifact_bucket,
+            ),
+            "s3_endpoint_url": _env_override(
+                env,
+                "MLFLOW_S3_ENDPOINT_URL",
+                current=settings.storage.s3_endpoint_url,
+            ),
+            "aws_access_key_id": _env_override(
+                env,
+                "AWS_ACCESS_KEY_ID",
+                current=settings.storage.aws_access_key_id,
+            ),
+            "aws_secret_access_key": _env_override(
+                env,
+                "AWS_SECRET_ACCESS_KEY",
+                current=settings.storage.aws_secret_access_key,
+            ),
+            "metadata_db_url": _env_override(
+                env,
+                "METADATA_DB_URL",
+                current=settings.storage.metadata_db_url,
+            ),
+        }
+    )
+    tracking = settings.tracking.model_copy(
+        update={
+            "uri": _env_override(
+                env,
+                "MLFLOW_TRACKING_URI",
+                current=settings.tracking.uri,
+            )
+        }
+    )
+    worker_http = settings.worker_http.model_copy(
+        update={
+            "cf_access_client_id": _env_override(
+                env,
+                "CF_ACCESS_CLIENT_ID",
+                current=settings.worker_http.cf_access_client_id,
+            ),
+            "cf_access_client_secret": _env_override(
+                env,
+                "CF_ACCESS_CLIENT_SECRET",
+                current=settings.worker_http.cf_access_client_secret,
+            ),
+            "prefect_api_url": _env_override(
+                env,
+                "PREFECT_API_URL",
+                current=settings.worker_http.prefect_api_url,
+            ),
+        }
+    )
+    return settings.model_copy(
+        update={
+            "storage": storage,
+            "tracking": tracking,
+            "worker_http": worker_http,
+        }
+    )
+
+
+def _env_override(env: dict[str, str], key: str, *, current: str) -> str:
+    value = str(env.get(key, "")).strip()
+    if value and value != "***REDACTED***":
+        return value
+    if current.strip() == "***REDACTED***":
+        return ""
+    return current

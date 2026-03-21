@@ -42,7 +42,7 @@ def build_execution_snapshot(
         "resolved_settings": settings.model_dump(mode="python"),
         "runtime_env": settings_env_snapshot(),
     }
-    return cast(dict[str, Any], _redact(snapshot))
+    return cast(dict[str, Any], snapshot)
 
 
 def redact_for_logging(value: Any) -> Any:
