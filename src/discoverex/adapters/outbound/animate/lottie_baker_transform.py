@@ -67,23 +67,25 @@ def apply_keyframes_to_lottie(
     if not keyframes:
         return result
 
-    # --- Scale translates (no canvas expansion — it causes frame drops) ---
-    ref = kf_data.get("preview_object_size", 80)
-    t_scale = min(w, h) / ref if ref > 0 and min(w, h) > ref else 1.0
-
     cx, cy = w / 2.0, h / 2.0
+    result_fr = result.get("fr", 16)
 
-    # --- Build null layer with LINEAR keyframes ---
-    # CSS animate() applies easing GLOBALLY, interpolating linearly between
-    # keyframes.  Per-segment bezier causes "pause" at direction changes.
-    # Linear between keyframes matches CSS behavior exactly.
+    # Keyframe duration in frames — matches CSS animate() duration_ms,
+    # NOT the full motion length.  After kf_frames the null holds its
+    # last value (= rest position), so the motion continues without transform.
+    dur_ms = kf_data.get("duration_ms") or round(total / result_fr * 1000)
+    kf_frames = min(total, round(dur_ms / 1000 * result_fr))
+
+    # No translate scaling — use CSS pixel values directly.
+    # The preview's CSS translate(Xpx) operates in the same space as the
+    # Lottie canvas, keeping movement proportional and within bounds.
     lin1: dict[str, Any] = {"x": [0], "y": [0]}
     lni1: dict[str, Any] = {"x": [1], "y": [1]}
     lin3: dict[str, Any] = {"x": [0, 0, 0], "y": [0, 0, 0]}
     lni3: dict[str, Any] = {"x": [1, 1, 1], "y": [1, 1, 1]}
 
     pos, rot, scl, opa = _build_sparse_kfs(
-        keyframes, total, t_scale, cx, cy, lin1, lni1, lin3, lni3,
+        keyframes, kf_frames, 1.0, cx, cy, lin1, lni1, lin3, lni3,
     )
 
     null_ind = 9999
