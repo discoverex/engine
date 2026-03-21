@@ -3,6 +3,7 @@ from __future__ import annotations
 import heapq
 import os
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from dataclasses import replace
 from pathlib import Path
 from time import perf_counter
@@ -72,6 +73,12 @@ from discoverex.runtime_logging import format_seconds, get_logger
 logger = get_logger("discoverex.generate.v2")
 
 
+@dataclass(frozen=True)
+class PreparedObjectAsset:
+    asset: GeneratedObjectAsset
+    variants: list[dict[str, Any]]
+
+
 def _stdout_debug(message: str) -> None:
     print(f"[discoverex-debug] {message}", flush=True)
 
@@ -125,6 +132,9 @@ def run(
             int(args.get("object_count") or config.object_variants.default_count),
         )
         placeholder_regions = _build_placeholder_regions(object_count)
+        _stdout_debug(
+            f"generate_verify_v2 object_generation_start total={len(placeholder_regions)}"
+        )
         generated_objects = _generate_objects(
             context=context,
             scene_dir=scene_dir,
@@ -135,11 +145,26 @@ def run(
         )
         _stdout_debug("generate_verify_v2 object_generation_complete")
         stage_gpu_barrier("after_object_generation")
+        _stdout_debug(
+            f"generate_verify_v2 object_prepare_start total={len(generated_objects)}"
+        )
+        prepared_objects = _prepare_objects_for_placement(
+            config=config,
+            generated_objects=generated_objects,
+        )
+        _stdout_debug(
+            f"generate_verify_v2 object_prepare_complete total={len(prepared_objects)}"
+        )
         candidate_regions = _select_regions_patch_similarity(
             config=config,
             background=background,
-            generated_objects=list(generated_objects.values()),
+            prepared_objects=prepared_objects,
         )
+        if len(candidate_regions) != len(prepared_objects):
+            raise RuntimeError(
+                "patch_selection returned fewer regions than prepared objects "
+                f"(prepared={len(prepared_objects)} selected={len(candidate_regions)})"
+            )
         _stdout_debug(
             f"generate_verify_v2 patch_selection_complete selected={len(candidate_regions)}"
         )
@@ -340,43 +365,56 @@ def _generate_objects(
     object_negative_prompt: str,
     object_generation_size: int,
 ) -> dict[str, GeneratedObjectAsset]:
-    generated: dict[str, GeneratedObjectAsset] = {}
-    region_prompts = resolve_object_prompts(object_prompt, total_regions=len(regions))
-    for region, region_prompt in zip(regions, region_prompts, strict=True):
-        _stdout_debug(f"generate_verify_v2 object_region_load start region={region.region_id}")
-        handle = context.object_generator_model.load(context.model_versions.object_generator)
-        try:
-            generated.update(
-                generate_region_objects(
-                    context=context,
-                    scene_dir=scene_dir,
-                    regions=[region],
-                    object_handle=handle,
-                    object_prompt=region_prompt,
-                    object_negative_prompt=object_negative_prompt,
-                    object_generation_size=object_generation_size,
-                )
+    if not regions:
+        return {}
+    _stdout_debug(f"generate_verify_v2 object_model_load total={len(regions)}")
+    handle = context.object_generator_model.load(context.model_versions.object_generator)
+    try:
+        return generate_region_objects(
+            context=context,
+            scene_dir=scene_dir,
+            regions=regions,
+            object_handle=handle,
+            object_prompt=object_prompt,
+            object_negative_prompt=object_negative_prompt,
+            object_generation_size=object_generation_size,
+        )
+    finally:
+        unload_model(context.object_generator_model)
+        _stdout_debug(f"generate_verify_v2 object_model_unload total={len(regions)}")
+
+
+def _prepare_objects_for_placement(
+    *,
+    config: PipelineConfig,
+    generated_objects: dict[str, GeneratedObjectAsset],
+) -> list[PreparedObjectAsset]:
+    prepared: list[PreparedObjectAsset] = []
+    for asset in generated_objects.values():
+        prepared.append(
+            PreparedObjectAsset(
+                asset=asset,
+                variants=_build_object_variants(config=config, asset=asset),
             )
-        finally:
-            unload_model(context.object_generator_model)
-            _stdout_debug(f"generate_verify_v2 object_region_unload end region={region.region_id}")
-    return generated
+        )
+    return prepared
 
 
 def _select_regions_patch_similarity(
     *,
     config: PipelineConfig,
     background: Background,
-    generated_objects: list[GeneratedObjectAsset],
+    prepared_objects: list[PreparedObjectAsset],
 ) -> list[Region]:
     _stdout_debug(
-        f"generate_verify_v2 patch_selection_start generated={len(generated_objects)}"
+        f"generate_verify_v2 patch_selection_start prepared={len(prepared_objects)}"
     )
     background_image = np.asarray(Image.open(background.asset_ref).convert("RGB"))
     selected_boxes: list[tuple[float, float, float, float]] = []
     regions: list[Region] = []
-    for index, asset in enumerate(generated_objects, start=1):
-        variants = _build_object_variants(config=config, asset=asset)
+    for index, prepared in enumerate(prepared_objects, start=1):
+        asset = prepared.asset
+        variants = prepared.variants
         best = _find_best_patch(
             config=config,
             background_image=background_image,

@@ -538,7 +538,7 @@ class SdxlInpaintModel:
         )
         edge_stage = self._run_object_blend_pass(
             handle=handle,
-            source_image=precomposited,
+            source_image=image,
             target_bbox=placement_bbox,
             localized_mask=edge_mask,
             prompt=(
@@ -552,21 +552,14 @@ class SdxlInpaintModel:
             guidance_scale=self.edge_blend_cfg,
             backend_kind="edge",
         )
-        opaque_after_edge, _ = self._opaque_composite_object(
-            image=edge_stage["composited"],
-            object_image=placement_object_image,
-            object_mask=placement_object_mask,
-            target_bbox=placement_bbox,
-            opacity=1.0,
-        )
         core_stage = self._run_object_blend_pass(
             handle=handle,
-            source_image=opaque_after_edge,
+            source_image=edge_stage["composited"],
             target_bbox=placement_bbox,
             localized_mask=placement_object_mask,
             prompt=(
-                "lightly harmonize the hidden object's texture, tone, and lighting with "
-                "the surrounding scene while preserving object shape and details"
+                "shape the hidden object area in the background so the object can sit "
+                "naturally in the scene while preserving nearby texture continuity"
             ),
             negative_prompt=request.negative_prompt or self.default_negative_prompt,
             strength=self.core_blend_strength,
@@ -589,9 +582,8 @@ class SdxlInpaintModel:
             guidance_scale=self.final_polish_cfg,
             backend_kind="final",
         )
-        processed_object, processed_mask = self._extract_processed_object_layer(
-            composited=final_stage["composited"],
-            target_bbox=placement_bbox,
+        processed_object, processed_mask = self._build_processed_object_layer(
+            object_image=placement_object_image,
             object_mask=placement_object_mask,
         )
         processed_object_path = save_image(
@@ -600,7 +592,12 @@ class SdxlInpaintModel:
         processed_mask_path = save_image(
             processed_mask, output.with_suffix(".layer-mask.png")
         )
-        composited_path = save_image(final_stage["composited"], output)
+        composited = apply_alpha_patch(
+            final_stage["composited"],
+            processed_object,
+            placement_bbox,
+        )
+        composited_path = save_image(composited, output)
         patch_path = save_image(
             final_stage["generated_patch"], output.with_suffix(".patch.png")
         )
@@ -1201,22 +1198,14 @@ class SdxlInpaintModel:
             crop_bbox=crop_bbox_with_padding,
         )
 
-    def _extract_processed_object_layer(
+    def _build_processed_object_layer(
         self,
         *,
-        composited: Any,
-        target_bbox: tuple[int, int, int, int],
+        object_image: Any,
         object_mask: Any,
     ) -> tuple[Any, Any]:
-        from PIL import Image  # type: ignore
-
-        left, top, right, bottom = target_bbox
-        width = max(1, int(right - left))
-        height = max(1, int(bottom - top))
-        cropped = crop_bbox(composited, target_bbox).convert("RGBA")
-        resized_mask = object_mask.convert("L").resize((width, height))
-        output = Image.new("RGBA", (width, height), color=(0, 0, 0, 0))
-        output.paste(cropped, (0, 0), resized_mask)
+        output = object_image.convert("RGBA")
+        resized_mask = object_mask.convert("L").resize(output.size)
         output.putalpha(resized_mask)
         return output, resized_mask
 

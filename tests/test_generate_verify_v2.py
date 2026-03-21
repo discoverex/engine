@@ -12,6 +12,7 @@ from discoverex.application.use_cases.generate_verify_v2 import (
     _crop_object_for_patch_selection,
     _find_best_patch,
     _generate_objects,
+    _prepare_objects_for_placement,
     _harmonize_rgba,
 )
 from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
@@ -255,13 +256,13 @@ def test_generate_objects_uses_distinct_prompt_per_region(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    seen_prompts: list[str] = []
+    captured: dict[str, object] = {}
 
     def fake_generate_region_objects(**kwargs):
-        seen_prompts.append(kwargs["object_prompt"])
-        region = kwargs["regions"][0]
-        return {
-            region.region_id: GeneratedObjectAsset(
+        captured.update(kwargs)
+        result: dict[str, GeneratedObjectAsset] = {}
+        for region in kwargs["regions"]:
+            result[region.region_id] = GeneratedObjectAsset(
                 region_id=region.region_id,
                 candidate_ref=str(tmp_path / f"{region.region_id}.candidate.png"),
                 object_ref=str(tmp_path / f"{region.region_id}.object.png"),
@@ -269,7 +270,7 @@ def test_generate_objects_uses_distinct_prompt_per_region(
                 width=32,
                 height=32,
             )
-        }
+        return result
 
     monkeypatch.setattr(
         "discoverex.application.use_cases.generate_verify_v2.generate_region_objects",
@@ -304,8 +305,41 @@ def test_generate_objects_uses_distinct_prompt_per_region(
     )
 
     assert list(generated) == ["r-1", "r-2", "r-3"]
-    assert seen_prompts == [
-        "butterfly",
-        "antique brass key",
-        "crystal wine glass",
-    ]
+    assert [region.region_id for region in captured["regions"]] == ["r-1", "r-2", "r-3"]
+    assert captured["object_prompt"] == "butterfly | antique brass key | crystal wine glass"
+
+
+def test_prepare_objects_for_placement_builds_variants_once_per_asset(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    seen_region_ids: list[str] = []
+    assets = {
+        f"r-{index}": GeneratedObjectAsset(
+            region_id=f"r-{index}",
+            candidate_ref=str(tmp_path / f"r-{index}.candidate.png"),
+            object_ref=str(tmp_path / f"r-{index}.object.png"),
+            object_mask_ref=str(tmp_path / f"r-{index}.mask.png"),
+            width=32,
+            height=32,
+        )
+        for index in range(1, 4)
+    }
+
+    def fake_build_object_variants(*, config, asset):  # type: ignore[no-untyped-def]
+        seen_region_ids.append(asset.region_id)
+        return [{"variant_id": f"{asset.region_id}-v1", "image": None}]
+
+    monkeypatch.setattr(
+        "discoverex.application.use_cases.generate_verify_v2._build_object_variants",
+        fake_build_object_variants,
+    )
+
+    prepared = _prepare_objects_for_placement(
+        config=SimpleNamespace(),
+        generated_objects=assets,
+    )
+
+    assert [item.asset.region_id for item in prepared] == ["r-1", "r-2", "r-3"]
+    assert seen_region_ids == ["r-1", "r-2", "r-3"]
+    assert prepared[0].variants == [{"variant_id": "r-1-v1", "image": None}]
