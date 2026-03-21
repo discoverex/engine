@@ -39,12 +39,7 @@ inputs:
     - models.inpaint.overlay_alpha=0.3
     - models/perception=hf
     - models/fx=copy_image
-    - runtime.model_runtime.offload_mode=none
-    - models.background_generator.offload_mode=none
-    - models.background_generator.text_encoder_offload=false
-    - models.object_generator.offload_mode=none
-    - models.inpaint.offload_mode=none
-    - models.fx.offload_mode=none
+    - runtime.model_runtime.offload_mode=sequential
     - runtime.model_runtime.enable_attention_slicing=true
     - runtime.model_runtime.enable_vae_slicing=true
     - runtime.model_runtime.enable_vae_tiling=true
