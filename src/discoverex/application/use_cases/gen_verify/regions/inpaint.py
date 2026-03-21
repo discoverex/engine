@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from time import perf_counter
 from uuid import uuid4
+import json
 
 from discoverex.application.context import AppContextLike
 from discoverex.domain.region import BBox, Region, RegionSource
@@ -23,6 +24,10 @@ from ..types import RegionPromptRecord
 
 _DEFAULT_OBJECT_GENERATION_PROMPT = "repair hidden object region naturally"
 logger = get_logger("discoverex.generate.regions")
+
+
+def _stdout_debug(message: str) -> None:
+    print(f"[discoverex-debug] {message}", flush=True)
 
 
 def generate_regions(
@@ -104,6 +109,13 @@ def _generate_single_region(
         total=total_regions,
         bbox=bbox_payload(region),
     )
+    _stdout_debug(
+        "object_inpaint start "
+        f"region={region.region_id} index={index}/{total_regions} "
+        f"prompt={region_prompt!r} generation_prompt={generation_prompt!r} "
+        f"object_model_id={object_asset.object_model_id!r} sampler={object_asset.object_sampler!r} "
+        f"steps={object_asset.object_steps} guidance={object_asset.object_guidance_scale} seed={object_asset.object_seed}"
+    )
     with track_stage_vram(
         context,
         object_inpaint_vram_stage(index=index, region_id=region.region_id),
@@ -152,7 +164,24 @@ def _generate_single_region(
         "object_image_ref": object_ref,
         "object_mask_ref": object_mask_ref,
         "patch_image_ref": patch_ref,
+        "selected_variant_ref": details.get("selected_variant_ref")
+        or details.get("patch_image_ref"),
+        "object_prompt_resolved": object_asset.object_prompt,
+        "object_negative_prompt_resolved": object_asset.object_negative_prompt,
+        "generation_prompt_resolved": generation_prompt,
+        "object_model_id": object_asset.object_model_id,
+        "object_sampler": object_asset.object_sampler,
+        "object_steps": object_asset.object_steps,
+        "object_guidance_scale": object_asset.object_guidance_scale,
+        "object_seed": object_asset.object_seed,
     }
+    _stdout_debug(
+        "object_inpaint end "
+        f"region={region.region_id} prompt={region_prompt!r} "
+        f"selected_variant_ref={details.get('selected_variant_ref')!r} "
+        f"patch={details.get('patch_image_ref')!r} composited={details.get('composited_image_ref')!r} "
+        f"selected_bbox={json.dumps(details.get('selected_bbox') or {})}"
+    )
     record_layer_candidate(
         background=background,
         region=updated,

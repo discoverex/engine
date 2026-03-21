@@ -6,6 +6,10 @@ from typing import Any
 from ...pipeline_memory import configure_diffusers_pipeline
 
 
+def _stdout_debug(message: str) -> None:
+    print(f"[discoverex-debug] {message}", flush=True)
+
+
 def load_pipeline(*, model: Any, handle: Any) -> Any:
     import torch  # type: ignore
     from diffusers import (  # type: ignore
@@ -88,6 +92,12 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
             sampler_name=str(getattr(model, "sampler", "") or ""),
             scheduler_cls=DPMSolverMultistepScheduler,
         )
+    _stdout_debug(
+        "object_pipeline_ready "
+        f"model_id={model.model_id} sampler={getattr(model, 'sampler', '')} "
+        f"is_sdxl={is_sdxl} effective_offload_mode={effective_offload_mode} "
+        f"scheduler_cls={type(getattr(pipe, 'scheduler', None)).__name__}"
+    )
     return configure_diffusers_pipeline(
         pipe,
         handle=handle,

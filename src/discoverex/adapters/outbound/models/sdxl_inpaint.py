@@ -201,12 +201,20 @@ class SdxlInpaintModel:
         self._core_blend_pipe: DiffusionObjectBlendBackend | None = None
         self._final_polish_pipe: DiffusionObjectBlendBackend | None = None
 
+    def _stdout_debug(self, message: str) -> None:
+        print(f"[discoverex-debug] {message}", flush=True)
+
     def load(self, model_ref_or_version: str) -> ModelHandle:
         logger.info(
             "loading object inpaint model model_id=%s revision=%s requested_device=%s",
             self.model_id,
             self.revision,
             self.device,
+        )
+        self._stdout_debug(
+            f"inpaint_model_load model_id={self.model_id} inpaint_mode={self.inpaint_mode} "
+            f"generation_steps={self.generation_steps} generation_strength={self.generation_strength} "
+            f"overlay_alpha={self.overlay_alpha} final_context_size={self.final_context_size}"
         )
         runtime = resolve_runtime()
         validate_diffusers_runtime(runtime)
@@ -275,6 +283,8 @@ class SdxlInpaintModel:
                 result["core_blend_ref"] = str(composited_ref["core_blend"])
             if "final_polish" in composited_ref:
                 result["final_polish_ref"] = str(composited_ref["final_polish"])
+            if "selected_variant" in composited_ref:
+                result["selected_variant_ref"] = str(composited_ref["selected_variant"])
             if "variant_manifest" in composited_ref:
                 result["variant_manifest_ref"] = str(composited_ref["variant_manifest"])
             if "placement_variant_id" in composited_ref:
@@ -480,6 +490,9 @@ class SdxlInpaintModel:
             object_image=selected_variant["object_image"],
             object_mask=selected_variant["object_mask"],
         )
+        selected_variant_path = save_image(
+            placement_object_image, output.with_suffix(".selected-variant.png")
+        )
         variant_manifest_path = output.with_suffix(".variants.json")
         variant_manifest_path.write_text(
             json.dumps(
@@ -613,6 +626,7 @@ class SdxlInpaintModel:
             "final_polish": final_patch_path,
             "shadow": shadow_path,
             "variant_manifest": variant_manifest_path,
+            "selected_variant": selected_variant_path,
             "selected_bbox": placement_bbox,
             "placement_score": placement_score,
             "placement_variant_id": selected_variant["id"],

@@ -61,9 +61,25 @@ def record_layer_candidate(
             "core_blend_ref",
             "final_polish_ref",
             "variant_manifest_ref",
+            "selected_variant_ref",
+            "object_prompt_resolved",
+            "object_negative_prompt_resolved",
+            "generation_prompt_resolved",
+            "object_model_id",
+            "object_sampler",
+            "object_steps",
+            "object_guidance_scale",
+            "object_seed",
+            "mask_source",
+            "alpha_has_signal",
+            "alpha_bbox",
+            "alpha_nonzero_ratio",
+            "alpha_mean",
         ):
             value = details.get(key)
             if isinstance(value, str) and value:
+                payload[key] = value
+            elif value is not None:
                 payload[key] = value
     candidates.append(payload)
 
@@ -88,4 +104,17 @@ def build_prompt_record(
         object_mask_ref=details.get("object_mask_ref"),
         blend_mask_ref=details.get("blend_mask_ref"),
         composited_image_ref=details.get("composited_image_ref"),
+        object_prompt_resolved=details.get("object_prompt_resolved"),
+        object_negative_prompt_resolved=details.get(
+            "object_negative_prompt_resolved"
+        ),
+        generation_prompt_resolved=details.get("generation_prompt_resolved"),
+        object_model_id=details.get("object_model_id"),
+        object_sampler=details.get("object_sampler"),
+        object_steps=details.get("object_steps"),
+        object_guidance_scale=details.get("object_guidance_scale"),
+        object_seed=details.get("object_seed"),
+        selected_variant_ref=details.get("selected_variant_ref"),
+        mask_source=details.get("mask_source"),
+        alpha_nonzero_ratio=details.get("alpha_nonzero_ratio"),
     )

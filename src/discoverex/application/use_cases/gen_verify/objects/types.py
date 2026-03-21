@@ -15,6 +15,13 @@ class GeneratedObjectAsset:
     raw_alpha_mask_ref: str | None = None
     mask_source: str = "unknown"
     tight_bbox: tuple[int, int, int, int] | None = None
+    object_prompt: str = ""
+    object_negative_prompt: str = ""
+    object_model_id: str = ""
+    object_sampler: str = ""
+    object_steps: int = 0
+    object_guidance_scale: float = 0.0
+    object_seed: int | None = None
 
 
 @dataclass(frozen=True)

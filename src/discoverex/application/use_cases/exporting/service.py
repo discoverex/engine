@@ -5,7 +5,7 @@ from pathlib import Path
 from discoverex.artifact_paths import outputs_dir
 from discoverex.domain.scene import Scene
 
-from .intermediates import export_intermediates
+from .intermediates import export_originals
 from .layers import export_layers
 from .render import write_lottie_bundle, write_output_manifest
 from .shared import candidate_by_region
@@ -18,11 +18,11 @@ def export_output_bundle(*, artifacts_root: Path, scene: Scene) -> OutputExportR
     out_dir = outputs_dir(artifacts_root, scene_id, version_id)
     layers_dir = out_dir / "layers" / "objects"
     source_layers_dir = out_dir / "layers" / "source-objects"
-    intermediates_dir = out_dir / "intermediates"
+    originals_dir = out_dir / "original"
     out_dir.mkdir(parents=True, exist_ok=True)
     layers_dir.mkdir(parents=True, exist_ok=True)
     source_layers_dir.mkdir(parents=True, exist_ok=True)
-    intermediates_dir.mkdir(parents=True, exist_ok=True)
+    originals_dir.mkdir(parents=True, exist_ok=True)
 
     candidates = candidate_by_region(scene)
     exported_layers, source_layer_paths = export_layers(
@@ -31,8 +31,8 @@ def export_output_bundle(*, artifacts_root: Path, scene: Scene) -> OutputExportR
         source_layers_dir=source_layers_dir,
         candidates=candidates,
     )
-    intermediate_paths, intermediate_entries = export_intermediates(
-        intermediates_dir=intermediates_dir,
+    original_paths, original_entries = export_originals(
+        originals_dir=originals_dir,
         candidates=candidates,
     )
     lottie_path = out_dir / "animation.lottie"
@@ -47,7 +47,7 @@ def export_output_bundle(*, artifacts_root: Path, scene: Scene) -> OutputExportR
         artifacts_root=artifacts_root,
         exported_layers=exported_layers,
         source_layer_paths=source_layer_paths,
-        intermediate_entries=intermediate_entries,
+        original_entries=original_entries,
         lottie_path=lottie_path,
     )
     return OutputExportResult(
@@ -55,5 +55,5 @@ def export_output_bundle(*, artifacts_root: Path, scene: Scene) -> OutputExportR
         lottie_path=lottie_path,
         layer_paths=exported_layers,
         source_layer_paths=source_layer_paths,
-        intermediate_paths=intermediate_paths,
+        original_paths=original_paths,
     )

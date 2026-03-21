@@ -248,7 +248,7 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     assert output_manifest["lottie_path"] == "animation.lottie"
     assert output_manifest["layers"]
     assert output_manifest["source_layers"]
-    assert output_manifest["intermediates"]
+    assert output_manifest["original"]
     assert output_manifest["object_entries"]
     assert output_manifest["object_sources"]
     assert (
@@ -258,7 +258,7 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     assert output_manifest["layers"][1]["object_number"] == 1
     assert output_manifest["layers"][1]["center"] == [25.0, 40.0]
     assert (scene_dir / "outputs" / "layers" / "source-objects").exists()
-    assert (scene_dir / "outputs" / "intermediates").exists()
+    assert (scene_dir / "outputs" / "original").exists()
     with ZipFile(lottie_path) as archive:
         names = set(archive.namelist())
         animation = json.loads(archive.read("animations/scene.json").decode("utf-8"))

@@ -100,7 +100,11 @@ def generate_region_objects(
                 candidate_path = batch_paths[offset]
                 if not saved_paths:
                     _stdout_debug(
-                        f"object_predict start region={region.region_id} index={index} size={object_generation_size}"
+                        "object_predict start "
+                        f"region={region.region_id} index={index} size={object_generation_size} "
+                        f"prompt={region_prompt!r} negative_prompt={(object_negative_prompt or _DEFAULT_OBJECT_NEGATIVE)!r} "
+                        f"steps={_OBJECT_GENERATION_STEPS} guidance={_OBJECT_GENERATION_GUIDANCE} "
+                        f"seed={context.runtime.model_runtime.seed}"
                     )
                     prediction = context.object_generator_model.predict(
                         object_handle,
@@ -168,6 +172,16 @@ def generate_region_objects(
                     raw_alpha_mask_ref=str(placement.raw_alpha_path),
                     mask_source=str(masked.get("mask_source", "unknown")),
                     tight_bbox=placement.tight_bbox,
+                    object_prompt=region_prompt,
+                    object_negative_prompt=object_negative_prompt
+                    or _DEFAULT_OBJECT_NEGATIVE,
+                    object_model_id=str(getattr(object_handle, "model_id", "") or ""),
+                    object_sampler=str(
+                        getattr(context.object_generator_model, "sampler", "") or ""
+                    ),
+                    object_steps=_OBJECT_GENERATION_STEPS,
+                    object_guidance_scale=_OBJECT_GENERATION_GUIDANCE,
+                    object_seed=context.runtime.model_runtime.seed,
                 )
                 emit_progress_event(
                     stage="object_generation",

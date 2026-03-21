@@ -20,7 +20,7 @@ from .shared import (
     candidate_by_region,
     object_entry_by_region,
 )
-from .types import IntermediateAssetEntry, ObjectEntry
+from .types import OriginalAssetEntry, ObjectEntry
 
 
 def write_output_manifest(
@@ -29,7 +29,7 @@ def write_output_manifest(
     artifacts_root: Path,
     exported_layers: list[Path],
     source_layer_paths: list[Path],
-    intermediate_entries: list[IntermediateAssetEntry],
+    original_entries: list[OriginalAssetEntry],
     lottie_path: Path,
 ) -> Path:
     scene_id = scene.meta.scene_id
@@ -79,7 +79,7 @@ def write_output_manifest(
             {"path": f"layers/source-objects/{path.name}"}
             for path in source_layer_paths
         ],
-        "intermediates": intermediate_entries,
+        "original": original_entries,
         "object_entries": object_entries,
         "object_sources": build_object_source_entries(
             candidates=candidates,

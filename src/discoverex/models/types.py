@@ -96,10 +96,23 @@ class InpaintPrediction(TypedDict, total=False):
     final_polish_ref: str
     variant_manifest_ref: str
     placement_variant_id: str
+    selected_variant_ref: str
     mask_source: str
     inpaint_mode: str
     placement_score: float
     selected_bbox: dict[str, float]
+    object_prompt_resolved: str
+    object_negative_prompt_resolved: str
+    generation_prompt_resolved: str
+    object_model_id: str
+    object_sampler: str
+    object_steps: int
+    object_guidance_scale: float
+    object_seed: int | None
+    alpha_has_signal: bool
+    alpha_bbox: list[int]
+    alpha_nonzero_ratio: float
+    alpha_mean: float
 
 
 # ---------------------------------------------------------------------------

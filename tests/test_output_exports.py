@@ -145,7 +145,7 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
     assert exported.manifest_path.exists()
     assert len(exported.layer_paths) == 3
     assert len(exported.source_layer_paths) == 1
-    assert len(exported.intermediate_paths) == 7
+    assert len(exported.original_paths) == 8
     payload = json.loads(exported.manifest_path.read_text(encoding="utf-8"))
     assert payload["lottie_path"] == "animation.lottie"
     assert payload["source_layers"] == [
@@ -175,10 +175,12 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
             "variant_manifest_ref": str(variant_manifest),
         }
     ]
-    assert {"region_id": "r1", "kind": "candidate_image_ref", "path": "intermediates/r1/object.png"} in payload["intermediates"]
-    assert {"region_id": "r1", "kind": "precomposited_image_ref", "path": "intermediates/r1/region.precomposite.png"} in payload["intermediates"]
-    assert {"region_id": "r1", "kind": "variant_manifest_ref", "path": "intermediates/r1/region.variants.json"} in payload["intermediates"]
-    assert (scene_root / "outputs" / "intermediates" / "r1" / "object.png").exists()
+    assert {"region_id": "r1", "kind": "candidate_image_ref", "path": "original/r1/object.png"} in payload["original"]
+    assert {"region_id": "r1", "kind": "precomposited_image_ref", "path": "original/r1/region.precomposite.png"} in payload["original"]
+    assert {"region_id": "r1", "kind": "variant_manifest_ref", "path": "original/r1/region.variants.json"} in payload["original"]
+    assert {"region_id": "r1", "kind": "diagnostics", "path": "original/r1/diagnostics.json"} in payload["original"]
+    assert (scene_root / "outputs" / "original" / "r1" / "object.png").exists()
+    assert (scene_root / "outputs" / "original" / "r1" / "diagnostics.json").exists()
     assert [layer["layer_id"] for layer in payload["layers"]] == [
         "layer-base",
         "layer-object",

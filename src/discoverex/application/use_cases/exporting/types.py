@@ -28,8 +28,22 @@ class CandidateLayerPayload(TypedDict, total=False):
     core_blend_ref: str
     final_polish_ref: str
     variant_manifest_ref: str
+    selected_variant_ref: str
     layer_image_ref: str
     bbox: BBoxPayload
+    object_prompt_resolved: str
+    object_negative_prompt_resolved: str
+    generation_prompt_resolved: str
+    object_model_id: str
+    object_sampler: str
+    object_steps: int
+    object_guidance_scale: float
+    object_seed: int | None
+    mask_source: str
+    alpha_has_signal: bool
+    alpha_bbox: list[int]
+    alpha_nonzero_ratio: float
+    alpha_mean: float
 
 
 class ObjectEntry(TypedDict):
@@ -61,7 +75,7 @@ class ObjectSourceEntry(TypedDict, total=False):
     variant_manifest_ref: str
 
 
-class IntermediateAssetEntry(TypedDict):
+class OriginalAssetEntry(TypedDict):
     region_id: str
     kind: str
     path: str
@@ -73,4 +87,4 @@ class OutputExportResult:
     lottie_path: Path
     layer_paths: list[Path]
     source_layer_paths: list[Path]
-    intermediate_paths: list[Path]
+    original_paths: list[Path]

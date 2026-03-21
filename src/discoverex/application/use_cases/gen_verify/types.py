@@ -41,6 +41,17 @@ class RegionPromptRecord(BaseModel):
     object_mask_ref: str | None = None
     blend_mask_ref: str | None = None
     composited_image_ref: str | None = None
+    object_prompt_resolved: str | None = None
+    object_negative_prompt_resolved: str | None = None
+    generation_prompt_resolved: str | None = None
+    object_model_id: str | None = None
+    object_sampler: str | None = None
+    object_steps: int | None = None
+    object_guidance_scale: float | None = None
+    object_seed: int | None = None
+    selected_variant_ref: str | None = None
+    mask_source: str | None = None
+    alpha_nonzero_ratio: float | None = None
 
 
 class PromptBundle(BaseModel):

@@ -26,6 +26,10 @@ from .runtime_cleanup import clear_model_runtime
 logger = get_logger("discoverex.models.layerdiffuse_object")
 
 
+def _stdout_debug(message: str) -> None:
+    print(f"[discoverex-debug] {message}", flush=True)
+
+
 class LayerDiffuseObjectGenerationModel:
     def __init__(
         self,
@@ -94,6 +98,13 @@ class LayerDiffuseObjectGenerationModel:
         if self.strict_runtime and selected_device != self.device:
             raise RuntimeError(f"requested device '{self.device}' is unavailable")
         apply_seed(self.seed, runtime.torch)
+        _stdout_debug(
+            "object_model_load "
+            f"model_id={self.model_id} sampler={self.sampler} "
+            f"requested_offload_mode={self.offload_mode} "
+            f"dtype={self.dtype} precision={self.precision} "
+            f"batch_size={self.batch_size} seed={self.seed}"
+        )
         return ModelHandle(
             name="object_generation_model",
             version=model_ref_or_version,
