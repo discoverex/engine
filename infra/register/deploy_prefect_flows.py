@@ -152,6 +152,16 @@ def _deployment_runtime_root() -> str:
     return SETTINGS.prefect_work_runtime_dir
 
 
+def _deployment_source_mounts() -> list[str]:
+    source_root = _deployment_source_root()
+    return [
+        f"{source_root}/src:/app/src",
+        f"{source_root}/infra:/app/infra",
+        f"{source_root}/conf:/app/conf",
+        f"{source_root}/prefect_flow.py:/app/prefect_flow.py",
+    ]
+
+
 def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
     _validate_required_worker_env()
     runtime_root = _deployment_runtime_root()
@@ -204,7 +214,7 @@ def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
     return {
         "env": env,
         "volumes": [
-            f"{_deployment_source_root()}:/app",
+            *_deployment_source_mounts(),
             f"{runtime_root}:/var/lib/discoverex",
         ],
         "container_create_kwargs": {

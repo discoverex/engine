@@ -118,8 +118,22 @@ def test_deployment_job_variables_mounts_source_and_runtime_roots(
     variables = deploy_flows._deployment_job_variables(work_pool_name="discoverex-fixed")
 
     assert variables["volumes"] == [
-        "/mnt/d/engine:/app",
+        "/mnt/d/engine/src:/app/src",
+        "/mnt/d/engine/infra:/app/infra",
+        "/mnt/d/engine/conf:/app/conf",
+        "/mnt/d/engine/prefect_flow.py:/app/prefect_flow.py",
         "/mnt/d/runtime:/var/lib/discoverex",
+    ]
+
+
+def test_deployment_source_mounts_use_selected_paths(monkeypatch: Any) -> None:
+    monkeypatch.setenv("DISCOVEREX_DEPLOY_SOURCE_ROOT", "/mnt/d/engine")
+
+    assert deploy_flows._deployment_source_mounts() == [
+        "/mnt/d/engine/src:/app/src",
+        "/mnt/d/engine/infra:/app/infra",
+        "/mnt/d/engine/conf:/app/conf",
+        "/mnt/d/engine/prefect_flow.py:/app/prefect_flow.py",
     ]
 
 

@@ -21,7 +21,8 @@ Optional env:
 - `DISCOVEREX_SOURCE_ROOT` default `../..`
 - `WORKER_RUNTIME_DIR` default `../../runtime/worker`
 
-The fixed worker mounts the repo root at `/app` and the runtime directory at
+The fixed worker mounts only the live source paths needed by the runtime:
+`src`, `infra`, `conf`, and `prefect_flow.py`. Runtime state is mounted at
 `/var/lib/discoverex`. The image still installs `tracking`, `storage`, and
 `ml-gpu` extras at build time.
 

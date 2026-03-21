@@ -32,5 +32,8 @@ services:
       HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:-}
       PREFECT_WORKER_LIMIT: ${PREFECT_WORKER_LIMIT:-1}
     volumes:
-      - ${DISCOVEREX_SOURCE_ROOT:-../..}:/app
+      - ${DISCOVEREX_SOURCE_ROOT:-../..}/src:/app/src
+      - ${DISCOVEREX_SOURCE_ROOT:-../..}/infra:/app/infra
+      - ${DISCOVEREX_SOURCE_ROOT:-../..}/conf:/app/conf
+      - ${DISCOVEREX_SOURCE_ROOT:-../..}/prefect_flow.py:/app/prefect_flow.py
       - ${WORKER_RUNTIME_DIR:-../../runtime/worker}:/var/lib/discoverex
