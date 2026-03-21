@@ -22,7 +22,8 @@ inputs:
     - runtime.model_runtime.enable_vae_slicing=true
     - runtime.model_runtime.enable_vae_tiling=true
     - models/object_generator=layerdiffuse
-    - models.object_generator.model_id=SG161222/RealVisXL_V4.0
+    - models.object_generator.model_id=SG161222/RealVisXL_V5.0
+    - models.object_generator.sampler=dpmpp_sde_karras
     - models.object_generator.dtype=float16
     - models.object_generator.precision=fp16
     - models/hidden_region=dummy

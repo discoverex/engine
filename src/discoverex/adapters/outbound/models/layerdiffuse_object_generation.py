@@ -29,7 +29,7 @@ logger = get_logger("discoverex.models.layerdiffuse_object")
 class LayerDiffuseObjectGenerationModel:
     def __init__(
         self,
-        model_id: str = "SG161222/RealVisXL_V4.0",
+        model_id: str = "SG161222/RealVisXL_V5.0",
         revision: str = "main",
         device: str = "cuda",
         dtype: str = "float16",
@@ -44,6 +44,7 @@ class LayerDiffuseObjectGenerationModel:
         enable_xformers_memory_efficient_attention: bool = False,
         enable_fp8_layerwise_casting: bool = False,
         enable_channels_last: bool = False,
+        sampler: str = "dpmpp_sde_karras",
         default_prompt: str = "isolated single object on a transparent background",
         default_negative_prompt: str = "busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact",
         default_num_inference_steps: int = 30,
@@ -67,6 +68,7 @@ class LayerDiffuseObjectGenerationModel:
         self.enable_xformers_memory_efficient_attention = enable_xformers_memory_efficient_attention
         self.enable_fp8_layerwise_casting = enable_fp8_layerwise_casting
         self.enable_channels_last = enable_channels_last
+        self.sampler = sampler
         self.default_prompt = default_prompt
         self.default_negative_prompt = default_negative_prompt
         self.default_num_inference_steps = default_num_inference_steps

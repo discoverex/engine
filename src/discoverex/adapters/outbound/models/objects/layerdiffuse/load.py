@@ -8,7 +8,11 @@ from ...pipeline_memory import configure_diffusers_pipeline
 
 def load_pipeline(*, model: Any, handle: Any) -> Any:
     import torch  # type: ignore
-    from diffusers import StableDiffusionPipeline, StableDiffusionXLPipeline  # type: ignore
+    from diffusers import (  # type: ignore
+        DPMSolverMultistepScheduler,
+        StableDiffusionPipeline,
+        StableDiffusionXLPipeline,
+    )
     from huggingface_hub import hf_hub_download  # type: ignore
     from safetensors.torch import load_file  # type: ignore
     from .rootonchair_vae import TransparentVAEDecoder
@@ -77,6 +81,13 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
     effective_offload_mode = model.offload_mode
     if is_sdxl and effective_offload_mode == "sequential":
         effective_offload_mode = "model"
+    scheduler = getattr(pipe, "scheduler", None)
+    if scheduler is not None:
+        pipe.scheduler = _configure_scheduler(
+            scheduler=scheduler,
+            sampler_name=str(getattr(model, "sampler", "") or ""),
+            scheduler_cls=DPMSolverMultistepScheduler,
+        )
     return configure_diffusers_pipeline(
         pipe,
         handle=handle,
@@ -93,3 +104,22 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
 def load_transparent_decoder(*, model: Any, handle: Any) -> Any:
     _ = (model, handle)
     return None
+
+
+def _configure_scheduler(*, scheduler: Any, sampler_name: str, scheduler_cls: Any) -> Any:
+    normalized = sampler_name.strip().lower().replace("+", "p").replace(" ", "_")
+    if normalized in {"", "default"}:
+        return scheduler
+    if normalized in {
+        "dpmpp_sde_karras",
+        "dpmpp_sde",
+        "dpmpp_sde_2m_karras",
+        "dpmpp_2m_sde_karras",
+    }:
+        return scheduler_cls.from_config(
+            scheduler.config,
+            algorithm_type="sde-dpmsolver++",
+            use_karras_sigmas=True,
+            solver_order=2,
+        )
+    raise ValueError(f"unsupported layerdiffuse sampler '{sampler_name}'")

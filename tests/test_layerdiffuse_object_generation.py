@@ -15,6 +15,9 @@ from discoverex.adapters.outbound.models.objects.layerdiffuse.generate import (
     _to_rgba_image,
     generate_rgba,
 )
+from discoverex.adapters.outbound.models.objects.layerdiffuse.load import (
+    _configure_scheduler,
+)
 from discoverex.adapters.outbound.models.runtime import RuntimeResolution
 from discoverex.models.types import FxRequest
 
@@ -329,6 +332,34 @@ def test_sample_latents_offloads_unet_after_sampling() -> None:
     assert pipe.unet.moves == ["cpu"]
 
 
+def test_configure_scheduler_maps_dpmpp_sde_karras() -> None:
+    calls: dict[str, object] = {}
+
+    class _FakeScheduler:
+        config = {"foo": "bar"}
+
+    class _FakeSchedulerCls:
+        @staticmethod
+        def from_config(config: object, **kwargs: object) -> str:
+            calls["config"] = config
+            calls["kwargs"] = kwargs
+            return "configured"
+
+    configured = _configure_scheduler(
+        scheduler=_FakeScheduler(),
+        sampler_name="DPM++ SDE Karras",
+        scheduler_cls=_FakeSchedulerCls,
+    )
+
+    assert configured == "configured"
+    assert calls["config"] == {"foo": "bar"}
+    assert calls["kwargs"] == {
+        "algorithm_type": "sde-dpmsolver++",
+        "use_karras_sigmas": True,
+        "solver_order": 2,
+    }
+
+
 def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -362,7 +393,13 @@ def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
         return f"/tmp/{filename}"
 
     fake_torch = SimpleNamespace(float16="float16", float32="float32")
+    class _FakeSchedulerCls:
+        @staticmethod
+        def from_config(config: object, **kwargs: object) -> object:
+            return SimpleNamespace(config=config, kwargs=kwargs)
+
     fake_diffusers = SimpleNamespace(
+        DPMSolverMultistepScheduler=_FakeSchedulerCls,
         StableDiffusionPipeline=_FakePipe,
         StableDiffusionXLPipeline=_FakePipe,
     )
@@ -417,6 +454,7 @@ def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
         enable_xformers_memory_efficient_attention=True,
         enable_fp8_layerwise_casting=False,
         enable_channels_last=True,
+        sampler="dpmpp_sde_karras",
     )
     handle = SimpleNamespace(dtype="float16")
 
