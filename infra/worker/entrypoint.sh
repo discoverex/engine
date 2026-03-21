@@ -26,6 +26,9 @@ UV_CACHE_DIR="${UV_CACHE_DIR:-${CACHE_DIR}/uv}"
 SUMMARY="$(
   /opt/venv/bin/python -m infra.worker.client_env summary --default-queue "${PRIMARY_QUEUE}"
 )"
+ENV_REPORT="$(
+  /opt/venv/bin/python -m infra.worker.client_env report --default-queue "${PRIMARY_QUEUE}"
+)"
 
 export DISCOVEREX_WORKER_RUNTIME_DIR="${RUNTIME_ROOT}"
 export DISCOVEREX_CACHE_DIR="${CACHE_DIR}"
@@ -50,6 +53,7 @@ done
 IFS="${OLD_IFS}"
 
 log "startup summary: ${SUMMARY}"
+log "env report: ${ENV_REPORT}"
 log "watched queues: ${WORK_QUEUES}"
 log "launching: $*"
 

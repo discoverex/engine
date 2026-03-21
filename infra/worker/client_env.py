@@ -19,8 +19,23 @@ class WorkerStartupSummary:
     prefect_work_pool: str
     prefect_work_queue: str
     checkpoint_dir: str
+    mlflow_tracking_uri: str
+    mlflow_s3_endpoint_url: str
+    artifact_bucket: str
+    metadata_db_url: str
+    aws_access_key_id_present: bool
+    aws_secret_access_key_present: bool
     custom_header_keys: list[str]
     cf_access_configured: bool
+
+
+def _display_value(value: str) -> str:
+    text = value.strip()
+    if not text:
+        return ""
+    if len(text) <= 12:
+        return "***"
+    return f"{text[:6]}...{text[-4:]}"
 
 
 def build_prefect_client_headers(
@@ -112,17 +127,45 @@ def startup_summary(
         prefect_work_pool=updated.get("PREFECT_WORK_POOL", ""),
         prefect_work_queue=updated.get("PREFECT_WORK_QUEUE", ""),
         checkpoint_dir=updated.get("ORCHESTRATOR_CHECKPOINT_DIR", ""),
+        mlflow_tracking_uri=updated.get("MLFLOW_TRACKING_URI", ""),
+        mlflow_s3_endpoint_url=updated.get("MLFLOW_S3_ENDPOINT_URL", ""),
+        artifact_bucket=updated.get("ARTIFACT_BUCKET", ""),
+        metadata_db_url=updated.get("METADATA_DB_URL", ""),
+        aws_access_key_id_present=bool(updated.get("AWS_ACCESS_KEY_ID")),
+        aws_secret_access_key_present=bool(updated.get("AWS_SECRET_ACCESS_KEY")),
         custom_header_keys=header_keys,
         cf_access_configured=bool(updated.get("CF_ACCESS_CLIENT_ID"))
         and bool(updated.get("CF_ACCESS_CLIENT_SECRET")),
     )
 
 
+def startup_env_report(
+    env: Mapping[str, str] | None = None, *, default_queue: str | None = None
+) -> dict[str, object]:
+    summary = startup_summary(env, default_queue=default_queue)
+    return {
+        "prefect_api_url": summary.prefect_api_url,
+        "prefect_work_pool": summary.prefect_work_pool,
+        "prefect_work_queue": summary.prefect_work_queue,
+        "checkpoint_dir": summary.checkpoint_dir,
+        "mlflow_tracking_uri": _display_value(summary.mlflow_tracking_uri),
+        "mlflow_s3_endpoint_url": _display_value(summary.mlflow_s3_endpoint_url),
+        "artifact_bucket": summary.artifact_bucket,
+        "metadata_db_url": _display_value(summary.metadata_db_url),
+        "aws_access_key_id": "set" if summary.aws_access_key_id_present else "unset",
+        "aws_secret_access_key": (
+            "set" if summary.aws_secret_access_key_present else "unset"
+        ),
+        "custom_header_keys": summary.custom_header_keys,
+        "cf_access_configured": summary.cf_access_configured,
+    }
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Prepare Prefect client environment for embedded worker runtime."
     )
-    parser.add_argument("command", choices=("shell", "summary"))
+    parser.add_argument("command", choices=("shell", "summary", "report"))
     parser.add_argument("--default-queue", default="")
     return parser.parse_args()
 
@@ -139,6 +182,14 @@ def main() -> int:
                 dataclasses.asdict(
                     startup_summary(default_queue=args.default_queue or None)
                 ),
+                ensure_ascii=True,
+                sort_keys=True,
+            )
+        )
+    if args.command == "report":
+        print(
+            json.dumps(
+                startup_env_report(default_queue=args.default_queue or None),
                 ensure_ascii=True,
                 sort_keys=True,
             )
