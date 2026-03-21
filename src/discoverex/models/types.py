@@ -85,6 +85,8 @@ class InpaintPrediction(TypedDict, total=False):
     candidate_image_ref: str
     object_image_ref: str
     object_mask_ref: str
+    processed_object_image_ref: str
+    processed_object_mask_ref: str
     composited_image_ref: str
     precomposited_image_ref: str
     blend_mask_ref: str

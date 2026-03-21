@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from PIL import Image
 
@@ -10,8 +11,10 @@ from discoverex.application.use_cases.generate_verify_v2 import (
     _bucket_patch_size,
     _crop_object_for_patch_selection,
     _find_best_patch,
+    _generate_objects,
     _harmonize_rgba,
 )
+from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
 from discoverex.config_loader import load_pipeline_config
 
 
@@ -246,3 +249,63 @@ def test_find_best_patch_error_includes_diagnostics(tmp_path: Path) -> None:
 
     assert "selected_boxes=1" in message
     assert "primary:" in message
+
+
+def test_generate_objects_uses_distinct_prompt_per_region(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    seen_prompts: list[str] = []
+
+    def fake_generate_region_objects(**kwargs):
+        seen_prompts.append(kwargs["object_prompt"])
+        region = kwargs["regions"][0]
+        return {
+            region.region_id: GeneratedObjectAsset(
+                region_id=region.region_id,
+                candidate_ref=str(tmp_path / f"{region.region_id}.candidate.png"),
+                object_ref=str(tmp_path / f"{region.region_id}.object.png"),
+                object_mask_ref=str(tmp_path / f"{region.region_id}.mask.png"),
+                width=32,
+                height=32,
+            )
+        }
+
+    monkeypatch.setattr(
+        "discoverex.application.use_cases.generate_verify_v2.generate_region_objects",
+        fake_generate_region_objects,
+    )
+
+    context = SimpleNamespace(
+        object_generator_model=SimpleNamespace(
+            load=lambda version: SimpleNamespace(model_id=version),
+        ),
+        model_versions=SimpleNamespace(object_generator="object-gen-v1"),
+    )
+    regions = [
+        Region(
+            region_id=f"r-{index}",
+            geometry=Geometry(type="bbox", bbox=BBox(x=0.0, y=0.0, w=32.0, h=32.0)),
+            role=RegionRole.CANDIDATE,
+            source=RegionSource.MANUAL,
+            attributes={},
+            version=1,
+        )
+        for index in range(1, 4)
+    ]
+
+    generated = _generate_objects(
+        context=context,
+        scene_dir=tmp_path,
+        regions=regions,
+        object_prompt="butterfly | antique brass key | crystal wine glass",
+        object_negative_prompt="blurry",
+        object_generation_size=512,
+    )
+
+    assert list(generated) == ["r-1", "r-2", "r-3"]
+    assert seen_prompts == [
+        "butterfly",
+        "antique brass key",
+        "crystal wine glass",
+    ]

@@ -35,6 +35,8 @@ inputs:
     - models.object_generator.precision=fp16
     - models/hidden_region=dummy
     - models/inpaint=sdxl_gpu_layerdiffuse_hidden_object_v1
+    - models.inpaint.final_context_size=384
+    - models.inpaint.overlay_alpha=0.3
     - models/perception=hf
     - models/fx=copy_image
     - runtime.model_runtime.offload_mode=sequential

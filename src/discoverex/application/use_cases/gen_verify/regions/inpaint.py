@@ -156,6 +156,8 @@ def _generate_single_region(
         current_composite_ref = composited_ref
     object_ref = details.get("object_image_ref") or object_asset.object_ref
     object_mask_ref = details.get("object_mask_ref") or object_asset.object_mask_ref
+    processed_object_ref = details.get("processed_object_image_ref") or object_ref
+    processed_object_mask_ref = details.get("processed_object_mask_ref") or object_mask_ref
     patch_ref = details.get("patch_image_ref") or object_asset.object_ref
     details = {
         **details,
@@ -190,6 +192,8 @@ def _generate_single_region(
         object_mask_ref=object_mask_ref,
         patch_ref=patch_ref,
         raw_alpha_mask_ref=object_asset.raw_alpha_mask_ref,
+        processed_object_ref=processed_object_ref,
+        processed_object_mask_ref=processed_object_mask_ref,
         details=details,
     )
     prompt_record = build_prompt_record(

@@ -266,6 +266,12 @@ class SdxlInpaintModel:
                 result["candidate_image_ref"] = str(composited_ref["candidate"])
             result["object_image_ref"] = str(composited_ref["object"])
             result["object_mask_ref"] = str(composited_ref["mask"])
+            if "processed_object" in composited_ref:
+                result["processed_object_image_ref"] = str(composited_ref["processed_object"])
+            if "processed_object_mask" in composited_ref:
+                result["processed_object_mask_ref"] = str(
+                    composited_ref["processed_object_mask"]
+                )
             result["composited_image_ref"] = str(composited_ref["composited"])
             if "precomposited" in composited_ref:
                 result["precomposited_image_ref"] = str(composited_ref["precomposited"])
@@ -568,15 +574,9 @@ class SdxlInpaintModel:
             guidance_scale=self.core_blend_cfg,
             backend_kind="core",
         )
-        shadowed = self._apply_direct_shadow(
-            image=core_stage["composited"],
-            object_mask=placement_object_mask,
-            target_bbox=placement_bbox,
-        )
-        shadow_path = save_image(shadowed, output.with_suffix(".shadow.png"))
         final_stage = self._run_object_blend_pass(
             handle=handle,
-            source_image=shadowed,
+            source_image=core_stage["composited"],
             target_bbox=placement_bbox,
             localized_mask=placement_object_mask,
             prompt=(
@@ -588,6 +588,17 @@ class SdxlInpaintModel:
             num_inference_steps=self.final_polish_steps,
             guidance_scale=self.final_polish_cfg,
             backend_kind="final",
+        )
+        processed_object, processed_mask = self._extract_processed_object_layer(
+            composited=final_stage["composited"],
+            target_bbox=placement_bbox,
+            object_mask=placement_object_mask,
+        )
+        processed_object_path = save_image(
+            processed_object, output.with_suffix(".layer.png")
+        )
+        processed_mask_path = save_image(
+            processed_mask, output.with_suffix(".layer-mask.png")
         )
         composited_path = save_image(final_stage["composited"], output)
         patch_path = save_image(
@@ -616,6 +627,8 @@ class SdxlInpaintModel:
             "candidate": Path(str(candidate_ref)),
             "object": refined_object_path,
             "mask": refined_mask_path,
+            "processed_object": processed_object_path,
+            "processed_object_mask": processed_mask_path,
             "composited": composited_path,
             "precomposited": precomposited_path,
             "blend_mask": core_mask_path,
@@ -624,7 +637,6 @@ class SdxlInpaintModel:
             "edge_blend": edge_patch_path,
             "core_blend": core_patch_path,
             "final_polish": final_patch_path,
-            "shadow": shadow_path,
             "variant_manifest": variant_manifest_path,
             "selected_variant": selected_variant_path,
             "selected_bbox": placement_bbox,
@@ -1188,6 +1200,25 @@ class SdxlInpaintModel:
             patch=composited_crop.convert("RGB"),
             crop_bbox=crop_bbox_with_padding,
         )
+
+    def _extract_processed_object_layer(
+        self,
+        *,
+        composited: Any,
+        target_bbox: tuple[int, int, int, int],
+        object_mask: Any,
+    ) -> tuple[Any, Any]:
+        from PIL import Image  # type: ignore
+
+        left, top, right, bottom = target_bbox
+        width = max(1, int(right - left))
+        height = max(1, int(bottom - top))
+        cropped = crop_bbox(composited, target_bbox).convert("RGBA")
+        resized_mask = object_mask.convert("L").resize((width, height))
+        output = Image.new("RGBA", (width, height), color=(0, 0, 0, 0))
+        output.paste(cropped, (0, 0), resized_mask)
+        output.putalpha(resized_mask)
+        return output, resized_mask
 
     def _interpolate(self, bounds: tuple[float, float], fraction: float) -> float:
         low, high = bounds

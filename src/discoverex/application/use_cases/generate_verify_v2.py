@@ -31,6 +31,7 @@ from discoverex.application.use_cases.gen_verify.model_lifecycle import (
 from discoverex.application.use_cases.gen_verify.object_pipeline import (
     GeneratedObjectAsset,
     generate_region_objects,
+    resolve_object_prompts,
 )
 from discoverex.application.use_cases.gen_verify.persistence import (
     save_scene,
@@ -340,7 +341,8 @@ def _generate_objects(
     object_generation_size: int,
 ) -> dict[str, GeneratedObjectAsset]:
     generated: dict[str, GeneratedObjectAsset] = {}
-    for region in regions:
+    region_prompts = resolve_object_prompts(object_prompt, total_regions=len(regions))
+    for region, region_prompt in zip(regions, region_prompts, strict=True):
         _stdout_debug(f"generate_verify_v2 object_region_load start region={region.region_id}")
         handle = context.object_generator_model.load(context.model_versions.object_generator)
         try:
@@ -350,7 +352,7 @@ def _generate_objects(
                     scene_dir=scene_dir,
                     regions=[region],
                     object_handle=handle,
-                    object_prompt=object_prompt,
+                    object_prompt=region_prompt,
                     object_negative_prompt=object_negative_prompt,
                     object_generation_size=object_generation_size,
                 )

@@ -17,6 +17,8 @@ class CandidateLayerPayload(TypedDict, total=False):
     candidate_image_ref: str
     object_image_ref: str
     object_mask_ref: str
+    processed_object_image_ref: str
+    processed_object_mask_ref: str
     raw_alpha_mask_ref: str
     patch_image_ref: str
     precomposited_image_ref: str
@@ -60,6 +62,8 @@ class ObjectSourceEntry(TypedDict, total=False):
     center: list[float]
     candidate_image_ref: str
     object_image_ref: str
+    processed_object_image_ref: str
+    processed_object_mask_ref: str
     layer_image_ref: str
     object_mask_ref: str
     raw_alpha_mask_ref: str

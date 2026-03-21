@@ -92,7 +92,11 @@ def export_source_object_layer(
     candidate: CandidateLayerPayload,
     source_layers_dir: Path,
 ) -> Path | None:
-    source_ref = candidate.get("object_image_ref") or candidate.get("candidate_image_ref")
+    source_ref = (
+        candidate.get("layer_image_ref")
+        or candidate.get("object_image_ref")
+        or candidate.get("candidate_image_ref")
+    )
     if not isinstance(source_ref, str):
         return None
     source_path = Path(source_ref)

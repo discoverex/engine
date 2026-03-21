@@ -31,9 +31,15 @@ def record_layer_candidate(
     object_mask_ref: object,
     patch_ref: object,
     raw_alpha_mask_ref: object | None = None,
+    processed_object_ref: object | None = None,
+    processed_object_mask_ref: object | None = None,
     details: InpaintPrediction | None = None,
 ) -> None:
-    layer_ref = object_ref if isinstance(object_ref, str) and object_ref else patch_ref
+    layer_ref = (
+        processed_object_ref
+        if isinstance(processed_object_ref, str) and processed_object_ref
+        else object_ref if isinstance(object_ref, str) and object_ref else patch_ref
+    )
     if not isinstance(layer_ref, str) or not layer_ref:
         return
     candidates = background.metadata.setdefault("inpaint_layer_candidates", [])
@@ -48,6 +54,10 @@ def record_layer_candidate(
         "layer_image_ref": layer_ref,
         "bbox": bbox_payload(region),
     }
+    if isinstance(processed_object_ref, str) and processed_object_ref:
+        payload["processed_object_image_ref"] = processed_object_ref
+    if isinstance(processed_object_mask_ref, str) and processed_object_mask_ref:
+        payload["processed_object_mask_ref"] = processed_object_mask_ref
     if isinstance(raw_alpha_mask_ref, str) and raw_alpha_mask_ref:
         payload["raw_alpha_mask_ref"] = raw_alpha_mask_ref
     if details is not None:

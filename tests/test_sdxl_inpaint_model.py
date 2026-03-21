@@ -381,8 +381,9 @@ def test_layerdiffuse_hidden_object_mode_writes_stage_artifacts(
     assert Path(pred["core_mask_ref"]).exists()
     assert Path(pred["edge_blend_ref"]).exists()
     assert Path(pred["core_blend_ref"]).exists()
-    assert Path(pred["shadow_ref"]).exists()
     assert Path(pred["final_polish_ref"]).exists()
+    assert Path(pred["processed_object_image_ref"]).exists()
+    assert Path(pred["processed_object_mask_ref"]).exists()
     assert len(captured) == 3
     assert captured[0]["label"] == "edge"
     assert captured[1]["label"] == "core"
@@ -390,4 +391,5 @@ def test_layerdiffuse_hidden_object_mode_writes_stage_artifacts(
     assert captured[0]["strength"] == pytest.approx(0.18)
     assert captured[1]["strength"] == pytest.approx(0.35)
     assert captured[2]["strength"] == pytest.approx(0.12)
+    assert captured[2]["image"].size == (96, 96)
     assert cast(Image.Image, captured[0]["mask"]).getbbox() is not None

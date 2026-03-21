@@ -20,6 +20,8 @@ def export_originals(
         for key in (
             "candidate_image_ref",
             "object_image_ref",
+            "processed_object_image_ref",
+            "processed_object_mask_ref",
             "object_mask_ref",
             "raw_alpha_mask_ref",
             "patch_image_ref",
