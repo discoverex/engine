@@ -174,11 +174,46 @@ bezier 보간은 뷰어의 렌더 주기에 맞춰 평가되므로, fr=16이면 
 fr=60 업샘플링 시 `round()` 사용 → 64프레임이 240슬롯에 불균등 배분 (3 or 4프레임).
 50ms/67ms 교차 → 시각적 마이크로 스터터.
 
-### 최종: fr=60 + float ip/op + bezier (프리뷰와 동일)
+### 3차: fr=60 + float ip/op + precomp bezier (여전히 끊김)
 
-float ip/op로 모든 모션 프레임이 정확히 3.75 Lottie 프레임 = 62.5ms.
-bezier 키프레임은 뷰어가 60fps에서 부드럽게 보간.
-프리뷰의 bodymovin(60fps) + CSS animate(60fps)와 구조적으로 동일.
+float ip/op로 균등 hold는 해결했으나, bodymovin 테스트 페이지에서도 여전히 끊김 확인.
+원인 분리 테스트(A~D) 결과:
+
+| 테스트 | 구조 | fr | 결과 |
+|--------|------|-----|------|
+| A. 직접 레이어 | 이미지 1장 | 16 | 부드러움 |
+| B. 직접 레이어 | 이미지 1장 | 60 | **가장 부드러움** |
+| C. 프리컴프+래퍼 | 이미지 1장 | 16 | 부드러움 |
+| D. 프리컴프+래퍼 | 64장 base64 PNG | 60 | **끊김** |
+
+**원인**: 프리컴프 + 64장 이미지 조합에서 래퍼 transform이 매 프레임 precomp 전체를
+재합성(re-composite)해야 하므로 렌더링 오버헤드 발생. CSS 프리뷰는 bodymovin(SVG)과
+CSS animate(GPU)가 분리되어 이 문제 없음.
+
+### 최종: fr=60 + float ip/op + 직접 레이어 (프리컴프 제거)
+
+프리컴프를 제거하고 **각 이미지 레이어에 직접 transform 적용** — 테스트 B와 동일 구조.
+
+```python
+# 각 레이어의 visibility window(~62.5ms) 동안의 transform 값을 계산
+for layer in result.get("layers", []):
+    t0, t1 = lip / total, lop / total
+    vs = _eval_at(keyframes, t0, bez, t_scale)  # window 시작 시점의 값
+    ve = _eval_at(keyframes, t1, bez, t_scale)  # window 종료 시점의 값
+
+    layer["ks"]["p"] = {"a": 1, "k": [
+        {"t": lip, "s": [cx+vs["tX"], cy+vs["tY"], 0],
+         "e": [cx+ve["tX"], cy+ve["tY"], 0], "o": lin3, "i": lin3},
+        {"t": lop, "s": [cx+ve["tX"], cy+ve["tY"], 0]},
+    ]}
+    # r, s, o도 동일하게 적용
+```
+
+**효과**:
+- 프리컴프 재합성 오버헤드 제거 — 매 순간 1개 레이어만 렌더링
+- 테스트 B(가장 부드러움)와 동일한 렌더링 구조
+- CSS bezier 곡선을 Newton's method로 정확히 평가하여 각 레이어에 베이크
+- 62.5ms 단위 미세 구간은 linear 보간으로 충분 (시각적 차이 없음)
 
 ---
 
@@ -186,11 +221,10 @@ bezier 키프레임은 뷰어가 60fps에서 부드럽게 보간.
 
 | 수정 항목 | KEYFRAME_ONLY | MOTION_NEEDED |
 |----------|:---:|:---:|
-| Lottie 네이티브 bezier | O | O |
+| 직접 레이어 (프리컴프 없음) | O | O |
 | fr=60 업샘플링 (float ip/op) | — (이미 fr=60) | O |
-| precomp fr 제거 | O | O |
-| 좌표 스케일링 | O | O |
-| 캔버스 확장 | O | O |
+| 좌표 스케일링 + 캔버스 확장 | O | O |
+| CSS bezier → 레이어별 transform 베이크 | O | O |
 | preview_object_size | O | O |
 
 ---
@@ -201,5 +235,5 @@ bezier 키프레임은 뷰어가 60fps에서 부드럽게 보간.
 ruff check    : All checks passed
 mypy strict   : Success (0 errors)
 pytest        : 전체 통과 (animate/lottie/keyframe 34건 포함)
-200줄 제약    : 174줄 ✅
+200줄 제약    : 164줄 ✅
 ```
