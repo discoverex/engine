@@ -44,6 +44,9 @@ class RegionSelectionConfig(BaseModel):
     iou_threshold: float = 0.12
     stride_ratio: float = 0.3
     scale_factors: list[float] = Field(default_factory=lambda: [1.0, 1.15])
+    enable_fallback_relaxation: bool = True
+    fallback_iou_threshold: float = 0.35
+    fallback_scale_factors: list[float] = Field(default_factory=lambda: [0.9, 1.0])
 
 
 class ObjectVariantsConfig(BaseModel):

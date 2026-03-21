@@ -410,8 +410,13 @@ def _build_object_variants(
 ) -> list[dict[str, Any]]:
     variants: list[dict[str, Any]] = []
     with Image.open(asset.object_ref).convert("RGBA") as object_image:
+        base_image = _crop_object_for_patch_selection(object_image=object_image, asset=asset)
         for rotation in config.object_variants.rotation_degrees:
-            rotated = object_image.rotate(rotation, expand=True, resample=Image.Resampling.BICUBIC)
+            rotated = base_image.rotate(
+                rotation,
+                expand=True,
+                resample=Image.Resampling.BICUBIC,
+            )
             for scale in config.object_variants.scale_factors:
                 width = max(1, int(round(rotated.width * scale)))
                 height = max(1, int(round(rotated.height * scale)))
@@ -425,6 +430,28 @@ def _build_object_variants(
                 if len(variants) >= config.object_variants.max_variants_per_object:
                     return variants
     return variants
+
+
+def _crop_object_for_patch_selection(
+    *,
+    object_image: Image.Image,
+    asset: GeneratedObjectAsset,
+) -> Image.Image:
+    if asset.tight_bbox is None:
+        return object_image.copy()
+    left, top, right, bottom = asset.tight_bbox
+    safe_box = (
+        max(0, min(object_image.width, int(left))),
+        max(0, min(object_image.height, int(top))),
+        max(0, min(object_image.width, int(right))),
+        max(0, min(object_image.height, int(bottom))),
+    )
+    if safe_box[0] >= safe_box[2] or safe_box[1] >= safe_box[3]:
+        return object_image.copy()
+    cropped = object_image.crop(safe_box)
+    if cropped.getbbox() is None:
+        return object_image.copy()
+    return cropped
 
 
 def _pad_rgba(image: Image.Image, padding: int) -> Image.Image:
@@ -444,6 +471,47 @@ def _find_best_patch(
     variants: list[dict[str, Any]],
     selected_boxes: list[tuple[float, float, float, float]],
 ) -> dict[str, Any]:
+    best, diagnostics = _find_best_patch_with_strategy(
+        config=config,
+        background_image=background_image,
+        variants=variants,
+        selected_boxes=selected_boxes,
+        iou_threshold=config.region_selection.iou_threshold,
+        scale_factors=tuple(config.region_selection.scale_factors),
+        strategy_label="primary",
+    )
+    if best is not None:
+        return best
+    if config.region_selection.enable_fallback_relaxation:
+        fallback_best, fallback_diagnostics = _find_best_patch_with_strategy(
+            config=config,
+            background_image=background_image,
+            variants=variants,
+            selected_boxes=selected_boxes,
+            iou_threshold=config.region_selection.fallback_iou_threshold,
+            scale_factors=tuple(config.region_selection.fallback_scale_factors),
+            strategy_label="fallback",
+        )
+        diagnostics.extend(fallback_diagnostics)
+        if fallback_best is not None:
+            return fallback_best
+    diagnostic_text = "; ".join(diagnostics) if diagnostics else "no diagnostics"
+    raise RuntimeError(
+        "patch_similarity_v2 could not find a valid candidate patch "
+        f"(selected_boxes={len(selected_boxes)}; {diagnostic_text})"
+    )
+
+
+def _find_best_patch_with_strategy(
+    *,
+    config: PipelineConfig,
+    background_image: np.ndarray,
+    variants: list[dict[str, Any]],
+    selected_boxes: list[tuple[float, float, float, float]],
+    iou_threshold: float,
+    scale_factors: tuple[float, ...],
+    strategy_label: str,
+) -> tuple[dict[str, Any] | None, list[str]]:
     best: dict[str, Any] | None = None
     height, width = background_image.shape[:2]
     coarse_feature_names = ("lab", "lbp")
@@ -454,12 +522,13 @@ def _find_best_patch(
     )
     top_k = max(1, int(config.patch_similarity.top_k_candidates))
     variant_tasks: list[tuple[str, np.ndarray, tuple[int, int]]] = []
+    diagnostics: list[str] = []
     for variant in variants:
         rgba = variant["image"]
         variant_id = str(variant["variant_id"])
         patch_w = min(width, max(1, max(config.patch_similarity.min_patch_side, rgba.width)))
         patch_h = min(height, max(1, max(config.patch_similarity.min_patch_side, rgba.height)))
-        for scale_factor in config.region_selection.scale_factors:
+        for scale_factor in scale_factors:
             scaled_w = min(width, max(1, int(round(patch_w * scale_factor))))
             scaled_h = min(height, max(1, int(round(patch_h * scale_factor))))
             bucket_size = _bucket_patch_size((scaled_w, scaled_h), config=config)
@@ -505,12 +574,14 @@ def _find_best_patch(
         candidates = candidate_cache[patch_size]
         variant_features = variant_feature_cache[(variant_id, patch_size)]
         coarse_ranked: list[tuple[float, int, dict[str, Any], dict[str, float]]] = []
+        skipped_for_iou = 0
         for candidate_index, candidate in enumerate(candidates):
             bbox = candidate["bbox"]
             if any(
-                bbox_iou(bbox, taken) > config.region_selection.iou_threshold
+                bbox_iou(bbox, taken) > iou_threshold
                 for taken in selected_boxes
             ):
+                skipped_for_iou += 1
                 continue
             feature_scores = _score_feature_bundle(
                 config=config,
@@ -525,10 +596,15 @@ def _find_best_patch(
             else:
                 heapq.heappushpop(coarse_ranked, entry)
         if not coarse_ranked:
+            diagnostics.append(
+                f"{strategy_label}:variant={variant_id}:patch={patch_size}:"
+                f"candidates={len(candidates)}:iou_filtered={skipped_for_iou}:top_k=0"
+            )
             continue
         _stdout_debug(
             "generate_verify_v2 patch_selection_coarse "
-            f"variant={variant_id} candidates={len(candidates)} top_k={len(coarse_ranked)}"
+            f"strategy={strategy_label} variant={variant_id} patch={patch_size} "
+            f"candidates={len(candidates)} iou_filtered={skipped_for_iou} top_k={len(coarse_ranked)}"
         )
         fine_variant_features: dict[str, np.ndarray] = {}
         if fine_feature_names:
@@ -575,10 +651,13 @@ def _find_best_patch(
                     "score": score,
                     "variant_id": variant_id,
                     "feature_scores": feature_scores,
+                    "selection_strategy": strategy_label,
                 }
-    if best is None:
-        raise RuntimeError("patch_similarity_v2 could not find a valid candidate patch")
-    return best
+    if best is not None:
+        diagnostics.append(
+            f"{strategy_label}:selected_variant={best['variant_id']}:score={float(best['score']):.4f}"
+        )
+    return best, diagnostics
 
 
 def _bucket_patch_size(

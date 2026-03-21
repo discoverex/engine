@@ -127,6 +127,9 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
 
     monkeypatch.setattr(deploy_flows, "_load_flow", _fake_load_flow)
     monkeypatch.setattr(
+        deploy_flows, "_deployment_source_root", lambda: "/tmp/discoverex-engine"
+    )
+    monkeypatch.setattr(
         deploy_flows,
         "_deployment_job_variables",
         lambda work_pool_name: {
@@ -154,7 +157,7 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
 
     assert deployment_id == "deployment-123"
     assert captured["entrypoint"] == "prefect_flow.py:run_generate_job_flow"
-    assert captured["source"] == "/app"
+    assert captured["source"] == "/tmp/discoverex-engine"
     assert captured["source_entrypoint"] == "prefect_flow.py:run_generate_job_flow"
     assert captured["deploy_kwargs"] == {
         "name": "discoverex-naturalness-experiment-feat-remote-source",
@@ -306,6 +309,9 @@ def test_deploy_embedded_flow_omits_image_for_process_pool(monkeypatch: Any) -> 
             return _FakeSourcedFlow()
 
     monkeypatch.setattr(deploy_flows, "_load_flow", lambda _entrypoint: _FakeFlow())
+    monkeypatch.setattr(
+        deploy_flows, "_deployment_source_root", lambda: "/tmp/discoverex-engine"
+    )
     monkeypatch.setattr(
         deploy_flows,
         "_deployment_job_variables",

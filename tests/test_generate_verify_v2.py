@@ -8,6 +8,7 @@ from discoverex.application.use_cases.gen_verify.objects.types import GeneratedO
 from discoverex.application.use_cases.generate_verify_v2 import (
     _build_object_variants,
     _bucket_patch_size,
+    _crop_object_for_patch_selection,
     _find_best_patch,
     _harmonize_rgba,
 )
@@ -37,6 +38,29 @@ def test_build_object_variants_respects_limit(tmp_path: Path) -> None:
     cfg = load_pipeline_config("generate", overrides=["flows/generate=generate_verify_v2"])
     variants = _build_object_variants(config=cfg, asset=asset)
     assert 1 <= len(variants) <= cfg.object_variants.max_variants_per_object
+
+
+def test_crop_object_for_patch_selection_uses_tight_bbox(tmp_path: Path) -> None:
+    object_path = tmp_path / "object.png"
+    mask_path = tmp_path / "mask.png"
+    image = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
+    for x in range(48, 80):
+        for y in range(40, 72):
+            image.putpixel((x, y), (240, 120, 80, 255))
+    image.save(object_path)
+    Image.new("L", (128, 128), 255).save(mask_path)
+    asset = GeneratedObjectAsset(
+        region_id="r-1",
+        candidate_ref=str(object_path),
+        object_ref=str(object_path),
+        object_mask_ref=str(mask_path),
+        width=32,
+        height=32,
+        tight_bbox=(48, 40, 80, 72),
+    )
+    with Image.open(object_path).convert("RGBA") as object_image:
+        cropped = _crop_object_for_patch_selection(object_image=object_image, asset=asset)
+    assert cropped.size == (32, 32)
 
 
 def test_find_best_patch_returns_bbox_for_synthetic_background(tmp_path: Path) -> None:
@@ -71,6 +95,48 @@ def test_find_best_patch_returns_bbox_for_synthetic_background(tmp_path: Path) -
     )
     assert result["score"] >= 0.0
     assert len(result["bbox"]) == 4
+
+
+def test_find_best_patch_uses_fallback_relaxation_when_primary_has_no_candidates(
+    tmp_path: Path,
+) -> None:
+    object_path = tmp_path / "object.png"
+    mask_path = tmp_path / "mask.png"
+    Image.new("RGBA", (40, 40), (180, 30, 30, 255)).save(object_path)
+    Image.new("L", (40, 40), 255).save(mask_path)
+    asset = GeneratedObjectAsset(
+        region_id="r-1",
+        candidate_ref=str(object_path),
+        object_ref=str(object_path),
+        object_mask_ref=str(mask_path),
+        width=40,
+        height=40,
+    )
+    cfg = load_pipeline_config(
+        "generate",
+        overrides=[
+            "flows/generate=generate_verify_v2",
+            "patch_similarity.min_patch_side=8",
+            "region_selection.scale_factors=[1.0]",
+            "region_selection.fallback_scale_factors=[1.0]",
+            "region_selection.iou_threshold=0.01",
+            "region_selection.fallback_iou_threshold=0.8",
+            "region_selection.stride_ratio=0.5",
+        ],
+    )
+    variants = _build_object_variants(config=cfg, asset=asset)[:1]
+    background = Image.new("RGB", (96, 96), (30, 30, 180))
+    selected_boxes = [(0.0, 0.0, 40.0, 40.0), (56.0, 0.0, 40.0, 40.0)]
+
+    result = _find_best_patch(
+        config=cfg,
+        background_image=__import__("numpy").asarray(background),
+        variants=variants,
+        selected_boxes=selected_boxes,
+    )
+
+    assert result["score"] >= 0.0
+    assert result["selection_strategy"] == "fallback"
 
 
 def test_bucket_patch_size_quantizes_for_candidate_cache() -> None:
@@ -136,3 +202,47 @@ def test_harmonize_rgba_preserves_alpha() -> None:
     harmonized = _harmonize_rgba(rgba=rgba, patch=patch, alpha=0.5)
     assert harmonized.mode == "RGBA"
     assert harmonized.getchannel("A").getextrema() == (200, 200)
+
+
+def test_find_best_patch_error_includes_diagnostics(tmp_path: Path) -> None:
+    object_path = tmp_path / "object.png"
+    mask_path = tmp_path / "mask.png"
+    Image.new("RGBA", (40, 40), (180, 30, 30, 255)).save(object_path)
+    Image.new("L", (40, 40), 255).save(mask_path)
+    asset = GeneratedObjectAsset(
+        region_id="r-1",
+        candidate_ref=str(object_path),
+        object_ref=str(object_path),
+        object_mask_ref=str(mask_path),
+        width=40,
+        height=40,
+    )
+    cfg = load_pipeline_config(
+        "generate",
+        overrides=[
+            "flows/generate=generate_verify_v2",
+            "patch_similarity.min_patch_side=8",
+            "region_selection.scale_factors=[1.0]",
+            "region_selection.fallback_scale_factors=[1.0]",
+            "region_selection.iou_threshold=0.0",
+            "region_selection.fallback_iou_threshold=0.0",
+            "region_selection.stride_ratio=0.5",
+        ],
+    )
+    variants = _build_object_variants(config=cfg, asset=asset)[:1]
+    background = Image.new("RGB", (96, 96), (30, 30, 180))
+
+    try:
+        _find_best_patch(
+            config=cfg,
+            background_image=__import__("numpy").asarray(background),
+            variants=variants,
+            selected_boxes=[(0.0, 0.0, 96.0, 96.0)],
+        )
+    except RuntimeError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("expected RuntimeError")
+
+    assert "selected_boxes=1" in message
+    assert "primary:" in message

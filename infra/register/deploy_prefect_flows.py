@@ -7,6 +7,7 @@ import json
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from prefect.settings import PREFECT_API_URL, temporary_settings
@@ -19,6 +20,8 @@ from infra.register.branch_deployments import (
 )
 from infra.register.register_orchestrator_job import _extra_headers, _normalize_api_url
 from infra.register.settings import SETTINGS, default_deployment_version
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class DeploymentMetadata(TypedDict, total=False):
@@ -135,6 +138,10 @@ def _load_flow(entrypoint: str) -> Any:
     return getattr(module, attr_name)
 
 
+def _deployment_source_root() -> str:
+    return str(REPO_ROOT)
+
+
 def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
     _validate_required_worker_env()
     runtime_root = SETTINGS.prefect_work_runtime_dir
@@ -231,7 +238,7 @@ def _deploy_embedded_flow(
 ) -> str:
     embedded_flow = cast(Any, _load_flow(flow_entrypoint))
     sourced_flow = embedded_flow.from_source(
-        source="/app",
+        source=_deployment_source_root(),
         entrypoint=flow_entrypoint,
     )
     deploy_kwargs: dict[str, Any] = {

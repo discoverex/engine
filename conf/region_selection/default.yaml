@@ -5,3 +5,8 @@ stride_ratio: 0.3
 scale_factors:
   - 1.0
   - 1.15
+enable_fallback_relaxation: true
+fallback_iou_threshold: 0.35
+fallback_scale_factors:
+  - 0.9
+  - 1.0
