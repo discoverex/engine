@@ -21,7 +21,7 @@ _BEZIER: dict[str, tuple[float, float, float, float]] = {
     "ease-out": (0.0, 0.0, 0.58, 1.0),
     "ease-in-out": (0.42, 0.0, 0.58, 1.0),
 }
-_KF_FPS = 60
+_KF_FPS = 48  # 16×3 — integer multiple avoids 3/4 stutter at any viewer
 
 
 def apply_keyframes_to_lottie(
@@ -43,10 +43,23 @@ def apply_keyframes_to_lottie(
         for layer in result.get("layers", []):
             layer["op"] = total
 
-    # MOTION_NEEDED: keep original fr — no upsampling.
-    # bodymovin evaluates bezier at sub-frame precision via setSubframe(true),
-    # so transforms are smooth at the display refresh rate even at fr=16.
-    # Upsampling to fr=60 increases SVG render load and causes frame drops.
+    # MOTION_NEEDED: upsample to _KF_FPS (48 = 16×3).
+    # Integer multiple of original fr ensures every frame holds for exactly
+    # the same number of composition frames (3), avoiding 3/4 stutter.
+    # 48 fps is smooth without setSubframe and lighter than 60 fps.
+    elif result.get("fr", 16) < _KF_FPS:
+        orig_fr = result["fr"]
+        # Use nearest integer multiple of orig_fr that's >= _KF_FPS
+        mult = max(1, round(_KF_FPS / orig_fr))
+        target_fr = orig_fr * mult
+        new_total = total * mult
+        for layer in result.get("layers", []):
+            layer["ip"] = layer.get("ip", 0) * mult
+            layer["op"] = layer.get("op", 0) * mult
+        result["fr"] = target_fr
+        result["ip"] = 0
+        result["op"] = new_total
+        total = new_total
 
     if total <= 0:
         return result
