@@ -1,4 +1,4 @@
-# Lottie 좌표 스케일링 + 네이티브 Bezier 보간 리포트
+# Lottie 키프레임 통합 리포트
 
 **날짜**: 2026-03-22
 **브랜치**: `wan/test`
@@ -8,175 +8,32 @@
 
 ## 문제
 
-웹 대시보드 프리뷰 대비 내보낸 Lottie 파일에서 세 가지 품질 격차 발생:
+웹 대시보드 프리뷰 대비 내보낸 Lottie 파일에서 품질 격차 발생:
 
-1. **움직임 크기가 작음** — CSS 프리뷰보다 Lottie에서 이동 거리가 눈에 띄게 작음
-2. **프레임이 끊김** — MOTION_NEEDED 경로에서 모션 프레임 끊김 발생
+1. **움직임 크기 불일치** — CSS 프리뷰보다 Lottie에서 이동 거리가 다름
+2. **프레임 끊김** — 다양한 원인으로 모션/키프레임 끊김 발생
 3. **LP0017 오류** — Lottie 뷰어에서 precomp asset의 `"fr"` 필드 경고
-
-두 문제 모두 KEYFRAME_ONLY / MOTION_NEEDED 경로에서 확인.
-
----
-
-## 원인 1: 좌표계 불일치
-
-### CSS 프리뷰
-
-```
-Stage: 800×600px
-Object: 80px (kfObjScale 기본값)
-translate(-60px) → 80px 대비 75% 이동 → 눈에 띄는 점프
-```
-
-### Lottie 내보내기 (수정 전)
-
-```
-Canvas: 480×480
-translate(-60) → 480 대비 12.5% 이동 → 미세한 움직임
-```
-
-CSS `translate(Xpx)`는 스크린 픽셀 단위, Lottie position은 캔버스 단위.
-동일한 값 `-60`이 프리뷰에서는 80px 대비 큰 이동이지만, Lottie에서는 480px 대비 미세한 이동.
-
-### 원인 2: FPS 업샘플링 부작용
-
-초기 접근으로 모션 레이어를 16fps → 60fps로 업샘플링했으나 두 가지 문제 발생:
-
-| 문제 | 원인 |
-|------|------|
-| **LP0017** | precomp asset에 `"fr": 60` 필드 추가 — Lottie 스펙에서 precomp에 `fr`은 비표준 |
-| **프레임 끊김** | 64프레임을 240슬롯에 `round()` 매핑 → 3~4프레임 불균등 hold (50ms vs 67ms) |
-
-실제 파일 분석 (`animation_combined (3).json`):
-
-```
-root:    fr=60, op=240, w=572, h=836
-precomp: fr=60 ← LP0017 원인
-         layer durations: [4,4,3,4,4,3,4,...] ← 불균등 → 시각적 끊김
-wrapper: 241 keyframes ← 프레임별 사전계산 (불필요하게 무거움)
-```
-
-### 근본 원인
-
-fps 업샘플링 + 프레임별 사전계산 접근 자체가 잘못됨.
-Lottie는 자체 bezier 보간 엔진을 갖고 있으므로, 희소 키프레임 + bezier 이징을
-전달하면 플레이어가 자체 디스플레이 레이트로 부드럽게 렌더링.
-
----
-
-## 최종 수정 내용
-
-### 1. Lottie 네이티브 Bezier 보간으로 전면 교체
-
-fps 업샘플링과 프레임별 사전계산(`_resample_css`)을 제거하고,
-CSS 키프레임을 Lottie 키프레임으로 직접 변환:
-
-```python
-# CSS cubic-bezier → Lottie out/in tangent 매핑
-# CSS ease-in-out = cubic-bezier(0.42, 0, 0.58, 1)
-# Lottie: o = {x: [0.42], y: [0]}, i = {x: [0.58], y: [1]}
-
-# 희소 키프레임 (예: hop 8개)에 bezier 이징 첨부
-for idx, kf in enumerate(keyframes):
-    p = {"t": t, "s": [cx + tx, cy + ty, 0]}
-    if idx < len(keyframes) - 1:
-        p["e"] = [cx + ntx, cy + nty, 0]  # end value
-        p["o"] = bez_o3                     # out tangent
-        p["i"] = bez_i3                     # in tangent
-```
-
-**효과**:
-- Lottie 플레이어가 bezier 곡선을 자체 디스플레이 레이트로 부드럽게 보간
-- 프레임별 사전계산 불필요 → 파일 크기 대폭 감소
-
-### 2. fr=60 업샘플링 + float ip/op (끊김 해결)
-
-fr=16인 Lottie는 뷰어가 16fps로만 렌더링하여 프리뷰(60fps)와 차이 발생.
-fr=60으로 올리되, 레이어 타이밍에 **정확한 float 값**을 사용:
-
-```python
-elif result.get("fr", 16) < _KF_FPS:
-    scale = _KF_FPS / orig_fps  # 60/16 = 3.75
-    for layer in result.get("layers", []):
-        layer["ip"] = layer.get("ip", 0) * scale  # float, not round
-        layer["op"] = layer.get("op", 0) * scale  # float, not round
-    result["fr"] = _KF_FPS
-```
-
-| 방식 | Layer 0 | Layer 1 | Layer 2 | 프레임 hold |
-|------|---------|---------|---------|-----------|
-| round() (이전) | ip=0, op=4 | ip=4, op=8 | ip=8, op=11 | 4,4,**3** 불균등 |
-| float (현재) | ip=0, op=3.75 | ip=3.75, op=7.5 | ip=7.5, op=11.25 | **모두 3.75** 균등 |
-
-모든 모션 프레임이 정확히 62.5ms(=3.75/60) 동안 표시 — 원본 16fps와 동일한 타이밍.
-
-### 3. precomp asset에서 `fr` 필드 제거 (LP0017 해결)
-
-```python
-# 수정 전 (LP0017 발생)
-precomp = {"id": precomp_id, "layers": ..., "fr": fps, "nm": "motion_layers"}
-
-# 수정 후 (LP0017 해결)
-precomp = {"id": precomp_id, "layers": ..., "nm": "motion_layers"}
-```
-
-Lottie 스펙에서 precomp asset에 `fr`은 비표준 필드. root composition의 `fr`만 유효.
-
-### 3. 좌표 스케일링 + 캔버스 확장 (유지)
-
-CSS 픽셀 단위 translate 값을 Lottie 캔버스 비율로 스케일링:
-
-```python
-ref = kf_data.get("preview_object_size", 80)
-t_scale = min(w, h) / ref  # 예: 480/80 = 6.0
-# translate 값에 t_scale 적용 후 캔버스를 이동 범위만큼 확장
-```
-
-### 4. 프론트엔드: preview_object_size 전달 (유지)
-
-```javascript
-const exportKfData = {
-  ...kfData,
-  preview_object_size: parseInt(document.getElementById('kfObjScale').value) || 80,
-};
-```
-
----
-
-## 수정 전 vs 최종 (모션 + 키프레임, 4초 64프레임)
-
-| 항목 | 수정 전 (초기) | 중간 (round 업샘플) | 최종 (float + bezier) |
-|------|--------------|-------------------|---------------------|
-| root fr | 16 | 60 | **60** |
-| root op | 64 | 240 | **240** |
-| precomp fr | 없음 | 60 (LP0017) | **없음** |
-| 모션 레이어 ip/op | 정수 균등 | round() 불균등 | **float 균등** |
-| 프레임 hold | 62.5ms 균등 | 50~67ms 불균등 | **62.5ms 균등** |
-| 키프레임 보간 | 64개 사전계산 | 241개 사전계산 | **8개 + bezier** |
-| 보간 품질 | 16fps 뷰어 렌더 | 60fps 뷰어 렌더 | **60fps + bezier** |
-| 파일 항목 수 | 64×4=256 | 241×4=964 | **8×4=32** |
-| LP0017 | 없음 | 발생 | **없음** |
-| 끊김 | 뷰어 16fps 렌더 | 3/4 불균등 | **없음** |
-| 움직임 크기 | 12.5% (작음) | 스케일링 적용 | **스케일링 적용** |
+4. **방향 전환 시 멈춤** — per-segment bezier easing으로 keyframe 경계에서 정지
+5. **속도 차이** — 키프레임이 전체 모션 길이에 매핑되어 느리게 재생
+6. **프레임 짤림** — 캔버스 범위를 벗어나는 이동 시 콘텐츠 클리핑
 
 ---
 
 ## 끊김 원인 분석 히스토리
 
-### 1차: fr=16 + bezier (끊김 지속)
+### 1차: fr=60 + round() ip/op + precomp (끊김 + LP0017)
 
-fr=16으로 설정 시 Lottie 뷰어가 **16fps로만 렌더링**하여 프리뷰(60fps)와 차이 발생.
-bezier 보간은 뷰어의 렌더 주기에 맞춰 평가되므로, fr=16이면 16fps 해상도로 보간됨.
-프리뷰는 bodymovin이 `requestAnimationFrame`(60fps)으로 렌더링하여 부드러움.
+- precomp asset에 `"fr": 60` → LP0017 경고
+- `round()` 매핑 → 64프레임이 240슬롯에 3~4프레임 불균등 hold
+- 241개 프레임별 사전계산 → 불필요하게 무거움
 
-### 2차: fr=60 + round() ip/op (3/4 끊김)
+### 2차: fr=16 + bezier (여전히 끊김)
 
-fr=60 업샘플링 시 `round()` 사용 → 64프레임이 240슬롯에 불균등 배분 (3 or 4프레임).
-50ms/67ms 교차 → 시각적 마이크로 스터터.
+- 뷰어가 `setSubframe` 미사용 시 16fps 정수 프레임으로만 렌더링
+- bezier 보간도 16fps 해상도로만 평가됨
 
-### 3차: fr=60 + float ip/op + precomp bezier (여전히 끊김)
+### 3차: fr=60 + float ip/op + precomp (여전히 끊김)
 
-float ip/op로 균등 hold는 해결했으나, bodymovin 테스트 페이지에서도 여전히 끊김 확인.
 원인 분리 테스트(A~D) 결과:
 
 | 테스트 | 구조 | fr | 결과 |
@@ -186,46 +43,91 @@ float ip/op로 균등 hold는 해결했으나, bodymovin 테스트 페이지에�
 | C. 프리컴프+래퍼 | 이미지 1장 | 16 | 부드러움 |
 | D. 프리컴프+래퍼 | 64장 base64 PNG | 60 | **끊김** |
 
-**원인**: 프리컴프 + 64장 이미지 조합에서 래퍼 transform이 매 프레임 precomp 전체를
-재합성(re-composite)해야 하므로 렌더링 오버헤드 발생. CSS 프리뷰는 bodymovin(SVG)과
-CSS animate(GPU)가 분리되어 이 문제 없음.
+**원인**: 프리컴프 + 64장 이미지 → 매 프레임 precomp 재합성 오버헤드
 
-### 최종: fr=60 + float ip/op + 직접 레이어 (프리컴프 제거)
+### 4차: 직접 레이어 + per-layer animated transform (끊김)
 
-프리컴프를 제거하고 **각 이미지 레이어에 직접 transform 적용** — 테스트 B와 동일 구조.
+64개 레이어에 각각 animated p/r/s/o → 256개 animated 속성 → 렌더 과부하
 
-```python
-# 각 레이어의 visibility window(~62.5ms) 동안의 transform 값을 계산
-for layer in result.get("layers", []):
-    t0, t1 = lip / total, lop / total
-    vs = _eval_at(keyframes, t0, bez, t_scale)  # window 시작 시점의 값
-    ve = _eval_at(keyframes, t1, bez, t_scale)  # window 종료 시점의 값
+### 5차: null parent + fr=60/16 (구조는 OK, 추가 문제 발견)
 
-    layer["ks"]["p"] = {"a": 1, "k": [
-        {"t": lip, "s": [cx+vs["tX"], cy+vs["tY"], 0],
-         "e": [cx+ve["tX"], cy+ve["tY"], 0], "o": lin3, "i": lin3},
-        {"t": lop, "s": [cx+ve["tX"], cy+ve["tY"], 0]},
-    ]}
-    # r, s, o도 동일하게 적용
-```
+- null(ty=3) 1개에 transform, 64 이미지 레이어를 parent로 연결
+- 추가 테스트(F~I) 결과: **null parent + 480x480 캔버스에서 부드러움 확인**
+- 캔버스 확장(578x856) 시 SVG 뷰포트 증가로 프레임 드롭
 
-**효과**:
-- 프리컴프 재합성 오버헤드 제거 — 매 순간 1개 레이어만 렌더링
-- 테스트 B(가장 부드러움)와 동일한 렌더링 구조
-- CSS bezier 곡선을 Newton's method로 정확히 평가하여 각 레이어에 베이크
-- 62.5ms 단위 미세 구간은 linear 보간으로 충분 (시각적 차이 없음)
+### 6차: fr=48(16x3) 정수배 + linear bezier (움직임 부드러움 달성)
+
+- fr=48: `setSubframe` 없이도 48fps 렌더링
+- 정수 배수(3x): 모든 프레임 정확히 3프레임 hold, 끊김 없음
+- **per-segment bezier → linear**: 방향 전환 시 멈춤 해결
+  - CSS animate()는 global easing + keyframe 간 linear 보간
+  - per-segment ease-in-out은 각 경계에서 감속→정지→가속 발생
+
+### 7차: duration_ms 기반 타이밍 + 좌표 스케일링 보정
+
+- **속도**: keyframe t값을 `duration_ms`에 매핑 (전체 모션 길이가 아닌)
+- **스케일링**: `t_scale = canvas / preview_object_size` (실제 슬라이더 값 사용)
 
 ---
 
-## 경로별 적용 확인
+## 최종 통합 Lottie 구조
 
-| 수정 항목 | KEYFRAME_ONLY | MOTION_NEEDED |
-|----------|:---:|:---:|
-| 직접 레이어 (프리컴프 없음) | O | O |
-| fr=60 업샘플링 (float ip/op) | — (이미 fr=60) | O |
-| 좌표 스케일링 + 캔버스 확장 | O | O |
-| CSS bezier → 레이어별 transform 베이크 | O | O |
-| preview_object_size | O | O |
+```
+fr=48 (16×3 정수배)
+null layer (ty=3): animated p/r/s/o, linear bezier, duration_ms 기반 타이밍
+64 image layers: static transforms, parent=null, 각 3프레임 hold
+캔버스: 480×480 (원본 유지, 확장 없음)
+```
+
+### 구조적 제한
+
+- **프레임 짤림**: 캔버스(480x480)가 콘텐츠와 동일 크기이므로, 큰 이동 시 가장자리 클리핑 발생.
+  이는 Lottie 포맷의 구조적 제한 — 캔버스 확장 시 SVG 렌더 부하로 프레임 드롭.
+- **프리뷰와의 근본 차이**: 프리뷰는 CSS animate(GPU 60fps) + bodymovin(SVG 16fps)
+  2-tier 렌더링. 단일 Lottie는 1-tier로 동일 품질 달성 불가.
+
+---
+
+## HTML 뷰어 내보내기 (프리뷰와 100% 동일)
+
+통합 Lottie의 구조적 제한을 해결하기 위해 **HTML 뷰어 내보내기** 추가.
+모션 Lottie + 키프레임 JSON을 단일 HTML 파일로 내보내기.
+
+```html
+<div id="outer">          <!-- CSS animate() — 60fps GPU 가속 -->
+  <div id="inner"></div>  <!-- bodymovin — 16fps SVG 모션 -->
+</div>
+```
+
+```javascript
+// 모션 Lottie 로드
+bodymovin.loadAnimation({
+  container: inner, renderer: 'svg',
+  loop: true, autoplay: true, animationData: lottieData,
+});
+// 키프레임 적용 (CSS animate = 프리뷰와 동일)
+outer.animate(kfFrames, { duration, easing, iterations: 1, fill: 'none' });
+```
+
+**효과**:
+- 프리뷰와 100% 동일한 2-tier 렌더링
+- 짤림 없음 (스테이지가 오브젝트보다 큼)
+- 끊김 없음 (CSS animate 60fps GPU 가속)
+- 브라우저에서 바로 열어 확인 가능
+
+---
+
+## 내보내기 버튼 구성
+
+| 버튼 | 내용 | 모션 | 키프레임 | 비고 |
+|------|------|:---:|:---:|------|
+| 📦 통합 Lottie | 단일 Lottie 파일 | O | O | 구조적 제한 있음 (짤림, 1-tier) |
+| 🎬 모션 Lottie만 | 모션만 있는 Lottie | O | X | 키프레임 별도 적용 필요 |
+| 🔑 키프레임 JSON | 키프레임 정보만 | X | O | CSS animate용 데이터 |
+| 🌐 HTML 뷰어 | 모션+키프레임 합친 HTML | O | O | **프리뷰와 100% 동일** |
+
+프론트엔드에서 모션 Lottie + 키프레임 JSON을 로드하여 CSS animate로 합쳐서
+표시하는 것이 프리뷰와 동일한 품질을 달성하는 최적 방법.
 
 ---
 
@@ -235,5 +137,5 @@ for layer in result.get("layers", []):
 ruff check    : All checks passed
 mypy strict   : Success (0 errors)
 pytest        : 전체 통과 (animate/lottie/keyframe 34건 포함)
-200줄 제약    : 164줄 ✅
+200줄 제약    : 149줄 ✅ (lottie_baker_transform.py)
 ```
