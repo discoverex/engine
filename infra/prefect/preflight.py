@@ -60,14 +60,15 @@ def _validate_storage(*, settings: AppSettings, logger: Any) -> None:
         base_url = f"{base_url}/artifact"
     url = f"{base_url}/v1/presign/batch"
     logger.info("preflight storage probe url=%s", url)
+    probe_attempt = 1
     body = json.dumps(
         {
             "flow_run_id": settings.execution.flow_run_id or "preflight",
-            "attempt": 0,
+            "attempt": probe_attempt,
             "entries": [
                 {
                     "flow_run_id": settings.execution.flow_run_id or "preflight",
-                    "attempt": 0,
+                    "attempt": probe_attempt,
                     "kind": "stdout",
                     "filename": "__preflight__.log",
                 }

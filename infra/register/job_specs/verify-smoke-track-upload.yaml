@@ -1,0 +1,33 @@
+run_mode: repo
+engine: discoverex
+ref: fix/generation-flow
+entrypoint:
+  - prefect_flow.py:run_verify_job_flow
+config: null
+job_name: verify-smoke-track-upload
+inputs:
+  contract_version: v2
+  command: verify
+  config_name: verify_only
+  config_dir: conf
+  args:
+    scene_json: infra/register/job_specs/fixtures/verify_smoke/scene.json
+  overrides:
+    - profile=default
+    - +models/background_upscaler=dummy
+    - +models/object_generator=dummy
+    - adapters/artifact_store=local
+    - adapters/tracker=mlflow_local
+    - adapters/metadata_store=local_json
+    - adapters/report_writer=local_json
+    - runtime.artifacts_root=artifacts
+  runtime:
+    mode: worker
+    bootstrap_mode: none
+    extras:
+      - tracking
+      - storage
+      - validator
+    extra_env: {}
+env: {}
+outputs_prefix: null

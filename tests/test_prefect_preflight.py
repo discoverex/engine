@@ -117,11 +117,14 @@ def test_validate_runtime_services_checks_mlflow_and_storage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
+    storage_payloads: list[dict[str, object]] = []
 
     def _fake_urlopen(req: request.Request, timeout: int = 20) -> _FakeResponse:
         calls.append(req.full_url)
         if req.full_url.endswith("/health"):
             return _FakeResponse("{}")
+        assert req.data is not None
+        storage_payloads.append(json.loads(req.data.decode("utf-8")))
         return _FakeResponse(json.dumps([{"kind": "stdout", "url": "u", "object_uri": "o"}]))
 
     monkeypatch.setattr(request, "urlopen", _fake_urlopen)
@@ -131,6 +134,20 @@ def test_validate_runtime_services_checks_mlflow_and_storage(
     assert calls == [
         "https://mlflow.example.com/health",
         "https://storage.example/artifact/v1/presign/batch",
+    ]
+    assert storage_payloads == [
+        {
+            "flow_run_id": "flow-123",
+            "attempt": 1,
+            "entries": [
+                {
+                    "flow_run_id": "flow-123",
+                    "attempt": 1,
+                    "kind": "stdout",
+                    "filename": "__preflight__.log",
+                }
+            ],
+        }
     ]
 
 

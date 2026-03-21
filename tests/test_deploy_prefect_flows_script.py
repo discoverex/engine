@@ -103,6 +103,22 @@ def test_deployment_job_variables_passes_huggingface_tokens(
     assert variables["env"]["HF_TOKEN"] == "hf-token"
     assert variables["env"]["HUGGINGFACE_HUB_TOKEN"] == "hub-token"
     assert variables["env"]["HUGGINGFACE_TOKEN"] == "legacy-token"
+    assert variables["working_dir"] == "/app"
+
+
+def test_deployment_job_variables_uses_working_dir_override(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setenv("PREFECT_API_URL", "https://prefect.example/api")
+    monkeypatch.setenv("STORAGE_API_URL", "https://storage.example")
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://mlflow.example")
+    monkeypatch.setenv("DISCOVEREX_DEPLOY_WORKING_DIR", "/tmp/discoverex-engine")
+
+    variables = deploy_flows._deployment_job_variables(
+        work_pool_name="discoverex-fixed-process"
+    )
+
+    assert variables["working_dir"] == "/tmp/discoverex-engine"
 
 
 def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> None:
@@ -179,6 +195,12 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
         "version": "20260312120000",
         "print_next_steps": False,
     }
+
+
+def test_deployment_source_root_uses_env_override(monkeypatch: Any) -> None:
+    monkeypatch.setenv("DISCOVEREX_DEPLOY_SOURCE_ROOT", "/app")
+
+    assert deploy_flows._deployment_source_root() == "/app"
 
 
 def test_main_dry_run_prints_remote_deployment_metadata(

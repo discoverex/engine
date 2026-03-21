@@ -139,12 +139,18 @@ def _load_flow(entrypoint: str) -> Any:
 
 
 def _deployment_source_root() -> str:
+    override = os.environ.get("DISCOVEREX_DEPLOY_SOURCE_ROOT", "").strip()
+    if override:
+        return override
     return str(REPO_ROOT)
 
 
 def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
     _validate_required_worker_env()
     runtime_root = SETTINGS.prefect_work_runtime_dir
+    process_working_dir = (
+        os.environ.get("DISCOVEREX_DEPLOY_WORKING_DIR", "").strip() or "/app"
+    )
     env_pairs = (
         ("PREFECT_API_URL", os.environ.get("PREFECT_API_URL", "")),
         (
@@ -186,7 +192,7 @@ def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
     if _is_process_work_pool(work_pool_name):
         return {
             "env": env,
-            "working_dir": "/app",
+            "working_dir": process_working_dir,
         }
     return {
         "env": env,
