@@ -114,6 +114,7 @@ def test_deployment_job_variables_mounts_source_and_runtime_roots(
     monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://mlflow.example")
     monkeypatch.setenv("DISCOVEREX_DEPLOY_SOURCE_ROOT", "/mnt/d/engine")
     monkeypatch.setenv("DISCOVEREX_DEPLOY_RUNTIME_ROOT", "/mnt/d/runtime")
+    monkeypatch.setenv("DISCOVEREX_DEPLOY_MODEL_CACHE_ROOT", "/home/me/.cache/models")
 
     variables = deploy_flows._deployment_job_variables(work_pool_name="discoverex-fixed")
 
@@ -123,6 +124,7 @@ def test_deployment_job_variables_mounts_source_and_runtime_roots(
         "/mnt/d/engine/conf:/app/conf",
         "/mnt/d/engine/prefect_flow.py:/app/prefect_flow.py",
         "/mnt/d/runtime:/var/lib/discoverex",
+        "/home/me/.cache/models:/var/lib/discoverex/cache/models",
     ]
 
 
@@ -238,6 +240,12 @@ def test_deployment_runtime_root_uses_env_override(monkeypatch: Any) -> None:
     monkeypatch.setenv("DISCOVEREX_DEPLOY_RUNTIME_ROOT", "/mnt/d/runtime")
 
     assert deploy_flows._deployment_runtime_root() == "/mnt/d/runtime"
+
+
+def test_deployment_model_cache_root_uses_env_override(monkeypatch: Any) -> None:
+    monkeypatch.setenv("DISCOVEREX_DEPLOY_MODEL_CACHE_ROOT", "/home/me/.cache/models")
+
+    assert deploy_flows._deployment_model_cache_root() == "/home/me/.cache/models"
 
 
 def test_main_dry_run_prints_remote_deployment_metadata(

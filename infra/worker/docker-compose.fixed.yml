@@ -37,3 +37,4 @@ services:
       - ${DISCOVEREX_SOURCE_ROOT:-../..}/conf:/app/conf
       - ${DISCOVEREX_SOURCE_ROOT:-../..}/prefect_flow.py:/app/prefect_flow.py
       - ${WORKER_RUNTIME_DIR:-../../runtime/worker}:/var/lib/discoverex
+      - ${WORKER_MODEL_CACHE_DIR:-${HOME}/.cache/discoverex-models}:/var/lib/discoverex/cache/models

@@ -152,6 +152,13 @@ def _deployment_runtime_root() -> str:
     return SETTINGS.prefect_work_runtime_dir
 
 
+def _deployment_model_cache_root() -> str:
+    override = os.environ.get("DISCOVEREX_DEPLOY_MODEL_CACHE_ROOT", "").strip()
+    if override:
+        return override
+    return SETTINGS.prefect_work_model_cache_dir
+
+
 def _deployment_source_mounts() -> list[str]:
     source_root = _deployment_source_root()
     return [
@@ -165,6 +172,7 @@ def _deployment_source_mounts() -> list[str]:
 def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
     _validate_required_worker_env()
     runtime_root = _deployment_runtime_root()
+    model_cache_root = _deployment_model_cache_root()
     process_working_dir = (
         os.environ.get("DISCOVEREX_DEPLOY_WORKING_DIR", "").strip() or "/app"
     )
@@ -216,6 +224,7 @@ def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
         "volumes": [
             *_deployment_source_mounts(),
             f"{runtime_root}:/var/lib/discoverex",
+            f"{model_cache_root}:/var/lib/discoverex/cache/models",
         ],
         "container_create_kwargs": {
             "entrypoint": "",

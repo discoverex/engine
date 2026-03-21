@@ -19,6 +19,9 @@ class RegisterSettings(BaseSettings):
     prefect_work_runtime_dir: str = str(
         (SCRIPT_DIR.parent.parent / "runtime" / "worker").resolve()
     )
+    prefect_work_model_cache_dir: str = str(
+        (Path.home() / ".cache" / "discoverex-models").resolve()
+    )
     register_flow_entrypoint: str = "prefect_flow.py:run_combined_job_flow"
     register_flow_ref: str = "dev"
     register_deployment_version: str = ""

@@ -20,11 +20,13 @@ Optional env:
 - `ARTIFACT_BUCKET`
 - `DISCOVEREX_SOURCE_ROOT` default `../..`
 - `WORKER_RUNTIME_DIR` default `../../runtime/worker`
+- `WORKER_MODEL_CACHE_DIR` default `$HOME/.cache/discoverex-models`
 
 The fixed worker mounts only the live source paths needed by the runtime:
 `src`, `infra`, `conf`, and `prefect_flow.py`. Runtime state is mounted at
-`/var/lib/discoverex`. The image still installs `tracking`, `storage`, and
-`ml-gpu` extras at build time.
+`/var/lib/discoverex`. Model cache is mounted separately at
+`/var/lib/discoverex/cache/models`. The image still installs `tracking`,
+`storage`, and `ml-gpu` extras at build time.
 
 Diagnostics:
 
