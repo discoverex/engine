@@ -42,14 +42,18 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
 
     base_image = scene_root / "assets" / "background" / "base.png"
     object_image = scene_root / "assets" / "objects" / "object.png"
+    precomposite_image = scene_root / "assets" / "patches" / "region.precomposite.png"
+    variant_manifest = scene_root / "assets" / "patches" / "region.variants.json"
     composite_image = scene_root / "outputs" / "composite.png"
     for path, color in (
         (base_image, (255, 255, 255, 255)),
         (object_image, (255, 0, 0, 255)),
+        (precomposite_image, (0, 255, 0, 255)),
         (composite_image, (0, 0, 0, 255)),
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
         Image.new("RGBA", (64, 64), color=color).save(path)
+    variant_manifest.write_text("{}", encoding="utf-8")
 
     scene = Scene(
         meta=SceneMeta(
@@ -73,7 +77,10 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
                         "candidate_image_ref": str(object_image),
                         "object_image_ref": str(object_image),
                         "object_mask_ref": str(object_image),
+                        "raw_alpha_mask_ref": str(object_image),
                         "patch_image_ref": str(object_image),
+                        "precomposited_image_ref": str(precomposite_image),
+                        "variant_manifest_ref": str(variant_manifest),
                         "layer_image_ref": str(object_image),
                         "bbox": {"x": 1, "y": 2, "w": 10, "h": 12},
                     }
@@ -138,6 +145,7 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
     assert exported.manifest_path.exists()
     assert len(exported.layer_paths) == 3
     assert len(exported.source_layer_paths) == 1
+    assert len(exported.intermediate_paths) == 7
     payload = json.loads(exported.manifest_path.read_text(encoding="utf-8"))
     assert payload["lottie_path"] == "animation.lottie"
     assert payload["source_layers"] == [
@@ -161,9 +169,16 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
             "object_image_ref": str(object_image),
             "layer_image_ref": str(object_image),
             "object_mask_ref": str(object_image),
+            "raw_alpha_mask_ref": str(object_image),
             "patch_image_ref": str(object_image),
+            "precomposited_image_ref": str(precomposite_image),
+            "variant_manifest_ref": str(variant_manifest),
         }
     ]
+    assert {"region_id": "r1", "kind": "candidate_image_ref", "path": "intermediates/r1/object.png"} in payload["intermediates"]
+    assert {"region_id": "r1", "kind": "precomposited_image_ref", "path": "intermediates/r1/region.precomposite.png"} in payload["intermediates"]
+    assert {"region_id": "r1", "kind": "variant_manifest_ref", "path": "intermediates/r1/region.variants.json"} in payload["intermediates"]
+    assert (scene_root / "outputs" / "intermediates" / "r1" / "object.png").exists()
     assert [layer["layer_id"] for layer in payload["layers"]] == [
         "layer-base",
         "layer-object",

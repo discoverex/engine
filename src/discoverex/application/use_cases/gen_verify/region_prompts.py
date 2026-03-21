@@ -30,6 +30,8 @@ def record_layer_candidate(
     object_ref: object,
     object_mask_ref: object,
     patch_ref: object,
+    raw_alpha_mask_ref: object | None = None,
+    details: InpaintPrediction | None = None,
 ) -> None:
     layer_ref = object_ref if isinstance(object_ref, str) and object_ref else patch_ref
     if not isinstance(layer_ref, str) or not layer_ref:
@@ -37,17 +39,33 @@ def record_layer_candidate(
     candidates = background.metadata.setdefault("inpaint_layer_candidates", [])
     if not isinstance(candidates, list):
         return
-    candidates.append(
-        {
-            "region_id": region.region_id,
-            "candidate_image_ref": candidate_ref,
-            "object_image_ref": object_ref,
-            "object_mask_ref": object_mask_ref,
-            "patch_image_ref": patch_ref,
-            "layer_image_ref": layer_ref,
-            "bbox": bbox_payload(region),
-        }
-    )
+    payload = {
+        "region_id": region.region_id,
+        "candidate_image_ref": candidate_ref,
+        "object_image_ref": object_ref,
+        "object_mask_ref": object_mask_ref,
+        "patch_image_ref": patch_ref,
+        "layer_image_ref": layer_ref,
+        "bbox": bbox_payload(region),
+    }
+    if isinstance(raw_alpha_mask_ref, str) and raw_alpha_mask_ref:
+        payload["raw_alpha_mask_ref"] = raw_alpha_mask_ref
+    if details is not None:
+        for key in (
+            "precomposited_image_ref",
+            "blend_mask_ref",
+            "edge_mask_ref",
+            "core_mask_ref",
+            "shadow_ref",
+            "edge_blend_ref",
+            "core_blend_ref",
+            "final_polish_ref",
+            "variant_manifest_ref",
+        ):
+            value = details.get(key)
+            if isinstance(value, str) and value:
+                payload[key] = value
+    candidates.append(payload)
 
 
 def build_prompt_record(

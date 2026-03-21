@@ -21,7 +21,17 @@ def candidate_by_region(scene: Scene) -> dict[str, CandidateLayerPayload]:
             "candidate_image_ref",
             "object_image_ref",
             "object_mask_ref",
+            "raw_alpha_mask_ref",
             "patch_image_ref",
+            "precomposited_image_ref",
+            "blend_mask_ref",
+            "edge_mask_ref",
+            "core_mask_ref",
+            "shadow_ref",
+            "edge_blend_ref",
+            "core_blend_ref",
+            "final_polish_ref",
+            "variant_manifest_ref",
             "layer_image_ref",
         ):
             value = item.get(key)
@@ -100,7 +110,17 @@ def build_object_source_entries(
             "object_image_ref",
             "layer_image_ref",
             "object_mask_ref",
+            "raw_alpha_mask_ref",
             "patch_image_ref",
+            "precomposited_image_ref",
+            "blend_mask_ref",
+            "edge_mask_ref",
+            "core_mask_ref",
+            "shadow_ref",
+            "edge_blend_ref",
+            "core_blend_ref",
+            "final_polish_ref",
+            "variant_manifest_ref",
         ):
             value = candidate.get(key)
             if isinstance(value, str):

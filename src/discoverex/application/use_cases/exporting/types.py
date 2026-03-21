@@ -17,7 +17,17 @@ class CandidateLayerPayload(TypedDict, total=False):
     candidate_image_ref: str
     object_image_ref: str
     object_mask_ref: str
+    raw_alpha_mask_ref: str
     patch_image_ref: str
+    precomposited_image_ref: str
+    blend_mask_ref: str
+    edge_mask_ref: str
+    core_mask_ref: str
+    shadow_ref: str
+    edge_blend_ref: str
+    core_blend_ref: str
+    final_polish_ref: str
+    variant_manifest_ref: str
     layer_image_ref: str
     bbox: BBoxPayload
 
@@ -38,7 +48,23 @@ class ObjectSourceEntry(TypedDict, total=False):
     object_image_ref: str
     layer_image_ref: str
     object_mask_ref: str
+    raw_alpha_mask_ref: str
     patch_image_ref: str
+    precomposited_image_ref: str
+    blend_mask_ref: str
+    edge_mask_ref: str
+    core_mask_ref: str
+    shadow_ref: str
+    edge_blend_ref: str
+    core_blend_ref: str
+    final_polish_ref: str
+    variant_manifest_ref: str
+
+
+class IntermediateAssetEntry(TypedDict):
+    region_id: str
+    kind: str
+    path: str
 
 
 @dataclass(frozen=True)
@@ -47,3 +73,4 @@ class OutputExportResult:
     lottie_path: Path
     layer_paths: list[Path]
     source_layer_paths: list[Path]
+    intermediate_paths: list[Path]

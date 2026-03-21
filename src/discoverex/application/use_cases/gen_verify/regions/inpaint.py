@@ -160,6 +160,8 @@ def _generate_single_region(
         object_ref=object_ref,
         object_mask_ref=object_mask_ref,
         patch_ref=patch_ref,
+        raw_alpha_mask_ref=object_asset.raw_alpha_mask_ref,
+        details=details,
     )
     prompt_record = build_prompt_record(
         region=updated,
