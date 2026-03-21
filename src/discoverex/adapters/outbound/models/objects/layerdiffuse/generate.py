@@ -68,56 +68,6 @@ def _raise_if_vram_limit_exceeded(*, limit_gb: float | None) -> None:
     )
 
 
-def _offload_text_encoders(*, pipe: Any) -> None:
-    try:
-        import torch  # type: ignore
-    except Exception:
-        torch = None
-    for component_name in ("text_encoder", "text_encoder_2"):
-        component = getattr(pipe, component_name, None)
-        if component is None:
-            continue
-        try:
-            component.to("cpu")
-        except Exception:
-            continue
-    if torch is not None and torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
-
-def _offload_unet_stack(*, pipe: Any) -> None:
-    try:
-        import torch  # type: ignore
-    except Exception:
-        torch = None
-    for component_name in ("unet",):
-        component = getattr(pipe, component_name, None)
-        if component is None:
-            continue
-        try:
-            component.to("cpu")
-        except Exception:
-            continue
-    if torch is not None and torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
-
-def _offload_decode_stack(*, pipe: Any, decoder: Any) -> None:
-    try:
-        import torch  # type: ignore
-    except Exception:
-        torch = None
-    for component in (getattr(pipe, "vae", None), decoder):
-        if component is None:
-            continue
-        try:
-            component.to("cpu")
-        except Exception:
-            continue
-    if torch is not None and torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
-
 def _prepare_decode_stack(*, pipe: Any, execution_device: Any) -> None:
     try:
         import torch  # type: ignore
@@ -243,9 +193,6 @@ def _sample_latents(
         negative_prompts=negative_prompts,
         guidance_scale=guidance_scale,
     )
-    if prompt_embeds is not None:
-        _offload_text_encoders(pipe=pipe)
-        _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
     call_signature = inspect.signature(pipe.__call__)
     pipe_kwargs: dict[str, Any] = {
         "prompt": None if prompt_embeds is not None else prompts,
@@ -268,8 +215,6 @@ def _sample_latents(
     result = pipe(**pipe_kwargs)
     _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
     latents = result[0] if isinstance(result, tuple) else result
-    _offload_unet_stack(pipe=pipe)
-    _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
     return latents
 
 
@@ -289,8 +234,8 @@ def generate_rgba(
     import torch  # type: ignore
 
     pipe = model._load_pipeline(handle)
-    execution_device = handle.device or getattr(pipe, "_execution_device", "cpu")
-    generator = None if seed is None else torch.Generator(device="cpu").manual_seed(seed)
+    execution_device = handle.device or getattr(pipe, "_execution_device", None) or "cuda"
+    generator = None if seed is None else torch.Generator().manual_seed(seed)
     prompt_embeds = None
     negative_prompt_embeds = None
     pooled_prompt_embeds = None
@@ -310,7 +255,6 @@ def generate_rgba(
     _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
     images = _decode_latents_to_rgba_images(pipe=pipe, latents=latents)
     image = images[0]
-    _offload_decode_stack(pipe=pipe, decoder=None)
     return _to_rgba_image(image)
 
 
@@ -334,8 +278,8 @@ def generate_rgba_batch(
     if len(prompts) != len(negative_prompts):
         raise ValueError("prompts and negative_prompts must have the same length")
     pipe = model._load_pipeline(handle)
-    execution_device = handle.device or getattr(pipe, "_execution_device", "cpu")
-    generator = None if seed is None else torch.Generator(device="cpu").manual_seed(seed)
+    execution_device = handle.device or getattr(pipe, "_execution_device", None) or "cuda"
+    generator = None if seed is None else torch.Generator().manual_seed(seed)
     latents = _sample_latents(
         pipe=pipe,
         prompts=prompts,
@@ -350,5 +294,4 @@ def generate_rgba_batch(
     )
     _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
     images = _decode_latents_to_rgba_images(pipe=pipe, latents=latents)
-    _offload_decode_stack(pipe=pipe, decoder=None)
     return _to_rgba_images(images)

@@ -83,8 +83,6 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
             load_lora_to_unet(pipe.unet, lora_path, frames=1)
         model._layerdiffuse_applied = True
     effective_offload_mode = model.offload_mode
-    if is_sdxl and effective_offload_mode == "sequential":
-        effective_offload_mode = "model"
     scheduler = getattr(pipe, "scheduler", None)
     if scheduler is not None:
         pipe.scheduler = _configure_scheduler(

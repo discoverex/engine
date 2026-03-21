@@ -210,12 +210,7 @@ class LayerDiffuseObjectGenerationModel:
         return self._transparent_decoder
 
     def unload(self) -> None:
-        clear_model_runtime(self._pipe)
+        clear_model_runtime(self._pipe, self._transparent_decoder)
         self._pipe = None
-        if self._transparent_decoder is not None:
-            try:
-                self._transparent_decoder.to("cpu")
-            except Exception:
-                pass
         self._transparent_decoder = None
         self._layerdiffuse_applied = False
