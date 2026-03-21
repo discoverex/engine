@@ -54,20 +54,11 @@ def apply_keyframes_to_lottie(
     if not keyframes:
         return result
 
-    # --- Scale + canvas expansion ---
+    # --- Scale translates (no canvas expansion — it causes frame drops) ---
     ref = kf_data.get("preview_object_size", 80)
     t_scale = min(w, h) / ref if ref > 0 and min(w, h) > ref else 1.0
-    max_dx = max(abs(kf.get("translateX", 0.0)) * t_scale for kf in keyframes)
-    max_dy = max(abs(kf.get("translateY", 0.0)) * t_scale for kf in keyframes)
-    pad_x = int(max_dx) + 1 if max_dx >= 1 else 0
-    pad_y = int(max_dy) + 1 if max_dy >= 1 else 0
-    canvas_w, canvas_h = w + 2 * pad_x, h + 2 * pad_y
-    if canvas_w != w or canvas_h != h:
-        result["w"] = canvas_w
-        result["h"] = canvas_h
 
-    anchor_x, anchor_y = w / 2.0, h / 2.0
-    cx, cy = canvas_w / 2.0, canvas_h / 2.0
+    cx, cy = w / 2.0, h / 2.0
 
     # --- Build null layer with bezier keyframes ---
     easing = kf_data.get("easing", "ease-in-out")
@@ -89,7 +80,7 @@ def apply_keyframes_to_lottie(
             "o": {"a": 1, "k": opa} if len(opa) > 1 else {"a": 0, "k": 100},
             "r": {"a": 1, "k": rot} if len(rot) > 1 else {"a": 0, "k": 0},
             "p": {"a": 1, "k": pos} if len(pos) > 1 else {"a": 0, "k": [cx, cy, 0]},
-            "a": {"a": 0, "k": [anchor_x, anchor_y, 0]},
+            "a": {"a": 0, "k": [cx, cy, 0]},
             "s": {"a": 1, "k": scl} if len(scl) > 1 else {"a": 0, "k": [100, 100, 100]},
         },
         "ip": 0, "op": total, "st": 0,
