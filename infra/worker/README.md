@@ -24,3 +24,8 @@ Optional env:
 The fixed worker mounts the repo root at `/app` and the runtime directory at
 `/var/lib/discoverex`. The image still installs `tracking`, `storage`, and
 `ml-gpu` extras at build time.
+
+Diagnostics:
+
+- `./bin/cli worker fixed doctor`
+- `./bin/cli worker fixed doctor --json`

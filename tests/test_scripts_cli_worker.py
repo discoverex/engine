@@ -100,3 +100,24 @@ def test_worker_fixed_logs_forwards_follow(monkeypatch) -> None:  # type: ignore
 
     assert result.exit_code == 0
     assert captured["args"] == ["logs", "--tail=50", "-f"]
+
+
+def test_worker_fixed_doctor_execs_runtime_diagnostics(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def _fake_exec_fixed(args: list[str]) -> int:
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.worker._exec_fixed", _fake_exec_fixed)
+
+    result = runner.invoke(app, ["fixed", "doctor", "--json"])
+
+    assert result.exit_code == 0
+    assert captured["args"] == [
+        "/opt/venv/bin/python",
+        "-m",
+        "infra.worker.diagnose_runtime",
+        "--json",
+    ]

@@ -28,6 +28,15 @@ def _compose_fixed(args: list[str]) -> int:
     return int(proc.returncode)
 
 
+def _exec_fixed(args: list[str]) -> int:
+    cmd = ["docker", "compose"]
+    if FIXED_ENV.exists():
+        cmd.extend(["--env-file", str(FIXED_ENV)])
+    cmd.extend(["-f", str(FIXED_COMPOSE), "exec", "-T", "worker", *args])
+    proc = subprocess.run(cmd, cwd=str(REPO_ROOT), check=False)
+    return int(proc.returncode)
+
+
 def _ensure_runtime_dirs() -> None:
     runtime_root = REPO_ROOT / "runtime" / "worker"
     if FIXED_ENV.exists():
@@ -94,6 +103,14 @@ def fixed_logs(
 @fixed_app.command("build")
 def fixed_build() -> None:
     raise typer.Exit(_compose_fixed(["build", "worker"]))
+
+
+@fixed_app.command("doctor")
+def fixed_doctor(json_output: bool = typer.Option(False, "--json")) -> None:
+    args = ["/opt/venv/bin/python", "-m", "infra.worker.diagnose_runtime"]
+    if json_output:
+        args.append("--json")
+    raise typer.Exit(_exec_fixed(args))
 
 
 app.add_typer(fixed_app, name="fixed")
