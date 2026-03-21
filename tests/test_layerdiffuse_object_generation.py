@@ -243,6 +243,97 @@ def test_generate_rgba_moves_text_encoders_to_execution_device_before_encoding()
     assert pipe.text_encoder_2.moves[0] == "cuda:0"
 
 
+def test_generate_rgba_moves_unet_and_scheduler_state_to_execution_device() -> None:
+    class _FakeGenerator:
+        def manual_seed(self, seed: int) -> "_FakeGenerator":
+            return self
+
+    fake_torch = SimpleNamespace(
+        Generator=lambda device="cpu": _FakeGenerator(),
+        cuda=SimpleNamespace(is_available=lambda: False, empty_cache=lambda: None),
+    )
+    original_torch = sys.modules.get("torch")
+    sys.modules["torch"] = fake_torch
+
+    class _FakeTensor:
+        def __init__(self) -> None:
+            self.moves: list[str] = []
+
+        def to(self, device: str) -> "_FakeTensor":
+            self.moves.append(device)
+            return self
+
+    class _FakeModule:
+        def __init__(self) -> None:
+            self.moves: list[str] = []
+
+        def to(self, device: str) -> "_FakeModule":
+            self.moves.append(device)
+            return self
+
+    class _FakeVAE:
+        dtype = "float16"
+
+        class _Cfg:
+            scaling_factor = 1.0
+
+        config = _Cfg()
+
+        def to(self, *args: object, **kwargs: object) -> "_FakeVAE":
+            return self
+
+        def decode(self, latents: object, return_dict: bool = False) -> tuple[list[Image.Image]]:
+            return ([Image.new("RGBA", (384, 384), color=(0, 0, 0, 255))],)
+
+    class _FakePipe:
+        def __init__(self) -> None:
+            self._execution_device = "cuda:0"
+            self.text_encoder = _FakeModule()
+            self.text_encoder_2 = _FakeModule()
+            self.unet = _FakeModule()
+            self.vae = _FakeVAE()
+            self.scheduler = SimpleNamespace(sigmas=_FakeTensor(), timesteps=_FakeTensor())
+
+        def encode_prompt(self, **kwargs: object) -> tuple[str, str, str, str]:
+            return ("prompt", "negative", "pooled", "negative_pooled")
+
+        def __call__(self, **kwargs: object) -> object:
+            return ("latents",)
+
+    pipe = _FakePipe()
+    model = type(
+        "_Model",
+        (),
+        {
+            "_load_pipeline": staticmethod(lambda handle: pipe),
+            "_load_transparent_decoder": staticmethod(lambda handle: None),
+        },
+    )()
+    handle = type("_Handle", (), {"device": "cuda:0"})()
+
+    try:
+        generate_rgba(
+            model=model,
+            handle=handle,
+            prompt="object",
+            negative_prompt="bad",
+            width=384,
+            height=384,
+            seed=None,
+            num_inference_steps=3,
+            guidance_scale=5.0,
+        )
+    finally:
+        if original_torch is None:
+            sys.modules.pop("torch", None)
+        else:
+            sys.modules["torch"] = original_torch
+
+    assert "cuda:0" in pipe.unet.moves
+    assert pipe.scheduler.sigmas.moves == ["cuda:0"]
+    assert pipe.scheduler.timesteps.moves == ["cuda:0"]
+
+
 def test_generate_rgba_fails_when_vram_limit_is_exceeded() -> None:
     class _FakeGenerator:
         def manual_seed(self, seed: int) -> "_FakeGenerator":
@@ -409,7 +500,7 @@ def test_sample_latents_offloads_unet_after_sampling() -> None:
             sys.modules["torch"] = original_torch
 
     assert latents == "latents"
-    assert pipe.unet.moves == ["cpu"]
+    assert pipe.unet.moves == ["cuda", "cpu"]
 
 
 def test_configure_scheduler_maps_dpmpp_sde_karras() -> None:
