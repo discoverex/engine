@@ -73,16 +73,17 @@ def apply_keyframes_to_lottie(
 
     cx, cy = w / 2.0, h / 2.0
 
-    # --- Build null layer with bezier keyframes ---
-    easing = kf_data.get("easing", "ease-in-out")
-    x1, y1, x2, y2 = _BEZIER.get(easing, _BEZIER["ease-in-out"])
-    bez1: dict[str, Any] = {"x": [x1], "y": [y1]}
-    bzi1: dict[str, Any] = {"x": [x2], "y": [y2]}
-    bez3: dict[str, Any] = {"x": [x1, x1, x1], "y": [y1, y1, y1]}
-    bzi3: dict[str, Any] = {"x": [x2, x2, x2], "y": [y2, y2, y2]}
+    # --- Build null layer with LINEAR keyframes ---
+    # CSS animate() applies easing GLOBALLY, interpolating linearly between
+    # keyframes.  Per-segment bezier causes "pause" at direction changes.
+    # Linear between keyframes matches CSS behavior exactly.
+    lin1: dict[str, Any] = {"x": [0], "y": [0]}
+    lni1: dict[str, Any] = {"x": [1], "y": [1]}
+    lin3: dict[str, Any] = {"x": [0, 0, 0], "y": [0, 0, 0]}
+    lni3: dict[str, Any] = {"x": [1, 1, 1], "y": [1, 1, 1]}
 
     pos, rot, scl, opa = _build_sparse_kfs(
-        keyframes, total, t_scale, cx, cy, bez1, bzi1, bez3, bzi3,
+        keyframes, total, t_scale, cx, cy, lin1, lni1, lin3, lni3,
     )
 
     null_ind = 9999
