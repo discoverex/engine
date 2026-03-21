@@ -4,8 +4,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from discoverex.config import PipelineConfig
-
-from .artifacts import artifact_root_from_env, write_engine_artifact_manifest
+from discoverex.orchestrator_contract.artifacts import (
+    artifact_root_from_env,
+    write_engine_artifact_manifest,
+)
 
 
 def normalize_pipeline_config_for_worker_runtime(

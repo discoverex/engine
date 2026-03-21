@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..storage_http import http_json, storage_base_url
 from discoverex.settings import AppSettings
+
+from .gateway import http_json, storage_base_url
 
 
 def prepare_links(

@@ -4,8 +4,6 @@ from importlib import import_module
 from typing import Any
 
 __all__ = [
-    "ARTIFACT_DIR_ENV",
-    "ARTIFACT_MANIFEST_ENV",
     "EngineRunSpec",
     "EngineRunSpecV1",
     "EngineRunSpecV2",
@@ -22,7 +20,10 @@ __all__ = [
     "build_cli_tokens",
     "build_worker_entrypoint",
     "is_legacy_command",
-    "write_engine_artifact_manifest",
+    "ARTIFACT_DIR_ENV",
+    "ARTIFACT_MANIFEST_ENV",
+    "EngineArtifact",
+    "EngineArtifactManifest",
 ]
 
 
@@ -35,7 +36,6 @@ def __getattr__(name: str) -> Any:
         "ARTIFACT_MANIFEST_ENV",
         "EngineArtifact",
         "EngineArtifactManifest",
-        "write_engine_artifact_manifest",
     }:
         module = import_module("discoverex.orchestrator_contract.artifacts")
         return getattr(module, name)

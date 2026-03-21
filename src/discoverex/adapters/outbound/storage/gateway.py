@@ -78,14 +78,17 @@ def upload_bytes(
         return
 
 
-def _gateway_headers(*, settings: AppSettings | dict[str, Any]) -> dict[str, str]:
+def gateway_headers(*, settings: AppSettings | dict[str, Any]) -> dict[str, str]:
+    return _gateway_headers(settings=_coerce_settings(settings))
+
+
+def _gateway_headers(*, settings: AppSettings) -> dict[str, str]:
     headers = {
         "Content-Type": "application/json",
         "User-Agent": _USER_AGENT,
     }
-    loaded = _coerce_settings(settings)
-    cf_id = loaded.worker_http.cf_access_client_id.strip()
-    cf_secret = loaded.worker_http.cf_access_client_secret.strip()
+    cf_id = settings.worker_http.cf_access_client_id.strip()
+    cf_secret = settings.worker_http.cf_access_client_secret.strip()
     if cf_id and cf_secret:
         headers["CF-Access-Client-Id"] = cf_id
         headers["CF-Access-Client-Secret"] = cf_secret

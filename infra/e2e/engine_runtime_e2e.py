@@ -168,15 +168,12 @@ class _StorageApiState:
 
 @contextmanager
 def _patched_storage_uploads(state: _StorageApiState) -> Iterator[None]:
-    from discoverex.orchestrator_contract.uploads import (
-        engine_artifacts,
-        presign,
-        results,
-    )
+    from discoverex.adapters.outbound.storage import output_uploads
+    from discoverex.adapters.outbound.storage import presign
 
-    engine_artifacts_module = cast(Any, engine_artifacts)
+    engine_artifacts_module = cast(Any, output_uploads)
     presign_module = cast(Any, presign)
-    results_module = cast(Any, results)
+    results_module = cast(Any, output_uploads)
     saved_presign_http_json = presign_module.http_json
     saved_presign_storage_base_url = presign_module.storage_base_url
     saved_results_upload_bytes = results_module.upload_bytes
@@ -608,7 +605,7 @@ def _run_generate_payload(
         build_execution_snapshot,
         write_execution_snapshot,
     )
-    from discoverex.orchestrator_contract.worker_runtime import (
+    from discoverex.application.services.worker_artifacts import (
         normalize_pipeline_config_for_worker_runtime,
     )
 

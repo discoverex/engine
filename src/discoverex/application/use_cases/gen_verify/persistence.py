@@ -6,6 +6,10 @@ from time import perf_counter
 
 from discoverex.adapters.outbound.io.json_files import write_json_file
 from discoverex.application.context import AppContextLike
+from discoverex.application.services.tracking import (
+    apply_tracking_identity,
+    tracking_run_name,
+)
 from discoverex.application.use_cases.naturalness_evaluation import (
     evaluate_scene_naturalness,
 )
@@ -15,7 +19,7 @@ from discoverex.artifact_paths import (
 )
 from discoverex.domain.scene import Scene
 from discoverex.execution_snapshot import build_tracking_params
-from discoverex.orchestrator_contract.worker_runtime import (
+from discoverex.application.services.worker_artifacts import (
     write_worker_artifact_manifest,
 )
 from discoverex.runtime_logging import format_seconds, get_logger
@@ -121,8 +125,6 @@ def track_run(
     extra_params: dict[str, str] | None = None,
 ) -> str | None:
     started = perf_counter()
-    flow_run_id = context.settings.execution.flow_run_id.strip()
-    flow_run_name = context.settings.execution.flow_run_name.strip()
     execution_snapshot = getattr(context, "execution_snapshot", None)
     execution_snapshot_path = getattr(context, "execution_snapshot_path", None)
     output_exports = export_output_bundle(
@@ -148,11 +150,10 @@ def track_run(
     )
 
     tracking_run_id = context.tracker.log_pipeline_run(
-        run_name=flow_run_id or "gen_verify",
-        params={
+        run_name=tracking_run_name(context.settings, "gen_verify"),
+        params=apply_tracking_identity(
+            {
             **build_tracking_params(execution_snapshot),
-            "prefect.flow_run_id": flow_run_id,
-            "prefect.flow_run_name": flow_run_name,
             "scene_id": scene.meta.scene_id,
             "version_id": scene.meta.version_id,
             "pipeline_run_id": scene.meta.pipeline_run_id,
@@ -163,6 +164,8 @@ def track_run(
             },
             **(extra_params or {}),
         },
+            context.settings,
+        ),
         metrics={
             "logical_score": scene.verification.logical.score,
             "perception_score": scene.verification.perception.score,

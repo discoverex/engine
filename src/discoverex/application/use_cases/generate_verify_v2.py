@@ -224,11 +224,11 @@ def run(
 
     return build_scene_payload(
         scene,
-        config.runtime.artifacts_root,
-        str(execution_snapshot_path) if execution_snapshot_path is not None else None,
-        getattr(context, "tracking_run_id", None),
-        context.settings.tracking.uri,
-        context.settings.execution.flow_run_id,
+        artifacts_root=config.runtime.artifacts_root,
+        execution_config_path=execution_snapshot_path,
+        mlflow_run_id=getattr(context, "tracking_run_id", None),
+        effective_tracking_uri=context.settings.tracking.uri,
+        flow_run_id=context.settings.execution.flow_run_id,
     )
 
 

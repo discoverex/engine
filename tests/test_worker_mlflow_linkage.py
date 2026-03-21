@@ -5,8 +5,8 @@ from urllib import request
 
 import pytest
 
+from discoverex.adapters.outbound.tracking.linkage import link_uploaded_artifacts
 from discoverex.settings import AppSettings
-from discoverex.orchestrator_contract.uploads.mlflow_tags import link_uploaded_artifacts
 
 
 def test_link_uploaded_artifacts_updates_remote_mlflow_tags(

@@ -3,13 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from discoverex.application.services.runtime import (
+    build_report_payload,
+    require_resolved_settings,
+)
 from discoverex.application.use_cases import run_replay_eval
 from discoverex.application.use_cases.generate_object_only import (
     run as run_generate_object_only,
 )
 from discoverex.bootstrap import build_context
 from discoverex.config import PipelineConfig
-from discoverex.settings import AppSettings
 
 from .generate import run_generate_flow
 from .generate_variant_pack import run_generate_inpaint_variant_pack_flow
@@ -54,11 +57,10 @@ def generate_verify_v2(
     execution_snapshot: dict[str, Any] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> dict[str, str]:
-    if not execution_snapshot or not isinstance(
-        execution_snapshot.get("resolved_settings"), dict
-    ):
-        raise RuntimeError("generate_verify_v2 requires resolved_settings in execution snapshot")
-    settings = AppSettings.model_validate(execution_snapshot["resolved_settings"])
+    settings = require_resolved_settings(
+        execution_snapshot,
+        consumer="generate_verify_v2",
+    )
     context = build_context(
         settings=settings,
         execution_snapshot=execution_snapshot,
@@ -79,11 +81,10 @@ def generate_object_only(
     execution_snapshot: dict[str, Any] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> dict[str, Any]:
-    if not execution_snapshot or not isinstance(
-        execution_snapshot.get("resolved_settings"), dict
-    ):
-        raise RuntimeError("generate_object_only requires resolved_settings in execution snapshot")
-    settings = AppSettings.model_validate(execution_snapshot["resolved_settings"])
+    settings = require_resolved_settings(
+        execution_snapshot,
+        consumer="generate_object_only",
+    )
     context = build_context(
         settings=settings,
         execution_snapshot=execution_snapshot,
@@ -134,11 +135,10 @@ def animate_replay_eval(
     execution_snapshot: dict[str, Any] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> dict[str, str]:
-    if not execution_snapshot or not isinstance(
-        execution_snapshot.get("resolved_settings"), dict
-    ):
-        raise RuntimeError("animate_replay_eval requires resolved_settings in execution snapshot")
-    settings = AppSettings.model_validate(execution_snapshot["resolved_settings"])
+    settings = require_resolved_settings(
+        execution_snapshot,
+        consumer="animate_replay_eval",
+    )
     scene_jsons = [str(item) for item in args.get("scene_jsons", [])]
     context = build_context(
         settings=settings,
@@ -146,14 +146,12 @@ def animate_replay_eval(
         execution_snapshot_path=execution_snapshot_path,
     )
     report = run_replay_eval(scene_json_paths=scene_jsons, context=context)
-    payload = {"report": str(report)}
-    if execution_snapshot_path is not None:
-        payload["execution_config"] = str(execution_snapshot_path)
-    if getattr(context, "tracking_run_id", None):
-        payload["mlflow_run_id"] = str(context.tracking_run_id)
-    payload["effective_tracking_uri"] = settings.tracking.uri
-    payload["flow_run_id"] = settings.execution.flow_run_id
-    return payload
+    return build_report_payload(
+        report=report,
+        settings=settings,
+        execution_config_path=execution_snapshot_path,
+        tracking_run_id=getattr(context, "tracking_run_id", None),
+    )
 
 
 def animate_stub(

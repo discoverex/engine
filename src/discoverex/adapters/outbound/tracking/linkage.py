@@ -49,10 +49,7 @@ def link_uploaded_artifacts(
 ) -> MlflowTagLinkageResult:
     run_id = str(payload.get("mlflow_run_id", "")).strip()
     if not run_id:
-        return MlflowTagLinkageResult(
-            status="skipped_missing_run_id",
-            linked_tags={},
-        )
+        return MlflowTagLinkageResult(status="skipped_missing_run_id", linked_tags={})
     tracking_uri = _tracking_uri_from_settings(settings)
     if not tracking_uri:
         return MlflowTagLinkageResult(

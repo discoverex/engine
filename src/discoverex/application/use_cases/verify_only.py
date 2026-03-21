@@ -5,6 +5,10 @@ from pathlib import Path
 from uuid import uuid4
 
 from discoverex.application.context import AppContextLike
+from discoverex.application.services.tracking import (
+    apply_tracking_identity,
+    tracking_run_name,
+)
 from discoverex.application.use_cases.output_exports import export_output_bundle
 from discoverex.domain import (
     integrate_verification,
@@ -15,7 +19,7 @@ from discoverex.domain.scene import Scene
 from discoverex.domain.verification import VerificationBundle, VerificationResult
 from discoverex.execution_snapshot import build_tracking_params
 from discoverex.models.types import PerceptionRequest
-from discoverex.orchestrator_contract.worker_runtime import (
+from discoverex.application.services.worker_artifacts import (
     write_worker_artifact_manifest,
 )
 
@@ -33,8 +37,6 @@ def _run_perception_verification(
 
 
 def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
-    flow_run_id = context.settings.execution.flow_run_id.strip()
-    flow_run_name = context.settings.execution.flow_run_name.strip()
     perception_version = scene.meta.model_versions.get(
         "perception", context.model_versions.perception
     )
@@ -99,17 +101,18 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
         ],
     )
     tracking_run_id = context.tracker.log_pipeline_run(
-        run_name=flow_run_id or "verify_only",
-        params={
+        run_name=tracking_run_name(context.settings, "verify_only"),
+        params=apply_tracking_identity(
+            {
             **build_tracking_params(context.execution_snapshot),
-            "prefect.flow_run_id": flow_run_id,
-            "prefect.flow_run_name": flow_run_name,
             "scene_id": scene.meta.scene_id,
             "version_id": scene.meta.version_id,
             "pipeline_run_id": scene.meta.pipeline_run_id,
             "config_version": scene.meta.config_version,
             **{f"model_version.{k}": v for k, v in scene.meta.model_versions.items()},
         },
+            context.settings,
+        ),
         metrics={
             "logical_score": scene.verification.logical.score,
             "perception_score": scene.verification.perception.score,

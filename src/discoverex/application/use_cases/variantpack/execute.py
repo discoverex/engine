@@ -101,11 +101,11 @@ def execute_variant(
     )
     payload = build_scene_payload(
         scene,
-        variant_cfg.runtime.artifacts_root,
-        str(variant_snapshot_path),
-        getattr(variant_context, "tracking_run_id", None),
-        variant_context.settings.tracking.uri,
-        variant_context.settings.execution.flow_run_id,
+        artifacts_root=variant_cfg.runtime.artifacts_root,
+        execution_config_path=variant_snapshot_path,
+        mlflow_run_id=getattr(variant_context, "tracking_run_id", None),
+        effective_tracking_uri=variant_context.settings.tracking.uri,
+        flow_run_id=variant_context.settings.execution.flow_run_id,
     )
     payload["variant_id"] = variant_id
     payload["saved_dir"] = str(saved_dir)

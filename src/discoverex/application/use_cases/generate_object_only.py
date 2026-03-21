@@ -10,7 +10,7 @@ from discoverex.application.use_cases.gen_verify.model_lifecycle import unload_m
 from discoverex.application.use_cases.gen_verify.objects import generate_region_objects
 from discoverex.config import PipelineConfig
 from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
-from discoverex.orchestrator_contract.worker_runtime import write_worker_artifact_manifest
+from discoverex.application.services.worker_artifacts import write_worker_artifact_manifest
 
 
 @dataclass(frozen=True)

@@ -22,7 +22,7 @@ from discoverex.application.use_cases.variantpack.runtime import (
     variant_run_ids,
 )
 from discoverex.config import PipelineConfig
-from discoverex.orchestrator_contract.worker_runtime import (
+from discoverex.application.services.worker_artifacts import (
     write_worker_artifact_manifest,
 )
 from discoverex.runtime_logging import format_seconds, get_logger

@@ -9,6 +9,7 @@ from typing import Any
 from prefect import flow, task
 
 from discoverex.application.context import AppContextLike
+from discoverex.application.services.runtime import require_resolved_settings
 from discoverex.application.use_cases.gen_verify.background_pipeline import (
     apply_background_canvas_upscale_if_needed,
     apply_background_detail_reconstruction_if_needed,
@@ -505,11 +506,7 @@ def run_generate_flow(
     execution_snapshot: dict[str, Any] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> dict[str, str]:
-    if not execution_snapshot or not isinstance(
-        execution_snapshot.get("resolved_settings"), dict
-    ):
-        raise RuntimeError("generate flow requires resolved_settings in execution snapshot")
-    settings = AppSettings.model_validate(execution_snapshot["resolved_settings"])
+    settings = require_resolved_settings(execution_snapshot, consumer="generate flow")
     started = perf_counter()
     background_asset_ref = str(args.get("background_asset_ref", "") or "")
     background_prompt = str(args.get("background_prompt", "") or "")
@@ -626,9 +623,9 @@ def run_generate_flow(
     )
     return build_scene_payload(
         scene,
-        config.runtime.artifacts_root,
-        str(execution_snapshot_path) if execution_snapshot_path is not None else None,
-        getattr(context, "tracking_run_id", None),
-        settings.tracking.uri,
-        settings.execution.flow_run_id,
+        artifacts_root=config.runtime.artifacts_root,
+        execution_config_path=execution_snapshot_path,
+        mlflow_run_id=getattr(context, "tracking_run_id", None),
+        effective_tracking_uri=settings.tracking.uri,
+        flow_run_id=settings.execution.flow_run_id,
     )

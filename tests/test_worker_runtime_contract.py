@@ -10,7 +10,7 @@ from discoverex.orchestrator_contract.artifacts import (
     ARTIFACT_DIR_ENV,
     ARTIFACT_MANIFEST_ENV,
 )
-from discoverex.orchestrator_contract.worker_runtime import (
+from discoverex.application.services.worker_artifacts import (
     normalize_pipeline_config_for_worker_runtime,
     write_worker_artifact_manifest,
 )
