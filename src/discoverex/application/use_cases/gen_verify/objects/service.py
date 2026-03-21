@@ -134,7 +134,13 @@ def generate_region_objects(
                     output_prefix=output_prefix,
                 )
                 _stdout_debug(
-                    f"mask_extract end region={region.region_id} index={index} source={masked.get('mask_source', 'unknown')}"
+                    "mask_extract end "
+                    f"region={region.region_id} index={index} "
+                    f"source={masked.get('mask_source', 'unknown')} "
+                    f"alpha_has_signal={masked.get('alpha_has_signal', False)} "
+                    f"alpha_bbox={masked.get('alpha_bbox', '')} "
+                    f"alpha_nonzero_ratio={masked.get('alpha_nonzero_ratio', 0.0)} "
+                    f"alpha_mean={masked.get('alpha_mean', 0.0)}"
                 )
                 mask_path, raw_alpha_path = relocate_mask_assets(
                     scene_dir=scene_dir,

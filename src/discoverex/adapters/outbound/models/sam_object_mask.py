@@ -22,17 +22,12 @@ class SamObjectMaskExtractor:
         loaded = self._load_image(image_path)
         image = loaded["rgb"]
         alpha = loaded.get("alpha")
+        alpha_stats = self._alpha_stats(alpha=alpha, image=image)
+        mask = self._predict_mask(image)
+        object_rgba = image.convert("RGBA")
+        object_rgba.putalpha(mask)
+        mask_source = "sam_mask_extractor_forced"
         raw_alpha_path: Path | None = None
-        if alpha is not None and alpha.getbbox() is not None:
-            mask = alpha
-            object_rgba = image.convert("RGBA")
-            object_rgba.putalpha(mask)
-            mask_source = "layerdiffuse_alpha"
-        else:
-            mask = self._predict_mask(image)
-            object_rgba = image.convert("RGBA")
-            object_rgba.putalpha(mask)
-            mask_source = "mask_extractor"
         prefix = Path(output_prefix)
         object_path = save_image(object_rgba, prefix.with_suffix(".object.png"))
         mask_path = save_image(mask, prefix.with_suffix(".mask.png"))
@@ -45,6 +40,10 @@ class SamObjectMaskExtractor:
             "mask": mask_path,
             "raw_alpha_mask": raw_alpha_path or mask_path,
             "mask_source": mask_source,
+            "alpha_bbox": alpha_stats["bbox"],
+            "alpha_nonzero_ratio": alpha_stats["nonzero_ratio"],
+            "alpha_mean": alpha_stats["mean"],
+            "alpha_has_signal": alpha_stats["has_signal"],
         }
 
     def unload(self) -> None:
@@ -130,3 +129,32 @@ class SamObjectMaskExtractor:
         if mask.getbbox() is None:
             return Image.new("L", image.size, color=255)
         return mask
+
+    def _alpha_stats(self, *, alpha: Any, image: Any) -> dict[str, str | float | bool]:
+        if alpha is None:
+            return {
+                "bbox": "",
+                "nonzero_ratio": 0.0,
+                "mean": 0.0,
+                "has_signal": False,
+            }
+        try:
+            import numpy as np
+        except Exception:
+            bbox = alpha.getbbox()
+            return {
+                "bbox": "" if bbox is None else ",".join(str(v) for v in bbox),
+                "nonzero_ratio": 0.0,
+                "mean": 0.0,
+                "has_signal": bbox is not None,
+            }
+        alpha_array = np.asarray(alpha, dtype=np.uint8)
+        total = max(1, int(alpha_array.size))
+        nonzero = int((alpha_array > 0).sum())
+        bbox = alpha.getbbox()
+        return {
+            "bbox": "" if bbox is None else ",".join(str(v) for v in bbox),
+            "nonzero_ratio": round(nonzero / float(total), 6),
+            "mean": round(float(alpha_array.mean()) / 255.0, 6),
+            "has_signal": bbox is not None,
+        }
