@@ -5,6 +5,7 @@ from urllib import request
 
 import pytest
 
+from discoverex.settings import AppSettings
 from discoverex.orchestrator_contract.uploads.mlflow_tags import link_uploaded_artifacts
 
 
@@ -29,10 +30,6 @@ def test_link_uploaded_artifacts_updates_remote_mlflow_tags(
         return _FakeResponse()
 
     monkeypatch.setattr(request, "urlopen", _fake_urlopen)
-    monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://mlflow.example.com")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "cf-id")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "cf-secret")
-
     result = link_uploaded_artifacts(
         payload={"mlflow_run_id": "run-123"},
         uploaded_uris={
@@ -43,6 +40,42 @@ def test_link_uploaded_artifacts_updates_remote_mlflow_tags(
         engine_mlflow_tags={
             "artifact_scene_uri": "s3://bucket/scenes/scene.json",
         },
+        settings=AppSettings.model_validate(
+            {
+                "pipeline": {
+                    "models": {
+                        "background_generator": {"target": "pkg.Background"},
+                        "background_upscaler": {"target": "pkg.Upscaler"},
+                        "object_generator": {"target": "pkg.Object"},
+                        "hidden_region": {"target": "pkg.Hidden"},
+                        "inpaint": {"target": "pkg.Inpaint"},
+                        "perception": {"target": "pkg.Perception"},
+                        "fx": {"target": "pkg.Fx"},
+                    },
+                    "adapters": {
+                        "artifact_store": {"target": "pkg.Artifacts"},
+                        "metadata_store": {"target": "pkg.Metadata"},
+                        "tracker": {"target": "pkg.Tracker"},
+                        "scene_io": {"target": "pkg.SceneIo"},
+                        "report_writer": {"target": "pkg.ReportWriter"},
+                    },
+                    "runtime": {},
+                    "thresholds": {},
+                    "model_versions": {},
+                },
+                "tracking": {"uri": "https://mlflow.example.com"},
+                "storage": {},
+                "worker_http": {
+                    "cf_access_client_id": "cf-id",
+                    "cf_access_client_secret": "cf-secret",
+                },
+                "runtime_paths": {},
+                "execution": {
+                    "config_name": "generate",
+                    "config_dir": "conf",
+                },
+            }
+        ),
     )
 
     assert result.status == "linked"
@@ -64,8 +97,6 @@ def test_link_uploaded_artifacts_updates_remote_mlflow_tags(
 def test_link_uploaded_artifacts_skips_without_mlflow_run_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://mlflow.example.com")
-
     result = link_uploaded_artifacts(
         payload={},
         uploaded_uris={"stdout_uri": "s3://bucket/stdout.log"},

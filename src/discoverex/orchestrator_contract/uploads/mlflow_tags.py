@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any, TypedDict, cast
 from urllib import error, request
@@ -9,6 +10,8 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict
 
 from discoverex.settings import AppSettings
+
+logger = logging.getLogger("discoverex.mlflow.linkage")
 
 
 class UploadedArtifactUris(TypedDict, total=False):
@@ -135,6 +138,12 @@ def _apply_remote_mlflow_tags(
     batch: MlflowTagUpdateBatch,
     settings: AppSettings | None,
 ) -> None:
+    logger.info(
+        "mlflow remote linkage start tracking_uri=%s run_id=%s tag_count=%d",
+        tracking_uri,
+        batch.run_id,
+        len(batch.tags),
+    )
     for tag in batch.tags:
         payload = {
             "run_id": batch.run_id,

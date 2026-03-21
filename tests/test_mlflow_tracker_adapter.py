@@ -119,9 +119,6 @@ def test_mlflow_tracker_uses_direct_remote_api_with_cf_headers(
         raise AssertionError(req.full_url)
 
     monkeypatch.setattr(request, "urlopen", _fake_urlopen)
-    monkeypatch.setenv("CF_ACCESS_CLIENT_ID", "cf-id")
-    monkeypatch.setenv("CF_ACCESS_CLIENT_SECRET", "cf-secret")
-
     scene_json = tmp_path / "scene.json"
     scene_json.write_text("{}", encoding="utf-8")
     verification = tmp_path / "verification.json"
@@ -133,6 +130,8 @@ def test_mlflow_tracker_uses_direct_remote_api_with_cf_headers(
     tracker = MLflowTrackerAdapter(
         tracking_uri="https://mlflow.example.com",
         artifact_bucket="orchestrator-artifacts",
+        cf_access_client_id="cf-id",
+        cf_access_client_secret="cf-secret",
     )
     run_id = tracker.log_pipeline_run(
         run_name="generate",
