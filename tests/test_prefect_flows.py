@@ -542,6 +542,72 @@ def test_repo_root_prefect_entrypoint_raises_on_failed_payload(
     assert "[discoverex-engine-flow] failure-context" in stderr_text
 
 
+def test_repo_root_prefect_entrypoint_runs_preflight_before_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        prefect_entrypoint,
+        "validate_runtime_services",
+        lambda **kwargs: calls.append("preflight"),
+    )
+    monkeypatch.setattr(
+        prefect_entrypoint,
+        "engine_job_task",
+        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
+            payload={"status": "completed"},
+            stdout='{"status":"completed"}\n',
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
+
+    output = prefect_entrypoint.run_job_flow.fn(
+        json.dumps(
+            {
+                "run_mode": "inline",
+                "engine": "discoverex",
+                "inputs": {
+                    "contract_version": "v2",
+                    "command": "generate",
+                    "args": {"background_prompt": "test"},
+                },
+            },
+            ensure_ascii=True,
+        )
+    )
+
+    assert output["status"] == "completed"
+    assert calls == ["preflight"]
+
+
+def test_repo_root_prefect_entrypoint_fails_when_preflight_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        prefect_entrypoint,
+        "validate_runtime_services",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("preflight failed")),
+    )
+    monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
+
+    with pytest.raises(RuntimeError, match="preflight failed"):
+        prefect_entrypoint.run_job_flow.fn(
+            json.dumps(
+                {
+                    "run_mode": "inline",
+                    "engine": "discoverex",
+                    "inputs": {
+                        "contract_version": "v2",
+                        "command": "generate",
+                        "args": {"background_prompt": "test"},
+                    },
+                },
+                ensure_ascii=True,
+            )
+        )
+
+
 def _capture_uploaded(
     payload: dict[str, Any], uploaded: list[dict[str, Any]]
 ) -> dict[str, Any]:
