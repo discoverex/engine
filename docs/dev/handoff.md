@@ -14,6 +14,12 @@
 - 엔진 명령어 체계를 v2로 전환하고 v1 Shim을 지원합니다.
 - `engine_entry_flow`를 통한 플로우 디스패치 구조를 도입했습니다.
 - `generate` 및 `verify` 플로우를 Prefect 태스크 단위로 세밀하게 분해했습니다.
+- `orchestrator_contract`에서 실행 로직을 제거하고, 공통 런타임/업로드/트래킹 로직을 `application/services`와 `adapters/outbound`로 이동했습니다.
+
+### 현재 플로우 분류
+- 외부 엔트리포인트: `discoverex-engine-flow`, `discoverex-generate-flow`, `discoverex-verify-flow`, `discoverex-animate-flow`, `discoverex-combined-flow`
+- 내부 엔진 플로우: `discoverex-engine-entry-pipeline`, `discoverex-generate-pipeline`, `discoverex-verify-pipeline`, `discoverex-generate-inpaint-variant-pack`
+- 내부/호환 핸들러: `generate_v1_compat`, `generate_v2_compat`, `generate_verify_v2`, `generate_object_only`, `generate_inpaint_variant_pack`, `verify_v1_compat`, `animate_replay_eval`, `animate_stub`
 
 ### 오류 페이로드 정규화
 - 플로우에서 예외 발생 시 표준 오류 페이로드(`status=failed`, `failure_reason`)를 반환하도록 수정했습니다.
@@ -25,8 +31,8 @@
 ## 4. 잔여 작업 및 공백 (Next Steps)
 
 1. **`animate` 실 유스케이스 구현**: 현재 Stub 상태인 애니메이션 파이프라인의 실질적 구현 및 검증.
-2. **E2E 스모크 테스트 자동화**: 운영 Prefect 서버 환경에서 전체 파이프라인이 정상적으로 동작하는지 확인하는 자동화 시나리오 추가.
-3. **Shim Sunset 정책 수립**: v1 레거시 명령어의 지원 중단 시점을 결정하고 문서를 통해 공지.
+2. **플로우 명칭 정리**: `*_compat` handler와 v1 shim을 언제 제거할지 정책 결정.
+3. **E2E 스모크 테스트 자동화**: 운영 Prefect 서버 환경에서 전체 파이프라인이 정상적으로 동작하는지 확인하는 자동화 시나리오 추가.
 
 ## 5. 중요 명령어
 

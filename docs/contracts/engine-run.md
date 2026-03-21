@@ -6,6 +6,13 @@
 
 `EngineRunSpec`은 워커 래퍼 없이 엔진을 직접 실행하는 데 필요한 최소한의 정보를 담고 있습니다. 엔진은 이 페이로드를 소비하여 실제 작업을 수행합니다.
 
+현재 엔진 내부 실행은 다음 계층으로 나뉩니다.
+- 엔트리 플로우: `discoverex-engine-entry-pipeline`
+- 내부 파이프라인: `discoverex-generate-pipeline`, `discoverex-verify-pipeline`, `discoverex-generate-inpaint-variant-pack`
+- 내부 subflow handler: `generate_v1_compat`, `generate_v2_compat`, `generate_verify_v2`, `generate_object_only`, `generate_inpaint_variant_pack`, `verify_v1_compat`, `animate_replay_eval`, `animate_stub`
+
+외부 계약 관점에서 stable surface는 `command`와 `EngineRunSpec` 뿐이며, handler 이름은 내부 구현 세부사항입니다.
+
 ## 2. 스키마 (Schema)
 
 - `contract_version`: "v1" | "v2"
@@ -34,7 +41,13 @@
 ## 4. 호환성
 
 - `v2` 명령어: `generate`, `verify`, `animate`
-- `v1` Shim: `gen-verify`, `verify-only`, `replay-eval` 지원 유지.
+- `v1` shim: `gen-verify`, `verify-only`, `replay-eval`
+- 현재 매핑:
+  - `gen-verify` -> `generate`
+  - `verify-only` -> `verify`
+  - `replay-eval` -> `animate`
+
+`animate` command는 공개 command로 유지되지만, 현재 기본 구현은 `animate_stub` 또는 `animate_replay_eval` 기반입니다.
 
 ## 5. 참고 문서
 - 외부 오케스트레이터 계약: `docs/contracts/orchestrator.md`

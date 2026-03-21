@@ -17,7 +17,28 @@ Discoverex 엔진의 로컬/워커 실행 모드와 실제 파이프라인 운�
 - `replay-eval` -> `animate`
 *(실행 시 Deprecation 경고가 출력됩니다)*
 
-## 2. 실행 모드 정의
+## 2. 현재 플로우 분류
+
+### 운영에서 직접 쓰는 Prefect 플로우
+- `discoverex-engine-flow`
+- `discoverex-generate-flow`
+- `discoverex-verify-flow`
+- `discoverex-animate-flow`
+- `discoverex-combined-flow`
+
+### 엔진 내부 플로우
+- `discoverex-engine-entry-pipeline`
+- `discoverex-generate-pipeline`
+- `discoverex-verify-pipeline`
+- `discoverex-generate-inpaint-variant-pack`
+
+### 호환/내부 핸들러
+- `generate_v1_compat`, `generate_v2_compat`
+- `generate_verify_v2`, `generate_object_only`, `generate_inpaint_variant_pack`
+- `verify_v1_compat`
+- `animate_replay_eval`, `animate_stub`
+
+## 3. 실행 모드 정의
 
 ### 2.1 Local Mode (로컬 개발용)
 - **저장소**: 로컬 파일 시스템 (`adapters/artifact_store=local`)
@@ -30,7 +51,7 @@ Discoverex 엔진의 로컬/워커 실행 모드와 실제 파이프라인 운�
 - **업로드 책임**: MinIO 업로드, presign 요청, MLflow artifact URI tag 기록은 워커가 담당합니다.
 - **인증**: 원격 MLflow가 보호되어 있으면 워커가 프록시를 띄우고 엔진에는 치환된 URI만 전달합니다.
 
-## 3. 실제 실행 예시
+## 4. 실제 실행 예시
 
 ### 로컬 모드 기본 실행 (just 사용 권장)
 ```bash
@@ -55,7 +76,7 @@ uv run discoverex generate \
 
 이 예시는 워커가 실제로 주입하는 계약을 로컬에서 흉내 내는 디버그 예시입니다.
 
-## 4. 필수 환경변수 및 가드레일
+## 5. 필수 환경변수 및 가드레일
 
 워커 환경에서 실행 시 아래 환경변수가 필수적으로 관리되어야 합니다.
 - `MLFLOW_TRACKING_URI`: MLflow 서버 주소 또는 워커 프록시 주소
@@ -67,13 +88,13 @@ uv run discoverex generate \
 2. durable output은 worker-managed artifact directory 계약으로만 보장됩니다.
 3. 실행 후 산출물 영속화는 worker upload 결과와 manifest를 기준으로 확인합니다.
 
-## 5. 트러블슈팅 (Quick Fix)
+## 6. 트러블슈팅 (Quick Fix)
 
 - **Hydra Target 에러**: `conf/models/*` 또는 `conf/adapters/*`의 `_target_` 경로를 확인하십시오.
 - **Tracker 초기화 에러**: `uv sync --extra tracking`이 실행되었는지 확인하십시오.
 - **Worker artifact 업로드 에러**: `ORCH_ENGINE_ARTIFACT_DIR`와 `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`가 주입되었는지, manifest 경로와 상대경로가 계약에 맞는지 확인하십시오.
 
-## 6. 로컬 E2E 검증
+## 7. 로컬 E2E 검증
 
 엔진 실행 계약을 한 번에 확인하려면 아래 하네스를 사용합니다.
 
@@ -85,6 +106,6 @@ UV_CACHE_DIR="$PWD/.cache/uv" uv run python infra/e2e/engine_runtime_e2e.py --sc
 - `tracking-artifact`: tiny runtime으로 실제 generate 실행, 엔진의 MLflow 기록 경계 확인
 - `worker-contract`: worker artifact 디렉토리/manifest/output upload 계약 확인
 
-## 7. 참고 문서
+## 8. 참고 문서
 - CLI 상세 옵션: `docs/ops/cli.md`
 - 마이그레이션 이력: `docs/dev/prefect-migration.md`

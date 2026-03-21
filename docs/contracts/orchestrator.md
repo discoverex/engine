@@ -4,20 +4,30 @@
 
 ## 1. 개요 및 엔트리포인트
 
-- **공식 플로우 엔트리포인트**:
-  - `prefect_flow.py:run_generate_job_flow`
-  - `prefect_flow.py:run_verify_job_flow`
-  - `prefect_flow.py:run_animate_job_flow`
-  - `prefect_flow.py:run_combined_job_flow`
-- **Prefect 플로우 이름**:
-  - `discoverex-generate-flow`
-  - `discoverex-verify-flow`
-  - `discoverex-animate-flow`
-  - `discoverex-combined-flow`
+### 공식 외부 엔트리포인트
+- `prefect_flow.py:run_job_flow`
+- `prefect_flow.py:run_generate_job_flow`
+- `prefect_flow.py:run_verify_job_flow`
+- `prefect_flow.py:run_animate_job_flow`
+- `prefect_flow.py:run_combined_job_flow`
+
+### Prefect 플로우 이름
+- `discoverex-engine-flow`
+- `discoverex-generate-flow`
+- `discoverex-verify-flow`
+- `discoverex-animate-flow`
+- `discoverex-combined-flow`
+
+### 현재 역할 구분
+- `discoverex-engine-flow`: command 제한이 없는 일반 JobSpec 진입점
+- `discoverex-generate-flow` / `discoverex-verify-flow` / `discoverex-animate-flow`: command가 고정된 운영용 엔트리포인트
+- `discoverex-combined-flow`: composite command를 명시적으로 분해 실행하는 엔트리포인트
 
 ### 책임 경계
 - **엔진 저장소**: 등록 가능한 플로우 호출부와 런타임 호환성을 책임집니다.
 - **외부 운영 계층**: Deployment 생성, 작업 제출(Submission), 워커 풀 및 큐 관리를 책임집니다.
+
+외부 오케스트레이터는 위 엔트리포인트만 호출합니다. 내부 엔진 플로우(`discoverex-engine-entry-pipeline`, `discoverex-generate-pipeline`, `discoverex-verify-pipeline`)와 subflow handler는 외부 계약 대상이 아닙니다.
 
 ## 2. Job Spec 스키마 (`job_spec_json`)
 
@@ -57,6 +67,17 @@
 - 워커가 업로드된 object URI를 MLflow tag로 기록합니다.
 - presign 요청과 MinIO 업로드는 워커가 수행합니다.
 
-## 5. 참고 문서
+## 5. 명령어 호환성
+
+- v2 공개 command: `generate`, `verify`, `animate`
+- v1 shim command: `gen-verify`, `verify-only`, `replay-eval`
+- 매핑:
+  - `gen-verify` -> `generate`
+  - `verify-only` -> `verify`
+  - `replay-eval` -> `animate`
+
+`v1` command는 등록/CLI 하위 호환을 위해 유지되며, 운영 기준 command는 `v2`를 우선합니다.
+
+## 6. 참고 문서
 - 내부 엔진 실행 사양: `docs/contracts/engine-run.md`
 - 마이그레이션 이력: `docs/dev/prefect-migration.md`

@@ -8,7 +8,27 @@ Discoverex Core 엔진 리포지토리입니다. Scene Canonical 규약을 중�
 - **설정 기반 조립**: Hydra 설정을 통해 실행 시점에 어댑터를 동적으로 교환합니다.
 - **워커 계약 우선**: 워커는 `MLFLOW_TRACKING_URI`와 engine artifact 디렉터리/manifest 경로를 주입하고, 업로드와 MLflow URI tag 기록은 워커가 담당합니다.
 
-## 2. 문서 가이드 (Documentation Index)
+## 2. 현재 플로우 구조
+
+### 공식 Prefect 엔트리포인트
+- `discoverex-engine-flow`: 일반 JobSpec 진입점
+- `discoverex-generate-flow`: generate 전용 진입점
+- `discoverex-verify-flow`: verify 전용 진입점
+- `discoverex-animate-flow`: animate 전용 진입점
+- `discoverex-combined-flow`: 명시적 복합 실행 경로
+
+### 내부 엔진 플로우
+- `discoverex-engine-entry-pipeline`: settings/snapshot 생성과 subflow dispatch
+- `discoverex-generate-pipeline`: scene 생성 및 검증 포함 메인 생성 파이프라인
+- `discoverex-verify-pipeline`: 기존 scene 검증 파이프라인
+- `discoverex-generate-inpaint-variant-pack`: variant pack 생성 파이프라인
+
+### 호환/서브플로우 핸들러
+- generate 계열: `generate_v1_compat`, `generate_v2_compat`, `generate_verify_v2`, `generate_object_only`, `generate_inpaint_variant_pack`
+- verify 계열: `verify_v1_compat`
+- animate 계열: `animate_replay_eval`, `animate_stub`
+
+## 3. 문서 가이드 (Documentation Index)
 
 프로젝트에 대한 자세한 내용은 아래 문서를 참고하십시오.
 
@@ -31,7 +51,7 @@ Discoverex Core 엔진 리포지토리입니다. Scene Canonical 규약을 중�
 - [Orchestrator & Worker Contract](docs/contracts/orchestrator.md): 외부 Prefect/워커 실행 계약.
 - [Registration Details](docs/contracts/registration/README.md): Prefect 등록 관련 세부 사양.
 
-## 3. 퀵스타트 (Quick Start)
+## 4. 퀵스타트 (Quick Start)
 
 ```bash
 # 환경 설정
@@ -44,7 +64,7 @@ just run discoverex generate --background-asset-ref bg://dummy
 uv run discoverex generate --background-asset-ref bg://dummy -o profile=cpu_fast
 ```
 
-## 4. 품질 검증
+## 5. 품질 검증
 ```bash
 just lint
 just typecheck
