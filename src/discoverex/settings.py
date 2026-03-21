@@ -99,7 +99,37 @@ class AppSettings(BaseModel):
         env: dict[str, str] | None = None,
     ) -> "AppSettings":
         env_map = dict(os.environ if env is None else env)
-        runtime_env = pipeline.runtime.env
+        runtime_env = pipeline.runtime.env.model_copy(
+            update={
+                "artifact_bucket": str(
+                    env_map.get("ARTIFACT_BUCKET", pipeline.runtime.env.artifact_bucket)
+                ).strip(),
+                "s3_endpoint_url": str(
+                    env_map.get("MLFLOW_S3_ENDPOINT_URL", pipeline.runtime.env.s3_endpoint_url)
+                ).strip(),
+                "aws_access_key_id": str(
+                    env_map.get("AWS_ACCESS_KEY_ID", pipeline.runtime.env.aws_access_key_id)
+                ).strip(),
+                "aws_secret_access_key": str(
+                    env_map.get(
+                        "AWS_SECRET_ACCESS_KEY", pipeline.runtime.env.aws_secret_access_key
+                    )
+                ).strip(),
+                "metadata_db_url": str(
+                    env_map.get("METADATA_DB_URL", pipeline.runtime.env.metadata_db_url)
+                ).strip(),
+                "tracking_uri": str(
+                    env_map.get("MLFLOW_TRACKING_URI", pipeline.runtime.env.tracking_uri)
+                ).strip(),
+            }
+        )
+        pipeline = pipeline.model_copy(
+            update={
+                "runtime": pipeline.runtime.model_copy(
+                    update={"env": runtime_env}
+                )
+            }
+        )
         selected_profile = next(
             (
                 item.split("=", 1)[1].strip()
@@ -156,18 +186,50 @@ def build_settings(
         return AppSettings.model_validate(resolved_config)
     if isinstance(resolved_config, AppSettings):
         return resolved_config
+    env_map = dict(os.environ if env is None else env)
     pipeline = resolve_pipeline_config(
         config_name=config_name,
         config_dir=config_dir,
         overrides=overrides,
         resolved_config=resolved_config,
     )
+    runtime_env = pipeline.runtime.env.model_copy(
+        update={
+            "artifact_bucket": str(
+                env_map.get("ARTIFACT_BUCKET", pipeline.runtime.env.artifact_bucket)
+            ).strip(),
+            "s3_endpoint_url": str(
+                env_map.get("MLFLOW_S3_ENDPOINT_URL", pipeline.runtime.env.s3_endpoint_url)
+            ).strip(),
+            "aws_access_key_id": str(
+                env_map.get("AWS_ACCESS_KEY_ID", pipeline.runtime.env.aws_access_key_id)
+            ).strip(),
+            "aws_secret_access_key": str(
+                env_map.get(
+                    "AWS_SECRET_ACCESS_KEY", pipeline.runtime.env.aws_secret_access_key
+                )
+            ).strip(),
+            "metadata_db_url": str(
+                env_map.get("METADATA_DB_URL", pipeline.runtime.env.metadata_db_url)
+            ).strip(),
+            "tracking_uri": str(
+                env_map.get("MLFLOW_TRACKING_URI", pipeline.runtime.env.tracking_uri)
+            ).strip(),
+        }
+    )
+    pipeline = pipeline.model_copy(
+        update={
+            "runtime": pipeline.runtime.model_copy(
+                update={"env": runtime_env}
+            )
+        }
+    )
     return AppSettings.from_pipeline(
         pipeline=pipeline,
         config_name=config_name,
         config_dir=config_dir,
         overrides=overrides,
-        env=env,
+        env=env_map,
     )
 
 
