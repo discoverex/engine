@@ -19,6 +19,9 @@ def export_originals(
         region_dir.mkdir(parents=True, exist_ok=True)
         for key in (
             "candidate_image_ref",
+            "generated_object_image_ref",
+            "generated_object_mask_ref",
+            "generated_raw_alpha_mask_ref",
             "object_image_ref",
             "processed_object_image_ref",
             "processed_object_mask_ref",

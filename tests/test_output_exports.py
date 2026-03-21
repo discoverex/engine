@@ -42,6 +42,9 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
 
     base_image = scene_root / "assets" / "background" / "base.png"
     object_image = scene_root / "assets" / "objects" / "object.png"
+    generated_object_image = scene_root / "assets" / "objects" / "generated.object.png"
+    generated_object_mask = scene_root / "assets" / "masks" / "generated.mask.png"
+    generated_raw_alpha = scene_root / "assets" / "masks" / "generated.raw-alpha-mask.png"
     processed_object_image = scene_root / "assets" / "patches" / "object.layer.png"
     processed_object_mask = scene_root / "assets" / "patches" / "object.layer-mask.png"
     precomposite_image = scene_root / "assets" / "patches" / "region.precomposite.png"
@@ -50,13 +53,16 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
     for path, color in (
         (base_image, (255, 255, 255, 255)),
         (object_image, (255, 0, 0, 255)),
+        (generated_object_image, (200, 0, 0, 255)),
+        (generated_object_mask, (255, 255, 255, 255)),
+        (generated_raw_alpha, (180, 180, 180, 255)),
         (processed_object_image, (0, 0, 255, 255)),
         (processed_object_mask, (255, 255, 255, 255)),
         (precomposite_image, (0, 255, 0, 255)),
         (composite_image, (0, 0, 0, 255)),
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
-        mode = "L" if path == processed_object_mask else "RGBA"
+        mode = "L" if path in {processed_object_mask, generated_object_mask, generated_raw_alpha} else "RGBA"
         size = (10, 12) if path in {processed_object_image, processed_object_mask} else (64, 64)
         Image.new(mode, size, color=color[0] if mode == "L" else color).save(path)
     variant_manifest.write_text("{}", encoding="utf-8")
@@ -81,6 +87,9 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
                     {
                         "region_id": "r1",
                         "candidate_image_ref": str(object_image),
+                        "generated_object_image_ref": str(generated_object_image),
+                        "generated_object_mask_ref": str(generated_object_mask),
+                        "generated_raw_alpha_mask_ref": str(generated_raw_alpha),
                         "object_image_ref": str(object_image),
                         "processed_object_image_ref": str(processed_object_image),
                         "processed_object_mask_ref": str(processed_object_mask),
@@ -153,7 +162,7 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
     assert exported.manifest_path.exists()
     assert len(exported.layer_paths) == 3
     assert len(exported.source_layer_paths) == 1
-    assert len(exported.original_paths) == 10
+    assert len(exported.original_paths) == 13
     payload = json.loads(exported.manifest_path.read_text(encoding="utf-8"))
     assert payload["lottie_path"] == "animation.lottie"
     assert payload["source_layers"] == [
@@ -174,6 +183,9 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
             "object_number": 1,
             "center": [6.0, 8.0],
             "candidate_image_ref": str(object_image),
+            "generated_object_image_ref": str(generated_object_image),
+            "generated_object_mask_ref": str(generated_object_mask),
+            "generated_raw_alpha_mask_ref": str(generated_raw_alpha),
             "object_image_ref": str(object_image),
             "processed_object_image_ref": str(processed_object_image),
             "processed_object_mask_ref": str(processed_object_mask),
@@ -186,6 +198,9 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
         }
     ]
     assert {"region_id": "r1", "kind": "candidate_image_ref", "path": "original/r1/object.png"} in payload["original"]
+    assert {"region_id": "r1", "kind": "generated_object_image_ref", "path": "original/r1/generated.object.png"} in payload["original"]
+    assert {"region_id": "r1", "kind": "generated_object_mask_ref", "path": "original/r1/generated.mask.png"} in payload["original"]
+    assert {"region_id": "r1", "kind": "generated_raw_alpha_mask_ref", "path": "original/r1/generated.raw-alpha-mask.png"} in payload["original"]
     assert {"region_id": "r1", "kind": "processed_object_image_ref", "path": "original/r1/object.layer.png"} in payload["original"]
     assert {"region_id": "r1", "kind": "processed_object_mask_ref", "path": "original/r1/object.layer-mask.png"} in payload["original"]
     assert {"region_id": "r1", "kind": "precomposited_image_ref", "path": "original/r1/region.precomposite.png"} in payload["original"]

@@ -184,7 +184,18 @@ def _build_prompt_embeds(
         encode_kwargs["prompt_2"] = prompts
     if "negative_prompt_2" in encode_signature.parameters:
         encode_kwargs["negative_prompt_2"] = negative_prompts
-    encoded = encode_prompt(**encode_kwargs)
+    try:
+        encoded = encode_prompt(**encode_kwargs)
+    except RuntimeError as exc:
+        message = str(exc)
+        if "Expected all tensors to be on the same device" not in message:
+            raise
+        return (
+            prompt_embeds,
+            negative_prompt_embeds,
+            pooled_prompt_embeds,
+            negative_pooled_prompt_embeds,
+        )
     if isinstance(encoded, tuple) and len(encoded) == 4:
         (
             prompt_embeds,

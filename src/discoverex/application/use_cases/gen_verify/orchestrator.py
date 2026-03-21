@@ -26,6 +26,7 @@ from .persistence import (
     write_verification_report,
 )
 from .prompt_bundle import build_prompt_tracking_params, save_prompt_bundle
+from .region_prompts import record_generated_object_candidate
 from .region_pipeline import build_candidate_regions, generate_regions
 from .scene_builder import build_scene, generate_run_ids
 from .types import PromptBundle, PromptStageRecord
@@ -127,6 +128,15 @@ def run(
         )
     finally:
         unload_model(context.object_generator_model)
+    for region in regions_to_process:
+        asset = generated_objects.get(region.region_id)
+        if asset is None:
+            continue
+        record_generated_object_candidate(
+            background=background,
+            region=region,
+            asset=asset,
+        )
 
     # 2. Blend generated objects into selected regions (load inpaint model only)
     inpaint_handle = context.inpaint_model.load(model_versions.inpaint)

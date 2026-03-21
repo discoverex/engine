@@ -15,6 +15,9 @@ from discoverex.application.use_cases.generate_verify_v2 import (
     _prepare_objects_for_placement,
     _harmonize_rgba,
 )
+from discoverex.adapters.outbound.models.objects.layerdiffuse.generate import (
+    _build_prompt_embeds,
+)
 from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
 from discoverex.config_loader import load_pipeline_config
 
@@ -343,3 +346,21 @@ def test_prepare_objects_for_placement_builds_variants_once_per_asset(
     assert [item.asset.region_id for item in prepared] == ["r-1", "r-2", "r-3"]
     assert seen_region_ids == ["r-1", "r-2", "r-3"]
     assert prepared[0].variants == [{"variant_id": "r-1-v1", "image": None}]
+
+
+def test_build_prompt_embeds_falls_back_when_encode_prompt_has_device_mismatch() -> None:
+    class _Pipe:
+        def encode_prompt(self, **kwargs):  # type: ignore[no-untyped-def]
+            raise RuntimeError(
+                "Expected all tensors to be on the same device, but got index is on cpu"
+            )
+
+    result = _build_prompt_embeds(
+        pipe=_Pipe(),
+        execution_device="cuda",
+        prompts="butterfly",
+        negative_prompts="blurry",
+        guidance_scale=5.0,
+    )
+
+    assert result == (None, None, None, None)

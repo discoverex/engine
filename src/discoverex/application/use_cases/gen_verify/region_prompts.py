@@ -3,6 +3,7 @@ from __future__ import annotations
 from discoverex.domain.region import Region
 from discoverex.domain.scene import Background
 from discoverex.models.types import InpaintPrediction
+from .objects.types import GeneratedObjectAsset
 
 from .types import RegionPromptRecord
 
@@ -20,6 +21,54 @@ def bbox_payload(region: Region) -> dict[str, float]:
 def bbox_tuple(region: Region) -> tuple[float, float, float, float]:
     bbox = region.geometry.bbox
     return (bbox.x, bbox.y, bbox.w, bbox.h)
+
+
+def _candidate_list(background: Background) -> list[dict[str, object]] | None:
+    candidates = background.metadata.setdefault("inpaint_layer_candidates", [])
+    return candidates if isinstance(candidates, list) else None
+
+
+def _upsert_candidate(
+    *,
+    background: Background,
+    region_id: str,
+    payload: dict[str, object],
+) -> None:
+    candidates = _candidate_list(background)
+    if candidates is None:
+        return
+    for index, item in enumerate(candidates):
+        if isinstance(item, dict) and item.get("region_id") == region_id:
+            candidates[index] = {**item, **payload}
+            return
+    candidates.append(payload)
+
+
+def record_generated_object_candidate(
+    *,
+    background: Background,
+    region: Region,
+    asset: GeneratedObjectAsset,
+) -> None:
+    payload: dict[str, object] = {
+        "region_id": region.region_id,
+        "bbox": bbox_payload(region),
+        "candidate_image_ref": asset.candidate_ref,
+        "generated_object_image_ref": asset.object_ref,
+        "generated_object_mask_ref": asset.object_mask_ref,
+        "object_prompt_resolved": asset.object_prompt,
+        "object_negative_prompt_resolved": asset.object_negative_prompt,
+        "object_model_id": asset.object_model_id,
+        "object_sampler": asset.object_sampler,
+        "object_steps": asset.object_steps,
+        "object_guidance_scale": asset.object_guidance_scale,
+        "object_seed": asset.object_seed,
+        "mask_source": asset.mask_source,
+    }
+    if asset.raw_alpha_mask_ref:
+        payload["generated_raw_alpha_mask_ref"] = asset.raw_alpha_mask_ref
+        payload["raw_alpha_mask_ref"] = asset.raw_alpha_mask_ref
+    _upsert_candidate(background=background, region_id=region.region_id, payload=payload)
 
 
 def record_layer_candidate(
@@ -41,9 +90,6 @@ def record_layer_candidate(
         else object_ref if isinstance(object_ref, str) and object_ref else patch_ref
     )
     if not isinstance(layer_ref, str) or not layer_ref:
-        return
-    candidates = background.metadata.setdefault("inpaint_layer_candidates", [])
-    if not isinstance(candidates, list):
         return
     payload = {
         "region_id": region.region_id,
@@ -91,7 +137,7 @@ def record_layer_candidate(
                 payload[key] = value
             elif value is not None:
                 payload[key] = value
-    candidates.append(payload)
+    _upsert_candidate(background=background, region_id=region.region_id, payload=payload)
 
 
 def build_prompt_record(

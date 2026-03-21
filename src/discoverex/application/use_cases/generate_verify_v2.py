@@ -44,7 +44,10 @@ from discoverex.application.use_cases.gen_verify.prompt_bundle import (
     build_prompt_tracking_params,
     save_prompt_bundle,
 )
-from discoverex.application.use_cases.gen_verify.region_prompts import record_layer_candidate
+from discoverex.application.use_cases.gen_verify.region_prompts import (
+    record_generated_object_candidate,
+    record_layer_candidate,
+)
 from discoverex.application.use_cases.gen_verify.region_pipeline import generate_regions
 from discoverex.application.use_cases.gen_verify.regions.selection import (
     bbox_iou,
@@ -126,6 +129,11 @@ def run(
             object_negative_prompt=object_negative_prompt,
             object_generation_size=object_generation_size,
         )
+        _record_generated_object_candidates(
+            background=background,
+            regions=candidate_regions,
+            generated_objects=generated_objects,
+        )
     else:
         object_count = max(
             1,
@@ -142,6 +150,11 @@ def run(
             object_prompt=object_prompt,
             object_negative_prompt=object_negative_prompt,
             object_generation_size=object_generation_size,
+        )
+        _record_generated_object_candidates(
+            background=background,
+            regions=placeholder_regions,
+            generated_objects=generated_objects,
         )
         _stdout_debug("generate_verify_v2 object_generation_complete")
         stage_gpu_barrier("after_object_generation")
@@ -398,6 +411,23 @@ def _prepare_objects_for_placement(
             )
         )
     return prepared
+
+
+def _record_generated_object_candidates(
+    *,
+    background: Background,
+    regions: list[Region],
+    generated_objects: dict[str, GeneratedObjectAsset],
+) -> None:
+    for region in regions:
+        asset = generated_objects.get(region.region_id)
+        if asset is None:
+            continue
+        record_generated_object_candidate(
+            background=background,
+            region=region,
+            asset=asset,
+        )
 
 
 def _select_regions_patch_similarity(
