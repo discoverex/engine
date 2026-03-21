@@ -105,38 +105,6 @@ def _prepare_text_encoders(*, pipe: Any, execution_device: Any) -> None:
             continue
 
 
-def _prepare_inference_stack(*, pipe: Any, execution_device: Any) -> None:
-    try:
-        from accelerate.hooks import remove_hook_from_module  # type: ignore
-    except Exception:
-        remove_hook_from_module = None
-    for component_name in ("unet",):
-        component = getattr(pipe, component_name, None)
-        if component is None:
-            continue
-        if callable(remove_hook_from_module):
-            try:
-                remove_hook_from_module(component, recurse=True)
-            except Exception:
-                pass
-        try:
-            component.to(execution_device)
-        except Exception:
-            continue
-    scheduler = getattr(pipe, "scheduler", None)
-    if scheduler is None:
-        return
-    for attr_name in ("sigmas", "timesteps"):
-        value = getattr(scheduler, attr_name, None)
-        move = getattr(value, "to", None)
-        if not callable(move):
-            continue
-        try:
-            setattr(scheduler, attr_name, move(execution_device))
-        except Exception:
-            continue
-
-
 def _offload_unet_stack(*, pipe: Any) -> None:
     try:
         import torch  # type: ignore
@@ -288,7 +256,6 @@ def _sample_latents(
     if prompt_embeds is not None:
         _offload_text_encoders(pipe=pipe)
         _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
-    _prepare_inference_stack(pipe=pipe, execution_device=execution_device)
     call_signature = inspect.signature(pipe.__call__)
     pipe_kwargs: dict[str, Any] = {
         "prompt": None if prompt_embeds is not None else prompts,
