@@ -1,11 +1,11 @@
 run_mode: repo
 engine: discoverex
 repo_url: https://github.com/discoverex/engine.git
-ref: codex/discoverex-engine-run-wip
+ref: feat/inline-resolved-config-registration
 entrypoint:
   - prefect_flow.py:run_generate_job_flow
 config: null
-job_name: generate--generate--generator-sdxl-gpu
+job_name: prod-gen-sdxl-none-hfregion-sdxlinpaint-tuned-8gb
 inputs:
   contract_version: v2
   command: generate
@@ -21,9 +21,15 @@ inputs:
   overrides:
     - runtime/model_runtime=gpu
     - runtime.width=512
-    - runtime.height=512
+    - runtime.height=384
     - models/background_generator=sdxl_gpu
     - models/hidden_region=hf
+    - models.inpaint.generation_strength=0.65
+    - models.inpaint.generation_steps=40
+    - models.inpaint.generation_guidance_scale=7.0
+    - models.inpaint.mask_blur=8
+    - models.inpaint.inpaint_only_masked=true
+    - models.inpaint.masked_area_padding=32
     - models/inpaint=sdxl_gpu
     - models/perception=hf
     - models/fx=copy_image

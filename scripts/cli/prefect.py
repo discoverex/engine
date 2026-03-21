@@ -44,7 +44,7 @@ INFRA_DIR = REPO_ROOT / "infra" / "register"
 DEFAULT_REGISTER_JOB_SPEC = (
     INFRA_DIR
     / "job_specs"
-    / "real-generate-pixart-hidden-object-naturalness-v2-8gb-safe.yaml"
+    / "prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml"
 )
 DEFAULT_NATURALNESS_SWEEP_SPEC = INFRA_DIR / "sweeps" / "naturalness_medium.yaml"
 DEFAULT_EXPERIMENT_QUEUE = "gpu-fixed-batch"

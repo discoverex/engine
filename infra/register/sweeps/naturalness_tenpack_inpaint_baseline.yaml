@@ -1,7 +1,7 @@
 sweep_id: naturalness-tenpack-inpaint-baseline
 search_stage: baseline
 experiment_name: discoverex-naturalness-tenpack
-base_job_spec: ../job_specs/real-generate-pixart-hidden-object-naturalness-v2-8gb-safe.yaml
+base_job_spec: ../job_specs/prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml
 scenarios_csv: naturalness_tenpack_scenarios.csv
 fixed_overrides:
   - adapters/tracker=mlflow_server

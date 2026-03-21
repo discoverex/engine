@@ -3,7 +3,7 @@ engine: discoverex
 entrypoint:
   - prefect_flow.py:run_generate_job_flow
 config: null
-job_name: quick-generate-object-only-layerdiffuse-8gb-safe
+job_name: prod-genobj-none-realvisxl5-none-8gb
 inputs:
   contract_version: v2
   command: generate

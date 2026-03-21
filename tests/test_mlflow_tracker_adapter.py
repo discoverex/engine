@@ -140,7 +140,7 @@ def test_mlflow_tracker_uses_direct_remote_api_with_cf_headers(
             "version_id": "ver-1",
             "background_prompt_used": "forest",
             "prefect.flow_run_id": "prefect-flow-123",
-            "prefect.flow_run_name": "verify-smoke-track-upload",
+            "prefect.flow_run_name": "test-verify-smoke-none-none-none",
         },
         metrics={"pass": 1.0},
         artifacts=[scene_json, verification, prompt_bundle, execution_config],
@@ -158,7 +158,7 @@ def test_mlflow_tracker_uses_direct_remote_api_with_cf_headers(
     assert calls[1][3]["tags"] == [
         {"key": "mlflow.runName", "value": "generate"},
         {"key": "prefect.flow_run_id", "value": "prefect-flow-123"},
-        {"key": "prefect.flow_run_name", "value": "verify-smoke-track-upload"},
+        {"key": "prefect.flow_run_name", "value": "test-verify-smoke-none-none-none"},
     ]
     assert calls[2][3]["run_id"] == "run-123"
 

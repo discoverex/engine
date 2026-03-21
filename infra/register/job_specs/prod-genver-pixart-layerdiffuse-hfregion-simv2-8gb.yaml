@@ -5,7 +5,7 @@ ref: feat/engin-worker-observility
 entrypoint:
   - prefect_flow.py:run_generate_job_flow
 config: null
-job_name: quick-generate-v2-https-8gb-safe
+job_name: prod-genver-pixart-layerdiffuse-hfregion-simv2-8gb
 inputs:
   contract_version: v2
   command: generate
@@ -19,12 +19,12 @@ inputs:
     final_prompt: polished playable hidden object scene
     final_negative_prompt: blurry, low quality, artifact
   overrides:
-    - profile=generator_sdxl_gpu_v2_8gb
+    - profile=generator_pixart_gpu_v2_8gb
     - runtime/model_runtime=gpu
     - flows/generate=v2
-    - runtime.width=256
-    - runtime.height=256
-    - models/background_generator=sdxl_gpu
+    - runtime.width=1024
+    - runtime.height=1024
+    - models/background_generator=pixart_sigma_8gb
     - models/object_generator=layerdiffuse
     - models/hidden_region=hf
     - models/inpaint=sdxl_gpu_similarity_v2

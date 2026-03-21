@@ -1,11 +1,11 @@
 run_mode: repo
 engine: discoverex
 repo_url: https://github.com/discoverex/engine.git
-ref: fix/generation-flow
+ref: feat/artifact-output-layout
 entrypoint:
   - prefect_flow.py:run_generate_job_flow
 config: null
-job_name: quick-generate-verify-v2-persistent-venv-no-tracking
+job_name: prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb
 inputs:
   contract_version: v2
   command: generate
@@ -18,12 +18,10 @@ inputs:
     object_negative_prompt: blurry, low quality, artifact
     final_prompt: polished playable hidden object scene, keep inserted objects matched to the background painting style, lighting direction, palette, texture, and scene atmosphere
     final_negative_prompt: blurry, low quality, artifact
-    object_count: 3
   overrides:
     - profile=generator_pixart_gpu_v2_hidden_object
     - runtime/model_runtime=gpu
-    - flows/generate=generate_verify_v2
-    - region_selection.strategy=patch_similarity_v2
+    - flows/generate=naturalness
     - runtime.width=512
     - runtime.height=512
     - runtime.background_upscale_factor=2
@@ -34,18 +32,14 @@ inputs:
     - models/perception=hf
     - models/fx=copy_image
     - runtime.model_runtime.offload_mode=sequential
-    - adapters.tracker._target_=discoverex.adapters.outbound.tracking.noop.NoOpTrackerAdapter
   runtime:
     mode: worker
-    bootstrap_mode: none
+    bootstrap_mode: auto
     extras:
+      - tracking
       - storage
       - ml-gpu
       - validator
-    extra_env:
-      CACHE_DIR: /cache/discoverex-engine
-      UV_CACHE_DIR: /cache/discoverex-engine/uv
-      MODEL_CACHE_DIR: /cache/discoverex-engine/models
-      UV_PROJECT_ENVIRONMENT: /cache/discoverex-engine/.venv
+    extra_env: {}
 env: {}
 outputs_prefix: null

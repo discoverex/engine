@@ -30,7 +30,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_SPEC = (
     SCRIPT_DIR
     / "job_specs"
-    / "real-generate-pixart-hidden-object-naturalness-v2-8gb-safe.yaml"
+    / "prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml"
 )
 DEFAULT_EXPERIMENT = "naturalness"
 

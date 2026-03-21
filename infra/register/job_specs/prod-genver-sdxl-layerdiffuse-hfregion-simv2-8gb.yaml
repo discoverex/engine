@@ -1,34 +1,33 @@
 run_mode: repo
 engine: discoverex
 repo_url: https://github.com/discoverex/engine.git
-ref: feat/object-hidding
+ref: feat/engin-worker-observility
 entrypoint:
   - prefect_flow.py:run_generate_job_flow
 config: null
-job_name: quick-generate-pixart-hidden-object-v2-8gb-safe
+job_name: prod-genver-sdxl-layerdiffuse-hfregion-simv2-8gb
 inputs:
   contract_version: v2
   command: generate
   config_name: generate
   config_dir: conf
   args:
-    background_prompt: stormy harbor at dusk, cinematic hidden object puzzle background, painterly realism, moody maritime lighting, weathered textures, cohesive color palette
+    background_prompt: stormy harbor at dusk, cinematic hidden object puzzle background
     background_negative_prompt: blurry, low quality, artifact
-    object_prompt: butterfly | antique brass key | crystal wine glass
+    object_prompt: banana
     object_negative_prompt: blurry, low quality, artifact
-    final_prompt: polished playable hidden object scene, keep inserted objects matched to the background painting style, lighting direction, palette, texture, and scene atmosphere
+    final_prompt: polished playable hidden object scene
     final_negative_prompt: blurry, low quality, artifact
   overrides:
-    - profile=generator_pixart_gpu_v2_hidden_object
+    - profile=generator_sdxl_gpu_v2_8gb
     - runtime/model_runtime=gpu
     - flows/generate=v2
-    - runtime.width=768
-    - runtime.height=768
-    - runtime.background_upscale_factor=1
-    - models/background_generator=pixart_sigma_8gb
+    - runtime.width=256
+    - runtime.height=256
+    - models/background_generator=sdxl_gpu
     - models/object_generator=layerdiffuse
     - models/hidden_region=hf
-    - models/inpaint=sdxl_gpu_layerdiffuse_hidden_object_v1
+    - models/inpaint=sdxl_gpu_similarity_v2
     - models/perception=hf
     - models/fx=copy_image
     - runtime.model_runtime.offload_mode=sequential

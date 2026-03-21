@@ -4,7 +4,7 @@ ref: fix/generation-flow
 entrypoint:
   - prefect_flow.py:run_verify_job_flow
 config: null
-job_name: verify-smoke-track-upload
+job_name: test-verify-smoke-none-none-none
 inputs:
   contract_version: v2
   command: verify
