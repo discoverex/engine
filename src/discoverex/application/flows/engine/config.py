@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from discoverex.config import PipelineConfig
+    from discoverex.settings import AppSettings
 
 
 def load_pipeline_config(
@@ -21,6 +22,24 @@ def load_pipeline_config(
         config_dir=config_dir,
         overrides=overrides,
         resolved_config=resolved_config,
+    )
+
+
+def build_app_settings(
+    config_name: str,
+    config_dir: str = "conf",
+    overrides: list[str] | None = None,
+    resolved_config: object | None = None,
+    env: dict[str, str] | None = None,
+) -> "AppSettings":
+    from discoverex.settings import build_settings as _build_settings
+
+    return _build_settings(
+        config_name=config_name,
+        config_dir=config_dir,
+        overrides=overrides,
+        resolved_config=resolved_config,
+        env=env,
     )
 
 

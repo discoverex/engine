@@ -49,6 +49,8 @@ class LayerDiffuseObjectGenerationModel:
         default_num_inference_steps: int = 30,
         default_guidance_scale: float = 5.0,
         weights_cache_dir: str = ".cache/layerdiffuse",
+        model_cache_dir: str = "",
+        hf_home: str = "",
     ) -> None:
         self.model_id = model_id
         self.revision = revision
@@ -69,7 +71,13 @@ class LayerDiffuseObjectGenerationModel:
         self.default_negative_prompt = default_negative_prompt
         self.default_num_inference_steps = default_num_inference_steps
         self.default_guidance_scale = default_guidance_scale
-        self.weights_cache_dir = str(resolve_shared_cache_dir(weights_cache_dir))
+        self.weights_cache_dir = str(
+            resolve_shared_cache_dir(
+                weights_cache_dir,
+                model_cache_dir=model_cache_dir,
+                hf_home=hf_home,
+            )
+        )
         self._pipe: Any | None = None
         self._transparent_decoder: Any | None = None
         self._layerdiffuse_applied = False

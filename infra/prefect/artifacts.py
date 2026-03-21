@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from discoverex.settings import AppSettings
 from infra.prefect.job_spec import string_value
 from infra.prefect.runtime import (
     ARTIFACT_DIR_ENV,
@@ -80,12 +81,14 @@ def upload_worker_artifacts(
         flow_run_id=flow_run_id,
         attempt=attempt,
         local_paths=local_paths,
+        settings=_settings_from_payload(parsed),
     )
     engine_uploaded = upload_engine_artifacts(
         flow_run_id=flow_run_id,
         attempt=attempt,
         local_paths=local_paths,
         require_manifest=require_manifest,
+        settings=_settings_from_payload(parsed),
     )
     payload: dict[str, Any] = {
         "stdout_uri": uploaded.get("stdout"),
@@ -101,10 +104,13 @@ def upload_worker_artifacts(
         payload=parsed,
         uploaded_uris=payload,
         engine_mlflow_tags=engine_uploaded.mlflow_tags,
+        settings=_settings_from_payload(parsed),
     )
     payload["mlflow_linkage_status"] = linkage.status
     if linkage.linked_tags:
         payload["mlflow_linked_tags"] = linkage.linked_tags
+    if linkage.error:
+        payload["mlflow_linkage_error"] = linkage.error
     return {key: value for key, value in payload.items() if value}
 
 
@@ -143,6 +149,7 @@ def summarize_payload(parsed: dict[str, Any]) -> dict[str, str]:
         "manifest_uri",
         "engine_manifest_uri",
         "mlflow_linkage_status",
+        "mlflow_linkage_error",
     )
     summary = {
         key: string_value(parsed.get(key))
@@ -152,3 +159,20 @@ def summarize_payload(parsed: dict[str, Any]) -> dict[str, str]:
     if not summary:
         return {"status": "completed"}
     return summary
+
+
+def _settings_from_payload(parsed: dict[str, Any]) -> AppSettings | dict[str, Any] | None:
+    execution_config = string_value(parsed.get("execution_config"))
+    if not execution_config:
+        return None
+    path = Path(execution_config)
+    if not path.exists():
+        return None
+    try:
+        snapshot = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    settings = snapshot.get("resolved_settings")
+    if not isinstance(settings, dict):
+        return None
+    return settings

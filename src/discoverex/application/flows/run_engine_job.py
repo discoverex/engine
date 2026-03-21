@@ -64,6 +64,7 @@ def run_engine_job(
         config_dir=engine_inputs.config_dir or "conf",
         overrides=list(engine_inputs.overrides),
         resolved_config=engine_inputs.resolved_config,
+        resolved_settings=engine_inputs.resolved_settings,
     )
     payload.setdefault("job_name", parsed.job_name)
     payload.setdefault("engine", parsed.engine)
@@ -99,6 +100,7 @@ def _inline_job_spec_from_engine_payload(job_spec: dict[str, Any]) -> JobSpec:
         "config_name": job_spec.get("config_name"),
         "config_dir": job_spec.get("config_dir"),
         "resolved_config": job_spec.get("resolved_config"),
+        "resolved_settings": job_spec.get("resolved_settings"),
         "args": job_spec.get("args", {}),
         "overrides": job_spec.get("overrides", []),
         "runtime": job_spec.get("runtime", {}),

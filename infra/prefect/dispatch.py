@@ -94,24 +94,33 @@ def dispatch_engine_job(
 
     args = coerce_args(payload.get("args"))
     resolved_config = payload.get("resolved_config")
+    resolved_settings = payload.get("resolved_settings")
     resolved_config_name = config_name(cast(dict[str, Any], payload))
     resolved_config_dir = string_value(payload.get("config_dir")) or "conf"
     overrides = coerce_overrides(payload.get("overrides"))
 
-    cfg = engine_entry.load_pipeline_config(
+    settings = engine_entry.build_app_settings(
         config_name=resolved_config_name,
         config_dir=resolved_config_dir,
         overrides=overrides,
-        resolved_config=resolved_config,
+        resolved_config=resolved_config if resolved_settings is None else resolved_settings,
+        env=env,
     )
-    cfg = engine_entry.normalize_pipeline_config_for_worker_runtime(cfg)
+    settings = settings.model_copy(
+        update={
+            "pipeline": engine_entry.normalize_pipeline_config_for_worker_runtime(
+                settings.pipeline
+            )
+        }
+    )
+    cfg = settings.pipeline
     execution_snapshot = engine_entry.build_execution_snapshot(
         command=command,
         args=args,
         config_name=resolved_config_name,
         config_dir=resolved_config_dir,
         overrides=overrides,
-        config=cfg,
+        settings=settings,
     )
     execution_snapshot_path = engine_entry.write_execution_snapshot(
         artifacts_root=Path(cfg.runtime.artifacts_root).resolve(),

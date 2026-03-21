@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import time
 from pathlib import Path
 from typing import Any, cast
@@ -15,12 +14,16 @@ class MLflowTrackerAdapter:
         experiment_name: str = "discoverex-core",
         tracking_uri: str = "sqlite:///mlflow.db",
         artifact_bucket: str = "discoverex-artifacts",
+        cf_access_client_id: str = "",
+        cf_access_client_secret: str = "",
         **_: str,
     ) -> None:
         self._mlflow: Any | None = None
         self._tracking_uri = tracking_uri
         self._artifact_bucket = artifact_bucket
         self._experiment_name = experiment_name
+        self._cf_access_client_id = cf_access_client_id
+        self._cf_access_client_secret = cf_access_client_secret
         if not self._uses_remote_tracking():
             try:
                 import mlflow  # type: ignore
@@ -162,7 +165,7 @@ class MLflowTrackerAdapter:
             url,
             method=method,
             data=body,
-            headers=_mlflow_headers(),
+            headers=self._mlflow_headers(),
         )
         try:
             with request.urlopen(req, timeout=60) as resp:
@@ -176,6 +179,18 @@ class MLflowTrackerAdapter:
         if not isinstance(decoded, dict):
             raise RuntimeError(f"unexpected mlflow response type for path={path}")
         return cast(dict[str, Any], decoded)
+
+    def _mlflow_headers(self) -> dict[str, str]:
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "discoverex-mlflow-tracker/1.0",
+        }
+        cf_id = self._cf_access_client_id.strip()
+        cf_secret = self._cf_access_client_secret.strip()
+        if cf_id and cf_secret:
+            headers["CF-Access-Client-Id"] = cf_id
+            headers["CF-Access-Client-Secret"] = cf_secret
+        return headers
 
 
 def _run_id_from_active_run(run: object) -> str | None:
@@ -195,20 +210,6 @@ def _mlflow_artifact_subdir(artifact: Path) -> str | None:
     relative_parent = Path(*parts[scenes_index + 3 : -1])
     text = relative_parent.as_posix()
     return text or None
-
-
-def _mlflow_headers() -> dict[str, str]:
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "discoverex-mlflow-tracker/1.0",
-    }
-    cf_id = os.getenv("CF_ACCESS_CLIENT_ID", "").strip()
-    cf_secret = os.getenv("CF_ACCESS_CLIENT_SECRET", "").strip()
-    if cf_id and cf_secret:
-        headers["CF-Access-Client-Id"] = cf_id
-        headers["CF-Access-Client-Secret"] = cf_secret
-    return headers
-
 
 def _string_value(value: object) -> str:
     if isinstance(value, str):

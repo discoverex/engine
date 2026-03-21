@@ -8,3 +8,5 @@ tile_pad: 16
 pre_pad: 0
 strict_runtime: true
 weights_cache_dir: .cache/realesrgan
+model_cache_dir: ${oc.env:MODEL_CACHE_DIR,""}
+hf_home: ${oc.env:HF_HOME,""}

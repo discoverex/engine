@@ -20,3 +20,5 @@ default_negative_prompt: "busy scene, environment, multiple objects, floor, wall
 default_num_inference_steps: 30
 default_guidance_scale: 5.0
 weights_cache_dir: .cache/layerdiffuse
+model_cache_dir: ${oc.env:MODEL_CACHE_DIR,""}
+hf_home: ${oc.env:HF_HOME,""}

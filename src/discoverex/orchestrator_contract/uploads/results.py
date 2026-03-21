@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from discoverex.settings import AppSettings
+
 from ..storage_http import upload_bytes
 from .presign import prepare_links
 
@@ -12,11 +14,13 @@ def upload_outputs(
     flow_run_id: str,
     attempt: int,
     local_paths: dict[str, str],
+    settings: AppSettings | dict[str, object],
 ) -> dict[str, str]:
     links = prepare_links(
         flow_run_id=flow_run_id,
         attempt=attempt,
         entries=("stdout", "stderr", "result", "manifest"),
+        settings=settings,
     )
     uploaded: dict[str, str] = {}
     for row in links:
@@ -41,8 +45,12 @@ def upload_outputs(
                 + "\n",
                 encoding="utf-8",
             )
-            upload_bytes(put_url, manifest_path.read_bytes())
+            upload_bytes(put_url, manifest_path.read_bytes(), settings=settings)
         else:
-            upload_bytes(put_url, Path(local_paths[kind]).read_bytes())
+            upload_bytes(
+                put_url,
+                Path(local_paths[kind]).read_bytes(),
+                settings=settings,
+            )
         uploaded[kind] = object_uri
     return uploaded

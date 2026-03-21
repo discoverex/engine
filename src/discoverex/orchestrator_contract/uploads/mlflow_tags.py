@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 from typing import Any, TypedDict, cast
 from urllib import error, request
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict
+
+from discoverex.settings import AppSettings
 
 
 class UploadedArtifactUris(TypedDict, total=False):
@@ -36,6 +37,7 @@ class MlflowTagUpdateBatch(BaseModel):
 class MlflowTagLinkageResult:
     status: str
     linked_tags: dict[str, str]
+    error: str = ""
 
 
 def link_uploaded_artifacts(
@@ -43,11 +45,15 @@ def link_uploaded_artifacts(
     payload: dict[str, Any],
     uploaded_uris: UploadedArtifactUris,
     engine_mlflow_tags: dict[str, str],
+    settings: AppSettings | dict[str, Any] | None = None,
 ) -> MlflowTagLinkageResult:
     run_id = str(payload.get("mlflow_run_id", "")).strip()
     if not run_id:
-        return MlflowTagLinkageResult(status="skipped_missing_run_id", linked_tags={})
-    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "").strip()
+        return MlflowTagLinkageResult(
+            status="skipped_missing_run_id",
+            linked_tags={},
+        )
+    tracking_uri = _tracking_uri_from_settings(settings)
     if not tracking_uri:
         return MlflowTagLinkageResult(
             status="skipped_missing_tracking_uri",
@@ -66,7 +72,19 @@ def link_uploaded_artifacts(
             for key, value in sorted(tags.items())
         ],
     )
-    _apply_mlflow_tags(tracking_uri=tracking_uri, batch=batch)
+    try:
+        loaded_settings = _coerce_settings(settings)
+        _apply_mlflow_tags(
+            tracking_uri=tracking_uri,
+            batch=batch,
+            settings=loaded_settings,
+        )
+    except RuntimeError as exc:
+        return MlflowTagLinkageResult(
+            status=_linkage_failure_status(exc),
+            linked_tags={},
+            error=str(exc),
+        )
     return MlflowTagLinkageResult(status="linked", linked_tags=tags)
 
 
@@ -94,10 +112,19 @@ def _build_tag_updates(
     return tags
 
 
-def _apply_mlflow_tags(*, tracking_uri: str, batch: MlflowTagUpdateBatch) -> None:
+def _apply_mlflow_tags(
+    *,
+    tracking_uri: str,
+    batch: MlflowTagUpdateBatch,
+    settings: AppSettings | None,
+) -> None:
     scheme = urlsplit(tracking_uri).scheme.lower()
     if scheme in {"http", "https"}:
-        _apply_remote_mlflow_tags(tracking_uri=tracking_uri, batch=batch)
+        _apply_remote_mlflow_tags(
+            tracking_uri=tracking_uri,
+            batch=batch,
+            settings=settings,
+        )
         return
     _apply_local_mlflow_tags(tracking_uri=tracking_uri, batch=batch)
 
@@ -106,6 +133,7 @@ def _apply_remote_mlflow_tags(
     *,
     tracking_uri: str,
     batch: MlflowTagUpdateBatch,
+    settings: AppSettings | None,
 ) -> None:
     for tag in batch.tags:
         payload = {
@@ -118,7 +146,7 @@ def _apply_remote_mlflow_tags(
             f"{tracking_uri.rstrip('/')}/api/2.0/mlflow/runs/set-tag",
             method="POST",
             data=body,
-            headers=_mlflow_headers(),
+            headers=_mlflow_headers(settings),
         )
         try:
             with request.urlopen(req, timeout=60) as resp:
@@ -150,14 +178,34 @@ def _apply_local_mlflow_tags(
         client.set_tag(batch.run_id, tag.key, tag.value)
 
 
-def _mlflow_headers() -> dict[str, str]:
+def _mlflow_headers(settings: AppSettings | None) -> dict[str, str]:
     headers = {
         "Content-Type": "application/json",
         "User-Agent": "discoverex-worker-mlflow-linkage/1.0",
     }
-    cf_id = os.getenv("CF_ACCESS_CLIENT_ID", "").strip()
-    cf_secret = os.getenv("CF_ACCESS_CLIENT_SECRET", "").strip()
+    cf_id = settings.worker_http.cf_access_client_id.strip() if settings else ""
+    cf_secret = settings.worker_http.cf_access_client_secret.strip() if settings else ""
     if cf_id and cf_secret:
         headers["CF-Access-Client-Id"] = cf_id
         headers["CF-Access-Client-Secret"] = cf_secret
     return cast(dict[str, str], headers)
+
+
+def _tracking_uri_from_settings(settings: AppSettings | dict[str, Any] | None) -> str:
+    loaded = _coerce_settings(settings)
+    return loaded.tracking.uri.strip() if loaded is not None else ""
+
+
+def _coerce_settings(settings: AppSettings | dict[str, Any] | None) -> AppSettings | None:
+    if settings is None:
+        return None
+    if isinstance(settings, AppSettings):
+        return settings
+    return AppSettings.model_validate(settings)
+
+
+def _linkage_failure_status(exc: RuntimeError) -> str:
+    text = str(exc)
+    if "RESOURCE_DOES_NOT_EXIST" in text or "not found" in text.lower():
+        return "skipped_run_not_found"
+    return "skipped_mlflow_error"

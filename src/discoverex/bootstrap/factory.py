@@ -10,36 +10,39 @@ from discoverex.application.use_cases.validator import ValidatorOrchestrator
 from discoverex.config import PipelineConfig, ValidatorPipelineConfig
 from discoverex.domain.services.verification import ScoringWeights
 from discoverex.models.types import ModelHandle
+from discoverex.settings import AppSettings
 
 from .config_defaults import resolve_config
 from .context import AppContext
 
 
-def _build_env_defaults(config: PipelineConfig) -> dict[str, str]:
-    runtime_cfg = config.runtime
-    runtime_env = runtime_cfg.env
+def _build_env_defaults(settings: AppSettings) -> dict[str, str]:
+    runtime_cfg = settings.pipeline.runtime
     artifacts_root = Path(runtime_cfg.artifacts_root)
     return {
         "artifacts_root": str(artifacts_root),
-        "artifact_bucket": runtime_env.artifact_bucket,
-        "s3_endpoint_url": runtime_env.s3_endpoint_url,
-        "aws_access_key_id": runtime_env.aws_access_key_id,
-        "aws_secret_access_key": runtime_env.aws_secret_access_key,
-        "metadata_db_url": runtime_env.metadata_db_url,
-        "tracking_uri": runtime_env.tracking_uri,
+        "artifact_bucket": settings.storage.artifact_bucket,
+        "s3_endpoint_url": settings.storage.s3_endpoint_url,
+        "aws_access_key_id": settings.storage.aws_access_key_id,
+        "aws_secret_access_key": settings.storage.aws_secret_access_key,
+        "metadata_db_url": settings.storage.metadata_db_url,
+        "tracking_uri": settings.tracking.uri,
+        "cf_access_client_id": settings.worker_http.cf_access_client_id,
+        "cf_access_client_secret": settings.worker_http.cf_access_client_secret,
         "experiment_name": "discoverex-core",
     }
 
 
 def build_context(
-    config: PipelineConfig | dict[str, Any] | None = None,
+    config: AppSettings | PipelineConfig | dict[str, Any] | None = None,
     *,
     execution_snapshot: dict[str, object] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> AppContext:
-    cfg = resolve_config(config)
+    settings = resolve_config(config)
+    cfg = settings.pipeline
     artifacts_root = Path(cfg.runtime.artifacts_root)
-    env_defaults = _build_env_defaults(cfg)
+    env_defaults = _build_env_defaults(settings)
 
     background_generator_model = instantiate(
         cfg.models.background_generator.as_kwargs()
@@ -62,6 +65,7 @@ def build_context(
     report_writer = instantiate(cfg.adapters.report_writer.as_kwargs(), **env_defaults)
 
     return AppContext(
+        settings=settings,
         background_generator_model=background_generator_model,
         background_upscaler_model=background_upscaler_model,
         object_generator_model=object_generator_model,

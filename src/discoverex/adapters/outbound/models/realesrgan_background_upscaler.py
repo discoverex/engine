@@ -26,6 +26,8 @@ class RealEsrganBackgroundUpscalerModel:
         pre_pad: int = 0,
         strict_runtime: bool = False,
         weights_cache_dir: str = ".cache/realesrgan",
+        model_cache_dir: str = "",
+        hf_home: str = "",
     ) -> None:
         self.model_name = model_name
         self.device = device
@@ -34,7 +36,13 @@ class RealEsrganBackgroundUpscalerModel:
         self.tile_pad = tile_pad
         self.pre_pad = pre_pad
         self.strict_runtime = strict_runtime
-        self.weights_cache_dir = str(_resolve_shared_cache_dir(weights_cache_dir))
+        self.weights_cache_dir = str(
+            _resolve_shared_cache_dir(
+                weights_cache_dir,
+                model_cache_dir=model_cache_dir,
+                hf_home=hf_home,
+            )
+        )
         self._upsampler: Any | None = None
 
     def load(self, model_ref_or_version: str) -> ModelHandle:
@@ -158,16 +166,20 @@ class RealEsrganBackgroundUpscalerModel:
         self._upsampler = None
 
 
-def _resolve_shared_cache_dir(raw_path: str) -> Path:
+def _resolve_shared_cache_dir(
+    raw_path: str,
+    *,
+    model_cache_dir: str = "",
+    hf_home: str = "",
+) -> Path:
     path = Path(raw_path).expanduser()
     if path.is_absolute():
         return path
-    base = resolve_model_cache_dir()
+    base = resolve_model_cache_dir(model_cache_dir=model_cache_dir)
     parts = [part for part in path.parts if part not in {".", ".cache"}]
     if parts:
         return base.joinpath(*parts)
-    hf_home = os.getenv("HF_HOME", "").strip()
-    if hf_home:
+    if hf_home.strip():
         base = Path(hf_home).expanduser()
     else:
         base = Path.home() / ".cache" / "huggingface" / "discoverex"

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from discoverex.settings import AppSettings
+
 from discoverex.orchestrator_contract.artifacts import EngineArtifactManifest
 
 from ..storage_http import upload_bytes
@@ -17,6 +19,7 @@ def upload_engine_artifacts(
     attempt: int,
     local_paths: dict[str, str],
     require_manifest: bool,
+    settings: AppSettings | dict[str, object],
 ) -> EngineUploadResult:
     manifest_path = Path(local_paths["engine_artifact_manifest"])
     artifact_dir = Path(local_paths["engine_artifact_dir"])
@@ -37,14 +40,18 @@ def upload_engine_artifacts(
         flow_run_id=flow_run_id,
         attempt=attempt,
         filenames=[f"engine/{item.relative_path}" for item in manifest.artifacts],
+        settings=settings,
     )
     uploaded: dict[str, str] = {}
     for item, row in zip(manifest.artifacts, links, strict=True):
         src = resolve_artifact_path(artifact_dir, item.relative_path)
-        upload_bytes(str(row["url"]), src.read_bytes())
+        upload_bytes(str(row["url"]), src.read_bytes(), settings=settings)
         uploaded[item.logical_name] = str(row["object_uri"])
     manifest_row = put_custom_link(
-        flow_run_id=flow_run_id, attempt=attempt, filename="engine-artifacts.json"
+        flow_run_id=flow_run_id,
+        attempt=attempt,
+        filename="engine-artifacts.json",
+        settings=settings,
     )
     payload = {
         "schema_version": manifest.schema_version,
@@ -65,6 +72,7 @@ def upload_engine_artifacts(
     upload_bytes(
         str(manifest_row["url"]),
         json.dumps(payload, ensure_ascii=True, indent=2).encode("utf-8"),
+        settings=settings,
     )
     mlflow_tags = {
         str(item.mlflow_tag): uploaded[item.logical_name]

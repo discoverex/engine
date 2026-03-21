@@ -6,11 +6,13 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from discoverex.config import ModelVersionsConfig, RuntimeConfig, ThresholdsConfig
+from discoverex.settings import AppSettings
 
 
 class AppContext(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    settings: AppSettings
     background_generator_model: Any
     background_upscaler_model: Any
     object_generator_model: Any
