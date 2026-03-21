@@ -43,17 +43,10 @@ def apply_keyframes_to_lottie(
         for layer in result.get("layers", []):
             layer["op"] = total
 
-    # MOTION_NEEDED: upsample fr to 60 with float ip/op
-    elif result.get("fr", 16) < _KF_FPS:
-        scale = _KF_FPS / result["fr"]
-        new_total = round(total * scale)
-        for layer in result.get("layers", []):
-            layer["ip"] = layer.get("ip", 0) * scale
-            layer["op"] = layer.get("op", 0) * scale
-        result["fr"] = _KF_FPS
-        result["ip"] = 0
-        result["op"] = new_total
-        total = new_total
+    # MOTION_NEEDED: keep original fr — no upsampling.
+    # bodymovin evaluates bezier at sub-frame precision via setSubframe(true),
+    # so transforms are smooth at the display refresh rate even at fr=16.
+    # Upsampling to fr=60 increases SVG render load and causes frame drops.
 
     if total <= 0:
         return result
