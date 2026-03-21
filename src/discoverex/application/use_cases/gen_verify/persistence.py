@@ -29,6 +29,10 @@ from ..worker_artifacts import collect_worker_artifacts
 logger = get_logger("discoverex.generate.persistence")
 
 
+def metadata_dir(saved_dir: Path) -> Path:
+    return saved_dir / "metadata"
+
+
 def save_scene(context: AppContextLike, scene: Scene) -> Path:
     started = perf_counter()
     saved_dir = context.artifact_store.save_scene_bundle(scene)
@@ -66,7 +70,7 @@ def write_naturalness_report(saved_dir: Path, scene: Scene) -> Path | None:
         logger.info("naturalness report skipped reason=%s", exc)
         return None
     report_path = naturalness_json_path(
-        saved_dir.parents[3],
+        saved_dir.parent.parent,
         scene.meta.scene_id,
         scene.meta.version_id,
     )
@@ -131,11 +135,12 @@ def track_run(
         artifacts_root=context.artifacts_root,
         scene=scene,
     )
+    saved_metadata_dir = metadata_dir(saved_dir)
     artifact_entries = collect_worker_artifacts(
         saved_dir,
         [
-            ("scene", saved_dir / "scene.json"),
-            ("verification", saved_dir / "verification.json"),
+            ("scene", saved_metadata_dir / "scene.json"),
+            ("verification", saved_metadata_dir / "verification.json"),
             ("naturalness", naturalness_artifact),
             ("composite", composite_artifact),
             ("prompt_bundle", prompt_bundle_artifact),

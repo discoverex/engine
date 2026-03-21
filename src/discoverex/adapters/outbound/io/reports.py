@@ -11,7 +11,8 @@ class JsonReportWriterAdapter:
         pass
 
     def write_verification_report(self, saved_dir: Path, scene: Scene) -> Path:
-        report_path = saved_dir / "verification.json"
+        report_path = saved_dir / "metadata" / "verification.json"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "scene_id": scene.meta.scene_id,
             "version_id": scene.meta.version_id,

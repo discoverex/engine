@@ -87,7 +87,7 @@ class LocalArtifactStoreAdapter:
             ),
             encoding="utf-8",
         )
-        return base
+        return scene_dir
 
 
 class MinioArtifactStoreAdapter:

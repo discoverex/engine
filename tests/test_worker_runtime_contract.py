@@ -50,11 +50,12 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
 ) -> None:
     artifact_root = tmp_path / "engine"
     manifest_path = tmp_path / "engine-artifacts.json"
-    saved_dir = artifact_root / "scenes" / "scene-1" / "version-1" / "metadata"
-    saved_dir.mkdir(parents=True)
-    scene_path = saved_dir / "scene.json"
-    verification_path = saved_dir / "verification.json"
-    naturalness_path = saved_dir / "naturalness.json"
+    saved_dir = artifact_root / "scenes" / "scene-1" / "version-1"
+    metadata_dir = saved_dir / "metadata"
+    metadata_dir.mkdir(parents=True)
+    scene_path = metadata_dir / "scene.json"
+    verification_path = metadata_dir / "verification.json"
+    naturalness_path = metadata_dir / "naturalness.json"
     lottie_path = (
         artifact_root
         / "scenes"

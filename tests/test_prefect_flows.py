@@ -369,6 +369,43 @@ def test_build_runtime_env_preserves_huggingface_auth_from_worker_env(
     assert env["HUGGINGFACE_TOKEN"] == "legacy-token"
 
 
+def test_build_runtime_env_places_worker_artifacts_under_runtime_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("DISCOVEREX_WORKER_RUNTIME_DIR", str(tmp_path / "runtime"))
+    monkeypatch.setattr("infra.prefect.runtime.repo_root", lambda: tmp_path)
+
+    env = build_runtime_env(
+        job_spec={
+            "engine": "discoverex",
+            "run_mode": "inline",
+            "job_name": "job-1",
+            "env": {},
+            "inputs": {"runtime": {"extra_env": {}}},
+        },
+        flow_run_id="flow-xyz",
+        attempt=3,
+        outputs_prefix="jobs/flow-xyz/attempt-3/",
+        resume_key=None,
+        checkpoint_dir=None,
+    )
+
+    assert env["ORCH_ENGINE_ARTIFACT_DIR"] == str(
+        (tmp_path / "runtime" / "engine-runs" / "flow-xyz" / "attempt-3").resolve()
+    )
+    assert env["ORCH_ENGINE_ARTIFACT_MANIFEST_PATH"] == str(
+        (
+            tmp_path
+            / "runtime"
+            / "engine-runs"
+            / "flow-xyz"
+            / "attempt-3"
+            / "engine-artifacts.json"
+        ).resolve()
+    )
+
+
 def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

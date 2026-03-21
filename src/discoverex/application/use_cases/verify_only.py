@@ -23,7 +23,7 @@ from discoverex.application.services.worker_artifacts import (
     write_worker_artifact_manifest,
 )
 
-from .gen_verify.persistence import write_naturalness_report
+from .gen_verify.persistence import metadata_dir, write_naturalness_report
 from .worker_artifacts import collect_worker_artifacts
 
 
@@ -87,8 +87,8 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
     artifact_entries = collect_worker_artifacts(
         saved_dir,
         [
-            ("scene", saved_dir / "scene.json"),
-            ("verification", saved_dir / "verification.json"),
+            ("scene", metadata_dir(saved_dir) / "scene.json"),
+            ("verification", metadata_dir(saved_dir) / "verification.json"),
             ("naturalness", naturalness_report),
             ("final_image", scene_artifact if scene_artifact.exists() else None),
             ("lottie", output_exports.lottie_path),
