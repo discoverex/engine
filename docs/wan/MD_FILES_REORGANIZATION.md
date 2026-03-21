@@ -1,0 +1,31 @@
+# MD 파일 정리 보고서
+
+**작성일**: 2026-03-21
+
+## 변경 사항
+
+프로젝트 루트에 WAN 개발 관련 md 파일이 40개 이상 누적되어 가독성 저하 → `docs/wan/` 폴더로 일괄 이동.
+
+## 이동 내역
+
+### 대상: 루트 → `docs/wan/` (43개)
+
+| 분류 | 파일 | 개수 |
+|------|------|------|
+| Phase 보고서 | `ANIMATE_PHASE1_REPORT.md` ~ `ANIMATE_PHASE6_REPORT.md` | 6 |
+| Phase 체크리스트 | `ANIMATE_PHASE1_2_CHECKLIST.md`, `PHASE4_CHECKLIST`, `PHASE5_CHECKLIST`, `PHASE5_CHECKLIST_RESULT` | 4 |
+| 통합 계획/검증 | `ANIMATE_INTEGRATION_PLAN.md`, `_REVIEW.md`, `_COMPATIBILITY_VERIFICATION.md` | 3 |
+| 최종 상태 | `ANIMATE_COMPLETE_SUMMARY.md`, `FINAL_STATUS.md`, `_SUPPLEMENT.md`, `REMAINING_ISSUES.md`, `SUPPLEMENT_APPLIED.md` | 5 |
+| 버그 수정 | `ANIMATE_HIGH_FIX_REPORT.md`, `MEDIUM_FIX_REPORT.md`, `BUGFIX_LOTTIE_INFO_REPORT.md`, `RETRY_LOOP_LOGGER_FIX_REPORT.md` | 4 |
+| 기능 보고서 | `COMFYUI_E2E_REPORT.md`, `COMFYUI_ADAPTER_REPORT.md`, `ENGINE_DASHBOARD_REPORT.md`, `PROGRESS_BAR_FIX_REPORT.md`, `HISTORY_NEGATIVE_REPORT.md`, `BGREMOVER_PROTECT_MASK_REPORT.md`, `ANIMATE_LOTTIE_BAKER_AND_REMAINING.md`, `ANIMATE_SETUP_GUIDE.md` | 8 |
+| 최적화/분석 | `MEMORY_OPTIMIZATION_REPORT.md`, `LOWVRAM_INVESTIGATION_REPORT.md`, `LOWVRAM_PROFILE_REPORT.md`, `REMBG_OPTIMIZATION_REVIEW.md`, `REMBG_REPLACEMENT_ANALYSIS.md` | 5 |
+| 프로필/모델 | `WAN22_TI2V_PROFILE_REPORT.md`, `KEYFRAME_ONLY_LOTTIE_FPS_FIX_REPORT.md`, `LOTTIE_EXPORT_FIX_REPORT.md` | 3 |
+| 세션 기록 | `SESSION_SUMMARY_20260319.md`, `_v2.md`, `SESSION_PROGRESS_20260319.md`, `SESSION_FINAL_20260319.md` | 4 |
+| 본 문서 | `MD_FILES_REORGANIZATION.md` | 1 |
+
+### 루트 잔여 (4개, 프로젝트 공통)
+
+- `CLAUDE.md` — Claude Code 프로젝트 설정
+- `README.md` — 프로젝트 소개
+- `HANDOFF.md` — 엔진 인수인계 문서
+- `REFACTOR_PLAN.md` — 엔진 리팩터링 계획

@@ -26,6 +26,10 @@ from .retry_state import (
     RetryConfig,
     RetryResult,
 )
+
+logger = logging.getLogger(__name__)
+
+
 class RetryLoop:
     """Generation + validation retry loop with AI feedback."""
 
