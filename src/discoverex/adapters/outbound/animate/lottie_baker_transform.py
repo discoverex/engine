@@ -45,9 +45,21 @@ def apply_keyframes_to_lottie(
         for layer in result.get("layers", []):
             layer["op"] = total
 
-    # MOTION_NEEDED: keep original fr and layer timing unchanged.
-    # Lottie bezier interpolation handles smooth keyframe animation natively
-    # — no fps upsampling, no uneven frame-hold stutter.
+    # MOTION_NEEDED: upsample fr to _KF_FPS so the Lottie player renders
+    # at 60 fps (matching the browser's requestAnimationFrame).  Use exact
+    # float ip/op so every original frame holds for *exactly* the same
+    # duration — no round()-based 3/4 stutter.
+    elif result.get("fr", 16) < _KF_FPS:
+        orig_fps = result["fr"]
+        scale = _KF_FPS / orig_fps  # e.g. 60/16 = 3.75
+        new_total = round(total * scale)
+        for layer in result.get("layers", []):
+            layer["ip"] = layer.get("ip", 0) * scale  # float, not round
+            layer["op"] = layer.get("op", 0) * scale  # float, not round
+        result["fr"] = _KF_FPS
+        result["ip"] = 0
+        result["op"] = new_total
+        total = new_total
 
     if total <= 0:
         return result

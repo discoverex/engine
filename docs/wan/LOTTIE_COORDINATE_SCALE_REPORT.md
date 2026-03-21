@@ -86,11 +86,31 @@ for idx, kf in enumerate(keyframes):
 ```
 
 **효과**:
-- Lottie 플레이어가 자체 디스플레이 레이트(60fps, 120fps 등)로 부드럽게 보간
+- Lottie 플레이어가 bezier 곡선을 자체 디스플레이 레이트로 부드럽게 보간
 - 프레임별 사전계산 불필요 → 파일 크기 대폭 감소
-- fps 업샘플링 불필요 → 모션 프레임 원본 타이밍 유지, 끊김 없음
 
-### 2. precomp asset에서 `fr` 필드 제거 (LP0017 해결)
+### 2. fr=60 업샘플링 + float ip/op (끊김 해결)
+
+fr=16인 Lottie는 뷰어가 16fps로만 렌더링하여 프리뷰(60fps)와 차이 발생.
+fr=60으로 올리되, 레이어 타이밍에 **정확한 float 값**을 사용:
+
+```python
+elif result.get("fr", 16) < _KF_FPS:
+    scale = _KF_FPS / orig_fps  # 60/16 = 3.75
+    for layer in result.get("layers", []):
+        layer["ip"] = layer.get("ip", 0) * scale  # float, not round
+        layer["op"] = layer.get("op", 0) * scale  # float, not round
+    result["fr"] = _KF_FPS
+```
+
+| 방식 | Layer 0 | Layer 1 | Layer 2 | 프레임 hold |
+|------|---------|---------|---------|-----------|
+| round() (이전) | ip=0, op=4 | ip=4, op=8 | ip=8, op=11 | 4,4,**3** 불균등 |
+| float (현재) | ip=0, op=3.75 | ip=3.75, op=7.5 | ip=7.5, op=11.25 | **모두 3.75** 균등 |
+
+모든 모션 프레임이 정확히 62.5ms(=3.75/60) 동안 표시 — 원본 16fps와 동일한 타이밍.
+
+### 3. precomp asset에서 `fr` 필드 제거 (LP0017 해결)
 
 ```python
 # 수정 전 (LP0017 발생)
@@ -125,18 +145,40 @@ const exportKfData = {
 
 ## 수정 전 vs 최종 (모션 + 키프레임, 4초 64프레임)
 
-| 항목 | 수정 전 (초기) | 중간 (fps 업샘플링) | 최종 (bezier) |
-|------|--------------|-------------------|-------------|
-| root fr | 16 | 60 | **16** (원본 유지) |
-| root op | 64 | 240 | **64** (원본 유지) |
+| 항목 | 수정 전 (초기) | 중간 (round 업샘플) | 최종 (float + bezier) |
+|------|--------------|-------------------|---------------------|
+| root fr | 16 | 60 | **60** |
+| root op | 64 | 240 | **240** |
 | precomp fr | 없음 | 60 (LP0017) | **없음** |
-| 모션 레이어 | 1프레임씩 균등 | 3~4프레임 불균등 | **1프레임씩 균등** |
+| 모션 레이어 ip/op | 정수 균등 | round() 불균등 | **float 균등** |
+| 프레임 hold | 62.5ms 균등 | 50~67ms 불균등 | **62.5ms 균등** |
 | 키프레임 보간 | 64개 사전계산 | 241개 사전계산 | **8개 + bezier** |
-| 보간 품질 | 16fps 샘플링 | 60fps 샘플링 | **플레이어 네이티브** |
+| 보간 품질 | 16fps 뷰어 렌더 | 60fps 뷰어 렌더 | **60fps + bezier** |
 | 파일 항목 수 | 64×4=256 | 241×4=964 | **8×4=32** |
 | LP0017 | 없음 | 발생 | **없음** |
-| 끊김 | 없음 | 3/4 불균등 | **없음** |
+| 끊김 | 뷰어 16fps 렌더 | 3/4 불균등 | **없음** |
 | 움직임 크기 | 12.5% (작음) | 스케일링 적용 | **스케일링 적용** |
+
+---
+
+## 끊김 원인 분석 히스토리
+
+### 1차: fr=16 + bezier (끊김 지속)
+
+fr=16으로 설정 시 Lottie 뷰어가 **16fps로만 렌더링**하여 프리뷰(60fps)와 차이 발생.
+bezier 보간은 뷰어의 렌더 주기에 맞춰 평가되므로, fr=16이면 16fps 해상도로 보간됨.
+프리뷰는 bodymovin이 `requestAnimationFrame`(60fps)으로 렌더링하여 부드러움.
+
+### 2차: fr=60 + round() ip/op (3/4 끊김)
+
+fr=60 업샘플링 시 `round()` 사용 → 64프레임이 240슬롯에 불균등 배분 (3 or 4프레임).
+50ms/67ms 교차 → 시각적 마이크로 스터터.
+
+### 최종: fr=60 + float ip/op + bezier (프리뷰와 동일)
+
+float ip/op로 모든 모션 프레임이 정확히 3.75 Lottie 프레임 = 62.5ms.
+bezier 키프레임은 뷰어가 60fps에서 부드럽게 보간.
+프리뷰의 bodymovin(60fps) + CSS animate(60fps)와 구조적으로 동일.
 
 ---
 
@@ -145,11 +187,11 @@ const exportKfData = {
 | 수정 항목 | KEYFRAME_ONLY | MOTION_NEEDED |
 |----------|:---:|:---:|
 | Lottie 네이티브 bezier | O | O |
+| fr=60 업샘플링 (float ip/op) | — (이미 fr=60) | O |
 | precomp fr 제거 | O | O |
 | 좌표 스케일링 | O | O |
 | 캔버스 확장 | O | O |
 | preview_object_size | O | O |
-| 모션 원본 fr 유지 | — (fr=60 확장) | O (fr=16 유지) |
 
 ---
 
@@ -159,5 +201,5 @@ const exportKfData = {
 ruff check    : All checks passed
 mypy strict   : Success (0 errors)
 pytest        : 전체 통과 (animate/lottie/keyframe 34건 포함)
-200줄 제약    : 162줄 ✅
+200줄 제약    : 174줄 ✅
 ```
