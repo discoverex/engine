@@ -71,6 +71,31 @@ def _resample_css(keyframes: list[dict[str, Any]], total: int, easing: str) -> l
     return result
 
 
+def _scale_translates(
+    sampled: list[dict[str, Any]], w: int, h: int, ref_size: int,
+) -> tuple[int, int]:
+    """Scale CSS-pixel translate values to Lottie canvas units.
+
+    Returns (canvas_w, canvas_h) — expanded to fit the scaled movement
+    so the content doesn't clip.  When the Lottie is displayed at
+    ``ref_size`` px, the movement matches the CSS animate() preview.
+    """
+    if ref_size <= 0 or min(w, h) <= ref_size:
+        return w, h
+    t_scale = min(w, h) / ref_size
+    max_dx = max_dy = 0.0
+    for s in sampled:
+        s["translateX"] = s.get("translateX", 0.0) * t_scale
+        s["translateY"] = s.get("translateY", 0.0) * t_scale
+        max_dx = max(max_dx, abs(s["translateX"]))
+        max_dy = max(max_dy, abs(s["translateY"]))
+    if max_dx < 1 and max_dy < 1:
+        return w, h
+    pad_x = int(max_dx) + 1
+    pad_y = int(max_dy) + 1
+    return w + 2 * pad_x, h + 2 * pad_y
+
+
 def apply_keyframes_to_lottie(lottie: dict[str, Any], kf_data: dict[str, Any]) -> dict[str, Any]:
     """Inject keyframes as precomp wrapper layer into Lottie structure."""
     result = copy.deepcopy(lottie)
@@ -119,7 +144,19 @@ def apply_keyframes_to_lottie(lottie: dict[str, Any], kf_data: dict[str, Any]) -
 
     # Resample CSS keyframes to per-frame (matches browser requestAnimationFrame)
     sampled = _resample_css(keyframes, total, easing_name)
-    cx, cy = w / 2.0, h / 2.0
+
+    # Scale CSS-pixel translates to Lottie canvas units and expand canvas
+    # so the proportional movement matches the browser CSS animate() preview.
+    ref = kf_data.get("preview_object_size", 80)
+    canvas_w, canvas_h = _scale_translates(sampled, w, h, ref)
+    if canvas_w != w or canvas_h != h:
+        result["w"] = canvas_w
+        result["h"] = canvas_h
+
+    # anchor = precomp content center, cx/cy = (expanded) canvas center
+    anchor_x, anchor_y = w / 2.0, h / 2.0
+    cx, cy = canvas_w / 2.0, canvas_h / 2.0
+
     pos, rot, scale, opacity = [], [], [], []
     for s in sampled:
         f = int(s["t"])
@@ -140,7 +177,7 @@ def apply_keyframes_to_lottie(lottie: dict[str, Any], kf_data: dict[str, Any]) -
             "o": {"a": 1, "k": opacity} if len(opacity) > 1 else {"a": 0, "k": 100},
             "r": {"a": 1, "k": rot} if len(rot) > 1 else {"a": 0, "k": 0},
             "p": {"a": 1, "k": pos} if len(pos) > 1 else {"a": 0, "k": [cx, cy, 0]},
-            "a": {"a": 0, "k": [cx, cy, 0]},
+            "a": {"a": 0, "k": [anchor_x, anchor_y, 0]},
             "s": {"a": 1, "k": scale} if len(scale) > 1 else {"a": 0, "k": [100, 100, 100]},
         },
         "ip": 0, "op": total, "st": 0, "bm": 0, "w": w, "h": h,
