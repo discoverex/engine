@@ -76,16 +76,19 @@ def apply_keyframes_to_lottie(
     dur_ms = kf_data.get("duration_ms") or round(total / result_fr * 1000)
     kf_frames = min(total, round(dur_ms / 1000 * result_fr))
 
-    # No translate scaling — use CSS pixel values directly.
-    # The preview's CSS translate(Xpx) operates in the same space as the
-    # Lottie canvas, keeping movement proportional and within bounds.
+    # Scale translates so movement matches the preview at any display size.
+    # CSS translate(Xpx) is in screen pixels for an object of preview_object_size.
+    # Lottie canvas is w×h, so: lottie_units = css_px × (canvas / objSize).
+    ref = kf_data.get("preview_object_size") or min(w, h)
+    t_scale = min(w, h) / ref if ref > 0 else 1.0
+
     lin1: dict[str, Any] = {"x": [0], "y": [0]}
     lni1: dict[str, Any] = {"x": [1], "y": [1]}
     lin3: dict[str, Any] = {"x": [0, 0, 0], "y": [0, 0, 0]}
     lni3: dict[str, Any] = {"x": [1, 1, 1], "y": [1, 1, 1]}
 
     pos, rot, scl, opa = _build_sparse_kfs(
-        keyframes, kf_frames, 1.0, cx, cy, lin1, lni1, lin3, lni3,
+        keyframes, kf_frames, t_scale, cx, cy, lin1, lni1, lin3, lni3,
     )
 
     null_ind = 9999
