@@ -202,6 +202,30 @@ def test_resize_patch_to_long_side_uses_multiple_of_8() -> None:
     assert size == (128, 120)
 
 
+def test_transform_object_variant_scales_relative_to_current_object_size() -> None:
+    model = SdxlInpaintModel(final_context_size=256)
+    object_image = Image.new("RGBA", (96, 48), color=(255, 0, 0, 255))
+    object_mask = Image.new("L", (96, 48), color=255)
+
+    variant = model._transform_object_variant(
+        image=Image.new("RGB", (512, 512), color="white"),
+        bbox=(0, 0, 96, 48),
+        object_image=object_image,
+        object_mask=object_mask,
+        scale_ratio=1.1,
+        rotation_deg=0.0,
+        saturation_mul=1.0,
+        contrast_mul=1.0,
+        sharpness_mul=1.0,
+        index=0,
+    )
+
+    mask_bbox = variant["object_mask"].getbbox()
+    assert mask_bbox is not None
+    assert (mask_bbox[2] - mask_bbox[0]) == 106
+    assert (mask_bbox[3] - mask_bbox[1]) == 53
+
+
 def test_sdxl_inpaint_v2_selects_similarity_bbox_and_writes_precomposite(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -3,7 +3,7 @@ engine: discoverex
 entrypoint:
   - prefect_flow.py:run_generate_job_flow
 config: null
-job_name: prod-genver2-realvisxl5bg-realvisxl5obj-patchsimv2-ldho1-baseprompt-8gb
+job_name: prod-genver2-pixartbg-realvisxl5obj-realesrgan-patchsimv2-ldho1-baseprompt-8gb
 inputs:
   contract_version: v2
   command: generate
@@ -28,17 +28,11 @@ inputs:
     - runtime.width=512
     - runtime.height=512
     - runtime.background_upscale_factor=2
-    - models/background_generator=realvisxl5_lightning_background
-    - models.background_generator.model_id=SG161222/RealVisXL_V5.0_Lightning
-    - models.background_generator.sampler=dpmpp_sde_karras
+    - +runtime.background_hires_mode=canvas_only
+    - models/background_generator=pixart_sigma_8gb
     - models.background_generator.default_num_inference_steps=10
-    - models.background_generator.default_guidance_scale=1.5
-    - models/background_upscaler=realvisxl5_lightning_hiresfix
-    - models.background_upscaler.model_id=SG161222/RealVisXL_V5.0_Lightning
-    - models.background_upscaler.hires_sampler=dpmpp_sde_karras
-    - models.background_upscaler.hires_num_inference_steps=10
-    - models.background_upscaler.hires_guidance_scale=1.5
-    - models.background_upscaler.hires_strength=0.4
+    - models.background_generator.default_guidance_scale=5.0
+    - models/background_upscaler=realesrgan
     - runtime.model_runtime.batch_size=1
     - models/object_generator=layerdiffuse_realvisxl5_lightning
     - models.object_generator.model_id=SG161222/RealVisXL_V5.0_Lightning

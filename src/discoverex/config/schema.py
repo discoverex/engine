@@ -113,6 +113,9 @@ class RuntimeConfig(BaseModel):
     width: int = 1024
     height: int = 768
     background_upscale_factor: int = 1
+    background_hires_mode: Literal[
+        "detail_reconstruct", "canvas_only", "canvas_then_detail", "none"
+    ] = "detail_reconstruct"
     config_version: str = "config-v1"
     artifacts_root: str = "artifacts"
     model_runtime: RuntimeModelConfig = Field(default_factory=RuntimeModelConfig)

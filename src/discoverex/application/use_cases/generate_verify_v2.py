@@ -19,6 +19,7 @@ from skimage.filters import gabor
 
 from discoverex.application.context import AppContextLike
 from discoverex.application.use_cases.gen_verify.background_pipeline import (
+    apply_background_canvas_upscale_if_needed,
     apply_background_detail_reconstruction_if_needed,
     build_background_from_inputs,
 )
@@ -345,15 +346,40 @@ def _build_background(
                 background_prompt=background_prompt,
                 background_negative_prompt=background_negative_prompt,
             )
-            background = apply_background_detail_reconstruction_if_needed(
-                background=background,
-                context=context,
-                scene_dir=scene_dir,
-                upscaler_handle=handle,
-                prompt=prompt,
-                negative_prompt=(background_negative_prompt or "").strip(),
-                predictor_model=context.background_generator_model,
-            )
+            hires_mode = str(
+                getattr(context.runtime, "background_hires_mode", "detail_reconstruct")
+            ).strip() or "detail_reconstruct"
+            if hires_mode in {"canvas_only", "canvas_then_detail"}:
+                upscaler_handle = handle
+                if context.background_upscaler_model is not context.background_generator_model:
+                    upscaler_handle = context.background_upscaler_model.load(
+                        context.model_versions.background_upscaler
+                    )
+                try:
+                    background = apply_background_canvas_upscale_if_needed(
+                        background=background,
+                        context=context,
+                        scene_dir=scene_dir,
+                        upscaler_handle=upscaler_handle,
+                        prompt=prompt,
+                        negative_prompt=(background_negative_prompt or "").strip(),
+                    )
+                finally:
+                    if (
+                        context.background_upscaler_model
+                        is not context.background_generator_model
+                    ):
+                        unload_model(context.background_upscaler_model)
+            if hires_mode in {"detail_reconstruct", "canvas_then_detail"}:
+                background = apply_background_detail_reconstruction_if_needed(
+                    background=background,
+                    context=context,
+                    scene_dir=scene_dir,
+                    upscaler_handle=handle,
+                    prompt=prompt,
+                    negative_prompt=(background_negative_prompt or "").strip(),
+                    predictor_model=context.background_generator_model,
+                )
         finally:
             unload_model(context.background_generator_model)
     else:
