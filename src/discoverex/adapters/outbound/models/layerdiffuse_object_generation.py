@@ -15,7 +15,7 @@ from .objects.layerdiffuse.generate import (
     generate_rgba,
     generate_rgba_batch,
 )
-from .objects.layerdiffuse.load import load_pipeline, load_transparent_decoder
+from .objects.layerdiffuse.load import load_pipeline
 from .pipeline_memory import OffloadMode
 from .runtime import (
     apply_seed,
@@ -53,7 +53,6 @@ class LayerDiffuseObjectGenerationModel:
         enable_fp8_layerwise_casting: bool = False,
         enable_channels_last: bool = False,
         sampler: str = "dpmpp_sde_karras",
-        use_transparent_decoder: bool = True,
         default_prompt: str = "isolated single object on a transparent background",
         default_negative_prompt: str = "busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact",
         default_num_inference_steps: int = 30,
@@ -78,7 +77,6 @@ class LayerDiffuseObjectGenerationModel:
         self.enable_fp8_layerwise_casting = enable_fp8_layerwise_casting
         self.enable_channels_last = enable_channels_last
         self.sampler = sampler
-        self.use_transparent_decoder = use_transparent_decoder
         self.default_prompt = default_prompt
         self.default_negative_prompt = default_negative_prompt
         self.default_num_inference_steps = default_num_inference_steps
@@ -91,7 +89,6 @@ class LayerDiffuseObjectGenerationModel:
             )
         )
         self._pipe: Any | None = None
-        self._transparent_decoder: Any | None = None
         self._layerdiffuse_applied = False
 
     def load(self, model_ref_or_version: str) -> ModelHandle:
@@ -287,18 +284,7 @@ class LayerDiffuseObjectGenerationModel:
             self._pipe = load_pipeline(model=self, handle=handle)
         return self._pipe
 
-    def _load_transparent_decoder(self, handle: ModelHandle) -> Any:
-        if self._transparent_decoder is None:
-            self._transparent_decoder = load_transparent_decoder(model=self, handle=handle)
-        return self._transparent_decoder
-
     def unload(self) -> None:
         clear_model_runtime(self._pipe)
         self._pipe = None
-        if self._transparent_decoder is not None:
-            try:
-                self._transparent_decoder.to("cpu")
-            except Exception:
-                pass
-        self._transparent_decoder = None
         self._layerdiffuse_applied = False

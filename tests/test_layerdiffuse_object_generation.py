@@ -129,7 +129,6 @@ def test_generate_rgba_precomputes_prompt_embeds_and_offloads_text_encoders() ->
         (),
         {
             "_load_pipeline": staticmethod(lambda handle: pipe),
-            "_load_transparent_decoder": staticmethod(lambda handle: None),
         },
     )()
     handle = type("_Handle", (), {"device": "cuda"})()
@@ -216,7 +215,6 @@ def test_generate_rgba_moves_text_encoders_to_execution_device_before_encoding()
         (),
         {
             "_load_pipeline": staticmethod(lambda handle: pipe),
-            "_load_transparent_decoder": staticmethod(lambda handle: None),
         },
     )()
     handle = type("_Handle", (), {"device": "cuda:0"})()
@@ -294,7 +292,6 @@ def test_generate_rgba_fails_when_vram_limit_is_exceeded() -> None:
         (),
         {
             "_load_pipeline": staticmethod(lambda handle: pipe),
-            "_load_transparent_decoder": staticmethod(lambda handle: object()),
         },
     )()
     handle = type("_Handle", (), {"device": "cuda"})()
@@ -442,19 +439,14 @@ def test_configure_scheduler_maps_dpmpp_sde_karras() -> None:
     }
 
 
-def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
+def test_sd15_load_pipeline_uses_custom_loader_with_base_vae(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: dict[str, object] = {}
 
-    class _FakeTransparentVAE:
-        config = SimpleNamespace(force_upcast=True)
-
-        def set_transparent_decoder(self, state_dict: object) -> None:
-            calls["decoder_state_dict"] = state_dict
-
+    class _FakeAutoencoderKL:
         @classmethod
-        def from_pretrained(cls, *args: object, **kwargs: object) -> "_FakeTransparentVAE":
+        def from_pretrained(cls, *args: object, **kwargs: object) -> "_FakeAutoencoderKL":
             calls["vae_from_pretrained"] = (args, kwargs)
             return cls()
 
@@ -481,6 +473,7 @@ def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
             return SimpleNamespace(config=config, kwargs=kwargs)
 
     fake_diffusers = SimpleNamespace(
+        AutoencoderKL=_FakeAutoencoderKL,
         DPMSolverMultistepScheduler=_FakeSchedulerCls,
         EulerDiscreteScheduler=_FakeSchedulerCls,
         StableDiffusionPipeline=_FakePipe,
@@ -488,8 +481,6 @@ def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
         UniPCMultistepScheduler=_FakeSchedulerCls,
     )
     fake_hf = SimpleNamespace(hf_hub_download=_fake_hf_hub_download)
-    fake_safetensors_torch = SimpleNamespace(load_file=lambda path: {"path": path})
-    fake_rootonchair_vae = SimpleNamespace(TransparentVAEDecoder=_FakeTransparentVAE)
 
     def _fake_configure(pipe: object, **kwargs: object) -> object:
         calls["configure"] = kwargs
@@ -506,20 +497,12 @@ def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
             "torch",
             "diffusers",
             "huggingface_hub",
-            "safetensors.torch",
-            "discoverex.adapters.outbound.models.objects.layerdiffuse.rootonchair_vae",
             "discoverex.adapters.outbound.models.objects.layerdiffuse.rootonchair_sd15.loaders",
         )
     }
     monkeypatch.setitem(sys.modules, "torch", fake_torch)
     monkeypatch.setitem(sys.modules, "diffusers", fake_diffusers)
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
-    monkeypatch.setitem(sys.modules, "safetensors.torch", fake_safetensors_torch)
-    monkeypatch.setitem(
-        sys.modules,
-        "discoverex.adapters.outbound.models.objects.layerdiffuse.rootonchair_vae",
-        fake_rootonchair_vae,
-    )
     monkeypatch.setitem(
         sys.modules,
         "discoverex.adapters.outbound.models.objects.layerdiffuse.rootonchair_sd15.loaders",
@@ -551,13 +534,13 @@ def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
     pipe = layerdiffuse_load.load_pipeline(model=model, handle=handle)
 
     assert isinstance(pipe, _FakePipe)
-    assert calls["decoder_state_dict"] == {"path": "/tmp/layer_sd15_vae_transparent_decoder.safetensors"}
+    assert calls["vae_from_pretrained"][0] == ("digiplay/Juggernaut_final",)
     assert calls["custom_loader"][1] == "/tmp/layer_sd15_transparent_attn.safetensors"
     assert calls["custom_loader"][2] == 1
     assert calls["configure"]["offload_mode"] == "sequential"
 
 
-def test_load_pipeline_skips_transparent_decoder_when_disabled(
+def test_load_pipeline_uses_base_vae_for_sdxl(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: dict[str, object] = {}
@@ -630,7 +613,6 @@ def test_load_pipeline_skips_transparent_decoder_when_disabled(
         enable_fp8_layerwise_casting=False,
         enable_channels_last=True,
         sampler="dpmpp_sde_karras",
-        use_transparent_decoder=False,
     )
     handle = SimpleNamespace(dtype="float16")
 

@@ -49,7 +49,6 @@ def test_lightning_base_vae_object_generator_config_loads() -> None:
     )
     payload = cfg.models.object_generator.model_dump(mode="python")
     assert payload["model_id"] == "SG161222/RealVisXL_V5.0_Lightning"
-    assert payload["use_transparent_decoder"] is False
 
 
 def test_single_object_base_vae_debug_flow_config_loads() -> None:

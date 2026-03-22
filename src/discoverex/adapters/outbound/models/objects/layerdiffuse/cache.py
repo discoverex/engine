@@ -8,10 +8,6 @@ ATTN_OFFSET_URL = (
     "https://huggingface.co/lllyasviel/LayerDiffuse_Diffusers/resolve/main/"
     "ld_diffusers_sdxl_attn.safetensors"
 )
-TRANSPARENT_DECODER_URL = (
-    "https://huggingface.co/lllyasviel/LayerDiffuse_Diffusers/resolve/main/"
-    "ld_diffusers_sdxl_vae_transparent_decoder.safetensors"
-)
 
 
 def resolve_shared_cache_dir(

@@ -15,7 +15,6 @@ enable_xformers_memory_efficient_attention: ${runtime.model_runtime.enable_xform
 enable_fp8_layerwise_casting: ${runtime.model_runtime.enable_fp8_layerwise_casting}
 enable_channels_last: ${runtime.model_runtime.enable_channels_last}
 sampler: dpmpp_sde_karras
-use_transparent_decoder: false
 strict_runtime: true
 default_prompt: "isolated single object"
 default_negative_prompt: "transparent object, translucent object, semi-transparent object, busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact"
