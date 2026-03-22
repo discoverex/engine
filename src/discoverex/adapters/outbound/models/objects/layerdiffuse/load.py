@@ -29,7 +29,6 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
             "madebyollin/sdxl-vae-fp16-fix",
             torch_dtype=torch_dtype,
         )
-        decoder_repo = "LayerDiffusion/layerdiffusion-v1"
         decoder_filename = "vae_transparent_decoder.safetensors"
         pipeline_cls = StableDiffusionXLPipeline
         pipeline_kwargs: dict[str, Any] = {
@@ -47,7 +46,6 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
             subfolder="vae",
             torch_dtype=torch_dtype,
         )
-        decoder_repo = "LayerDiffusion/layerdiffusion-v1"
         decoder_filename = "layer_sd15_vae_transparent_decoder.safetensors"
         pipeline_cls = StableDiffusionPipeline
         pipeline_kwargs = {
@@ -58,7 +56,7 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
         lora_weight_name = "layer_sd15_transparent_attn.safetensors"
     transparent_vae.config.force_upcast = False
     decoder_path = hf_hub_download(
-        repo_id=decoder_repo,
+        repo_id="LayerDiffusion/layerdiffusion-v1",
         filename=decoder_filename,
         cache_dir=model.weights_cache_dir,
     )
@@ -112,8 +110,10 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
 
 
 def load_transparent_decoder(*, model: Any, handle: Any) -> Any:
+    from .transparent_decode import LayerDiffuseTransparentDecoder
+
     _ = (model, handle)
-    return None
+    return LayerDiffuseTransparentDecoder()
 
 
 def _configure_scheduler(*, scheduler: Any, sampler_name: str, scheduler_cls: Any) -> Any:

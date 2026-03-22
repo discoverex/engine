@@ -80,6 +80,9 @@ def run(
         output_dir=run_state.output_dir,
         region_id=asset.region_id,
         candidate_ref=Path(asset.candidate_ref),
+        preview_ref=Path(asset.preview_ref or asset.candidate_ref),
+        visualization_ref=Path(asset.transparent_visualization_ref or asset.candidate_ref),
+        candidate_alpha_ref=Path(asset.alpha_preview_ref or asset.raw_alpha_mask_ref or asset.object_mask_ref),
         sam_object_ref=Path(asset.sam_object_ref or asset.object_ref),
         raw_alpha_mask_ref=Path(asset.raw_alpha_mask_ref or asset.object_mask_ref),
         processed_object_ref=Path(asset.object_ref),
@@ -140,6 +143,9 @@ def run(
         "generated_object": {
             "region_id": asset.region_id,
             "candidate_ref": asset.candidate_ref,
+            "preview_ref": asset.preview_ref,
+            "transparent_visualization_ref": asset.transparent_visualization_ref,
+            "alpha_preview_ref": asset.alpha_preview_ref,
             "sam_object_ref": asset.sam_object_ref,
             "object_ref": asset.object_ref,
             "object_mask_ref": asset.object_mask_ref,
@@ -204,6 +210,9 @@ def _write_debug_exports(
     output_dir: Path,
     region_id: str,
     candidate_ref: Path,
+    preview_ref: Path,
+    visualization_ref: Path,
+    candidate_alpha_ref: Path,
     sam_object_ref: Path,
     raw_alpha_mask_ref: Path,
     processed_object_ref: Path,
@@ -213,7 +222,9 @@ def _write_debug_exports(
     export_dir.mkdir(parents=True, exist_ok=True)
 
     rgb_preview_path = export_dir / "candidate.rgb-preview.png"
+    base_preview_path = export_dir / "candidate.base-preview.png"
     alpha_mask_path = export_dir / "candidate.alpha-mask.png"
+    transparent_visualization_path = export_dir / "candidate.transparent-visualization.png"
     final_rgba_path = export_dir / "candidate.final-rgba.png"
     pre_sam_rgba_path = export_dir / "candidate.pre-sam-rgba.png"
     sam_object_path = export_dir / "sam.object.png"
@@ -223,9 +234,11 @@ def _write_debug_exports(
 
     with Image.open(candidate_ref).convert("RGBA") as candidate_image:
         candidate_image.convert("RGB").save(rgb_preview_path)
-        candidate_image.getchannel("A").save(alpha_mask_path)
         candidate_image.save(final_rgba_path)
         candidate_image.save(pre_sam_rgba_path)
+    _copy_if_needed(preview_ref, base_preview_path)
+    _copy_if_needed(candidate_alpha_ref, alpha_mask_path)
+    _copy_if_needed(visualization_ref, transparent_visualization_path)
 
     _copy_if_needed(sam_object_ref, sam_object_path)
     _copy_if_needed(raw_alpha_mask_ref, raw_alpha_path)
@@ -237,15 +250,29 @@ def _write_debug_exports(
             export_key="rgb_preview",
             logical_name="debug_rgb_preview",
             path=rgb_preview_path,
-            description="alpha removed RGB preview derived from the generator RGBA output",
+            description="RGB extracted from the transparent generator output",
             source_ref=str(candidate_ref),
+        ),
+        DebugArtifact(
+            export_key="base_preview",
+            logical_name="debug_base_preview",
+            path=base_preview_path,
+            description="base VAE preview decoded before transparent post-processing",
+            source_ref=str(preview_ref),
         ),
         DebugArtifact(
             export_key="alpha_mask",
             logical_name="debug_alpha_mask",
             path=alpha_mask_path,
-            description="alpha-only grayscale image derived from the generator RGBA output",
-            source_ref=str(candidate_ref),
+            description="alpha mask emitted by the transparent decoder",
+            source_ref=str(candidate_alpha_ref),
+        ),
+        DebugArtifact(
+            export_key="transparent_visualization",
+            logical_name="debug_transparent_visualization",
+            path=transparent_visualization_path,
+            description="checkerboard visualization of the transparent decoder result",
+            source_ref=str(visualization_ref),
         ),
         DebugArtifact(
             export_key="final_rgba",

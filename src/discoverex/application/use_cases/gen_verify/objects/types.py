@@ -12,6 +12,9 @@ class GeneratedObjectAsset:
     object_mask_ref: str
     width: int
     height: int
+    preview_ref: str | None = None
+    transparent_visualization_ref: str | None = None
+    alpha_preview_ref: str | None = None
     raw_alpha_mask_ref: str | None = None
     raw_generated_ref: str | None = None
     sam_object_ref: str | None = None

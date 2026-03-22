@@ -145,7 +145,9 @@ def test_single_object_debug_run_writes_debug_exports_and_manifest(
     assert result["object_count"] == 1
     assert export_keys == {
         "rgb_preview",
+        "base_preview",
         "alpha_mask",
+        "transparent_visualization",
         "final_rgba",
         "pre_sam_rgba",
         "sam_object",
@@ -155,7 +157,9 @@ def test_single_object_debug_run_writes_debug_exports_and_manifest(
     }
     assert (output_dir / "outputs" / "original").exists()
     assert "debug_rgb_preview" in logical_names
+    assert "debug_base_preview" in logical_names
     assert "debug_alpha_mask" in logical_names
+    assert "debug_transparent_visualization" in logical_names
     assert "debug_final_rgba" in logical_names
     assert "debug_pre_sam_rgba" in logical_names
     assert "debug_sam_object" in logical_names

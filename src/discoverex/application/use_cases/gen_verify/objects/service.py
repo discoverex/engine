@@ -78,11 +78,17 @@ def generate_region_objects(
             batch_regions = regions[batch_start : batch_start + batch_size]
             batch_prompts = object_prompts[batch_start : batch_start + batch_size]
             batch_paths: list[Path] = []
+            preview_paths: list[Path] = []
+            alpha_paths: list[Path] = []
+            visualization_paths: list[Path] = []
             for batch_index, region in enumerate(batch_regions, start=batch_start + 1):
                 output_prefix = scene_dir / "assets" / "objects" / f"{region.region_id}"
                 output_prefix.parent.mkdir(parents=True, exist_ok=True)
                 candidate_path = output_prefix.with_suffix(".candidate.png")
                 batch_paths.append(candidate_path)
+                preview_paths.append(output_prefix.with_suffix(".preview.png"))
+                alpha_paths.append(output_prefix.with_suffix(".candidate.alpha.png"))
+                visualization_paths.append(output_prefix.with_suffix(".transparent.viz.png"))
                 emit_progress_event(
                     stage="object_generation",
                     status="started",
@@ -104,6 +110,9 @@ def generate_region_objects(
                         mode="object_generation",
                         params={
                             "output_paths": [str(path) for path in batch_paths],
+                            "preview_output_paths": [str(path) for path in preview_paths],
+                            "alpha_output_paths": [str(path) for path in alpha_paths],
+                            "visualization_output_paths": [str(path) for path in visualization_paths],
                             "prompts": [object_generation_prompt(prompt) for prompt in batch_prompts],
                             "width": object_generation_size,
                             "height": object_generation_size,
@@ -119,11 +128,17 @@ def generate_region_objects(
                     f"object_batch_predict end batch_start={batch_start + 1} saved={len(list(batch_prediction.get('output_paths') or []))}"
                 )
             saved_paths = list(batch_prediction.get("output_paths") or []) if batch_prediction else []
+            saved_preview_paths = list(batch_prediction.get("preview_output_paths") or []) if batch_prediction else []
+            saved_alpha_paths = list(batch_prediction.get("alpha_output_paths") or []) if batch_prediction else []
+            saved_visualization_paths = list(batch_prediction.get("visualization_output_paths") or []) if batch_prediction else []
             for offset, region in enumerate(batch_regions):
                 index = batch_start + offset + 1
                 region_prompt = batch_prompts[offset]
                 output_prefix = scene_dir / "assets" / "objects" / f"{region.region_id}"
                 candidate_path = batch_paths[offset]
+                preview_path = preview_paths[offset]
+                alpha_path = alpha_paths[offset]
+                visualization_path = visualization_paths[offset]
                 if not saved_paths:
                     _stdout_debug(
                         "object_predict start "
@@ -138,6 +153,9 @@ def generate_region_objects(
                             mode="object_generation",
                             params={
                                 "output_path": str(candidate_path),
+                                "preview_output_path": str(preview_path),
+                                "alpha_output_path": str(alpha_path),
+                                "visualization_output_path": str(visualization_path),
                                 "width": object_generation_size,
                                 "height": object_generation_size,
                                 "seed": context.runtime.model_runtime.seed,
@@ -154,8 +172,20 @@ def generate_region_objects(
                         f"object_predict end region={region.region_id} index={index}"
                     )
                     generated_ref = str(prediction.get("output_path") or candidate_path)
+                    preview_ref = str(prediction.get("preview_output_path") or preview_path)
+                    alpha_ref = str(prediction.get("alpha_output_path") or alpha_path)
+                    visualization_ref = str(
+                        prediction.get("visualization_output_path") or visualization_path
+                    )
                 else:
                     generated_ref = saved_paths[offset]
+                    preview_ref = saved_preview_paths[offset] if len(saved_preview_paths) > offset else str(preview_path)
+                    alpha_ref = saved_alpha_paths[offset] if len(saved_alpha_paths) > offset else str(alpha_path)
+                    visualization_ref = (
+                        saved_visualization_paths[offset]
+                        if len(saved_visualization_paths) > offset
+                        else str(visualization_path)
+                    )
                 _stdout_debug(
                     f"mask_extract start region={region.region_id} index={index} image={generated_ref}"
                 )
@@ -195,6 +225,9 @@ def generate_region_objects(
                     object_mask_ref=str(placement.mask_path),
                     width=placement.width,
                     height=placement.height,
+                    preview_ref=preview_ref,
+                    transparent_visualization_ref=visualization_ref,
+                    alpha_preview_ref=alpha_ref,
                     raw_alpha_mask_ref=str(placement.raw_alpha_path),
                     raw_generated_ref=generated_ref,
                     sam_object_ref=str(masked["object"]),

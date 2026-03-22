@@ -547,6 +547,7 @@ def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
     pipe = layerdiffuse_load.load_pipeline(model=model, handle=handle)
 
     assert isinstance(pipe, _FakePipe)
+    assert calls["decoder_state_dict"] == {"path": "/tmp/layer_sd15_vae_transparent_decoder.safetensors"}
     assert calls["custom_loader"][1] == "/tmp/layer_sd15_transparent_attn.safetensors"
     assert calls["custom_loader"][2] == 1
     assert calls["configure"]["offload_mode"] == "sequential"

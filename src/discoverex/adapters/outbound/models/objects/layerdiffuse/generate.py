@@ -1,9 +1,24 @@
 from __future__ import annotations
 
 import inspect
+from dataclasses import dataclass
 from typing import Any
 
 from PIL import Image  # type: ignore
+
+from .transparent_decode import TransparentDecodeResult
+
+
+@dataclass(frozen=True)
+class LayerDiffuseGenerationResult:
+    preview_rgb: Image.Image
+    transparent_rgba: Image.Image
+    alpha_mask: Image.Image
+    visualization_rgb: Image.Image
+
+    @property
+    def mode(self) -> str:
+        return self.transparent_rgba.mode
 
 
 def _to_rgba_image(image: Any) -> Image.Image:
@@ -172,6 +187,50 @@ def _decode_latents_to_rgba_images(*, pipe: Any, latents: Any) -> list[Image.Ima
     return _to_rgba_images(decoded)
 
 
+def _decode_latents_with_transparent_decoder(
+    *,
+    pipe: Any,
+    decoder: Any,
+    latents: Any,
+) -> list[LayerDiffuseGenerationResult]:
+    if decoder is None:
+        images = _decode_latents_to_rgba_images(pipe=pipe, latents=latents)
+        results: list[LayerDiffuseGenerationResult] = []
+        for image in images:
+            rgba = image.convert("RGBA")
+            results.append(
+                LayerDiffuseGenerationResult(
+                    preview_rgb=image.convert("RGB"),
+                    transparent_rgba=rgba,
+                    alpha_mask=rgba.getchannel("A"),
+                    visualization_rgb=image.convert("RGB"),
+                )
+            )
+        return results
+    decoded = decoder.decode(transparent_vae=pipe.vae, latents=latents)
+    return [
+        LayerDiffuseGenerationResult(
+            preview_rgb=item.preview_rgb,
+            transparent_rgba=item.transparent_rgba,
+            alpha_mask=item.alpha_mask,
+            visualization_rgb=item.visualization_rgb,
+        )
+        for item in decoded
+    ]
+
+
+def _coerce_generation_result(image: Any) -> LayerDiffuseGenerationResult:
+    if isinstance(image, LayerDiffuseGenerationResult):
+        return image
+    rgba = _to_rgba_image(image)
+    return LayerDiffuseGenerationResult(
+        preview_rgb=rgba.convert("RGB"),
+        transparent_rgba=rgba,
+        alpha_mask=rgba.getchannel("A"),
+        visualization_rgb=rgba.convert("RGB"),
+    )
+
+
 def _build_prompt_embeds(
     *,
     pipe: Any,
@@ -295,16 +354,13 @@ def generate_rgba(
     num_inference_steps: int,
     guidance_scale: float,
     max_vram_gb: float | None = None,
-) -> Any:
+) -> LayerDiffuseGenerationResult:
     import torch  # type: ignore
 
     pipe = model._load_pipeline(handle)
+    transparent_decoder = model._load_transparent_decoder(handle)
     execution_device = getattr(pipe, "_execution_device", handle.device)
     generator = None if seed is None else torch.Generator(device="cpu").manual_seed(seed)
-    prompt_embeds = None
-    negative_prompt_embeds = None
-    pooled_prompt_embeds = None
-    negative_pooled_prompt_embeds = None
     latents = _sample_latents(
         pipe=pipe,
         prompts=prompt,
@@ -318,10 +374,19 @@ def generate_rgba(
         max_vram_gb=max_vram_gb,
     )
     _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
-    images = _decode_latents_to_rgba_images(pipe=pipe, latents=latents)
+    if transparent_decoder is not None:
+        try:
+            transparent_decoder.to(execution_device)
+        except Exception:
+            pass
+    images = _decode_latents_with_transparent_decoder(
+        pipe=pipe,
+        decoder=transparent_decoder,
+        latents=latents,
+    )
     image = images[0]
-    _offload_decode_stack(pipe=pipe, decoder=None)
-    return _to_rgba_image(image)
+    _offload_decode_stack(pipe=pipe, decoder=transparent_decoder)
+    return _coerce_generation_result(image)
 
 
 def generate_rgba_batch(
@@ -336,7 +401,7 @@ def generate_rgba_batch(
     num_inference_steps: int,
     guidance_scale: float,
     max_vram_gb: float | None = None,
-) -> list[Image.Image]:
+) -> list[LayerDiffuseGenerationResult]:
     import torch  # type: ignore
 
     if not prompts:
@@ -344,6 +409,7 @@ def generate_rgba_batch(
     if len(prompts) != len(negative_prompts):
         raise ValueError("prompts and negative_prompts must have the same length")
     pipe = model._load_pipeline(handle)
+    transparent_decoder = model._load_transparent_decoder(handle)
     execution_device = getattr(pipe, "_execution_device", handle.device)
     generator = None if seed is None else torch.Generator(device="cpu").manual_seed(seed)
     latents = _sample_latents(
@@ -359,6 +425,15 @@ def generate_rgba_batch(
         max_vram_gb=max_vram_gb,
     )
     _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
-    images = _decode_latents_to_rgba_images(pipe=pipe, latents=latents)
-    _offload_decode_stack(pipe=pipe, decoder=None)
-    return _to_rgba_images(images)
+    if transparent_decoder is not None:
+        try:
+            transparent_decoder.to(execution_device)
+        except Exception:
+            pass
+    images = _decode_latents_with_transparent_decoder(
+        pipe=pipe,
+        decoder=transparent_decoder,
+        latents=latents,
+    )
+    _offload_decode_stack(pipe=pipe, decoder=transparent_decoder)
+    return images

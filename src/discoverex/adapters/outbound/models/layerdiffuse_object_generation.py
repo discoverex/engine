@@ -10,7 +10,11 @@ from discoverex.runtime_logging import format_seconds, get_logger
 
 from .fx_param_parsing import as_float, as_int_or_none, as_positive_int, as_str
 from .objects.layerdiffuse.cache import resolve_shared_cache_dir
-from .objects.layerdiffuse.generate import generate_rgba, generate_rgba_batch
+from .objects.layerdiffuse.generate import (
+    LayerDiffuseGenerationResult,
+    generate_rgba,
+    generate_rgba_batch,
+)
 from .objects.layerdiffuse.load import load_pipeline, load_transparent_decoder
 from .pipeline_memory import OffloadMode
 from .runtime import (
@@ -127,9 +131,21 @@ class LayerDiffuseObjectGenerationModel:
 
     def predict(self, handle: ModelHandle, request: FxRequest) -> FxPrediction:
         started = perf_counter()
-        path = Path(str(request.params.get("output_path", "")))
-        if not str(path):
+        output_path_value = as_str(request.params.get("output_path"), fallback="")
+        if not output_path_value:
             raise ValueError("FxRequest.params.output_path is required")
+        path = Path(output_path_value)
+        preview_path_value = as_str(request.params.get("preview_output_path"), fallback="")
+        alpha_path_value = as_str(request.params.get("alpha_output_path"), fallback="")
+        visualization_path_value = as_str(
+            request.params.get("visualization_output_path"),
+            fallback="",
+        )
+        preview_path = Path(preview_path_value) if preview_path_value else None
+        alpha_path = Path(alpha_path_value) if alpha_path_value else None
+        visualization_path = (
+            Path(visualization_path_value) if visualization_path_value else None
+        )
         image = self._generate_rgba(
             handle=handle,
             prompt=as_str(request.params.get("prompt"), fallback=self.default_prompt),
@@ -145,19 +161,60 @@ class LayerDiffuseObjectGenerationModel:
                 else None
             ),
         )
+        if not isinstance(image, LayerDiffuseGenerationResult):
+            rgba = image.convert("RGBA")
+            image = LayerDiffuseGenerationResult(
+                preview_rgb=rgba.convert("RGB"),
+                transparent_rgba=rgba,
+                alpha_mask=rgba.getchannel("A"),
+                visualization_rgb=rgba.convert("RGB"),
+            )
         path.parent.mkdir(parents=True, exist_ok=True)
-        image.save(path)
+        image.transparent_rgba.save(path)
+        if preview_path is not None:
+            preview_path.parent.mkdir(parents=True, exist_ok=True)
+            image.preview_rgb.save(preview_path)
+        if alpha_path is not None:
+            alpha_path.parent.mkdir(parents=True, exist_ok=True)
+            image.alpha_mask.save(alpha_path)
+        if visualization_path is not None:
+            visualization_path.parent.mkdir(parents=True, exist_ok=True)
+            image.visualization_rgb.save(visualization_path)
         logger.info("layerdiffuse object image saved path=%s duration=%s", path, format_seconds(started))
-        return {"fx": request.mode or "object_generation", "output_path": str(path)}
+        return {
+            "fx": request.mode or "object_generation",
+            "output_path": str(path),
+            "preview_output_path": str(preview_path) if preview_path is not None else "",
+            "alpha_output_path": str(alpha_path) if alpha_path is not None else "",
+            "visualization_output_path": (
+                str(visualization_path) if visualization_path is not None else ""
+            ),
+        }
 
     def predict_batch(self, handle: ModelHandle, request: FxRequest) -> FxPrediction:
         started = perf_counter()
         output_paths = [Path(str(path)) for path in list(request.params.get("output_paths") or [])]
+        preview_output_paths = [
+            Path(str(path)) for path in list(request.params.get("preview_output_paths") or [])
+        ]
+        alpha_output_paths = [
+            Path(str(path)) for path in list(request.params.get("alpha_output_paths") or [])
+        ]
+        visualization_output_paths = [
+            Path(str(path))
+            for path in list(request.params.get("visualization_output_paths") or [])
+        ]
         prompts = [str(prompt) for prompt in list(request.params.get("prompts") or [])]
         if not output_paths:
             raise ValueError("FxRequest.params.output_paths is required")
         if len(output_paths) != len(prompts):
             raise ValueError("output_paths and prompts must have the same length")
+        if preview_output_paths and len(preview_output_paths) != len(output_paths):
+            raise ValueError("preview_output_paths and output_paths must have the same length")
+        if alpha_output_paths and len(alpha_output_paths) != len(output_paths):
+            raise ValueError("alpha_output_paths and output_paths must have the same length")
+        if visualization_output_paths and len(visualization_output_paths) != len(output_paths):
+            raise ValueError("visualization_output_paths and output_paths must have the same length")
         negative_prompt = as_str(
             request.params.get("negative_prompt"),
             fallback=self.default_negative_prompt,
@@ -185,16 +242,40 @@ class LayerDiffuseObjectGenerationModel:
             ),
         )
         saved_paths: list[str] = []
-        for path, image in zip(output_paths, images, strict=True):
+        preview_saved_paths: list[str] = []
+        alpha_saved_paths: list[str] = []
+        visualization_saved_paths: list[str] = []
+        for index, (path, image) in enumerate(zip(output_paths, images, strict=True)):
             path.parent.mkdir(parents=True, exist_ok=True)
-            image.save(path)
+            image.transparent_rgba.save(path)
             saved_paths.append(str(path))
+            if preview_output_paths:
+                preview_path = preview_output_paths[index]
+                preview_path.parent.mkdir(parents=True, exist_ok=True)
+                image.preview_rgb.save(preview_path)
+                preview_saved_paths.append(str(preview_path))
+            if alpha_output_paths:
+                alpha_path = alpha_output_paths[index]
+                alpha_path.parent.mkdir(parents=True, exist_ok=True)
+                image.alpha_mask.save(alpha_path)
+                alpha_saved_paths.append(str(alpha_path))
+            if visualization_output_paths:
+                visualization_path = visualization_output_paths[index]
+                visualization_path.parent.mkdir(parents=True, exist_ok=True)
+                image.visualization_rgb.save(visualization_path)
+                visualization_saved_paths.append(str(visualization_path))
         logger.info(
             "layerdiffuse object batch saved count=%s duration=%s",
             len(saved_paths),
             format_seconds(started),
         )
-        return {"fx": request.mode or "object_generation", "output_paths": saved_paths}
+        return {
+            "fx": request.mode or "object_generation",
+            "output_paths": saved_paths,
+            "preview_output_paths": preview_saved_paths,
+            "alpha_output_paths": alpha_saved_paths,
+            "visualization_output_paths": visualization_saved_paths,
+        }
 
     def _generate_rgba(self, **kwargs: Any) -> Any:
         return generate_rgba(model=self, **kwargs)

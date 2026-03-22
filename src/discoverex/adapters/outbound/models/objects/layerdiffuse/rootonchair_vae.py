@@ -99,13 +99,23 @@ class TransparentVAEDecoder(AutoencoderKL):
         return torch.median(torch.stack(results, dim=0), dim=0).values
 
     @torch.no_grad()
+    def decode_preview(
+        self,
+        z: torch.Tensor,
+        *,
+        return_dict: bool = True,
+        generator: torch.Generator | None = None,
+    ) -> DecoderOutput | tuple[torch.Tensor]:
+        return super().decode(z, return_dict=return_dict, generator=generator)
+
+    @torch.no_grad()
     def decode(
         self,
         z: torch.Tensor,
         return_dict: bool = True,
         generator: torch.Generator | None = None,
     ) -> DecoderOutput | tuple[torch.Tensor]:
-        pixel = super().decode(z, return_dict=False, generator=generator)[0]
+        pixel = self.decode_preview(z, return_dict=False, generator=generator)[0]
         pixel = pixel / 2 + 0.5
         output_batches: list[torch.Tensor] = []
         for index in range(int(z.shape[0])):
