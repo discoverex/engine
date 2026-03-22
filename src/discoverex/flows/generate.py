@@ -11,7 +11,6 @@ from prefect import flow, task
 from discoverex.application.context import AppContextLike
 from discoverex.application.services.runtime import require_resolved_settings
 from discoverex.application.use_cases.gen_verify.background_pipeline import (
-    apply_background_canvas_upscale_if_needed,
     apply_background_detail_reconstruction_if_needed,
     build_background_from_inputs,
 )
@@ -120,7 +119,7 @@ def _build_background_stage(
         context.model_versions.background_generator
     )
     try:
-        return build_background_from_inputs(
+        background, prompt_record = build_background_from_inputs(
             context=context,
             scene_dir=scene_dir,
             fx_handle=handle,
@@ -128,6 +127,16 @@ def _build_background_stage(
             background_prompt=background_prompt,
             background_negative_prompt=background_negative_prompt,
         )
+        background = apply_background_detail_reconstruction_if_needed(
+            background=background,
+            context=context,
+            scene_dir=scene_dir,
+            upscaler_handle=handle,
+            prompt=prompt,
+            negative_prompt=(background_negative_prompt or "").strip(),
+            predictor_model=context.background_generator_model,
+        )
+        return background, prompt_record
     finally:
         unload_model(context.background_generator_model)
 
@@ -141,22 +150,8 @@ def _background_canvas_upscale_stage(
     background_prompt: str | None,
     background_negative_prompt: str | None,
 ) -> Background:
-    if not (background_prompt or "").strip():
-        return background
-    handle = context.background_upscaler_model.load(
-        context.model_versions.background_upscaler
-    )
-    try:
-        return apply_background_canvas_upscale_if_needed(
-            background=background,
-            context=context,
-            scene_dir=scene_dir,
-            upscaler_handle=handle,
-            prompt=(background_prompt or "").strip(),
-            negative_prompt=(background_negative_prompt or "").strip(),
-        )
-    finally:
-        unload_model(context.background_upscaler_model)
+    _ = (context, scene_dir, background_prompt, background_negative_prompt)
+    return background
 
 
 @task(name="discoverex-generate-background-detail-reconstruct", persist_result=False)
@@ -168,22 +163,8 @@ def _background_detail_reconstruct_stage(
     background_prompt: str | None,
     background_negative_prompt: str | None,
 ) -> Background:
-    if not (background_prompt or "").strip():
-        return background
-    handle = context.background_upscaler_model.load(
-        context.model_versions.background_upscaler
-    )
-    try:
-        return apply_background_detail_reconstruction_if_needed(
-            background=background,
-            context=context,
-            scene_dir=scene_dir,
-            upscaler_handle=handle,
-            prompt=(background_prompt or "").strip(),
-            negative_prompt=(background_negative_prompt or "").strip(),
-        )
-    finally:
-        unload_model(context.background_upscaler_model)
+    _ = (context, scene_dir, background_prompt, background_negative_prompt)
+    return background
 
 
 @task(name="discoverex-generate-regions", persist_result=False)

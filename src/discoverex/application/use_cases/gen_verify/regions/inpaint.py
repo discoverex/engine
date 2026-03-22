@@ -114,9 +114,33 @@ def _generate_single_region(
     _stdout_debug(
         "object_inpaint start "
         f"region={region.region_id} index={index}/{total_regions} "
-        f"prompt={region_prompt!r} generation_prompt={generation_prompt!r} "
-        f"object_model_id={object_asset.object_model_id!r} sampler={object_asset.object_sampler!r} "
-        f"steps={object_asset.object_steps} guidance={object_asset.object_guidance_scale} seed={object_asset.object_seed}"
+        f"bbox={json.dumps(bbox_payload(region))} "
+        f"inpaint_model_id={getattr(context.inpaint_model, 'model_id', '')!r} "
+        f"inpaint_mode={getattr(context.inpaint_model, 'inpaint_mode', '')!r} "
+        f"prompt={region_prompt!r} negative_prompt={object_negative_prompt!r} "
+        f"generation_prompt={generation_prompt!r}"
+    )
+    _stdout_debug(
+        "object_inpaint stages "
+        f"region={region.region_id} "
+        f"generation(steps={getattr(context.inpaint_model, 'generation_steps', '')}, "
+        f"guidance={getattr(context.inpaint_model, 'generation_guidance_scale', '')}, "
+        f"strength={getattr(context.inpaint_model, 'generation_strength', '')}) "
+        f"edge(backend={getattr(context.inpaint_model, 'edge_blend_backend', '')!r}, "
+        f"model_id={getattr(context.inpaint_model, 'edge_blend_model_id', '')!r}, "
+        f"steps={getattr(context.inpaint_model, 'edge_blend_steps', '')}, "
+        f"guidance={getattr(context.inpaint_model, 'edge_blend_cfg', '')}, "
+        f"strength={getattr(context.inpaint_model, 'edge_blend_strength', '')}) "
+        f"core(backend={getattr(context.inpaint_model, 'core_blend_backend', '')!r}, "
+        f"model_id={getattr(context.inpaint_model, 'core_blend_model_id', '')!r}, "
+        f"steps={getattr(context.inpaint_model, 'core_blend_steps', '')}, "
+        f"guidance={getattr(context.inpaint_model, 'core_blend_cfg', '')}, "
+        f"strength={getattr(context.inpaint_model, 'core_blend_strength', '')}) "
+        f"final(backend={getattr(context.inpaint_model, 'final_polish_backend', '')!r}, "
+        f"model_id={getattr(context.inpaint_model, 'final_polish_model_id', '')!r}, "
+        f"steps={getattr(context.inpaint_model, 'final_polish_steps', '')}, "
+        f"guidance={getattr(context.inpaint_model, 'final_polish_cfg', '')}, "
+        f"strength={getattr(context.inpaint_model, 'final_polish_strength', '')})"
     )
     with track_stage_vram(
         context,
@@ -198,7 +222,7 @@ def _generate_single_region(
         )
     _stdout_debug(
         "object_inpaint end "
-        f"region={region.region_id} prompt={region_prompt!r} "
+        f"region={region.region_id} "
         f"selected_variant_ref={details.get('selected_variant_ref')!r} "
         f"patch={details.get('patch_image_ref')!r} composited={details.get('composited_image_ref')!r} "
         f"selected_bbox={json.dumps(details.get('selected_bbox') or {})}"
@@ -226,9 +250,8 @@ def _generate_single_region(
         details=details,
     )
     logger.info(
-        "object inpaint completed region=%s prompt=%s patch=%s object=%s composited=%s duration=%s",
+        "object inpaint completed region=%s patch=%s object=%s composited=%s duration=%s",
         region.region_id,
-        region_prompt,
         details.get("patch_image_ref"),
         details.get("object_image_ref"),
         details.get("composited_image_ref"),

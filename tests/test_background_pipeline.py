@@ -64,7 +64,6 @@ def test_apply_background_hires_fix_updates_background_dimensions(
     assert updated.asset_ref == str(output)
     assert updated.width == 256
     assert updated.height == 192
-    assert updated.metadata["base_background_ref"] == str(source)
-    assert updated.metadata["background_upscale_factor"] == 4
+    assert updated.metadata["canvas_background_ref"] == str(source)
     assert context.runtime.width == 256
     assert context.runtime.height == 192

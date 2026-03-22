@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance
 from scipy.spatial.distance import cosine
 from skimage import color
 from skimage.feature import hog, local_binary_pattern
@@ -19,7 +19,6 @@ from skimage.filters import gabor
 
 from discoverex.application.context import AppContextLike
 from discoverex.application.use_cases.gen_verify.background_pipeline import (
-    apply_background_canvas_upscale_if_needed,
     apply_background_detail_reconstruction_if_needed,
     build_background_from_inputs,
 )
@@ -140,11 +139,21 @@ def run(
             object_generation_size=object_generation_size,
         )
         _stdout_debug("generate_verify_v2 object_generation_complete")
+        _stdout_debug("generate_verify_v2 object_bg_scaling_start")
+        generated_objects = _apply_object_background_scaling(
+            config=config,
+            scene_dir=scene_dir,
+            background=background,
+            generated_objects=generated_objects,
+        )
+        _stdout_debug("generate_verify_v2 object_bg_scaling_complete")
         stage_gpu_barrier("after_object_generation")
         candidate_regions = _select_regions_patch_similarity(
             config=config,
+            context=context,
+            scene_dir=scene_dir,
             background=background,
-            generated_objects=list(generated_objects.values()),
+            generated_objects=generated_objects,
         )
         candidate_regions = _mark_regions_as_answers(candidate_regions)
         _stdout_debug(
@@ -336,20 +345,6 @@ def _build_background(
                 background_prompt=background_prompt,
                 background_negative_prompt=background_negative_prompt,
             )
-        finally:
-            unload_model(context.background_generator_model)
-        handle = context.background_upscaler_model.load(
-            context.model_versions.background_upscaler
-        )
-        try:
-            background = apply_background_canvas_upscale_if_needed(
-                background=background,
-                context=context,
-                scene_dir=scene_dir,
-                upscaler_handle=handle,
-                prompt=prompt,
-                negative_prompt=(background_negative_prompt or "").strip(),
-            )
             background = apply_background_detail_reconstruction_if_needed(
                 background=background,
                 context=context,
@@ -357,9 +352,10 @@ def _build_background(
                 upscaler_handle=handle,
                 prompt=prompt,
                 negative_prompt=(background_negative_prompt or "").strip(),
+                predictor_model=context.background_generator_model,
             )
         finally:
-            unload_model(context.background_upscaler_model)
+            unload_model(context.background_generator_model)
     else:
         background, prompt_record = build_background_from_inputs(
             context=context,
@@ -465,8 +461,10 @@ def _generate_objects(
 def _select_regions_patch_similarity(
     *,
     config: PipelineConfig,
+    context: AppContextLike,
+    scene_dir: Path,
     background: Background,
-    generated_objects: list[GeneratedObjectAsset],
+    generated_objects: dict[str, GeneratedObjectAsset],
 ) -> list[Region]:
     _stdout_debug(
         f"generate_verify_v2 patch_selection_start generated={len(generated_objects)}"
@@ -474,8 +472,12 @@ def _select_regions_patch_similarity(
     background_image = np.asarray(Image.open(background.asset_ref).convert("RGB"))
     selected_boxes: list[tuple[float, float, float, float]] = []
     regions: list[Region] = []
-    for index, asset in enumerate(generated_objects, start=1):
-        variants = _build_object_variants(config=config, asset=asset)
+    for index, asset in enumerate(generated_objects.values(), start=1):
+        variants = _build_object_variants(
+            config=config,
+            context=context,
+            asset=asset,
+        )
         best = _find_best_patch(
             config=config,
             background_image=background_image,
@@ -499,6 +501,13 @@ def _select_regions_patch_similarity(
             version=1,
         )
         regions.append(region)
+        generated_objects[asset.region_id] = _apply_selected_variant_asset(
+            scene_dir=scene_dir,
+            asset=asset,
+            variant=next(
+                variant for variant in variants if variant["variant_id"] == best["variant_id"]
+            ),
+        )
         _stdout_debug(
             f"generate_verify_v2 patch_selection_region region={asset.region_id} variant={best['variant_id']} score={float(best['score']):.4f}"
         )
@@ -509,30 +518,232 @@ def _select_regions_patch_similarity(
 def _build_object_variants(
     *,
     config: PipelineConfig,
+    context: AppContextLike | None = None,
     asset: GeneratedObjectAsset,
 ) -> list[dict[str, Any]]:
     variants: list[dict[str, Any]] = []
-    with Image.open(asset.object_ref).convert("RGBA") as object_image:
-        base_image = _crop_object_for_patch_selection(object_image=object_image, asset=asset)
-        for rotation in config.object_variants.rotation_degrees:
-            rotated = base_image.rotate(
-                rotation,
-                expand=True,
-                resample=Image.Resampling.BICUBIC,
-            )
-            for scale in config.object_variants.scale_factors:
-                width = max(1, int(round(rotated.width * scale)))
-                height = max(1, int(round(rotated.height * scale)))
-                scaled = rotated.resize((width, height), Image.Resampling.LANCZOS)
-                variants.append(
-                    {
-                        "variant_id": f"rot{rotation:g}-scale{scale:.2f}",
-                        "image": _pad_rgba(scaled, config.object_variants.canvas_padding),
-                    }
-                )
-                if len(variants) >= config.object_variants.max_variants_per_object:
-                    return variants
+    with _load_object_image_for_patch_selection(asset) as object_image:
+        rotations = _variant_rotation_values(config=config, context=context)
+        appearance_variants = _variant_appearance_values(context=context)
+        for appearance in appearance_variants:
+            for rotation in rotations:
+                for scale in config.object_variants.scale_factors:
+                    scaled = _scale_rgba(object_image, scale)
+                    transformed = _apply_rgba_appearance(
+                        image=scaled,
+                        saturation_mul=appearance["saturation_mul"],
+                        contrast_mul=appearance["contrast_mul"],
+                        sharpness_mul=appearance["sharpness_mul"],
+                    )
+                    rotated = transformed.rotate(
+                        rotation,
+                        expand=True,
+                        resample=Image.Resampling.BICUBIC,
+                    )
+                    cropped = _tight_crop_variant_for_patch_selection(rotated)
+                    variants.append(
+                        {
+                            "variant_id": (
+                                f"rot{rotation:g}-scale{scale:.2f}"
+                                f"-{appearance['variant_id']}"
+                            ),
+                            "image": _pad_rgba(
+                                cropped,
+                                config.object_variants.canvas_padding,
+                            ),
+                        }
+                    )
+                    if len(variants) >= config.object_variants.max_variants_per_object:
+                        return variants
     return variants
+
+
+def _load_object_image_for_patch_selection(asset: GeneratedObjectAsset) -> Image.Image:
+    object_image = Image.open(asset.object_ref).convert("RGBA")
+    mask_ref = asset.raw_alpha_mask_ref or asset.object_mask_ref
+    if not mask_ref:
+        return object_image
+    try:
+        with Image.open(mask_ref).convert("L") as mask_image:
+            if mask_image.size != object_image.size:
+                mask_image = mask_image.resize(object_image.size, Image.Resampling.NEAREST)
+            object_image.putalpha(mask_image)
+    except OSError:
+        return object_image
+    return object_image
+
+
+def _apply_selected_variant_asset(
+    *,
+    scene_dir: Path,
+    asset: GeneratedObjectAsset,
+    variant: dict[str, Any],
+) -> GeneratedObjectAsset:
+    image = variant["image"].convert("RGBA")
+    mask = image.getchannel("A")
+    object_out = scene_dir / "assets" / "objects" / f"{asset.region_id}.selected.png"
+    mask_out = scene_dir / "assets" / "masks" / f"{asset.region_id}.selected.mask.png"
+    raw_alpha_out = (
+        scene_dir / "assets" / "masks" / f"{asset.region_id}.selected.raw-alpha-mask.png"
+    )
+    object_out.parent.mkdir(parents=True, exist_ok=True)
+    mask_out.parent.mkdir(parents=True, exist_ok=True)
+    image.save(object_out)
+    mask.save(mask_out)
+    mask.save(raw_alpha_out)
+    tight_bbox = mask.getbbox()
+    return replace(
+        asset,
+        object_ref=str(object_out),
+        object_mask_ref=str(mask_out),
+        raw_alpha_mask_ref=str(raw_alpha_out),
+        width=max(1, tight_bbox[2] - tight_bbox[0]) if tight_bbox else image.width,
+        height=max(1, tight_bbox[3] - tight_bbox[1]) if tight_bbox else image.height,
+        tight_bbox=tight_bbox,
+    )
+
+
+def _apply_object_background_scaling(
+    *,
+    config: PipelineConfig,
+    scene_dir: Path,
+    background: Background,
+    generated_objects: dict[str, GeneratedObjectAsset],
+) -> dict[str, GeneratedObjectAsset]:
+    with Image.open(background.asset_ref).convert("RGB") as background_image:
+        background_long_side = max(1, background_image.width, background_image.height)
+    target_long_side = max(
+        1,
+        int(round(background_long_side * max(0.01, config.object_variants.obj_bg_ratio))),
+    )
+    output: dict[str, GeneratedObjectAsset] = {}
+    for region_id, asset in generated_objects.items():
+        object_path = Path(asset.object_ref)
+        mask_path = Path(asset.object_mask_ref)
+        raw_alpha_path = Path(asset.raw_alpha_mask_ref) if asset.raw_alpha_mask_ref else None
+        with Image.open(object_path).convert("RGBA") as object_image:
+            current_long_side = max(1, object_image.width, object_image.height)
+            scale = target_long_side / float(current_long_side)
+            scaled_object = _scale_rgba(object_image, scale)
+        with Image.open(mask_path).convert("L") as mask_image:
+            scaled_mask = mask_image.resize(
+                scaled_object.size,
+                Image.Resampling.NEAREST,
+            )
+        scaled_raw_alpha = None
+        if raw_alpha_path is not None:
+            with Image.open(raw_alpha_path).convert("L") as raw_alpha_image:
+                scaled_raw_alpha = raw_alpha_image.resize(
+                    scaled_object.size,
+                    Image.Resampling.NEAREST,
+                )
+        object_out = scene_dir / "assets" / "objects" / f"{region_id}.scaled.png"
+        mask_out = scene_dir / "assets" / "masks" / f"{region_id}.scaled.mask.png"
+        raw_alpha_out = (
+            scene_dir / "assets" / "masks" / f"{region_id}.scaled.raw-alpha-mask.png"
+            if scaled_raw_alpha is not None
+            else None
+        )
+        object_out.parent.mkdir(parents=True, exist_ok=True)
+        mask_out.parent.mkdir(parents=True, exist_ok=True)
+        scaled_object.save(object_out)
+        scaled_mask.save(mask_out)
+        if scaled_raw_alpha is not None and raw_alpha_out is not None:
+            scaled_raw_alpha.save(raw_alpha_out)
+        tight_bbox = scaled_mask.getbbox()
+        output[region_id] = replace(
+            asset,
+            object_ref=str(object_out),
+            object_mask_ref=str(mask_out),
+            raw_alpha_mask_ref=str(raw_alpha_out) if raw_alpha_out is not None else asset.raw_alpha_mask_ref,
+            original_object_ref=asset.original_object_ref or asset.object_ref,
+            original_object_mask_ref=asset.original_object_mask_ref or asset.object_mask_ref,
+            original_raw_alpha_mask_ref=asset.original_raw_alpha_mask_ref or asset.raw_alpha_mask_ref,
+            width=max(1, tight_bbox[2] - tight_bbox[0]) if tight_bbox else scaled_mask.width,
+            height=max(1, tight_bbox[3] - tight_bbox[1]) if tight_bbox else scaled_mask.height,
+            tight_bbox=tight_bbox,
+        )
+        _stdout_debug(
+            "generate_verify_v2 object_bg_scaled "
+            f"region={region_id} target_long_side={target_long_side} "
+            f"scaled_size={scaled_object.width}x{scaled_object.height}"
+        )
+    return output
+
+
+def _scale_rgba(image: Image.Image, scale: float) -> Image.Image:
+    scaled_width = max(1, int(round(image.width * scale)))
+    scaled_height = max(1, int(round(image.height * scale)))
+    return image.resize((scaled_width, scaled_height), Image.Resampling.LANCZOS)
+
+
+def _variant_rotation_values(
+    *,
+    config: PipelineConfig,
+    context: AppContextLike | None,
+) -> list[float]:
+    if context is None:
+        return list(config.object_variants.rotation_degrees)
+    bounds = tuple(getattr(context.inpaint_model, "pre_match_rotation_deg", ()) or ())
+    if len(bounds) != 2:
+        return list(config.object_variants.rotation_degrees)
+    low, high = float(bounds[0]), float(bounds[1])
+    return list(dict.fromkeys([low, 0.0, high]))
+
+
+def _variant_appearance_values(
+    *,
+    context: AppContextLike | None,
+) -> list[dict[str, float | str]]:
+    variants: list[dict[str, float | str]] = [
+        {
+            "variant_id": "base",
+            "saturation_mul": 1.0,
+            "contrast_mul": 1.0,
+            "sharpness_mul": 1.0,
+        }
+    ]
+    if context is None:
+        return variants
+    saturation = tuple(getattr(context.inpaint_model, "pre_match_saturation_mul", ()) or ())
+    contrast = tuple(getattr(context.inpaint_model, "pre_match_contrast_mul", ()) or ())
+    sharpness = tuple(getattr(context.inpaint_model, "pre_match_sharpness_mul", ()) or ())
+    if len(saturation) != 2 or len(contrast) != 2 or len(sharpness) != 2:
+        return variants
+    variants.extend(
+        [
+            {
+                "variant_id": "low",
+                "saturation_mul": float(saturation[0]),
+                "contrast_mul": float(contrast[0]),
+                "sharpness_mul": float(sharpness[0]),
+            },
+            {
+                "variant_id": "high",
+                "saturation_mul": float(saturation[1]),
+                "contrast_mul": float(contrast[1]),
+                "sharpness_mul": float(sharpness[1]),
+            },
+        ]
+    )
+    return variants
+
+
+def _apply_rgba_appearance(
+    *,
+    image: Image.Image,
+    saturation_mul: float,
+    contrast_mul: float,
+    sharpness_mul: float,
+) -> Image.Image:
+    alpha = image.getchannel("A")
+    rgb = image.convert("RGB")
+    rgb = ImageEnhance.Color(rgb).enhance(saturation_mul)
+    rgb = ImageEnhance.Contrast(rgb).enhance(contrast_mul)
+    rgb = ImageEnhance.Sharpness(rgb).enhance(sharpness_mul)
+    output = rgb.convert("RGBA")
+    output.putalpha(alpha)
+    return output
 
 
 def _crop_object_for_patch_selection(
@@ -554,6 +765,17 @@ def _crop_object_for_patch_selection(
     cropped = object_image.crop(safe_box)
     if cropped.getbbox() is None:
         return object_image.copy()
+    return cropped
+
+
+def _tight_crop_variant_for_patch_selection(image: Image.Image) -> Image.Image:
+    alpha = image.getchannel("A")
+    bbox = alpha.getbbox()
+    if bbox is None:
+        return image.copy()
+    cropped = image.crop(bbox)
+    if cropped.getbbox() is None:
+        return image.copy()
     return cropped
 
 
@@ -650,6 +872,8 @@ def _find_best_patch_with_strategy(
                 config=config,
                 background_image=background_image,
                 patch_size=patch_size,
+                selected_boxes=selected_boxes,
+                iou_threshold=iou_threshold,
             ),
         )
 
@@ -726,36 +950,41 @@ def _find_best_patch_with_strategy(
             key=lambda item: item[0],
             reverse=True,
         ):
-            bbox = candidate["bbox"]
-            feature_scores = dict(coarse_scores)
-            if fine_feature_names:
-                left = int(bbox[0])
-                top = int(bbox[1])
-                patch_w = int(bbox[2])
-                patch_h = int(bbox[3])
-                patch = background_image[top : top + patch_h, left : left + patch_w]
-                patch_features = _extract_feature_bundle(
-                    patch,
-                    config=config,
-                    feature_names=fine_feature_names,
-                )
-                feature_scores.update(
-                    _score_feature_bundle(
+            for bbox in _iter_local_refined_bboxes(
+                candidate["bbox"],
+                image_size=(width, height),
+                iou_threshold=iou_threshold,
+                selected_boxes=selected_boxes,
+            ):
+                feature_scores = dict(coarse_scores)
+                if fine_feature_names:
+                    left = int(bbox[0])
+                    top = int(bbox[1])
+                    patch_w = int(bbox[2])
+                    patch_h = int(bbox[3])
+                    patch = background_image[top : top + patch_h, left : left + patch_w]
+                    patch_features = _extract_feature_bundle(
+                        patch,
                         config=config,
-                        variant_features=fine_variant_features,
-                        patch_features=patch_features,
                         feature_names=fine_feature_names,
                     )
-                )
-            score = sum(feature_scores.values())
-            if best is None or score > float(best["score"]):
-                best = {
-                    "bbox": bbox,
-                    "score": score,
-                    "variant_id": variant_id,
-                    "feature_scores": feature_scores,
-                    "selection_strategy": strategy_label,
-                }
+                    feature_scores.update(
+                        _score_feature_bundle(
+                            config=config,
+                            variant_features=fine_variant_features,
+                            patch_features=patch_features,
+                            feature_names=fine_feature_names,
+                        )
+                    )
+                score = sum(feature_scores.values())
+                if best is None or score > float(best["score"]):
+                    best = {
+                        "bbox": bbox,
+                        "score": score,
+                        "variant_id": variant_id,
+                        "feature_scores": feature_scores,
+                        "selection_strategy": strategy_label,
+                    }
     if best is not None:
         diagnostics.append(
             f"{strategy_label}:selected_variant={best['variant_id']}:score={float(best['score']):.4f}"
@@ -781,11 +1010,56 @@ def _bucket_patch_size(
     return (quantized_w, quantized_h)
 
 
+def _iter_local_refined_bboxes(
+    bbox: tuple[float, float, float, float],
+    *,
+    image_size: tuple[int, int],
+    iou_threshold: float,
+    selected_boxes: list[tuple[float, float, float, float]],
+) -> list[tuple[float, float, float, float]]:
+    image_w, image_h = image_size
+    left = int(bbox[0])
+    top = int(bbox[1])
+    patch_w = int(bbox[2])
+    patch_h = int(bbox[3])
+    offset_x = max(1, min(8, patch_w // 8))
+    offset_y = max(1, min(8, patch_h // 8))
+    offsets_x = (-offset_x, 0, offset_x)
+    offsets_y = (-offset_y, 0, offset_y)
+    refined: list[tuple[float, float, float, float]] = []
+    seen: set[tuple[int, int, int, int]] = set()
+    max_left = max(0, image_w - patch_w)
+    max_top = max(0, image_h - patch_h)
+    for dy in offsets_y:
+        for dx in offsets_x:
+            next_left = min(max(0, left + dx), max_left)
+            next_top = min(max(0, top + dy), max_top)
+            candidate = (next_left, next_top, patch_w, patch_h)
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            bbox_candidate = (
+                float(next_left),
+                float(next_top),
+                float(patch_w),
+                float(patch_h),
+            )
+            if any(
+                bbox_iou(bbox_candidate, taken) > iou_threshold
+                for taken in selected_boxes
+            ):
+                continue
+            refined.append(bbox_candidate)
+    return refined or [bbox]
+
+
 def _build_patch_candidates(
     *,
     config: PipelineConfig,
     background_image: np.ndarray,
     patch_size: tuple[int, int],
+    selected_boxes: list[tuple[float, float, float, float]] | None = None,
+    iou_threshold: float = 0.0,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     height, width = background_image.shape[:2]
@@ -794,12 +1068,18 @@ def _build_patch_candidates(
     stride_y = max(8, int(round(patch_h * config.region_selection.stride_ratio)))
     for top in range(0, max(1, height - patch_h + 1), stride_y):
         for left in range(0, max(1, width - patch_w + 1), stride_x):
+            bbox = (float(left), float(top), float(patch_w), float(patch_h))
+            if selected_boxes and any(
+                bbox_iou(bbox, taken) > iou_threshold
+                for taken in selected_boxes
+            ):
+                continue
             patch = background_image[top : top + patch_h, left : left + patch_w]
             if patch.size == 0:
                 continue
             candidates.append(
                 {
-                    "bbox": (float(left), float(top), float(patch_w), float(patch_h)),
+                    "bbox": bbox,
                     "coarse_features": _extract_feature_bundle(
                         patch,
                         config=config,

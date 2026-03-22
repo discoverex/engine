@@ -1,0 +1,33 @@
+# @package models.background_upscaler
+_target_: discoverex.adapters.outbound.models.realvisxl_lightning_background_generation.RealVisXLLightningBackgroundGenerationModel
+model_id: SG161222/RealVisXL_V5.0_Lightning
+revision: main
+device: ${runtime.model_runtime.device}
+dtype: ${runtime.model_runtime.dtype}
+precision: ${runtime.model_runtime.precision}
+batch_size: ${runtime.model_runtime.batch_size}
+seed: ${runtime.model_runtime.seed}
+offload_mode: ${runtime.model_runtime.offload_mode}
+enable_attention_slicing: ${runtime.model_runtime.enable_attention_slicing}
+enable_vae_slicing: ${runtime.model_runtime.enable_vae_slicing}
+enable_vae_tiling: ${runtime.model_runtime.enable_vae_tiling}
+enable_xformers_memory_efficient_attention: ${runtime.model_runtime.enable_xformers_memory_efficient_attention}
+enable_fp8_layerwise_casting: ${runtime.model_runtime.enable_fp8_layerwise_casting}
+enable_channels_last: ${runtime.model_runtime.enable_channels_last}
+strict_runtime: true
+sampler: dpmpp_sde_karras
+hires_sampler: dpmpp_sde_karras
+default_prompt: "cinematic hidden object puzzle background"
+default_negative_prompt: "blurry, low quality, artifact"
+default_num_inference_steps: 5
+default_guidance_scale: 2.0
+hires_num_inference_steps: 3
+hires_guidance_scale: 2.0
+hires_strength: 0.5
+canvas_upscaler_model_name: RealESRGAN_x4plus
+canvas_upscaler_scale: 4
+canvas_upscaler_repo_id: ""
+canvas_upscaler_filename: ""
+canvas_upscaler_weights_cache_dir: .cache/realesrgan
+model_cache_dir: ${oc.env:MODEL_CACHE_DIR,""}
+hf_home: ${oc.env:HF_HOME,""}

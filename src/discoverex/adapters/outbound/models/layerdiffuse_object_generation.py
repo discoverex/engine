@@ -64,6 +64,10 @@ class LayerDiffuseObjectGenerationModel:
         weights_cache_dir: str = ".cache/layerdiffuse",
         model_cache_dir: str = "",
         hf_home: str = "",
+        model_cache_policy: str = "local_first",
+        allow_remote_model_fetch: bool = True,
+        required_local_snapshot: str = "",
+        prefetch_model_on_load: bool = False,
     ) -> None:
         self.model_id = model_id
         self.pipeline_variant = pipeline_variant
@@ -96,6 +100,12 @@ class LayerDiffuseObjectGenerationModel:
                 hf_home=hf_home,
             )
         )
+        self.model_cache_dir = model_cache_dir
+        self.hf_home = hf_home
+        self.model_cache_policy = model_cache_policy
+        self.allow_remote_model_fetch = allow_remote_model_fetch
+        self.required_local_snapshot = required_local_snapshot
+        self.prefetch_model_on_load = prefetch_model_on_load
         self._pipe: Any | None = None
         self._transparent_decoder: Any | None = None
         self._layerdiffuse_applied = False

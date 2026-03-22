@@ -12,7 +12,6 @@ from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 
 from .background_pipeline import (
-    apply_background_canvas_upscale_if_needed,
     apply_background_detail_reconstruction_if_needed,
     build_background_from_inputs,
 )
@@ -70,33 +69,18 @@ def run(
             background_prompt=background_prompt,
             background_negative_prompt=background_negative_prompt,
         )
-    finally:
-        unload_model(context.background_generator_model)
-
-    background_upscaler_model = getattr(context, "background_upscaler_model", None)
-    if background_upscaler_model is not None:
-        upscaler_handle = background_upscaler_model.load(
-            model_versions.background_upscaler
-        )
-        try:
-            background = apply_background_canvas_upscale_if_needed(
-                background=background,
-                context=context,
-                scene_dir=scene_dir,
-                upscaler_handle=upscaler_handle,
-                prompt=(background_prompt or "").strip(),
-                negative_prompt=(background_negative_prompt or "").strip(),
-            )
+        if (background_prompt or "").strip():
             background = apply_background_detail_reconstruction_if_needed(
                 background=background,
                 context=context,
                 scene_dir=scene_dir,
-                upscaler_handle=upscaler_handle,
+                upscaler_handle=background_handle,
                 prompt=(background_prompt or "").strip(),
                 negative_prompt=(background_negative_prompt or "").strip(),
+                predictor_model=context.background_generator_model,
             )
-        finally:
-            unload_model(background_upscaler_model)
+    finally:
+        unload_model(context.background_generator_model)
     _materialize_background_asset(background=background, scene_dir=scene_dir)
     logger.info("background ready asset_ref=%s", background.asset_ref)
 

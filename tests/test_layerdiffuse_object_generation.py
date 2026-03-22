@@ -650,6 +650,117 @@ def test_load_pipeline_uses_base_vae_for_sdxl(
     assert "merged_state_dict" in calls
 
 
+def test_load_pipeline_uses_local_files_only_first_for_sdxl(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: dict[str, object] = {}
+
+    class _FakeAutoencoderKL:
+        @classmethod
+        def from_pretrained(cls, *args: object, **kwargs: object) -> "_FakeAutoencoderKL":
+            return cls()
+
+    class _FakePipe:
+        def __init__(self) -> None:
+            self.unet = self
+            self.scheduler = SimpleNamespace(config={"beta_schedule": "scaled_linear"})
+
+        @classmethod
+        def from_pretrained(cls, *args: object, **kwargs: object) -> "_FakePipe":
+            calls["pipe_from_pretrained"] = (args, kwargs)
+            return cls()
+
+        def state_dict(self) -> dict[str, object]:
+            return {"weight": 1}
+
+        def load_state_dict(self, state_dict: dict[str, object], strict: bool = True) -> None:
+            return None
+
+    class _FakeSchedulerCls:
+        @staticmethod
+        def from_config(config: object, **kwargs: object) -> object:
+            return SimpleNamespace(config=config, kwargs=kwargs)
+
+    fake_diffusers = SimpleNamespace(
+        AutoencoderKL=_FakeAutoencoderKL,
+        DPMSolverMultistepScheduler=_FakeSchedulerCls,
+        EulerDiscreteScheduler=_FakeSchedulerCls,
+        AutoPipelineForText2Image=_FakePipe,
+        StableDiffusionPipeline=_FakePipe,
+        StableDiffusionXLPipeline=_FakePipe,
+        UniPCMultistepScheduler=_FakeSchedulerCls,
+    )
+    fake_torch = SimpleNamespace(float16="float16", float32="float32")
+
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "diffusers", fake_diffusers)
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        SimpleNamespace(hf_hub_download=lambda **kwargs: f"/tmp/{kwargs['filename']}"),
+    )
+    monkeypatch.setitem(sys.modules, "safetensors.torch", SimpleNamespace(load_file=lambda path: {"weight": 2}))
+    monkeypatch.setitem(
+        sys.modules,
+        "discoverex.adapters.outbound.models.layerdiffuse_transparent_vae",
+        SimpleNamespace(
+            TransparentVAEDecoder=lambda filename, dtype: SimpleNamespace(
+                filename=filename,
+                dtype=dtype,
+                to=lambda *args, **kwargs: None,
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.rootonchair_sd15.loaders",
+        SimpleNamespace(load_lora_to_unet=lambda *args, **kwargs: None),
+    )
+    monkeypatch.setattr(
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.load.configure_diffusers_pipeline",
+        lambda pipe, **kwargs: pipe,
+    )
+    monkeypatch.setattr(
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.load._download_weight",
+        lambda **kwargs: Path(f"/tmp/{kwargs['filename']}"),
+    )
+    monkeypatch.setattr(
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.load._missing_snapshot_files",
+        lambda model, cache_dir: [],
+    )
+    monkeypatch.setattr(
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.load._snapshot_dir",
+        lambda model, cache_dir: "/cache/models/hf/hub/models--SG161222--RealVisXL_V5.0_Lightning/snapshots/main",
+    )
+
+    from discoverex.adapters.outbound.models.objects.layerdiffuse import load as layerdiffuse_load
+
+    model = SimpleNamespace(
+        model_id="SG161222/RealVisXL_V5.0_Lightning",
+        revision="main",
+        weights_cache_dir=".cache/layerdiffuse",
+        model_cache_dir="/cache/models",
+        hf_home="/cache/models/hf",
+        model_cache_policy="local_first",
+        allow_remote_model_fetch=True,
+        required_local_snapshot="",
+        _layerdiffuse_applied=False,
+        offload_mode="none",
+        enable_attention_slicing=True,
+        enable_vae_slicing=True,
+        enable_vae_tiling=True,
+        enable_xformers_memory_efficient_attention=True,
+        enable_fp8_layerwise_casting=False,
+        enable_channels_last=True,
+        sampler="dpmpp_sde_karras",
+    )
+    handle = SimpleNamespace(dtype="float16")
+
+    layerdiffuse_load.load_pipeline(model=model, handle=handle)
+
+    assert calls["pipe_from_pretrained"][1]["local_files_only"] is True
+
+
 def test_load_pipeline_uses_official_sd15_transparent_variant(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

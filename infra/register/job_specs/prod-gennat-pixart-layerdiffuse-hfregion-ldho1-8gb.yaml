@@ -28,7 +28,7 @@ inputs:
     - models/background_generator=pixart_sigma_8gb
     - models/object_generator=layerdiffuse
     - models/hidden_region=hf
-    - models/inpaint=sdxl_gpu_layerdiffuse_hidden_object_v1
+    - models/inpaint=tmu
     - models/perception=hf
     - models/fx=copy_image
     - runtime.model_runtime.offload_mode=sequential

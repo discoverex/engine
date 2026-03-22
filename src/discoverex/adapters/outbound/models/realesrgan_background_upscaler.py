@@ -3,11 +3,12 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from discoverex.cache_dirs import resolve_model_cache_dir
 from discoverex.models.types import FxPrediction, FxRequest, ModelHandle
-from discoverex.runtime_logging import get_logger
+from discoverex.runtime_logging import format_seconds, get_logger
 
 from .runtime import apply_seed, normalize_dtype, resolve_device, resolve_runtime
 from .runtime_cleanup import clear_model_runtime
@@ -19,6 +20,9 @@ class RealEsrganBackgroundUpscalerModel:
     def __init__(
         self,
         model_name: str = "RealESRGAN_x4plus",
+        scale: int = 4,
+        weights_repo_id: str = "",
+        weights_filename: str = "",
         device: str = "cuda",
         dtype: str = "float16",
         tile: int = 512,
@@ -30,6 +34,9 @@ class RealEsrganBackgroundUpscalerModel:
         hf_home: str = "",
     ) -> None:
         self.model_name = model_name
+        self.scale = max(1, int(scale))
+        self.weights_repo_id = weights_repo_id.strip()
+        self.weights_filename = weights_filename.strip()
         self.device = device
         self.dtype = dtype
         self.tile = tile
@@ -102,12 +109,17 @@ class RealEsrganBackgroundUpscalerModel:
         if self._upsampler is not None:
             return self._upsampler
         _ensure_torchvision_compat()
+        started = perf_counter()
         try:
             import torch  # type: ignore
             from basicsr.archs.rrdbnet_arch import RRDBNet  # type: ignore
-            from basicsr.utils.download_util import load_file_from_url  # type: ignore
             from realesrgan import RealESRGANer  # type: ignore
         except Exception as exc:
+            logger.exception(
+                "realesrgan background upscaler import failed model=%s cache_dir=%s",
+                self.model_name,
+                self.weights_cache_dir,
+            )
             raise RuntimeError(
                 "RealESRGAN runtime unavailable. Install ml-gpu dependencies with realesrgan/basicsr."
             ) from exc
@@ -119,23 +131,67 @@ class RealEsrganBackgroundUpscalerModel:
             "RealESRGAN_x4plus": 4,
             "RealESRGAN_x2plus": 2,
         }
-        if self.model_name not in model_urls:
-            raise ValueError(f"unsupported RealESRGAN model: {self.model_name}")
         weights_dir = Path(self.weights_cache_dir)
         weights_dir.mkdir(parents=True, exist_ok=True)
-        model_path = load_file_from_url(
-            url=model_urls[self.model_name],
-            model_dir=str(weights_dir),
-            progress=True,
-            file_name=f"{self.model_name}.pth",
+        model_scale = model_scales.get(self.model_name, self.scale)
+        logger.info(
+            "loading realesrgan background upscaler model=%s device=%s tile=%s weights_cache_dir=%s source=%s",
+            self.model_name,
+            handle.device,
+            self.tile,
+            self.weights_cache_dir,
+            "hf_hub" if self.weights_repo_id and self.weights_filename else "url",
         )
+        if self.weights_repo_id and self.weights_filename:
+            from huggingface_hub import hf_hub_download  # type: ignore
+
+            logger.info(
+                "realesrgan weight fetch started repo_id=%s filename=%s",
+                self.weights_repo_id,
+                self.weights_filename,
+            )
+            model_path = hf_hub_download(
+                repo_id=self.weights_repo_id,
+                filename=self.weights_filename,
+                cache_dir=str(weights_dir),
+            )
+            logger.info(
+                "realesrgan weight fetch completed repo_id=%s filename=%s path=%s",
+                self.weights_repo_id,
+                self.weights_filename,
+                model_path,
+            )
+        elif self.model_name in model_urls:
+            from basicsr.utils.download_util import load_file_from_url  # type: ignore
+
+            target_file = weights_dir / f"{self.model_name}.pth"
+            cache_hit = target_file.exists()
+            logger.info(
+                "realesrgan weight fetch started url=%s target=%s cache_hit=%s",
+                model_urls[self.model_name],
+                target_file,
+                cache_hit,
+            )
+            model_path = load_file_from_url(
+                url=model_urls[self.model_name],
+                model_dir=str(weights_dir),
+                progress=True,
+                file_name=f"{self.model_name}.pth",
+            )
+            logger.info(
+                "realesrgan weight fetch completed target=%s path=%s",
+                target_file,
+                model_path,
+            )
+        else:
+            raise ValueError(f"unsupported RealESRGAN model: {self.model_name}")
         rrdb = RRDBNet(
             num_in_ch=3,
             num_out_ch=3,
             num_feat=64,
             num_block=23,
             num_grow_ch=32,
-            scale=model_scales[self.model_name],
+            scale=model_scale,
         )
         use_half = bool(
             "16" in handle.dtype
@@ -143,14 +199,8 @@ class RealEsrganBackgroundUpscalerModel:
             and torch.cuda.is_available()
         )
         gpu_id = 0 if handle.device == "cuda" and torch.cuda.is_available() else None
-        logger.info(
-            "loading realesrgan background upscaler model=%s device=%s tile=%s",
-            self.model_name,
-            handle.device,
-            self.tile,
-        )
         self._upsampler = RealESRGANer(
-            scale=model_scales[self.model_name],
+            scale=model_scale,
             model_path=model_path,
             model=rrdb,
             tile=max(0, int(self.tile)),
@@ -158,6 +208,11 @@ class RealEsrganBackgroundUpscalerModel:
             pre_pad=max(0, int(self.pre_pad)),
             half=use_half,
             gpu_id=gpu_id,
+        )
+        logger.info(
+            "realesrgan background upscaler ready model=%s duration=%s",
+            self.model_name,
+            format_seconds(started),
         )
         return self._upsampler
 

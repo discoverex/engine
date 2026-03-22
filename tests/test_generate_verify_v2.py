@@ -13,10 +13,13 @@ from discoverex.application.use_cases.gen_verify.objects.types import (
 )
 from discoverex.application.use_cases.gen_verify.types import RegionPromptRecord
 from discoverex.application.use_cases.generate_verify_v2 import (
+    _apply_object_background_scaling,
     _bucket_patch_size,
     _build_background,
     _build_object_variants,
     _crop_object_for_patch_selection,
+    _load_object_image_for_patch_selection,
+    _tight_crop_variant_for_patch_selection,
     _find_best_patch,
     _generate_objects,
     _harmonize_rgba,
@@ -77,6 +80,43 @@ def test_crop_object_for_patch_selection_uses_tight_bbox(tmp_path: Path) -> None
     assert cropped.size == (32, 32)
 
 
+def test_tight_crop_variant_for_patch_selection_uses_alpha_bbox() -> None:
+    image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    for x in range(20, 44):
+        for y in range(16, 40):
+            image.putpixel((x, y), (240, 120, 80, 255))
+
+    cropped = _tight_crop_variant_for_patch_selection(image)
+
+    assert cropped.size == (24, 24)
+
+
+def test_load_object_image_for_patch_selection_prefers_mask_over_object_alpha(
+    tmp_path: Path,
+) -> None:
+    object_path = tmp_path / "object.png"
+    mask_path = tmp_path / "mask.png"
+
+    Image.new("RGBA", (128, 128), (240, 120, 80, 255)).save(object_path)
+    mask = Image.new("L", (128, 128), 0)
+    for x in range(48, 80):
+        for y in range(40, 72):
+            mask.putpixel((x, y), 255)
+    mask.save(mask_path)
+
+    asset = GeneratedObjectAsset(
+        region_id="r-1",
+        candidate_ref=str(object_path),
+        object_ref=str(object_path),
+        object_mask_ref=str(mask_path),
+        width=32,
+        height=32,
+    )
+
+    with _load_object_image_for_patch_selection(asset) as image:
+        assert image.getchannel("A").getbbox() == (48, 40, 80, 72)
+
+
 def test_find_best_patch_returns_bbox_for_synthetic_background(tmp_path: Path) -> None:
     object_path = tmp_path / "object.png"
     mask_path = tmp_path / "mask.png"
@@ -111,6 +151,60 @@ def test_find_best_patch_returns_bbox_for_synthetic_background(tmp_path: Path) -
     assert len(result["bbox"]) == 4
 
 
+def test_build_object_variants_scales_before_tight_crop(tmp_path: Path) -> None:
+    background_path = tmp_path / "background.png"
+    object_path = tmp_path / "object.png"
+    mask_path = tmp_path / "mask.png"
+    Image.new("RGB", (512, 512), (10, 20, 30)).save(background_path)
+    image = Image.new("RGBA", (512, 512), (240, 120, 80, 255))
+    for x in range(0, 512):
+        for y in range(0, 512):
+            image.putpixel((x, y), (240, 120, 80, 255))
+    image.save(object_path)
+    mask = Image.new("L", (512, 512), 0)
+    for x in range(200, 260):
+        for y in range(220, 280):
+            mask.putpixel((x, y), 255)
+    mask.save(mask_path)
+    asset = GeneratedObjectAsset(
+        region_id="r-1",
+        candidate_ref=str(object_path),
+        object_ref=str(object_path),
+        object_mask_ref=str(mask_path),
+        width=60,
+        height=60,
+        tight_bbox=(200, 220, 260, 280),
+    )
+    cfg = load_pipeline_config(
+        "generate",
+        overrides=[
+            "flows/generate=generate_verify_v2",
+            "object_variants.rotation_degrees=[0.0]",
+            "object_variants.obj_bg_ratio=0.1",
+            "object_variants.scale_factors=[1.0]",
+            "object_variants.canvas_padding=0",
+            "object_variants.max_variants_per_object=1",
+        ],
+    )
+
+    scaled = _apply_object_background_scaling(
+        config=cfg,
+        scene_dir=tmp_path,
+        background=Background(
+            asset_ref=str(background_path),
+            width=512,
+            height=512,
+            metadata={},
+        ),
+        generated_objects={"r-1": asset},
+    )
+    variants = _build_object_variants(config=cfg, asset=scaled["r-1"])
+
+    assert len(variants) == 1
+    assert variants[0]["image"].size[0] <= 16
+    assert variants[0]["image"].size[1] <= 16
+
+
 def test_find_best_patch_uses_fallback_relaxation_when_primary_has_no_candidates(
     tmp_path: Path,
 ) -> None:
@@ -140,7 +234,17 @@ def test_find_best_patch_uses_fallback_relaxation_when_primary_has_no_candidates
     )
     variants = _build_object_variants(config=cfg, asset=asset)[:1]
     background = Image.new("RGB", (96, 96), (30, 30, 180))
-    selected_boxes = [(0.0, 0.0, 40.0, 40.0), (56.0, 0.0, 40.0, 40.0)]
+    selected_boxes = [
+        (0.0, 0.0, 32.0, 32.0),
+        (32.0, 0.0, 32.0, 32.0),
+        (64.0, 0.0, 32.0, 32.0),
+        (0.0, 32.0, 32.0, 32.0),
+        (32.0, 32.0, 32.0, 32.0),
+        (64.0, 32.0, 32.0, 32.0),
+        (0.0, 64.0, 32.0, 32.0),
+        (32.0, 64.0, 32.0, 32.0),
+        (64.0, 64.0, 32.0, 32.0),
+    ]
 
     result = _find_best_patch(
         config=cfg,
@@ -208,6 +312,52 @@ def test_find_best_patch_skips_gabor_when_weight_disabled(
         selected_boxes=[],
     )
     assert result["score"] >= 0.0
+
+
+def test_apply_object_background_scaling_rewrites_object_assets(tmp_path: Path) -> None:
+    background_path = tmp_path / "background.png"
+    object_path = tmp_path / "object.png"
+    mask_path = tmp_path / "mask.png"
+
+    Image.new("RGB", (512, 512), (10, 20, 30)).save(background_path)
+    Image.new("RGBA", (512, 512), (180, 30, 30, 255)).save(object_path)
+    Image.new("L", (512, 512), 255).save(mask_path)
+
+    asset = GeneratedObjectAsset(
+        region_id="r-1",
+        candidate_ref=str(object_path),
+        object_ref=str(object_path),
+        object_mask_ref=str(mask_path),
+        raw_alpha_mask_ref=str(mask_path),
+        width=512,
+        height=512,
+    )
+    cfg = load_pipeline_config(
+        "generate",
+        overrides=[
+            "flows/generate=generate_verify_v2",
+            "object_variants.obj_bg_ratio=0.1",
+        ],
+    )
+    background = Background(asset_ref=str(background_path), width=512, height=512, metadata={})
+
+    scaled = _apply_object_background_scaling(
+        config=cfg,
+        scene_dir=tmp_path,
+        background=background,
+        generated_objects={"r-1": asset},
+    )
+
+    scaled_asset = scaled["r-1"]
+    with Image.open(scaled_asset.object_ref).convert("RGBA") as scaled_object:
+        assert scaled_object.size == (51, 51)
+    with Image.open(scaled_asset.object_mask_ref).convert("L") as scaled_mask:
+        assert scaled_mask.size == (51, 51)
+    assert scaled_asset.width == 51
+    assert scaled_asset.height == 51
+    assert scaled_asset.original_object_ref == str(object_path)
+    assert scaled_asset.original_object_mask_ref == str(mask_path)
+    assert scaled_asset.original_raw_alpha_mask_ref == str(mask_path)
 
 
 def test_harmonize_rgba_preserves_alpha() -> None:

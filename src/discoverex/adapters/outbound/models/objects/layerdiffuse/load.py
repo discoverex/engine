@@ -6,6 +6,23 @@ from typing import Any
 
 from ...pipeline_memory import configure_diffusers_pipeline
 
+_REQUIRED_SNAPSHOT_FILES = (
+    "model_index.json",
+    "scheduler/scheduler_config.json",
+    "tokenizer/vocab.json",
+    "tokenizer/merges.txt",
+    "tokenizer/special_tokens_map.json",
+    "tokenizer/tokenizer_config.json",
+    "tokenizer_2/vocab.json",
+    "tokenizer_2/merges.txt",
+    "tokenizer_2/special_tokens_map.json",
+    "tokenizer_2/tokenizer_config.json",
+    "unet/config.json",
+    "unet/diffusion_pytorch_model.fp16.safetensors",
+    "text_encoder/model.fp16.safetensors",
+    "text_encoder_2/model.fp16.safetensors",
+)
+
 
 def _stdout_debug(message: str) -> None:
     print(f"[discoverex-debug] {message}", flush=True)
@@ -148,14 +165,12 @@ def _load_sdxl_transparent_pipeline(
         "madebyollin/sdxl-vae-fp16-fix",
         torch_dtype=torch_dtype,
     )
-    pipe = auto_pipeline_cls.from_pretrained(
-        model.model_id,
-        revision=model.revision,
-        vae=base_vae,
-        torch_dtype=torch_dtype,
+    pipe = _from_pretrained_with_cache_policy(
+        model=model,
+        loader=auto_pipeline_cls.from_pretrained,
         variant=variant,
-        use_safetensors=True,
-        add_watermarker=False,
+        torch_dtype=torch_dtype,
+        extra_kwargs={"vae": base_vae},
     )
     pipe.scheduler = _configure_scheduler(
         scheduler=pipe.scheduler,
@@ -213,6 +228,96 @@ def _load_sdxl_transparent_pipeline(
         enable_fp8_layerwise_casting=model.enable_fp8_layerwise_casting,
         enable_channels_last=model.enable_channels_last,
     )
+
+
+def _from_pretrained_with_cache_policy(
+    *,
+    model: Any,
+    loader: Any,
+    variant: str | None,
+    torch_dtype: Any,
+    extra_kwargs: dict[str, Any] | None = None,
+) -> Any:
+    cache_dir = _diffusers_cache_dir(model)
+    kwargs = {
+        "revision": model.revision,
+        "torch_dtype": torch_dtype,
+        "variant": variant,
+        "use_safetensors": True,
+        "add_watermarker": False,
+        "cache_dir": cache_dir,
+        **(extra_kwargs or {}),
+    }
+    if _should_try_local_first(model, cache_dir):
+        _stdout_debug(
+            "object_pipeline_local_only_attempt "
+            f"model_id={model.model_id} cache_dir={cache_dir} snapshot={_snapshot_dir(model, cache_dir) or 'missing'}"
+        )
+        try:
+            return loader(model.model_id, local_files_only=True, **kwargs)
+        except Exception as exc:
+            _stdout_debug(
+                "object_pipeline_local_only_failed "
+                f"model_id={model.model_id} cache_dir={cache_dir} reason={exc}"
+            )
+            if not bool(getattr(model, "allow_remote_model_fetch", True)):
+                raise
+    _stdout_debug(
+        "object_pipeline_remote_fallback "
+        f"model_id={model.model_id} cache_dir={cache_dir} policy={getattr(model, 'model_cache_policy', 'local_first')}"
+    )
+    return loader(model.model_id, **kwargs)
+
+
+def _should_try_local_first(model: Any, cache_dir: str) -> bool:
+    policy = str(getattr(model, "model_cache_policy", "local_first") or "").strip().lower()
+    if policy not in {"local_first", "remote_first"}:
+        policy = "local_first"
+    if policy != "local_first":
+        return False
+    if str(getattr(model, "required_local_snapshot", "") or "").strip() and _snapshot_dir(model, cache_dir) is None:
+        return False
+    return not _missing_snapshot_files(model, cache_dir)
+
+
+def _missing_snapshot_files(model: Any, cache_dir: str) -> list[str]:
+    snapshot = _snapshot_dir(model, cache_dir)
+    if snapshot is None:
+        return list(_REQUIRED_SNAPSHOT_FILES)
+    root = Path(snapshot)
+    return [relative for relative in _REQUIRED_SNAPSHOT_FILES if not (root / relative).exists()]
+
+
+def _snapshot_dir(model: Any, cache_dir: str) -> str | None:
+    repo_root = Path(cache_dir) / "hub" / _repo_cache_key(model.model_id)
+    snapshot_ref = str(getattr(model, "required_local_snapshot", "") or "").strip()
+    if not snapshot_ref:
+        ref_path = repo_root / "refs" / str(getattr(model, "revision", "main") or "main")
+        if ref_path.exists():
+            snapshot_ref = ref_path.read_text(encoding="utf-8").strip()
+    if not snapshot_ref:
+        return None
+    snapshot_path = repo_root / "snapshots" / snapshot_ref
+    if not snapshot_path.exists():
+        return None
+    return str(snapshot_path)
+
+
+def _diffusers_cache_dir(model: Any) -> str:
+    hf_home = str(getattr(model, "hf_home", "") or "").strip()
+    if hf_home:
+        return str(Path(hf_home).expanduser())
+    model_cache_dir = str(getattr(model, "model_cache_dir", "") or "").strip()
+    if model_cache_dir:
+        return str(Path(model_cache_dir).expanduser() / "hf")
+    weights_cache_dir = Path(str(getattr(model, "weights_cache_dir", "") or "")).expanduser()
+    if weights_cache_dir.name == "layerdiffuse":
+        return str(weights_cache_dir.parent / "hf")
+    return str(weights_cache_dir / "hf")
+
+
+def _repo_cache_key(model_id: str) -> str:
+    return f"models--{model_id.replace('/', '--')}"
 
 
 def _load_sd15_transparent_pipeline(
