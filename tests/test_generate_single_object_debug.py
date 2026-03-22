@@ -64,6 +64,10 @@ def test_single_object_debug_run_writes_debug_exports_and_manifest(
         "discoverex.application.use_cases.generate_single_object_debug.write_worker_artifact_manifest",
         lambda **kwargs: None,
     )
+    captured_tracking: dict[str, object] = {}
+    tracker = SimpleNamespace(
+        log_pipeline_run=lambda **kwargs: captured_tracking.update(kwargs) or "mlflow-run-1"
+    )
     monkeypatch.setattr(
         "discoverex.application.use_cases.generate_single_object_debug.collect_worker_artifacts",
         lambda saved_dir_arg, artifacts: captured_artifacts.extend(artifacts)
@@ -76,9 +80,11 @@ def test_single_object_debug_run_writes_debug_exports_and_manifest(
         model_versions=SimpleNamespace(object_generator="object-generator-v0"),
         settings=SimpleNamespace(
             tracking=SimpleNamespace(uri="mlflow://tracking"),
-            execution=SimpleNamespace(flow_run_id="flow-run-1"),
+            execution=SimpleNamespace(flow_run_id="flow-run-1", flow_run_name="flow-run-name"),
         ),
+        tracker=tracker,
         tracking_run_id=None,
+        execution_snapshot={"command": "generate", "args": {"sweep_id": "s1"}},
     )
     cfg = load_pipeline_config(
         config_name="generate",
@@ -118,3 +124,7 @@ def test_single_object_debug_run_writes_debug_exports_and_manifest(
     assert "debug_processed_object" in logical_names
     assert "debug_processed_mask" in logical_names
     assert "output_manifest" in logical_names
+    assert result["mlflow_run_id"] == "mlflow-run-1"
+    assert captured_tracking["run_name"] == "flow-run-1"
+    assert captured_tracking["params"]["prefect.flow_run_id"] == "flow-run-1"
+    assert captured_tracking["params"]["prefect.flow_run_name"] == "flow-run-name"

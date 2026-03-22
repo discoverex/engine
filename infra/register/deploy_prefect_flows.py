@@ -24,9 +24,6 @@ from infra.register.branch_deployments import (
 from infra.register.register_orchestrator_job import _extra_headers, _normalize_api_url
 from infra.register.settings import SETTINGS, default_deployment_version
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
 class DeploymentMetadata(TypedDict, total=False):
     deployment_name: str
     deployment_id: str
@@ -141,13 +138,6 @@ def _load_flow(entrypoint: str) -> Any:
     return getattr(module, attr_name)
 
 
-def _deployment_source_root() -> str:
-    override = os.environ.get("DISCOVEREX_DEPLOY_SOURCE_ROOT", "").strip()
-    if override:
-        return override
-    return str(REPO_ROOT)
-
-
 def _deployment_runtime_root() -> str:
     override = os.environ.get("DISCOVEREX_DEPLOY_RUNTIME_ROOT", "").strip()
     if override:
@@ -162,20 +152,8 @@ def _deployment_model_cache_root() -> str:
     return SETTINGS.prefect_work_model_cache_dir
 
 
-def _deployment_source_mounts() -> list[str]:
-    source_root = _deployment_source_root()
-    return [
-        f"{source_root}/src:/app/src",
-        f"{source_root}/infra:/app/infra",
-        f"{source_root}/conf:/app/conf",
-        f"{source_root}/prefect_flow.py:/app/prefect_flow.py",
-    ]
-
-
 def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
     _validate_required_worker_env()
-    runtime_root = _deployment_runtime_root()
-    model_cache_root = _deployment_model_cache_root()
     process_working_dir = (
         os.environ.get("DISCOVEREX_DEPLOY_WORKING_DIR", "").strip() or "/app"
     )
@@ -217,28 +195,9 @@ def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
         ("NVIDIA_VISIBLE_DEVICES", "all"),
     )
     env = {key: value for key, value in env_pairs if value}
-    if _is_process_work_pool(work_pool_name):
-        return {
-            "env": env,
-            "working_dir": process_working_dir,
-        }
     return {
         "env": env,
-        "volumes": [
-            *_deployment_source_mounts(),
-            f"{runtime_root}:/var/lib/discoverex",
-            f"{model_cache_root}:/var/lib/discoverex/cache/models",
-        ],
-        "container_create_kwargs": {
-            "entrypoint": "",
-            "extra_hosts": {"host.docker.internal": "host-gateway"},
-            "device_requests": [
-                {
-                    "count": -1,
-                    "capabilities": [["gpu"]],
-                }
-            ],
-        },
+        "working_dir": process_working_dir,
     }
 
 
@@ -305,10 +264,6 @@ def _deploy_embedded_flow(
     deployment_suffix: str,
 ) -> str:
     embedded_flow = cast(Any, _load_flow(flow_entrypoint))
-    sourced_flow = embedded_flow.from_source(
-        source=_deployment_source_root(),
-        entrypoint=flow_entrypoint,
-    )
     deploy_kwargs: dict[str, Any] = {
         "name": deployment_name,
         "work_pool_name": work_pool_name,
@@ -321,13 +276,12 @@ def _deploy_embedded_flow(
         "version": deployment_version,
         "print_next_steps": False,
     }
-    if not _is_process_work_pool(work_pool_name):
+    process_pull_steps = _process_pull_steps(work_pool_name=work_pool_name)
+    if process_pull_steps is not None:
+        deploy_kwargs["pull_steps"] = process_pull_steps
+    else:
         deploy_kwargs["image"] = image
-    deployment_id = str(sourced_flow.deploy(**deploy_kwargs))
-    _update_process_deployment_pull_steps(
-        deployment_id,
-        work_pool_name=work_pool_name,
-    )
+    deployment_id = str(embedded_flow.deploy(**deploy_kwargs))
     return deployment_id
 
 

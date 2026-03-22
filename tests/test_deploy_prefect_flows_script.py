@@ -106,37 +106,17 @@ def test_deployment_job_variables_passes_huggingface_tokens(
     assert variables["working_dir"] == "/app"
 
 
-def test_deployment_job_variables_mounts_source_and_runtime_roots(
+def test_deployment_job_variables_use_working_dir_for_non_process_pool(
     monkeypatch: Any,
 ) -> None:
     monkeypatch.setenv("PREFECT_API_URL", "https://prefect.example/api")
     monkeypatch.setenv("STORAGE_API_URL", "https://storage.example")
     monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://mlflow.example")
-    monkeypatch.setenv("DISCOVEREX_DEPLOY_SOURCE_ROOT", "/mnt/d/engine")
-    monkeypatch.setenv("DISCOVEREX_DEPLOY_RUNTIME_ROOT", "/mnt/d/runtime")
-    monkeypatch.setenv("DISCOVEREX_DEPLOY_MODEL_CACHE_ROOT", "/home/me/.cache/models")
+    monkeypatch.setenv("DISCOVEREX_DEPLOY_WORKING_DIR", "/mnt/d/engine")
 
     variables = deploy_flows._deployment_job_variables(work_pool_name="discoverex-fixed")
 
-    assert variables["volumes"] == [
-        "/mnt/d/engine/src:/app/src",
-        "/mnt/d/engine/infra:/app/infra",
-        "/mnt/d/engine/conf:/app/conf",
-        "/mnt/d/engine/prefect_flow.py:/app/prefect_flow.py",
-        "/mnt/d/runtime:/var/lib/discoverex",
-        "/home/me/.cache/models:/var/lib/discoverex/cache/models",
-    ]
-
-
-def test_deployment_source_mounts_use_selected_paths(monkeypatch: Any) -> None:
-    monkeypatch.setenv("DISCOVEREX_DEPLOY_SOURCE_ROOT", "/mnt/d/engine")
-
-    assert deploy_flows._deployment_source_mounts() == [
-        "/mnt/d/engine/src:/app/src",
-        "/mnt/d/engine/infra:/app/infra",
-        "/mnt/d/engine/conf:/app/conf",
-        "/mnt/d/engine/prefect_flow.py:/app/prefect_flow.py",
-    ]
+    assert variables["working_dir"] == "/mnt/d/engine"
 
 
 def test_deployment_job_variables_uses_working_dir_override(
@@ -157,16 +137,10 @@ def test_deployment_job_variables_uses_working_dir_override(
 def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> None:
     captured: dict[str, Any] = {}
 
-    class _FakeSourcedFlow:
+    class _FakeFlow:
         def deploy(self, **kwargs: Any) -> str:
             captured["deploy_kwargs"] = kwargs
             return "deployment-123"
-
-    class _FakeFlow:
-        def from_source(self, *, source: str, entrypoint: str) -> _FakeSourcedFlow:
-            captured["source"] = source
-            captured["source_entrypoint"] = entrypoint
-            return _FakeSourcedFlow()
 
     fake_flow = _FakeFlow()
 
@@ -176,18 +150,11 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
 
     monkeypatch.setattr(deploy_flows, "_load_flow", _fake_load_flow)
     monkeypatch.setattr(
-        deploy_flows, "_deployment_source_root", lambda: "/tmp/discoverex-engine"
-    )
-    monkeypatch.setattr(
         deploy_flows,
         "_deployment_job_variables",
         lambda work_pool_name: {
             "env": {"PREFECT_API_URL": "https://prefect.example/api"},
-            "volumes": ["/tmp/runtime:/var/lib/discoverex"],
-            "container_create_kwargs": {
-                "entrypoint": "",
-                "device_requests": [{"count": -1, "capabilities": [["gpu"]]}],
-            },
+            "working_dir": "/app",
         },
     )
 
@@ -206,8 +173,6 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
 
     assert deployment_id == "deployment-123"
     assert captured["entrypoint"] == "prefect_flow.py:run_generate_job_flow"
-    assert captured["source"] == "/tmp/discoverex-engine"
-    assert captured["source_entrypoint"] == "prefect_flow.py:run_generate_job_flow"
     assert captured["deploy_kwargs"] == {
         "name": "discoverex-naturalness-experiment-feat-remote-source",
         "work_pool_name": "gpu-pool",
@@ -215,11 +180,7 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
         "work_queue_name": "gpu-fixed",
         "job_variables": {
             "env": {"PREFECT_API_URL": "https://prefect.example/api"},
-            "volumes": ["/tmp/runtime:/var/lib/discoverex"],
-            "container_create_kwargs": {
-                "entrypoint": "",
-                "device_requests": [{"count": -1, "capabilities": [["gpu"]]}],
-            },
+            "working_dir": "/app",
         },
         "build": False,
         "push": False,
@@ -242,12 +203,6 @@ def test_process_pull_steps_use_container_working_dir(monkeypatch: Any) -> None:
             }
         }
     ]
-
-
-def test_deployment_source_root_uses_env_override(monkeypatch: Any) -> None:
-    monkeypatch.setenv("DISCOVEREX_DEPLOY_SOURCE_ROOT", "/app")
-
-    assert deploy_flows._deployment_source_root() == "/app"
 
 
 def test_deployment_runtime_root_uses_env_override(monkeypatch: Any) -> None:
@@ -377,30 +332,13 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
 
 def test_deploy_embedded_flow_omits_image_for_process_pool(monkeypatch: Any) -> None:
     captured: dict[str, Any] = {}
-    updated: dict[str, Any] = {}
 
-    class _FakeSourcedFlow:
+    class _FakeFlow:
         def deploy(self, **kwargs: Any) -> str:
             captured["deploy_kwargs"] = kwargs
             return "deployment-789"
 
-    class _FakeFlow:
-        def from_source(self, *, source: str, entrypoint: str) -> _FakeSourcedFlow:
-            captured["source"] = source
-            captured["source_entrypoint"] = entrypoint
-            return _FakeSourcedFlow()
-
     monkeypatch.setattr(deploy_flows, "_load_flow", lambda _entrypoint: _FakeFlow())
-    monkeypatch.setattr(
-        deploy_flows, "_deployment_source_root", lambda: "/tmp/discoverex-engine"
-    )
-    monkeypatch.setattr(
-        deploy_flows,
-        "_update_process_deployment_pull_steps",
-        lambda deployment_id, work_pool_name: updated.update(
-            {"deployment_id": deployment_id, "work_pool_name": work_pool_name}
-        ),
-    )
     monkeypatch.setattr(
         deploy_flows,
         "_deployment_job_variables",
@@ -425,12 +363,17 @@ def test_deploy_embedded_flow_omits_image_for_process_pool(monkeypatch: Any) -> 
 
     assert deployment_id == "deployment-789"
     assert "image" not in captured["deploy_kwargs"]
+    assert captured["deploy_kwargs"]["pull_steps"] == [
+        {
+            "prefect.deployments.steps.set_working_directory": {
+                "directory": "/app"
+            }
+        }
+    ]
     assert captured["deploy_kwargs"]["job_variables"] == {
         "env": {"PREFECT_API_URL": "https://prefect.example/api"},
         "working_dir": "/app",
     }
-    assert updated["deployment_id"] == "deployment-789"
-    assert updated["work_pool_name"] == "discoverex-fixed-process"
 
 
 class _FakeClientContext:

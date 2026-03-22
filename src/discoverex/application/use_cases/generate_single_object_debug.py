@@ -10,12 +10,17 @@ from uuid import uuid4
 from PIL import Image
 
 from discoverex.application.context import AppContextLike
+from discoverex.application.services.tracking import (
+    apply_tracking_identity,
+    tracking_run_name,
+)
 from discoverex.application.services.worker_artifacts import write_worker_artifact_manifest
 from discoverex.application.use_cases.gen_verify.model_lifecycle import unload_model
 from discoverex.application.use_cases.gen_verify.objects import generate_region_objects
 from discoverex.application.use_cases.worker_artifacts import collect_worker_artifacts
 from discoverex.config import PipelineConfig
 from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
+from discoverex.execution_snapshot import build_tracking_params
 
 
 @dataclass(frozen=True)
@@ -85,6 +90,29 @@ def run(
         artifacts_root=context.artifacts_root,
         artifacts=artifact_entries,
     )
+    tracking_run_id = context.tracker.log_pipeline_run(
+        run_name=tracking_run_name(context.settings, "single_object_debug"),
+        params=apply_tracking_identity(
+            {
+                **build_tracking_params(getattr(context, "execution_snapshot", None)),
+                "job_id": run_state.job_id,
+                "region_id": asset.region_id,
+                "object_prompt": str(args.get("object_prompt", "") or ""),
+                "object_negative_prompt": str(args.get("object_negative_prompt", "") or ""),
+                "object_generation_size": str(args.get("object_generation_size", "") or 512),
+                "object_count": "1",
+                "mask_source": asset.mask_source,
+                "candidate_ref": asset.candidate_ref,
+            },
+            context.settings,
+        ),
+        metrics={
+            "object.width": float(asset.width),
+            "object.height": float(asset.height),
+        },
+        artifacts=[path for _, path in artifact_entries if path is not None],
+    )
+    context.tracking_run_id = tracking_run_id
 
     payload: dict[str, Any] = {
         "status": "completed",
@@ -111,8 +139,8 @@ def run(
     }
     if execution_snapshot_path is not None:
         payload["execution_config"] = str(execution_snapshot_path)
-    if getattr(context, "tracking_run_id", None):
-        payload["mlflow_run_id"] = str(context.tracking_run_id)
+    if tracking_run_id:
+        payload["mlflow_run_id"] = str(tracking_run_id)
     payload["effective_tracking_uri"] = context.settings.tracking.uri
     payload["flow_run_id"] = context.settings.execution.flow_run_id
     return payload
