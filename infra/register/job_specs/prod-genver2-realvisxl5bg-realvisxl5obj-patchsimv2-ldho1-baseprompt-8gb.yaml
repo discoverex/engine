@@ -11,11 +11,11 @@ inputs:
   config_dir: conf
   args:
     background_prompt: stormy harbor at dusk, cinematic hidden object puzzle background, painterly realism, moody maritime lighting, weathered textures, cohesive color palette
-    background_negative_prompt: blurry, low quality, artifact
+    background_negative_prompt: (worst quality, low quality, illustration, 3d, 2d, painting, cartoons, sketch), open mouth
     object_base_prompt: isolated single object on a transparent background
     object_prompt: butterfly | antique brass key | crystal wine glass
     object_base_negative_prompt: opaque background, solid background, busy scene, environment, multiple objects, floor, wall, clutter
-    object_negative_prompt: blurry, low quality, artifact
+    object_negative_prompt: (worst quality, low quality, illustration, 3d, 2d, painting, cartoons, sketch), open mouth
     object_generation_size: 512
     final_prompt: polished playable hidden object scene, keep inserted objects matched to the background painting style, lighting direction, palette, texture, and scene atmosphere
     final_negative_prompt: blurry, low quality, artifact
@@ -31,20 +31,20 @@ inputs:
     - models/background_generator=realvisxl5_lightning_background
     - models.background_generator.model_id=SG161222/RealVisXL_V5.0_Lightning
     - models.background_generator.sampler=dpmpp_sde_karras
-    - models.background_generator.default_num_inference_steps=5
-    - models.background_generator.default_guidance_scale=1.0
+    - models.background_generator.default_num_inference_steps=6
+    - models.background_generator.default_guidance_scale=1.5
     - models/background_upscaler=realvisxl5_lightning_hiresfix
     - models.background_upscaler.model_id=SG161222/RealVisXL_V5.0_Lightning
     - models.background_upscaler.hires_sampler=dpmpp_sde_karras
-    - models.background_upscaler.hires_num_inference_steps=3
-    - models.background_upscaler.hires_guidance_scale=1.0
+    - models.background_upscaler.hires_num_inference_steps=4
+    - models.background_upscaler.hires_guidance_scale=1.5
     - models.background_upscaler.hires_strength=0.5
     - runtime.model_runtime.batch_size=1
     - models/object_generator=layerdiffuse_realvisxl5_lightning
     - models.object_generator.model_id=SG161222/RealVisXL_V5.0_Lightning
     - models.object_generator.sampler=dpmpp_sde_karras
     - models.object_generator.default_num_inference_steps=5
-    - models.object_generator.default_guidance_scale=1.0
+    - models.object_generator.default_guidance_scale=1.5
     - models.object_generator.dtype=float16
     - models.object_generator.precision=fp16
     - models/hidden_region=dummy

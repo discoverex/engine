@@ -11,7 +11,7 @@ def test_hydra_config_loads_into_pipeline_config() -> None:
     assert isinstance(cfg, PipelineConfig)
     assert cfg.runtime.width == 1024
     assert cfg.runtime.model_runtime.device in {"cpu", "cuda"}
-    assert cfg.object_variants.obj_bg_ratio == 0.1
+    assert cfg.object_variants.obj_bg_ratio == 0.05
     assert cfg.object_variants.scale_factors == [0.9, 1.0, 1.1]
     assert cfg.models.background_generator.target
     assert cfg.models.object_generator.target

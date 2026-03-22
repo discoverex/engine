@@ -996,7 +996,7 @@ class SdxlInpaintModel:
             max(1, int(round(rgba.height * resize_scale))),
         )
         rgba = rgba.resize(resized_size, Image.Resampling.LANCZOS)
-        mask = mask.resize(resized_size, Image.Resampling.LANCZOS)
+        mask = mask.resize(resized_size, Image.Resampling.NEAREST)
         rgba = ImageEnhance.Color(rgba).enhance(float(saturation_mul))
         rgba = ImageEnhance.Contrast(rgba).enhance(float(contrast_mul))
         rgba = ImageEnhance.Sharpness(rgba).enhance(float(sharpness_mul))
@@ -1007,11 +1007,12 @@ class SdxlInpaintModel:
         )
         alpha = mask.rotate(
             float(rotation_deg),
-            resample=Image.Resampling.BICUBIC,
+            resample=Image.Resampling.NEAREST,
             expand=True,
         )
         if alpha.getbbox() is None:
             alpha = mask
+        alpha = alpha.point(lambda value: 255 if value >= 128 else 0, mode="L")
         rgba.putalpha(alpha)
         rgba = self._apply_relight_hint(rgba)
         canvas = Image.new("RGBA", (canvas_side, canvas_side), color=(0, 0, 0, 0))
