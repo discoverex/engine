@@ -50,13 +50,17 @@ class ScoringWeights(BaseModel):
 
 def run_logical_verification(scene: Scene, pass_threshold: float) -> VerificationResult:
     answer_count = len(scene.answer.answer_region_ids)
+    region_ids = {region.region_id for region in scene.regions}
+    answer_ids = set(scene.answer.answer_region_ids)
     unique_ok = answer_count == 1 and scene.answer.uniqueness_intent
     region_count = len(scene.regions)
-    score = 1.0 if unique_ok else max(0.0, 0.6 - 0.1 * abs(answer_count - 1))
+    multi_object_ok = answer_count >= 1 and answer_ids == region_ids
+    score = 1.0 if unique_ok or multi_object_ok else max(0.0, 0.6 - 0.1 * abs(answer_count - 1))
     signals = {
         "answer_count": answer_count,
         "uniqueness_intent": scene.answer.uniqueness_intent,
         "region_count": region_count,
+        "multi_object_ok": multi_object_ok,
     }
     return VerificationResult(
         score=score,

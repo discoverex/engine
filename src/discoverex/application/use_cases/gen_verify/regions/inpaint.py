@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from time import perf_counter
 from uuid import uuid4
-import json
 
 from discoverex.application.context import AppContextLike
 from discoverex.domain.region import BBox, Region, RegionSource
@@ -12,6 +12,7 @@ from discoverex.models.types import InpaintRequest, ModelHandle
 from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 
+from ..model_lifecycle import stage_gpu_barrier
 from ..object_pipeline import GeneratedObjectAsset, resolve_object_prompts
 from ..region_prompts import (
     bbox_payload,
@@ -63,6 +64,7 @@ def generate_regions(
         )
         inpainted_regions.append(updated)
         prompt_records.append(prompt_record)
+        stage_gpu_barrier(f"after_object_inpaint_{index:02d}_{region.region_id}")
     return inpainted_regions, prompt_records
 
 
@@ -154,6 +156,10 @@ def _generate_single_region(
     if isinstance(composited_ref, str) and composited_ref:
         background.metadata["inpaint_composited_ref"] = composited_ref
         current_composite_ref = composited_ref
+    else:
+        raise RuntimeError(
+            f"object inpaint missing composited image region={region.region_id}"
+        )
     object_ref = details.get("object_image_ref") or object_asset.object_ref
     object_mask_ref = details.get("object_mask_ref") or object_asset.object_mask_ref
     processed_object_ref = details.get("processed_object_image_ref") or object_ref
@@ -163,6 +169,15 @@ def _generate_single_region(
         **details,
         "candidate_image_ref": details.get("candidate_image_ref")
         or object_asset.candidate_ref,
+        "raw_generated_image_ref": details.get("raw_generated_image_ref")
+        or object_asset.raw_generated_ref
+        or object_asset.candidate_ref,
+        "sam_object_image_ref": details.get("sam_object_image_ref")
+        or object_asset.sam_object_ref
+        or object_ref,
+        "sam_object_mask_ref": details.get("sam_object_mask_ref")
+        or object_asset.sam_mask_ref
+        or object_mask_ref,
         "object_image_ref": object_ref,
         "object_mask_ref": object_mask_ref,
         "patch_image_ref": patch_ref,
@@ -177,6 +192,10 @@ def _generate_single_region(
         "object_guidance_scale": object_asset.object_guidance_scale,
         "object_seed": object_asset.object_seed,
     }
+    if not details.get("selected_variant_ref"):
+        raise RuntimeError(
+            f"object inpaint missing selected variant region={region.region_id}"
+        )
     _stdout_debug(
         "object_inpaint end "
         f"region={region.region_id} prompt={region_prompt!r} "
@@ -188,6 +207,9 @@ def _generate_single_region(
         background=background,
         region=updated,
         candidate_ref=details.get("candidate_image_ref"),
+        raw_generated_ref=details.get("raw_generated_image_ref"),
+        sam_object_ref=details.get("sam_object_image_ref"),
+        sam_mask_ref=details.get("sam_object_mask_ref"),
         object_ref=object_ref,
         object_mask_ref=object_mask_ref,
         patch_ref=patch_ref,

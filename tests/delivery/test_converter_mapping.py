@@ -84,7 +84,10 @@ def _sample_scene(tmp_path: Path) -> Scene:
             constraint_struct={"description": "find the hidden object"},
             answer_form=AnswerForm.CLICK_ONE,
         ),
-        answer=Answer(answer_region_ids=["r-answer"], uniqueness_intent=True),
+        answer=Answer(
+            answer_region_ids=["r-answer", "r-candidate"],
+            uniqueness_intent=True,
+        ),
         verification=VerificationBundle(
             logical=VerificationResult(score=0.8, pass_=True, signals={}),
             perception=VerificationResult(score=0.9, pass_=True, signals={}),
@@ -103,7 +106,8 @@ def test_build_game_bundle_maps_scene_to_delivery_schema(tmp_path: Path) -> None
     assert bundle.playable.width == 100
     assert bundle.playable.image_ref == scene.composite.final_image_ref
     assert len(bundle.playable.layers) == 2
-    assert bundle.answer_key.answer_region_ids == ["r-answer"]
-    assert len(bundle.answer_key.regions) == 1
+    assert bundle.playable.ui_flags.allow_multi_click is True
+    assert bundle.answer_key.answer_region_ids == ["r-answer", "r-candidate"]
+    assert len(bundle.answer_key.regions) == 2
     assert bundle.delivery_meta.image_sha256
     assert bundle.delivery_meta.image_bytes > 0

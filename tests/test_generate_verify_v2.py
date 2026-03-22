@@ -5,17 +5,27 @@ from types import SimpleNamespace
 
 from PIL import Image
 
-from discoverex.application.use_cases.gen_verify.objects.types import GeneratedObjectAsset
+from discoverex.application.use_cases.gen_verify.objects.service import (
+    generate_region_objects,
+)
+from discoverex.application.use_cases.gen_verify.objects.types import (
+    GeneratedObjectAsset,
+)
+from discoverex.application.use_cases.gen_verify.types import RegionPromptRecord
 from discoverex.application.use_cases.generate_verify_v2 import (
-    _build_object_variants,
     _bucket_patch_size,
+    _build_object_variants,
     _crop_object_for_patch_selection,
     _find_best_patch,
     _generate_objects,
     _harmonize_rgba,
+    _mark_regions_as_answers,
+    _validate_generated_object_assets,
+    _validate_region_outputs,
 )
-from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
 from discoverex.config_loader import load_pipeline_config
+from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
+from discoverex.domain.scene import Background
 
 
 def test_generate_verify_v2_config_loads() -> None:
@@ -309,3 +319,200 @@ def test_generate_objects_uses_distinct_prompt_per_region(
         "antique brass key",
         "crystal wine glass",
     ]
+
+
+def test_generate_objects_uses_model_default_steps_and_guidance(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    seen_params: list[tuple[int, float]] = []
+
+    class FakeObjectModel:
+        default_num_inference_steps = 41
+        default_guidance_scale = 7.25
+        sampler = "dpmpp_sde_karras"
+
+        def predict(self, handle, request):
+            seen_params.append(
+                (
+                    int(request.params["num_inference_steps"]),
+                    float(request.params["guidance_scale"]),
+                )
+            )
+            Path(request.params["output_path"]).write_bytes(b"x")
+            return {"output_path": request.params["output_path"]}
+
+    class FakeMasker:
+        def extract(self, *, image_path, output_prefix):
+            object_path = Path(str(output_prefix)).with_suffix(".object.png")
+            mask_path = Path(str(output_prefix)).with_suffix(".mask.png")
+            raw_mask_path = Path(str(output_prefix)).with_suffix(".raw-mask.png")
+            object_path.write_bytes(b"x")
+            mask_path.write_bytes(b"x")
+            raw_mask_path.write_bytes(b"x")
+            return {
+                "object": object_path,
+                "mask": mask_path,
+                "raw_alpha_mask": raw_mask_path,
+                "mask_source": "stub",
+                "alpha_bbox": "0,0,1,1",
+                "alpha_nonzero_ratio": 1.0,
+                "alpha_mean": 1.0,
+                "alpha_has_signal": True,
+            }
+
+        def unload(self):
+            return None
+
+    monkeypatch.setattr(
+        "discoverex.application.use_cases.gen_verify.objects.service.SamObjectMaskExtractor",
+        lambda **kwargs: FakeMasker(),
+    )
+    monkeypatch.setattr(
+        "discoverex.application.use_cases.gen_verify.objects.service.build_placement_assets",
+        lambda **kwargs: SimpleNamespace(
+            object_path=Path(kwargs["object_path"]),
+            mask_path=Path(kwargs["mask_path"]),
+            raw_alpha_path=Path(kwargs["raw_alpha_path"]),
+            width=32,
+            height=32,
+            tight_bbox=(0, 0, 32, 32),
+        ),
+    )
+
+    context = SimpleNamespace(
+        runtime=SimpleNamespace(model_runtime=SimpleNamespace(device="cuda", dtype="float16", batch_size=1, seed=None)),
+        object_generator_model=FakeObjectModel(),
+    )
+    regions = [
+        Region(
+            region_id="r-1",
+            geometry=Geometry(type="bbox", bbox=BBox(x=0.0, y=0.0, w=32.0, h=32.0)),
+            role=RegionRole.CANDIDATE,
+            source=RegionSource.MANUAL,
+            attributes={},
+            version=1,
+        )
+    ]
+
+    generated = generate_region_objects(
+        context=context,
+        scene_dir=tmp_path,
+        regions=regions,
+        object_handle=SimpleNamespace(model_id="object-gen-v1"),
+        object_prompt="butterfly",
+        object_negative_prompt="blurry",
+        object_generation_size=512,
+    )
+
+    assert list(generated) == ["r-1"]
+    assert seen_params == [(41, 7.25)]
+
+
+def test_mark_regions_as_answers_promotes_every_region() -> None:
+    regions = [
+        Region(
+            region_id=f"r-{index}",
+            geometry=Geometry(type="bbox", bbox=BBox(x=0.0, y=0.0, w=32.0, h=32.0)),
+            role=RegionRole.CANDIDATE,
+            source=RegionSource.MANUAL,
+            attributes={},
+            version=1,
+        )
+        for index in range(1, 4)
+    ]
+
+    updated = _mark_regions_as_answers(regions)
+
+    assert [region.role for region in updated] == [RegionRole.ANSWER] * 3
+    assert [region.role for region in regions] == [RegionRole.CANDIDATE] * 3
+
+
+def test_validate_generated_object_assets_rejects_missing_region(tmp_path: Path) -> None:
+    regions = [
+        Region(
+            region_id="r-1",
+            geometry=Geometry(type="bbox", bbox=BBox(x=0.0, y=0.0, w=32.0, h=32.0)),
+            role=RegionRole.ANSWER,
+            source=RegionSource.MANUAL,
+            attributes={},
+            version=1,
+        ),
+        Region(
+            region_id="r-2",
+            geometry=Geometry(type="bbox", bbox=BBox(x=0.0, y=0.0, w=32.0, h=32.0)),
+            role=RegionRole.ANSWER,
+            source=RegionSource.MANUAL,
+            attributes={},
+            version=1,
+        ),
+    ]
+    generated = {
+        "r-1": GeneratedObjectAsset(
+            region_id="r-1",
+            candidate_ref=str(tmp_path / "r-1.candidate.png"),
+            object_ref=str(tmp_path / "r-1.object.png"),
+            object_mask_ref=str(tmp_path / "r-1.mask.png"),
+            width=32,
+            height=32,
+        )
+    }
+
+    try:
+        _validate_generated_object_assets(
+            expected_regions=regions,
+            generated_objects=generated,
+            stage="pre_inpaint",
+        )
+    except RuntimeError as exc:
+        assert "missing=['r-2']" in str(exc)
+    else:
+        raise AssertionError("expected RuntimeError")
+
+
+def test_validate_region_outputs_requires_every_region_record(tmp_path: Path) -> None:
+    regions = [
+        Region(
+            region_id=f"r-{index}",
+            geometry=Geometry(type="bbox", bbox=BBox(x=0.0, y=0.0, w=32.0, h=32.0)),
+            role=RegionRole.ANSWER,
+            source=RegionSource.INPAINT,
+            attributes={},
+            version=1,
+        )
+        for index in range(1, 4)
+    ]
+    background = Background(
+        asset_ref=str(tmp_path / "bg.png"),
+        width=512,
+        height=512,
+        metadata={
+            "inpaint_layer_candidates": [
+                {"region_id": "r-1"},
+                {"region_id": "r-2"},
+            ]
+        },
+    )
+    prompt_records = [
+        RegionPromptRecord(
+            region_id=f"r-{index}",
+            prompt=f"object-{index}",
+            negative_prompt="blur",
+            generation_prompt=f"gen-{index}",
+            bbox=(0.0, 0.0, 32.0, 32.0),
+            composited_image_ref=str(tmp_path / f"r-{index}.composited.png"),
+            selected_variant_ref=str(tmp_path / f"r-{index}.variant.png"),
+        )
+        for index in range(1, 4)
+    ]
+
+    try:
+        _validate_region_outputs(
+            background=background,
+            regions=regions,
+            region_prompt_records=prompt_records,
+        )
+    except RuntimeError as exc:
+        assert "missing candidate payload region=r-3" in str(exc)
+    else:
+        raise AssertionError("expected RuntimeError")

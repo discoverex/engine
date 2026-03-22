@@ -43,7 +43,6 @@ from discoverex.application.use_cases.gen_verify.prompt_bundle import (
     build_prompt_tracking_params,
     save_prompt_bundle,
 )
-from discoverex.application.use_cases.gen_verify.region_prompts import record_layer_candidate
 from discoverex.application.use_cases.gen_verify.region_pipeline import generate_regions
 from discoverex.application.use_cases.gen_verify.regions.selection import (
     bbox_iou,
@@ -110,6 +109,7 @@ def run(
     if config.region_selection.strategy == "legacy_detr":
         candidate_regions = _detect_regions_legacy(context=context, background=background)
         candidate_regions = candidate_regions[: config.object_variants.default_count]
+        candidate_regions = _mark_regions_as_answers(candidate_regions)
         stage_gpu_barrier("after_hidden_region_detection")
         generated_objects = _generate_objects(
             context=context,
@@ -140,8 +140,14 @@ def run(
             background=background,
             generated_objects=list(generated_objects.values()),
         )
+        candidate_regions = _mark_regions_as_answers(candidate_regions)
         _stdout_debug(
             f"generate_verify_v2 patch_selection_complete selected={len(candidate_regions)}"
+        )
+        _validate_generated_object_assets(
+            expected_regions=candidate_regions,
+            generated_objects=generated_objects,
+            stage="patch_selection",
         )
         generated_objects = {
             region.region_id: generated_objects[region.region_id] for region in candidate_regions
@@ -158,6 +164,11 @@ def run(
             _stdout_debug("generate_verify_v2 harmonization_complete")
     if config.region_selection.strategy == "legacy_detr":
         stage_gpu_barrier("after_object_generation")
+    _validate_generated_object_assets(
+        expected_regions=candidate_regions,
+        generated_objects=generated_objects,
+        stage="pre_inpaint",
+    )
 
     regions, region_prompt_records = _generate_regions(
         context=context,
@@ -167,6 +178,11 @@ def run(
         generated_objects=generated_objects,
         object_prompt=object_prompt,
         object_negative_prompt=object_negative_prompt,
+    )
+    _validate_region_outputs(
+        background=background,
+        regions=regions,
+        region_prompt_records=region_prompt_records,
     )
     _stdout_debug("generate_verify_v2 inpaint_complete")
     stage_gpu_barrier("after_inpaint_region_generation")
@@ -231,6 +247,65 @@ def run(
         effective_tracking_uri=context.settings.tracking.uri,
         flow_run_id=context.settings.execution.flow_run_id,
     )
+
+
+def _mark_regions_as_answers(regions: list[Region]) -> list[Region]:
+    return [region.model_copy(update={"role": RegionRole.ANSWER}, deep=True) for region in regions]
+
+
+def _validate_generated_object_assets(
+    *,
+    expected_regions: list[Region],
+    generated_objects: dict[str, GeneratedObjectAsset],
+    stage: str,
+) -> None:
+    expected_ids = [region.region_id for region in expected_regions]
+    actual_ids = list(generated_objects)
+    missing = [region_id for region_id in expected_ids if region_id not in generated_objects]
+    unexpected = [region_id for region_id in actual_ids if region_id not in set(expected_ids)]
+    if missing or unexpected:
+        raise RuntimeError(
+            "generate_verify_v2 object-region mapping mismatch "
+            f"stage={stage} expected={expected_ids} actual={actual_ids} "
+            f"missing={missing} unexpected={unexpected}"
+        )
+
+
+def _validate_region_outputs(
+    *,
+    background: Background,
+    regions: list[Region],
+    region_prompt_records: list[RegionPromptRecord],
+) -> None:
+    if len(region_prompt_records) != len(regions):
+        raise RuntimeError(
+            "generate_verify_v2 region prompt record count mismatch "
+            f"regions={len(regions)} prompt_records={len(region_prompt_records)}"
+        )
+    candidate_payloads = background.metadata.get("inpaint_layer_candidates")
+    if not isinstance(candidate_payloads, list):
+        raise RuntimeError("generate_verify_v2 missing inpaint_layer_candidates payload")
+    candidate_ids = {
+        item.get("region_id")
+        for item in candidate_payloads
+        if isinstance(item, dict) and isinstance(item.get("region_id"), str)
+    }
+    for region, prompt_record in zip(regions, region_prompt_records, strict=True):
+        if not prompt_record.composited_image_ref:
+            raise RuntimeError(
+                "generate_verify_v2 missing composited image "
+                f"region={region.region_id}"
+            )
+        if not prompt_record.selected_variant_ref:
+            raise RuntimeError(
+                "generate_verify_v2 missing selected variant "
+                f"region={region.region_id}"
+            )
+        if region.region_id not in candidate_ids:
+            raise RuntimeError(
+                "generate_verify_v2 missing candidate payload "
+                f"region={region.region_id}"
+            )
 
 
 def _build_background(
