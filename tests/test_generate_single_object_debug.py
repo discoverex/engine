@@ -21,6 +21,26 @@ def test_single_object_debug_flow_config_loads() -> None:
     assert cfg.flows.generate.target.endswith("generate_single_object_debug")
 
 
+def test_lightning_object_generator_config_loads() -> None:
+    cfg = load_pipeline_config(
+        config_name="generate",
+        config_dir="conf",
+        overrides=["models/object_generator=layerdiffuse_realvisxl5_lightning"],
+    )
+    assert (
+        cfg.models.object_generator.model_dump(mode="python")["model_id"]
+        == "SG161222/RealVisXL_V5.0_Lightning"
+    )
+    assert (
+        cfg.models.object_generator.model_dump(mode="python")["default_num_inference_steps"]
+        == 5
+    )
+    assert (
+        cfg.models.object_generator.model_dump(mode="python")["default_guidance_scale"]
+        == 1.0
+    )
+
+
 def test_single_object_debug_run_writes_debug_exports_and_manifest(
     tmp_path: Path,
     monkeypatch,
@@ -38,9 +58,11 @@ def test_single_object_debug_run_writes_debug_exports_and_manifest(
     Image.new("RGBA", (6, 6), color=(40, 50, 60, 255)).save(processed_object_path)
     Image.new("L", (6, 6), color=255).save(processed_mask_path)
 
-    monkeypatch.setattr(
-        "discoverex.application.use_cases.generate_single_object_debug.generate_region_objects",
-        lambda **kwargs: {
+    captured_generation: dict[str, object] = {}
+
+    def _fake_generate_region_objects(**kwargs):
+        captured_generation.update(kwargs)
+        return {
             kwargs["regions"][0].region_id: GeneratedObjectAsset(
                 region_id=kwargs["regions"][0].region_id,
                 candidate_ref=str(candidate_path),
@@ -51,8 +73,18 @@ def test_single_object_debug_run_writes_debug_exports_and_manifest(
                 raw_alpha_mask_ref=str(raw_alpha_path),
                 sam_object_ref=str(sam_object_path),
                 mask_source="raw_alpha_plus_sam",
+                object_prompt=str(kwargs["object_prompt"]),
+                object_negative_prompt=str(kwargs["object_negative_prompt"]),
+                object_model_id="SG161222/RealVisXL_V5.0_Lightning",
+                object_sampler="dpmpp_sde_karras",
+                object_steps=5,
+                object_guidance_scale=1.5,
             )
-        },
+        }
+
+    monkeypatch.setattr(
+        "discoverex.application.use_cases.generate_single_object_debug.generate_region_objects",
+        _fake_generate_region_objects,
     )
     monkeypatch.setattr(
         "discoverex.application.use_cases.generate_single_object_debug.unload_model",
@@ -76,7 +108,13 @@ def test_single_object_debug_run_writes_debug_exports_and_manifest(
 
     context = SimpleNamespace(
         artifacts_root=tmp_path / "artifacts",
-        object_generator_model=SimpleNamespace(load=lambda version: SimpleNamespace(model_id="realvisxl5")),
+        object_generator_model=SimpleNamespace(
+            load=lambda version: SimpleNamespace(
+                model_id="SG161222/RealVisXL_V5.0_Lightning"
+            ),
+            default_prompt="isolated single opaque object on a transparent background",
+            sampler="dpmpp_sde_karras",
+        ),
         model_versions=SimpleNamespace(object_generator="object-generator-v0"),
         settings=SimpleNamespace(
             tracking=SimpleNamespace(uri="mlflow://tracking"),
@@ -125,6 +163,26 @@ def test_single_object_debug_run_writes_debug_exports_and_manifest(
     assert "debug_processed_mask" in logical_names
     assert "output_manifest" in logical_names
     assert result["mlflow_run_id"] == "mlflow-run-1"
+    assert (
+        captured_generation["object_prompt"]
+        == "isolated single opaque object on a transparent background, antique brass key"
+    )
+    assert (
+        result["effective_prompt"]
+        == "isolated single opaque object on a transparent background, antique brass key, isolated single object, centered composition, plain neutral backdrop, no environment, no floor"
+    )
     assert captured_tracking["run_name"] == "flow-run-1"
     assert captured_tracking["params"]["prefect.flow_run_id"] == "flow-run-1"
     assert captured_tracking["params"]["prefect.flow_run_name"] == "flow-run-name"
+    assert (
+        captured_tracking["params"]["base_prompt"]
+        == "isolated single opaque object on a transparent background"
+    )
+    assert (
+        captured_tracking["params"]["effective_prompt"]
+        == "isolated single opaque object on a transparent background, antique brass key, isolated single object, centered composition, plain neutral backdrop, no environment, no floor"
+    )
+    assert captured_tracking["params"]["model_id"] == "SG161222/RealVisXL_V5.0_Lightning"
+    assert captured_tracking["params"]["sampler"] == "dpmpp_sde_karras"
+    assert captured_tracking["params"]["num_inference_steps"] == "5"
+    assert captured_tracking["params"]["guidance_scale"] == "1.5"

@@ -17,6 +17,9 @@ from discoverex.application.services.tracking import (
 from discoverex.application.services.worker_artifacts import write_worker_artifact_manifest
 from discoverex.application.use_cases.gen_verify.model_lifecycle import unload_model
 from discoverex.application.use_cases.gen_verify.objects import generate_region_objects
+from discoverex.application.use_cases.gen_verify.objects.prompts import (
+    object_generation_prompt,
+)
 from discoverex.application.use_cases.worker_artifacts import collect_worker_artifacts
 from discoverex.config import PipelineConfig
 from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
@@ -48,6 +51,15 @@ def run(
     _ = config
     run_state = _build_run_state(context=context)
     regions = [_build_placeholder_region()]
+    base_object_prompt = str(args.get("object_prompt", "") or "")
+    default_prompt = str(
+        getattr(context.object_generator_model, "default_prompt", "") or ""
+    )
+    effective_object_prompt = _compose_object_prompt(
+        default_prompt=default_prompt,
+        object_prompt=base_object_prompt,
+    )
+    effective_generation_prompt = object_generation_prompt(effective_object_prompt)
     handle = context.object_generator_model.load(context.model_versions.object_generator)
     try:
         generated = generate_region_objects(
@@ -55,7 +67,7 @@ def run(
             scene_dir=run_state.output_dir,
             regions=regions,
             object_handle=handle,
-            object_prompt=str(args.get("object_prompt", "") or ""),
+            object_prompt=effective_object_prompt,
             object_negative_prompt=str(args.get("object_negative_prompt", "") or ""),
             object_generation_size=max(64, int(args.get("object_generation_size") or 512)),
             max_vram_gb=_max_vram_gb(args),
@@ -97,12 +109,18 @@ def run(
                 **build_tracking_params(getattr(context, "execution_snapshot", None)),
                 "job_id": run_state.job_id,
                 "region_id": asset.region_id,
-                "object_prompt": str(args.get("object_prompt", "") or ""),
+                "object_prompt": base_object_prompt,
+                "base_prompt": default_prompt,
+                "effective_prompt": effective_generation_prompt,
                 "object_negative_prompt": str(args.get("object_negative_prompt", "") or ""),
                 "object_generation_size": str(args.get("object_generation_size", "") or 512),
                 "object_count": "1",
                 "mask_source": asset.mask_source,
                 "candidate_ref": asset.candidate_ref,
+                "model_id": str(getattr(handle, "model_id", "") or ""),
+                "sampler": str(getattr(context.object_generator_model, "sampler", "") or ""),
+                "num_inference_steps": str(asset.object_steps or ""),
+                "guidance_scale": str(asset.object_guidance_scale or ""),
             },
             context.settings,
         ),
@@ -129,6 +147,12 @@ def run(
             "width": asset.width,
             "height": asset.height,
             "mask_source": asset.mask_source,
+            "object_prompt": asset.object_prompt,
+            "object_negative_prompt": asset.object_negative_prompt,
+            "object_model_id": asset.object_model_id,
+            "object_sampler": asset.object_sampler,
+            "object_steps": asset.object_steps,
+            "object_guidance_scale": asset.object_guidance_scale,
         },
         "export_keys": {
             artifact.export_key: str(artifact.path.relative_to(run_state.output_dir))
@@ -136,6 +160,9 @@ def run(
         },
         "output_manifest": str(manifest_path),
         "max_vram_gb": _max_vram_gb(args),
+        "base_prompt": default_prompt,
+        "effective_object_prompt": effective_object_prompt,
+        "effective_prompt": effective_generation_prompt,
     }
     if execution_snapshot_path is not None:
         payload["execution_config"] = str(execution_snapshot_path)
@@ -162,6 +189,14 @@ def _build_placeholder_region() -> Region:
         attributes={"proposal_rank": 1},
         version=1,
     )
+
+
+def _compose_object_prompt(*, default_prompt: str, object_prompt: str) -> str:
+    default_text = default_prompt.strip()
+    object_text = object_prompt.strip()
+    if default_text and object_text:
+        return f"{default_text}, {object_text}"
+    return object_text or default_text
 
 
 def _write_debug_exports(

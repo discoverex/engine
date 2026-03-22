@@ -7,7 +7,7 @@
 `generate_verify_v2`의 오브젝트 생성 단계를 단일 실행으로 분리해서, 어떤 단계에서 이미지가 손상되는지 추적합니다.
 
 핵심 목표:
-- LayerDiffuse + RealVisXL5 조합의 단일 오브젝트 생성
+- LayerDiffuse + RealVisXL V5 Lightning 조합의 단일 오브젝트 생성
 - 생성 직후 RGBA와 alpha 분리 결과를 별도 저장
 - SAM/마스크 적용 이후 산출물과 placement 처리 이후 산출물을 함께 저장
 - 모든 디버그 산출물을 worker manifest에 포함해서 MinIO 업로드 대상으로 노출
@@ -18,8 +18,10 @@
 - `inputs.command`: `generate`
 - `inputs.overrides`: `flows/generate=single_object_debug`
 - 권장 모델 설정:
-  - `models/object_generator=layerdiffuse`
-  - `models.object_generator.model_id=SG161222/RealVisXL_V5.0`
+  - `models/object_generator=layerdiffuse_realvisxl5_lightning`
+  - `models.object_generator.model_id=SG161222/RealVisXL_V5.0_Lightning`
+  - `models.object_generator.default_num_inference_steps=5`
+  - `models.object_generator.sampler=dpmpp_sde_karras`
 
 ## 입력 인자
 
@@ -33,6 +35,8 @@
 ## 단계
 
 1. LayerDiffuse object generator로 RGBA 오브젝트를 생성합니다.
+   - positive prompt는 `default_prompt + object_prompt`를 결합해서 만듭니다.
+   - 예: `isolated single opaque object on a transparent background, butterfly`
 2. 생성 직후 RGBA에서 아래 4개를 분리/보존합니다.
    - alpha 없는 RGB 미리보기
    - alpha 채널 흑백 이미지
@@ -107,14 +111,14 @@ engine: discoverex
 entrypoint:
   - prefect_flow.py:run_generate_job_flow
 config: null
-job_name: prod-genobjdebug-none-realvisxl5-none-8gb
+job_name: prod-genobjdebug-none-realvisxl5-lightning-none-8gb
 inputs:
   contract_version: v2
   command: generate
   config_name: generate
   config_dir: conf
   args:
-    object_prompt: antique brass key
+    object_prompt: butterfly
     object_negative_prompt: blurry, low quality, artifact
     object_generation_size: 512
   overrides:
@@ -130,9 +134,11 @@ inputs:
     - runtime.model_runtime.enable_vae_tiling=true
     - runtime.model_runtime.enable_xformers_memory_efficient_attention=true
     - runtime.model_runtime.enable_channels_last=true
-    - models/object_generator=layerdiffuse
-    - models.object_generator.model_id=SG161222/RealVisXL_V5.0
+    - models/object_generator=layerdiffuse_realvisxl5_lightning
+    - models.object_generator.model_id=SG161222/RealVisXL_V5.0_Lightning
     - models.object_generator.sampler=dpmpp_sde_karras
+    - models.object_generator.default_num_inference_steps=5
+    - models.object_generator.default_guidance_scale=1.0
     - models.object_generator.dtype=float16
     - models.object_generator.precision=fp16
     - models/hidden_region=dummy
