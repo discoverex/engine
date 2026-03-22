@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import shutil
 import json
+import shutil
 from pathlib import Path
 
 from .types import CandidateLayerPayload, OriginalAssetEntry
@@ -19,6 +19,9 @@ def export_originals(
         region_dir.mkdir(parents=True, exist_ok=True)
         for key in (
             "candidate_image_ref",
+            "raw_generated_image_ref",
+            "sam_object_image_ref",
+            "sam_object_mask_ref",
             "object_image_ref",
             "processed_object_image_ref",
             "processed_object_mask_ref",

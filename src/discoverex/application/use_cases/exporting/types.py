@@ -15,6 +15,9 @@ class BBoxPayload(TypedDict):
 class CandidateLayerPayload(TypedDict, total=False):
     region_id: str
     candidate_image_ref: str
+    raw_generated_image_ref: str
+    sam_object_image_ref: str
+    sam_object_mask_ref: str
     object_image_ref: str
     object_mask_ref: str
     processed_object_image_ref: str
@@ -61,6 +64,9 @@ class ObjectSourceEntry(TypedDict, total=False):
     object_number: int
     center: list[float]
     candidate_image_ref: str
+    raw_generated_image_ref: str
+    sam_object_image_ref: str
+    sam_object_mask_ref: str
     object_image_ref: str
     processed_object_image_ref: str
     processed_object_mask_ref: str

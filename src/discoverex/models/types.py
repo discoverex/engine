@@ -83,6 +83,9 @@ class InpaintPrediction(TypedDict, total=False):
     model_id: str
     patch_image_ref: str
     candidate_image_ref: str
+    raw_generated_image_ref: str
+    sam_object_image_ref: str
+    sam_object_mask_ref: str
     object_image_ref: str
     object_mask_ref: str
     processed_object_image_ref: str

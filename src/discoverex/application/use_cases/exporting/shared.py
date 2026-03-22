@@ -19,6 +19,9 @@ def candidate_by_region(scene: Scene) -> dict[str, CandidateLayerPayload]:
         payload: CandidateLayerPayload = {"region_id": region_id}
         for key in (
             "candidate_image_ref",
+            "raw_generated_image_ref",
+            "sam_object_image_ref",
+            "sam_object_mask_ref",
             "object_image_ref",
             "processed_object_image_ref",
             "processed_object_mask_ref",
@@ -109,6 +112,9 @@ def build_object_source_entries(
             entry["center"] = object_entry["center"]
         for key in (
             "candidate_image_ref",
+            "raw_generated_image_ref",
+            "sam_object_image_ref",
+            "sam_object_mask_ref",
             "object_image_ref",
             "processed_object_image_ref",
             "processed_object_mask_ref",

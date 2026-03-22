@@ -10,18 +10,16 @@ from discoverex.application.services.tracking import (
     apply_tracking_identity,
     tracking_run_name,
 )
+from discoverex.application.services.worker_artifacts import (
+    write_worker_artifact_manifest,
+)
 from discoverex.application.use_cases.naturalness_evaluation import (
     evaluate_scene_naturalness,
 )
 from discoverex.application.use_cases.output_exports import export_output_bundle
-from discoverex.artifact_paths import (
-    naturalness_json_path,
-)
+from discoverex.artifact_paths import naturalness_json_path
 from discoverex.domain.scene import Scene
 from discoverex.execution_snapshot import build_tracking_params
-from discoverex.application.services.worker_artifacts import (
-    write_worker_artifact_manifest,
-)
 from discoverex.runtime_logging import format_seconds, get_logger
 
 from ..worker_artifacts import collect_worker_artifacts
@@ -150,6 +148,14 @@ def track_run(
             *[
                 (f"output_layer/{layer_path.name}", layer_path)
                 for layer_path in output_exports.layer_paths
+            ],
+            *[
+                (f"output_source_layer/{layer_path.name}", layer_path)
+                for layer_path in output_exports.source_layer_paths
+            ],
+            *[
+                (f"output_original/{original_path.relative_to(output_exports.manifest_path.parent).as_posix()}", original_path)
+                for original_path in output_exports.original_paths
             ],
         ],
     )
