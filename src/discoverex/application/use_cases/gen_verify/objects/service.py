@@ -28,6 +28,30 @@ _OBJECT_GENERATION_STEPS = 30
 _OBJECT_GENERATION_GUIDANCE = 5.0
 
 
+def _resolved_object_generation_steps(context: AppContextLike) -> int:
+    value = getattr(
+        context.object_generator_model,
+        "default_num_inference_steps",
+        _OBJECT_GENERATION_STEPS,
+    )
+    try:
+        return max(1, int(value))
+    except (TypeError, ValueError):
+        return _OBJECT_GENERATION_STEPS
+
+
+def _resolved_object_generation_guidance(context: AppContextLike) -> float:
+    value = getattr(
+        context.object_generator_model,
+        "default_guidance_scale",
+        _OBJECT_GENERATION_GUIDANCE,
+    )
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return _OBJECT_GENERATION_GUIDANCE
+
+
 def generate_region_objects(
     *,
     context: AppContextLike,
@@ -46,6 +70,8 @@ def generate_region_objects(
     generated: dict[str, GeneratedObjectAsset] = {}
     total_regions = len(regions)
     object_prompts = resolve_object_prompts(object_prompt, total_regions=total_regions)
+    object_generation_steps = _resolved_object_generation_steps(context)
+    object_generation_guidance = _resolved_object_generation_guidance(context)
     try:
         batch_size = max(1, int(context.runtime.model_runtime.batch_size))
         for batch_start in range(0, total_regions, batch_size):
@@ -83,8 +109,8 @@ def generate_region_objects(
                             "height": object_generation_size,
                             "seed": context.runtime.model_runtime.seed,
                             "negative_prompt": object_negative_prompt or _DEFAULT_OBJECT_NEGATIVE,
-                            "num_inference_steps": _OBJECT_GENERATION_STEPS,
-                            "guidance_scale": _OBJECT_GENERATION_GUIDANCE,
+                            "num_inference_steps": object_generation_steps,
+                            "guidance_scale": object_generation_guidance,
                             "max_vram_gb": max_vram_gb,
                         },
                     ),
@@ -103,7 +129,7 @@ def generate_region_objects(
                         "object_predict start "
                         f"region={region.region_id} index={index} size={object_generation_size} "
                         f"prompt={region_prompt!r} negative_prompt={(object_negative_prompt or _DEFAULT_OBJECT_NEGATIVE)!r} "
-                        f"steps={_OBJECT_GENERATION_STEPS} guidance={_OBJECT_GENERATION_GUIDANCE} "
+                        f"steps={object_generation_steps} guidance={object_generation_guidance} "
                         f"seed={context.runtime.model_runtime.seed}"
                     )
                     prediction = context.object_generator_model.predict(
@@ -118,8 +144,8 @@ def generate_region_objects(
                                 "prompt": object_generation_prompt(region_prompt),
                                 "negative_prompt": object_negative_prompt
                                 or _DEFAULT_OBJECT_NEGATIVE,
-                                "num_inference_steps": _OBJECT_GENERATION_STEPS,
-                                "guidance_scale": _OBJECT_GENERATION_GUIDANCE,
+                                "num_inference_steps": object_generation_steps,
+                                "guidance_scale": object_generation_guidance,
                                 "max_vram_gb": max_vram_gb,
                             },
                         ),
@@ -170,6 +196,9 @@ def generate_region_objects(
                     width=placement.width,
                     height=placement.height,
                     raw_alpha_mask_ref=str(placement.raw_alpha_path),
+                    raw_generated_ref=generated_ref,
+                    sam_object_ref=str(masked["object"]),
+                    sam_mask_ref=str(mask_path),
                     mask_source=str(masked.get("mask_source", "unknown")),
                     tight_bbox=placement.tight_bbox,
                     object_prompt=region_prompt,
@@ -179,8 +208,8 @@ def generate_region_objects(
                     object_sampler=str(
                         getattr(context.object_generator_model, "sampler", "") or ""
                     ),
-                    object_steps=_OBJECT_GENERATION_STEPS,
-                    object_guidance_scale=_OBJECT_GENERATION_GUIDANCE,
+                    object_steps=object_generation_steps,
+                    object_guidance_scale=object_generation_guidance,
                     object_seed=context.runtime.model_runtime.seed,
                 )
                 emit_progress_event(

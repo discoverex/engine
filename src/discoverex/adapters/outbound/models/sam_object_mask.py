@@ -23,10 +23,14 @@ class SamObjectMaskExtractor:
         image = loaded["rgb"]
         alpha = loaded.get("alpha")
         alpha_stats = self._alpha_stats(alpha=alpha, image=image)
-        mask = self._predict_mask(image)
+        predicted_mask = self._predict_mask(image)
+        mask, mask_source = self._resolve_mask(
+            predicted_mask=predicted_mask,
+            alpha=alpha,
+            alpha_stats=alpha_stats,
+        )
         object_rgba = image.convert("RGBA")
         object_rgba.putalpha(mask)
-        mask_source = "sam_mask_extractor_forced"
         raw_alpha_path: Path | None = None
         prefix = Path(output_prefix)
         object_path = save_image(object_rgba, prefix.with_suffix(".object.png"))
@@ -119,6 +123,30 @@ class SamObjectMaskExtractor:
             return self._fallback_mask(image)
         return mask_image
 
+    def _resolve_mask(
+        self,
+        *,
+        predicted_mask: Any,
+        alpha: Any,
+        alpha_stats: dict[str, str | float | bool],
+    ) -> tuple[Any, str]:
+        from PIL import ImageChops  # type: ignore
+
+        if alpha is None or alpha.getbbox() is None:
+            return predicted_mask, "sam_mask_extractor_forced"
+        alpha_mask = alpha.convert("L")
+        if not bool(alpha_stats.get("has_signal")):
+            return predicted_mask, "sam_mask_extractor_forced"
+        alpha_nonzero_ratio = float(alpha_stats.get("nonzero_ratio") or 0.0)
+        predicted_bbox = predicted_mask.getbbox()
+        if predicted_bbox is None:
+            return alpha_mask, "raw_alpha_preserved"
+        predicted_ratio = self._mask_nonzero_ratio(predicted_mask)
+        if alpha_nonzero_ratio >= 0.02 and predicted_ratio < (alpha_nonzero_ratio * 0.6):
+            return alpha_mask, "raw_alpha_preserved"
+        combined = ImageChops.lighter(alpha_mask, predicted_mask.convert("L"))
+        return combined, "raw_alpha_plus_sam"
+
     def _fallback_mask(self, image: Any) -> Any:
         from PIL import Image, ImageFilter, ImageOps  # type: ignore
 
@@ -158,3 +186,14 @@ class SamObjectMaskExtractor:
             "mean": round(float(alpha_array.mean()) / 255.0, 6),
             "has_signal": bbox is not None,
         }
+
+    def _mask_nonzero_ratio(self, mask: Any) -> float:
+        try:
+            import numpy as np
+        except Exception:
+            bbox = mask.getbbox()
+            return 1.0 if bbox is not None else 0.0
+        mask_array = np.asarray(mask.convert("L"), dtype=np.uint8)
+        total = max(1, int(mask_array.size))
+        nonzero = int((mask_array > 0).sum())
+        return nonzero / float(total)

@@ -13,6 +13,9 @@ class GeneratedObjectAsset:
     width: int
     height: int
     raw_alpha_mask_ref: str | None = None
+    raw_generated_ref: str | None = None
+    sam_object_ref: str | None = None
+    sam_mask_ref: str | None = None
     mask_source: str = "unknown"
     tight_bbox: tuple[int, int, int, int] | None = None
     object_prompt: str = ""

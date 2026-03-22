@@ -28,8 +28,35 @@ def test_sam_extractor_runs_mask_prediction_even_when_alpha_exists(tmp_path: Pat
     )
 
     mask = Image.open(extracted["mask"]).convert("L")
-    assert mask.getbbox() == (10, 10, 22, 22)
-    assert extracted["mask_source"] == "sam_mask_extractor_forced"
+    assert mask.getbbox() == (8, 8, 24, 24)
+    assert extracted["mask_source"] == "raw_alpha_preserved"
     assert extracted["alpha_has_signal"] is True
     assert extracted["alpha_bbox"] == "8,8,24,24"
     assert float(extracted["alpha_nonzero_ratio"]) > 0.0
+
+
+def test_sam_extractor_preserves_raw_alpha_when_predicted_mask_is_too_small(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "transparent-object.png"
+    image = Image.new("RGBA", (32, 32), color=(0, 0, 0, 0))
+    for x in range(8, 24):
+        for y in range(8, 24):
+            image.putpixel((x, y), (40, 80, 120, 255))
+    image.save(source)
+
+    extractor = SamObjectMaskExtractor()
+    predicted = Image.new("L", (32, 32), color=0)
+    for x in range(14, 18):
+        for y in range(14, 18):
+            predicted.putpixel((x, y), 255)
+    extractor._predict_mask = lambda image: predicted  # type: ignore[method-assign]
+
+    extracted = extractor.extract(
+        image_path=source,
+        output_prefix=tmp_path / "masked",
+    )
+
+    mask = Image.open(extracted["mask"]).convert("L")
+    assert mask.getbbox() == (8, 8, 24, 24)
+    assert extracted["mask_source"] == "raw_alpha_preserved"
