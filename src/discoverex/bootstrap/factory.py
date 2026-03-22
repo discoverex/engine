@@ -29,7 +29,6 @@ def _build_env_defaults(settings: AppSettings) -> dict[str, str]:
         "tracking_uri": settings.tracking.uri,
         "cf_access_client_id": settings.worker_http.cf_access_client_id,
         "cf_access_client_secret": settings.worker_http.cf_access_client_secret,
-        "experiment_name": "discoverex-core",
     }
 
 

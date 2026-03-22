@@ -183,6 +183,9 @@ def _job_spec_for_case(
     job_spec = deepcopy(base_job_spec)
     inputs = job_spec.setdefault("inputs", {})
     args = inputs.setdefault("args", {})
+    if str(scenario.get("background_asset_ref", "")).strip():
+        args["background_prompt"] = ""
+        args["background_negative_prompt"] = ""
     overrides = list(inputs.get("overrides", []))
     overrides.extend(fixed_overrides)
     scenario_overrides = str(scenario.get("scenario_overrides", "")).strip()
