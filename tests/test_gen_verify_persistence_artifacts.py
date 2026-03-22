@@ -42,10 +42,13 @@ def test_track_run_includes_source_layers_and_originals_in_worker_manifest(
         metadata_dir / "scene.json",
         metadata_dir / "verification.json",
         outputs_dir / "composite.png",
-        outputs_dir / "animation.lottie",
+        outputs_dir / "layers" / "animation.lottie",
         outputs_dir / "output_manifest.json",
         outputs_dir / "layers" / "objects" / "001-layer-object.png",
         outputs_dir / "layers" / "source-objects" / "001-layer-object.png",
+        outputs_dir / "delivery" / "metadata" / "scene.json",
+        outputs_dir / "delivery" / "metadata" / "verification.json",
+        outputs_dir / "delivery" / "layers" / "animation.lottie",
         outputs_dir / "original" / "r1" / "object.png",
         outputs_dir / "original" / "r1" / "diagnostics.json",
     ):
@@ -93,7 +96,7 @@ def test_track_run_includes_source_layers_and_originals_in_worker_manifest(
 
     exported = OutputExportResult(
         manifest_path=outputs_dir / "output_manifest.json",
-        lottie_path=outputs_dir / "animation.lottie",
+        lottie_path=outputs_dir / "layers" / "animation.lottie",
         layer_paths=[outputs_dir / "layers" / "objects" / "001-layer-object.png"],
         source_layer_paths=[
             outputs_dir / "layers" / "source-objects" / "001-layer-object.png"
@@ -101,6 +104,11 @@ def test_track_run_includes_source_layers_and_originals_in_worker_manifest(
         original_paths=[
             outputs_dir / "original" / "r1" / "object.png",
             outputs_dir / "original" / "r1" / "diagnostics.json",
+        ],
+        delivery_paths=[
+            outputs_dir / "delivery" / "metadata" / "scene.json",
+            outputs_dir / "delivery" / "metadata" / "verification.json",
+            outputs_dir / "delivery" / "layers" / "animation.lottie",
         ],
     )
 
@@ -154,3 +162,6 @@ def test_track_run_includes_source_layers_and_originals_in_worker_manifest(
     assert "output_source_layer/001-layer-object.png" in logical_names
     assert "output_original/original/r1/object.png" in logical_names
     assert "output_original/original/r1/diagnostics.json" in logical_names
+    assert "delivery/delivery/metadata/scene.json" in logical_names
+    assert "delivery/delivery/metadata/verification.json" in logical_names
+    assert "delivery/delivery/layers/animation.lottie" in logical_names

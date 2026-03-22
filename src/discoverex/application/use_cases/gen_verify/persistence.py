@@ -157,6 +157,13 @@ def track_run(
                 (f"output_original/{original_path.relative_to(output_exports.manifest_path.parent).as_posix()}", original_path)
                 for original_path in output_exports.original_paths
             ],
+            *[
+                (
+                    f"delivery/{delivery_path.relative_to(output_exports.manifest_path.parent).as_posix()}",
+                    delivery_path,
+                )
+                for delivery_path in output_exports.delivery_paths
+            ],
         ],
     )
 

@@ -98,3 +98,4 @@ class OutputExportResult:
     layer_paths: list[Path]
     source_layer_paths: list[Path]
     original_paths: list[Path]
+    delivery_paths: list[Path]

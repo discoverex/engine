@@ -3,7 +3,7 @@ engine: discoverex
 entrypoint:
   - prefect_flow.py:run_generate_job_flow
 config: null
-job_name: prod-genver2-pixart-realvisxl5-patchsimv2-ldho1-baseprompt-8gb
+job_name: prod-genver2-pixart-realvisxl5-lightning-patchsimv2-ldho1-baseprompt-8gb
 inputs:
   contract_version: v2
   command: generate
@@ -30,10 +30,10 @@ inputs:
     - runtime.background_upscale_factor=2
     - models/background_generator=pixart_sigma_8gb
     - runtime.model_runtime.batch_size=1
-    - models/object_generator=layerdiffuse
-    - models.object_generator.model_id=SG161222/RealVisXL_V5.0
+    - models/object_generator=layerdiffuse_realvisxl5_lightning
+    - models.object_generator.model_id=SG161222/RealVisXL_V5.0_Lightning
     - models.object_generator.sampler=dpmpp_sde_karras
-    - models.object_generator.default_num_inference_steps=40
+    - models.object_generator.default_num_inference_steps=5
     - models.object_generator.default_guidance_scale=2.0
     - models.object_generator.dtype=float16
     - models.object_generator.precision=fp16

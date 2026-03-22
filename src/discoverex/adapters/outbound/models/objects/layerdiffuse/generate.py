@@ -6,6 +6,10 @@ from typing import Any
 
 from PIL import Image  # type: ignore
 
+def _stdout_debug(message: str) -> None:
+    print(f"[discoverex-debug] {message}", flush=True)
+
+
 @dataclass(frozen=True)
 class LayerDiffuseGenerationResult:
     preview_rgb: Image.Image
@@ -80,114 +84,18 @@ def _raise_if_vram_limit_exceeded(*, limit_gb: float | None) -> None:
     )
 
 
-def _offload_text_encoders(*, pipe: Any) -> None:
-    try:
-        import torch  # type: ignore
-    except Exception:
-        torch = None
-    for component_name in ("text_encoder", "text_encoder_2"):
-        component = getattr(pipe, component_name, None)
-        if component is None:
-            continue
-        try:
-            component.to("cpu")
-        except Exception:
-            continue
-    if torch is not None and torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
-
-def _prepare_text_encoders(*, pipe: Any, execution_device: Any) -> None:
-    try:
-        from accelerate.hooks import remove_hook_from_module  # type: ignore
-    except Exception:
-        remove_hook_from_module = None
-    for component_name in ("text_encoder", "text_encoder_2"):
-        component = getattr(pipe, component_name, None)
-        if component is None:
-            continue
-        if callable(remove_hook_from_module):
-            try:
-                remove_hook_from_module(component, recurse=True)
-            except Exception:
-                pass
-        try:
-            component.to(execution_device)
-        except Exception:
-            continue
-
-
-def _offload_unet_stack(*, pipe: Any) -> None:
-    try:
-        import torch  # type: ignore
-    except Exception:
-        torch = None
-    for component_name in ("unet",):
-        component = getattr(pipe, component_name, None)
-        if component is None:
-            continue
-        try:
-            component.to("cpu")
-        except Exception:
-            continue
-    if torch is not None and torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
-
-def _offload_decode_stack(*, pipe: Any) -> None:
-    try:
-        import torch  # type: ignore
-    except Exception:
-        torch = None
-    for component in (
-        getattr(pipe, "_layerdiffuse_base_vae", None),
-        getattr(pipe, "vae", None),
-    ):
-        if component is None:
-            continue
-        try:
-            component.to("cpu")
-        except Exception:
-            continue
-    if torch is not None and torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
-
-def _prepare_decode_stack(*, pipe: Any, execution_device: Any) -> None:
-    try:
-        import torch  # type: ignore
-        from accelerate.hooks import remove_hook_from_module  # type: ignore
-    except Exception:
-        torch = None
-        remove_hook_from_module = None
-    for component in (
-        getattr(pipe, "_layerdiffuse_base_vae", None),
-        getattr(pipe, "vae", None),
-    ):
-        if component is None:
-            continue
-        if callable(remove_hook_from_module):
-            try:
-                remove_hook_from_module(component, recurse=True)
-            except Exception:
-                pass
-        try:
-            component.to(execution_device)
-        except Exception:
-            pass
-    if torch is not None and torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
-
 def _decode_latents_to_results(*, model: Any, pipe: Any, latents: Any) -> list[LayerDiffuseGenerationResult]:
     transparent_decoder = getattr(model, "_transparent_decoder", None)
     base_vae = getattr(pipe, "_layerdiffuse_base_vae", None)
     if transparent_decoder is not None and base_vae is not None:
+        decode_device = getattr(latents, "device", getattr(pipe, "_execution_device", "cpu"))
+        decode_dtype = getattr(base_vae, "dtype", getattr(latents, "dtype", None))
         try:
-            transparent_decoder.to(
-                device=getattr(base_vae, "device", getattr(pipe, "_execution_device", "cpu")),
-                dtype=getattr(base_vae, "dtype", None),
-            )
+            base_vae.to(device=decode_device, dtype=decode_dtype)
+        except Exception:
+            pass
+        try:
+            transparent_decoder.to(device=decode_device, dtype=decode_dtype)
         except Exception:
             pass
         latents_for_decode = latents / base_vae.config.scaling_factor
@@ -240,62 +148,6 @@ def _coerce_generation_result(image: Any) -> LayerDiffuseGenerationResult:
     )
 
 
-def _build_prompt_embeds(
-    *,
-    pipe: Any,
-    execution_device: Any,
-    prompts: str | list[str],
-    negative_prompts: str | list[str],
-    guidance_scale: float,
-) -> tuple[Any, Any, Any, Any]:
-    prompt_embeds = None
-    negative_prompt_embeds = None
-    pooled_prompt_embeds = None
-    negative_pooled_prompt_embeds = None
-    encode_prompt = getattr(pipe, "encode_prompt", None)
-    if not callable(encode_prompt):
-        return (
-            prompt_embeds,
-            negative_prompt_embeds,
-            pooled_prompt_embeds,
-            negative_pooled_prompt_embeds,
-        )
-    _prepare_text_encoders(pipe=pipe, execution_device=execution_device)
-    encode_signature = inspect.signature(encode_prompt)
-    encode_kwargs: dict[str, Any] = {
-        "prompt": prompts,
-        "device": execution_device,
-        "num_images_per_prompt": 1,
-        "do_classifier_free_guidance": guidance_scale > 1.0,
-        "negative_prompt": negative_prompts,
-    }
-    if "prompt_2" in encode_signature.parameters:
-        encode_kwargs["prompt_2"] = prompts
-    if "negative_prompt_2" in encode_signature.parameters:
-        encode_kwargs["negative_prompt_2"] = negative_prompts
-    encoded = encode_prompt(**encode_kwargs)
-    if isinstance(encoded, tuple) and len(encoded) == 4:
-        (
-            prompt_embeds,
-            negative_prompt_embeds,
-            pooled_prompt_embeds,
-            negative_pooled_prompt_embeds,
-        ) = encoded
-    elif isinstance(encoded, tuple) and len(encoded) == 2:
-        prompt_embeds, negative_prompt_embeds = encoded
-    else:
-        raise TypeError(
-            "unsupported encode_prompt return contract "
-            f"type={type(encoded)!r} len={len(encoded) if isinstance(encoded, tuple) else 'n/a'}"
-        )
-    return (
-        prompt_embeds,
-        negative_prompt_embeds,
-        pooled_prompt_embeds,
-        negative_pooled_prompt_embeds,
-    )
-
-
 def _sample_latents(
     *,
     pipe: Any,
@@ -309,25 +161,10 @@ def _sample_latents(
     execution_device: Any,
     max_vram_gb: float | None,
 ) -> Any:
-    (
-        prompt_embeds,
-        negative_prompt_embeds,
-        pooled_prompt_embeds,
-        negative_pooled_prompt_embeds,
-    ) = _build_prompt_embeds(
-        pipe=pipe,
-        execution_device=execution_device,
-        prompts=prompts,
-        negative_prompts=negative_prompts,
-        guidance_scale=guidance_scale,
-    )
-    if prompt_embeds is not None:
-        _offload_text_encoders(pipe=pipe)
-        _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
     call_signature = inspect.signature(pipe.__call__)
     pipe_kwargs: dict[str, Any] = {
-        "prompt": None if prompt_embeds is not None else prompts,
-        "negative_prompt": None if negative_prompt_embeds is not None else negative_prompts,
+        "prompt": prompts,
+        "negative_prompt": negative_prompts,
         "num_inference_steps": num_inference_steps,
         "num_images_per_prompt": 1,
         "guidance_scale": guidance_scale,
@@ -335,18 +172,20 @@ def _sample_latents(
         "height": height,
         "generator": generator,
         "output_type": "latent",
-        "prompt_embeds": prompt_embeds,
-        "negative_prompt_embeds": negative_prompt_embeds,
         "return_dict": False,
     }
-    if "pooled_prompt_embeds" in call_signature.parameters:
-        pipe_kwargs["pooled_prompt_embeds"] = pooled_prompt_embeds
-    if "negative_pooled_prompt_embeds" in call_signature.parameters:
-        pipe_kwargs["negative_pooled_prompt_embeds"] = negative_pooled_prompt_embeds
-    result = pipe(**pipe_kwargs)
+    try:
+        result = pipe(**pipe_kwargs)
+    except Exception as exc:
+        _stdout_debug(
+            "layerdiffuse_pipe_exception "
+            f"error={exc!r} "
+            f"generator_type={type(generator).__name__ if generator is not None else 'None'} "
+            f"width={width} height={height} steps={num_inference_steps} guidance={guidance_scale}"
+        )
+        raise
     _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
     latents = result[0] if isinstance(result, tuple) else result
-    _offload_unet_stack(pipe=pipe)
     _raise_if_vram_limit_exceeded(limit_gb=max_vram_gb)
     return latents
 
@@ -367,7 +206,7 @@ def generate_rgba(
     import torch  # type: ignore
 
     pipe = model._load_pipeline(handle)
-    execution_device = getattr(pipe, "_execution_device", handle.device)
+    execution_device = getattr(handle, "device", None) or getattr(pipe, "_execution_device", "cpu")
     generator = None if seed is None else torch.Generator(device="cpu").manual_seed(seed)
     latents = _sample_latents(
         pipe=pipe,
@@ -381,10 +220,8 @@ def generate_rgba(
         execution_device=execution_device,
         max_vram_gb=max_vram_gb,
     )
-    _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
     images = _decode_latents_to_results(model=model, pipe=pipe, latents=latents)
     image = images[0]
-    _offload_decode_stack(pipe=pipe)
     return _coerce_generation_result(image)
 
 
@@ -408,7 +245,7 @@ def generate_rgba_batch(
     if len(prompts) != len(negative_prompts):
         raise ValueError("prompts and negative_prompts must have the same length")
     pipe = model._load_pipeline(handle)
-    execution_device = getattr(pipe, "_execution_device", handle.device)
+    execution_device = getattr(handle, "device", None) or getattr(pipe, "_execution_device", "cpu")
     generator = None if seed is None else torch.Generator(device="cpu").manual_seed(seed)
     latents = _sample_latents(
         pipe=pipe,
@@ -422,7 +259,5 @@ def generate_rgba_batch(
         execution_device=execution_device,
         max_vram_gb=max_vram_gb,
     )
-    _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
     images = _decode_latents_to_results(model=model, pipe=pipe, latents=latents)
-    _offload_decode_stack(pipe=pipe)
     return images

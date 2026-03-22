@@ -51,7 +51,7 @@ def write_output_manifest(
         "status": scene.meta.status.value,
         "created_at": scene.meta.created_at.isoformat(),
         "updated_at": scene.meta.updated_at.isoformat(),
-        "lottie_path": lottie_path.name,
+        "lottie_path": f"layers/{lottie_path.name}",
         "preview_image_path": composite_output_path(
             artifacts_root, scene_id, version_id
         ).name,

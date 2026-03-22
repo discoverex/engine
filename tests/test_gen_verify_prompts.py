@@ -230,7 +230,7 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     output_manifest = json.loads(
         (scene_dir / "outputs" / "manifest.json").read_text(encoding="utf-8")
     )
-    lottie_path = scene_dir / "outputs" / "animation.lottie"
+    lottie_path = scene_dir / "outputs" / "layers" / "animation.lottie"
     output_layers_dir = scene_dir / "outputs" / "layers"
     tracker_call = _tracker_call_value(tracker)
     tracker_params = cast(dict[str, object], tracker_call["params"])
@@ -245,7 +245,7 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     assert "manifest.json" in artifact_names
     assert lottie_path.exists()
     assert output_layers_dir.exists()
-    assert output_manifest["lottie_path"] == "animation.lottie"
+    assert output_manifest["lottie_path"] == "layers/animation.lottie"
     assert output_manifest["layers"]
     assert output_manifest["source_layers"]
     assert output_manifest["original"]

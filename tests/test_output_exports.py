@@ -163,8 +163,9 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
     assert len(exported.layer_paths) == 3
     assert len(exported.source_layer_paths) == 1
     assert len(exported.original_paths) == 13
+    assert len(exported.delivery_paths) >= 3
     payload = json.loads(exported.manifest_path.read_text(encoding="utf-8"))
-    assert payload["lottie_path"] == "animation.lottie"
+    assert payload["lottie_path"] == "layers/animation.lottie"
     assert payload["source_layers"] == [
         {"path": "layers/source-objects/001-layer-object.png"}
     ]
@@ -208,6 +209,17 @@ def test_export_output_bundle_writes_lottie_and_output_layers(tmp_path: Path) ->
     assert {"region_id": "r1", "kind": "diagnostics", "path": "original/r1/diagnostics.json"} in payload["original"]
     assert (scene_root / "outputs" / "original" / "r1" / "object.png").exists()
     assert (scene_root / "outputs" / "original" / "r1" / "diagnostics.json").exists()
+    assert (scene_root / "outputs" / "delivery" / "metadata" / "scene.json").exists()
+    assert (scene_root / "outputs" / "delivery" / "metadata" / "verification.json").exists()
+    assert (scene_root / "outputs" / "delivery" / "layers" / "animation.lottie").exists()
+    assert (
+        scene_root
+        / "outputs"
+        / "delivery"
+        / "layers"
+        / "objects"
+        / "001-layer-object.png"
+    ).exists()
     assert [layer["layer_id"] for layer in payload["layers"]] == [
         "layer-base",
         "layer-object",

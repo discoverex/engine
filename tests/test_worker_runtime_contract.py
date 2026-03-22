@@ -62,6 +62,7 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
         / "scene-1"
         / "version-1"
         / "outputs"
+        / "layers"
         / "animation.lottie"
     )
     lottie_path.parent.mkdir(parents=True, exist_ok=True)
@@ -112,7 +113,7 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
         },
         {
             "logical_name": "lottie_bundle",
-            "relative_path": "scenes/scene-1/version-1/outputs/animation.lottie",
+            "relative_path": "scenes/scene-1/version-1/outputs/layers/animation.lottie",
             "content_type": "application/zip",
             "mlflow_tag": "artifact_lottie_uri",
             "description": None,

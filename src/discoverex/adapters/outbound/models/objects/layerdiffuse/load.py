@@ -346,3 +346,26 @@ def _configure_scheduler(
     if normalized in {"euler", "euler_discrete"}:
         return euler_scheduler_cls.from_config(scheduler.config)
     raise ValueError(f"unsupported layerdiffuse sampler '{sampler_name}'")
+
+
+def reset_scheduler(*, model: Any, pipe: Any) -> None:
+    import diffusers  # type: ignore
+
+    scheduler = getattr(pipe, "scheduler", None)
+    if scheduler is None:
+        return
+    DPMSolverMultistepScheduler = getattr(diffusers, "DPMSolverMultistepScheduler")
+    UniPCMultistepScheduler = getattr(diffusers, "UniPCMultistepScheduler")
+    EulerDiscreteScheduler = getattr(diffusers, "EulerDiscreteScheduler")
+    pipe.scheduler = _configure_scheduler(
+        scheduler=scheduler,
+        sampler_name=str(getattr(model, "sampler", "") or ""),
+        dpm_scheduler_cls=DPMSolverMultistepScheduler,
+        unipc_scheduler_cls=UniPCMultistepScheduler,
+        euler_scheduler_cls=EulerDiscreteScheduler,
+    )
+    _stdout_debug(
+        "object_scheduler_reset "
+        f"model_id={getattr(model, 'model_id', '')} "
+        f"scheduler_cls={type(getattr(pipe, 'scheduler', None)).__name__}"
+    )
