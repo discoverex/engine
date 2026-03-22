@@ -51,6 +51,34 @@ def test_lightning_base_vae_object_generator_config_loads() -> None:
     assert payload["model_id"] == "SG161222/RealVisXL_V5.0_Lightning"
 
 
+def test_sd15_transparent_object_generator_config_loads() -> None:
+    cfg = load_pipeline_config(
+        config_name="generate",
+        config_dir="conf",
+        overrides=["models/object_generator=layerdiffuse_sd15_transparent"],
+    )
+    payload = cfg.models.object_generator.model_dump(mode="python")
+    assert payload["model_id"] == "runwayml/stable-diffusion-v1-5"
+    assert payload["pipeline_variant"] == "sd15_layerdiffuse_transparent"
+    assert payload["weights_repo"] == "LayerDiffusion/layerdiffusion-v1"
+    assert (
+        payload["transparent_decoder_weight_name"]
+        == "layer_sd15_vae_transparent_decoder.safetensors"
+    )
+    assert payload["attn_weight_name"] == "layer_sd15_transparent_attn.safetensors"
+
+
+def test_pixart_object_generator_config_loads() -> None:
+    cfg = load_pipeline_config(
+        config_name="generate",
+        config_dir="conf",
+        overrides=["models/object_generator=pixart_sigma_8gb"],
+    )
+    payload = cfg.models.object_generator.model_dump(mode="python")
+    assert payload["model_id"] == "PixArt-alpha/PixArt-Sigma-XL-2-1024-MS"
+    assert payload["default_num_inference_steps"] == 20
+
+
 def test_single_object_base_vae_debug_flow_config_loads() -> None:
     cfg = load_pipeline_config(
         config_name="generate",
@@ -92,7 +120,7 @@ def test_single_object_debug_run_writes_debug_exports_and_manifest(
                 height=6,
                 raw_alpha_mask_ref=str(raw_alpha_path),
                 sam_object_ref=str(sam_object_path),
-                mask_source="raw_alpha_plus_sam",
+                mask_source="layerdiffuse_alpha",
                 object_prompt=str(kwargs["object_prompt"]),
                 object_negative_prompt=str(kwargs["object_negative_prompt"]),
                 object_model_id="SG161222/RealVisXL_V5.0_Lightning",

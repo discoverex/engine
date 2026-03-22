@@ -11,7 +11,7 @@ from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 
 from .assets import build_placement_assets, relocate_mask_assets
-from .prompts import object_generation_prompt, resolve_object_prompts
+from .prompts import compose_prompt, object_generation_prompt, resolve_object_prompts
 from .types import GeneratedObjectAsset
 
 logger = get_logger("discoverex.generate.objects")
@@ -60,6 +60,8 @@ def generate_region_objects(
     object_handle: ModelHandle,
     object_prompt: str,
     object_negative_prompt: str,
+    object_base_prompt: str = "",
+    object_base_negative_prompt: str = "",
     object_generation_size: int = _OBJECT_GENERATION_SIZE,
     max_vram_gb: float | None = None,
 ) -> dict[str, GeneratedObjectAsset]:
@@ -70,13 +72,21 @@ def generate_region_objects(
     generated: dict[str, GeneratedObjectAsset] = {}
     total_regions = len(regions)
     object_prompts = resolve_object_prompts(object_prompt, total_regions=total_regions)
+    resolved_object_prompts = [
+        compose_prompt(base_prompt=object_base_prompt, prompt=prompt)
+        for prompt in object_prompts
+    ]
+    resolved_negative_prompt = compose_prompt(
+        base_prompt=object_base_negative_prompt,
+        prompt=object_negative_prompt or _DEFAULT_OBJECT_NEGATIVE,
+    )
     object_generation_steps = _resolved_object_generation_steps(context)
     object_generation_guidance = _resolved_object_generation_guidance(context)
     try:
         batch_size = max(1, int(context.runtime.model_runtime.batch_size))
         for batch_start in range(0, total_regions, batch_size):
             batch_regions = regions[batch_start : batch_start + batch_size]
-            batch_prompts = object_prompts[batch_start : batch_start + batch_size]
+            batch_prompts = resolved_object_prompts[batch_start : batch_start + batch_size]
             batch_paths: list[Path] = []
             preview_paths: list[Path] = []
             alpha_paths: list[Path] = []
@@ -117,7 +127,7 @@ def generate_region_objects(
                             "width": object_generation_size,
                             "height": object_generation_size,
                             "seed": context.runtime.model_runtime.seed,
-                            "negative_prompt": object_negative_prompt or _DEFAULT_OBJECT_NEGATIVE,
+                            "negative_prompt": resolved_negative_prompt,
                             "num_inference_steps": object_generation_steps,
                             "guidance_scale": object_generation_guidance,
                             "max_vram_gb": max_vram_gb,
@@ -143,7 +153,7 @@ def generate_region_objects(
                     _stdout_debug(
                         "object_predict start "
                         f"region={region.region_id} index={index} size={object_generation_size} "
-                        f"prompt={region_prompt!r} negative_prompt={(object_negative_prompt or _DEFAULT_OBJECT_NEGATIVE)!r} "
+                        f"prompt={region_prompt!r} negative_prompt={resolved_negative_prompt!r} "
                         f"steps={object_generation_steps} guidance={object_generation_guidance} "
                         f"seed={context.runtime.model_runtime.seed}"
                     )
@@ -160,8 +170,7 @@ def generate_region_objects(
                                 "height": object_generation_size,
                                 "seed": context.runtime.model_runtime.seed,
                                 "prompt": object_generation_prompt(region_prompt),
-                                "negative_prompt": object_negative_prompt
-                                or _DEFAULT_OBJECT_NEGATIVE,
+                                "negative_prompt": resolved_negative_prompt,
                                 "num_inference_steps": object_generation_steps,
                                 "guidance_scale": object_generation_guidance,
                                 "max_vram_gb": max_vram_gb,
@@ -235,8 +244,7 @@ def generate_region_objects(
                     mask_source=str(masked.get("mask_source", "unknown")),
                     tight_bbox=placement.tight_bbox,
                     object_prompt=region_prompt,
-                    object_negative_prompt=object_negative_prompt
-                    or _DEFAULT_OBJECT_NEGATIVE,
+                    object_negative_prompt=resolved_negative_prompt,
                     object_model_id=str(getattr(object_handle, "model_id", "") or ""),
                     object_sampler=str(
                         getattr(context.object_generator_model, "sampler", "") or ""

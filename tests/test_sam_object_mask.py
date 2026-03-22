@@ -29,7 +29,7 @@ def test_sam_extractor_runs_mask_prediction_even_when_alpha_exists(tmp_path: Pat
 
     mask = Image.open(extracted["mask"]).convert("L")
     assert mask.getbbox() == (8, 8, 24, 24)
-    assert extracted["mask_source"] == "raw_alpha_preserved"
+    assert extracted["mask_source"] == "layerdiffuse_alpha"
     assert extracted["alpha_has_signal"] is True
     assert extracted["alpha_bbox"] == "8,8,24,24"
     assert float(extracted["alpha_nonzero_ratio"]) > 0.0
@@ -59,4 +59,4 @@ def test_sam_extractor_preserves_raw_alpha_when_predicted_mask_is_too_small(
 
     mask = Image.open(extracted["mask"]).convert("L")
     assert mask.getbbox() == (8, 8, 24, 24)
-    assert extracted["mask_source"] == "raw_alpha_preserved"
+    assert extracted["mask_source"] == "layerdiffuse_alpha"

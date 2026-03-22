@@ -23,12 +23,16 @@ class SamObjectMaskExtractor:
         image = loaded["rgb"]
         alpha = loaded.get("alpha")
         alpha_stats = self._alpha_stats(alpha=alpha, image=image)
-        predicted_mask = self._predict_mask(image)
-        mask, mask_source = self._resolve_mask(
-            predicted_mask=predicted_mask,
-            alpha=alpha,
-            alpha_stats=alpha_stats,
-        )
+        if alpha is not None and alpha.getbbox() is not None:
+            mask = alpha.convert("L")
+            mask_source = "layerdiffuse_alpha"
+        else:
+            predicted_mask = self._predict_mask(image)
+            mask, mask_source = self._resolve_mask(
+                predicted_mask=predicted_mask,
+                alpha=alpha,
+                alpha_stats=alpha_stats,
+            )
         object_rgba = image.convert("RGBA")
         object_rgba.putalpha(mask)
         raw_alpha_path: Path | None = None
@@ -130,22 +134,12 @@ class SamObjectMaskExtractor:
         alpha: Any,
         alpha_stats: dict[str, str | float | bool],
     ) -> tuple[Any, str]:
-        from PIL import ImageChops  # type: ignore
-
         if alpha is None or alpha.getbbox() is None:
             return predicted_mask, "sam_mask_extractor_forced"
         alpha_mask = alpha.convert("L")
         if not bool(alpha_stats.get("has_signal")):
             return predicted_mask, "sam_mask_extractor_forced"
-        alpha_nonzero_ratio = float(alpha_stats.get("nonzero_ratio") or 0.0)
-        predicted_bbox = predicted_mask.getbbox()
-        if predicted_bbox is None:
-            return alpha_mask, "raw_alpha_preserved"
-        predicted_ratio = self._mask_nonzero_ratio(predicted_mask)
-        if alpha_nonzero_ratio >= 0.02 and predicted_ratio < (alpha_nonzero_ratio * 0.6):
-            return alpha_mask, "raw_alpha_preserved"
-        combined = ImageChops.lighter(alpha_mask, predicted_mask.convert("L"))
-        return combined, "raw_alpha_plus_sam"
+        return alpha_mask, "layerdiffuse_alpha"
 
     def _fallback_mask(self, image: Any) -> Any:
         from PIL import Image, ImageFilter, ImageOps  # type: ignore

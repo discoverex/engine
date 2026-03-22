@@ -38,6 +38,10 @@ class LayerDiffuseObjectGenerationModel:
     def __init__(
         self,
         model_id: str = "SG161222/RealVisXL_V5.0",
+        pipeline_variant: str = "",
+        weights_repo: str = "",
+        transparent_decoder_weight_name: str = "",
+        attn_weight_name: str = "",
         revision: str = "main",
         device: str = "cuda",
         dtype: str = "float16",
@@ -62,6 +66,10 @@ class LayerDiffuseObjectGenerationModel:
         hf_home: str = "",
     ) -> None:
         self.model_id = model_id
+        self.pipeline_variant = pipeline_variant
+        self.weights_repo = weights_repo
+        self.transparent_decoder_weight_name = transparent_decoder_weight_name
+        self.attn_weight_name = attn_weight_name
         self.revision = revision
         self.device = device
         self.dtype = dtype
@@ -89,6 +97,7 @@ class LayerDiffuseObjectGenerationModel:
             )
         )
         self._pipe: Any | None = None
+        self._transparent_decoder: Any | None = None
         self._layerdiffuse_applied = False
 
     def load(self, model_ref_or_version: str) -> ModelHandle:
@@ -287,4 +296,10 @@ class LayerDiffuseObjectGenerationModel:
     def unload(self) -> None:
         clear_model_runtime(self._pipe)
         self._pipe = None
+        if self._transparent_decoder is not None:
+            try:
+                self._transparent_decoder.to("cpu")
+            except Exception:
+                pass
+        self._transparent_decoder = None
         self._layerdiffuse_applied = False

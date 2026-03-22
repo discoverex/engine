@@ -218,6 +218,81 @@ def test_harmonize_rgba_preserves_alpha() -> None:
     assert harmonized.getchannel("A").getextrema() == (200, 200)
 
 
+def test_generate_objects_loads_model_once_and_passes_base_prompts(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    regions = [
+        Region(
+            region_id="r-1",
+            geometry=Geometry(type="bbox", bbox=BBox(x=0.0, y=0.0, w=64.0, h=64.0)),
+            role=RegionRole.ANSWER,
+            source=RegionSource.MANUAL,
+            attributes={},
+            version=1,
+        ),
+        Region(
+            region_id="r-2",
+            geometry=Geometry(type="bbox", bbox=BBox(x=0.0, y=0.0, w=64.0, h=64.0)),
+            role=RegionRole.CANDIDATE,
+            source=RegionSource.MANUAL,
+            attributes={},
+            version=1,
+        ),
+    ]
+    captured: dict[str, object] = {}
+    events: list[str] = []
+
+    context = SimpleNamespace(
+        object_generator_model=SimpleNamespace(
+            load=lambda version: events.append(f"load:{version}") or SimpleNamespace(),
+        ),
+        model_versions=SimpleNamespace(object_generator="object-generator-v1"),
+    )
+
+    monkeypatch.setattr(
+        "discoverex.application.use_cases.generate_verify_v2.generate_region_objects",
+        lambda **kwargs: captured.update(kwargs)
+        or {
+            region.region_id: GeneratedObjectAsset(
+                region_id=region.region_id,
+                candidate_ref=str(tmp_path / f"{region.region_id}.png"),
+                object_ref=str(tmp_path / f"{region.region_id}.object.png"),
+                object_mask_ref=str(tmp_path / f"{region.region_id}.mask.png"),
+                width=64,
+                height=64,
+            )
+            for region in kwargs["regions"]
+        },
+    )
+    monkeypatch.setattr(
+        "discoverex.application.use_cases.generate_verify_v2.unload_model",
+        lambda model: events.append("unload"),
+    )
+
+    result = _generate_objects(
+        context=context,
+        scene_dir=tmp_path,
+        regions=regions,
+        object_prompt="butterfly | brass key",
+        object_negative_prompt="blurry",
+        object_base_prompt="isolated single object on transparent background",
+        object_base_negative_prompt="opaque background, scene",
+        object_generation_size=512,
+    )
+
+    assert list(result.keys()) == ["r-1", "r-2"]
+    assert events == ["load:object-generator-v1", "unload"]
+    assert captured["regions"] == regions
+    assert captured["object_prompt"] == "butterfly | brass key"
+    assert captured["object_negative_prompt"] == "blurry"
+    assert (
+        captured["object_base_prompt"]
+        == "isolated single object on transparent background"
+    )
+    assert captured["object_base_negative_prompt"] == "opaque background, scene"
+
+
 def test_find_best_patch_error_includes_diagnostics(tmp_path: Path) -> None:
     object_path = tmp_path / "object.png"
     mask_path = tmp_path / "mask.png"
@@ -270,7 +345,6 @@ def test_generate_objects_uses_distinct_prompt_per_region(
 
     def fake_generate_region_objects(**kwargs):
         seen_prompts.append(kwargs["object_prompt"])
-        region = kwargs["regions"][0]
         return {
             region.region_id: GeneratedObjectAsset(
                 region_id=region.region_id,
@@ -280,6 +354,7 @@ def test_generate_objects_uses_distinct_prompt_per_region(
                 width=32,
                 height=32,
             )
+            for region in kwargs["regions"]
         }
 
     monkeypatch.setattr(
@@ -311,15 +386,13 @@ def test_generate_objects_uses_distinct_prompt_per_region(
         regions=regions,
         object_prompt="butterfly | antique brass key | crystal wine glass",
         object_negative_prompt="blurry",
+        object_base_prompt="",
+        object_base_negative_prompt="",
         object_generation_size=512,
     )
 
     assert list(generated) == ["r-1", "r-2", "r-3"]
-    assert seen_prompts == [
-        "butterfly",
-        "antique brass key",
-        "crystal wine glass",
-    ]
+    assert seen_prompts == ["butterfly | antique brass key | crystal wine glass"]
 
 
 def test_generate_objects_uses_model_default_steps_and_guidance(

@@ -553,7 +553,9 @@ def test_load_pipeline_uses_base_vae_for_sdxl(
 
     class _FakePipe:
         def __init__(self) -> None:
-            self.unet = object()
+            self.unet = self
+            self.scheduler = SimpleNamespace(config={"beta_schedule": "scaled_linear"})
+            self._loaded_state_dict = None
 
         @classmethod
         def from_pretrained(cls, *args: object, **kwargs: object) -> "_FakePipe":
@@ -562,6 +564,12 @@ def test_load_pipeline_uses_base_vae_for_sdxl(
 
         def load_lora_weights(self, *args: object, **kwargs: object) -> None:
             calls["load_lora_weights"] = (args, kwargs)
+
+        def state_dict(self) -> dict[str, object]:
+            return {"weight": 1}
+
+        def load_state_dict(self, state_dict: dict[str, object], strict: bool = True) -> None:
+            calls["merged_state_dict"] = (state_dict, strict)
 
     def _fake_hf_hub_download(*, repo_id: str, filename: str, cache_dir: str) -> str:
         calls.setdefault("downloads", []).append((repo_id, filename, cache_dir))
@@ -578,16 +586,31 @@ def test_load_pipeline_uses_base_vae_for_sdxl(
         AutoencoderKL=_FakeAutoencoderKL,
         DPMSolverMultistepScheduler=_FakeSchedulerCls,
         EulerDiscreteScheduler=_FakeSchedulerCls,
+        AutoPipelineForText2Image=_FakePipe,
         StableDiffusionPipeline=_FakePipe,
         StableDiffusionXLPipeline=_FakePipe,
         UniPCMultistepScheduler=_FakeSchedulerCls,
     )
     fake_hf = SimpleNamespace(hf_hub_download=_fake_hf_hub_download)
     fake_rootonchair_loader = SimpleNamespace(load_lora_to_unet=lambda *args, **kwargs: None)
+    fake_safetensors_torch = SimpleNamespace(load_file=lambda path: {"weight": 2})
+    fake_transparent_vae = SimpleNamespace(
+        TransparentVAEDecoder=lambda filename, dtype: SimpleNamespace(
+            filename=filename,
+            dtype=dtype,
+            to=lambda *args, **kwargs: None,
+        )
+    )
 
     monkeypatch.setitem(sys.modules, "torch", fake_torch)
     monkeypatch.setitem(sys.modules, "diffusers", fake_diffusers)
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+    monkeypatch.setitem(sys.modules, "safetensors.torch", fake_safetensors_torch)
+    monkeypatch.setitem(
+        sys.modules,
+        "discoverex.adapters.outbound.models.layerdiffuse_transparent_vae",
+        fake_transparent_vae,
+    )
     monkeypatch.setitem(
         sys.modules,
         "discoverex.adapters.outbound.models.objects.layerdiffuse.rootonchair_sd15.loaders",
@@ -596,6 +619,10 @@ def test_load_pipeline_uses_base_vae_for_sdxl(
     monkeypatch.setattr(
         "discoverex.adapters.outbound.models.objects.layerdiffuse.load.configure_diffusers_pipeline",
         lambda pipe, **kwargs: pipe,
+    )
+    monkeypatch.setattr(
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.load._download_weight",
+        lambda **kwargs: Path(f"/tmp/{kwargs['filename']}"),
     )
 
     from discoverex.adapters.outbound.models.objects.layerdiffuse import load as layerdiffuse_load
@@ -619,8 +646,113 @@ def test_load_pipeline_uses_base_vae_for_sdxl(
     pipe = layerdiffuse_load.load_pipeline(model=model, handle=handle)
 
     assert isinstance(pipe, _FakePipe)
-    assert "downloads" not in calls
-    assert "load_lora_weights" in calls
+    assert "load_lora_weights" not in calls
+    assert "merged_state_dict" in calls
+
+
+def test_load_pipeline_uses_official_sd15_transparent_variant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: dict[str, object] = {}
+
+    class _FakeTransparentVAE:
+        config = SimpleNamespace(force_upcast=True)
+
+        @classmethod
+        def from_pretrained(cls, *args: object, **kwargs: object) -> "_FakeTransparentVAE":
+            calls["vae_from_pretrained"] = (args, kwargs)
+            return cls()
+
+        def set_transparent_decoder(self, state_dict: object) -> None:
+            calls["decoder_state_dict"] = state_dict
+
+    class _FakePipe:
+        def __init__(self) -> None:
+            self.unet = object()
+            self.scheduler = SimpleNamespace(config={"beta_schedule": "scaled_linear"})
+
+        @classmethod
+        def from_pretrained(cls, *args: object, **kwargs: object) -> "_FakePipe":
+            calls["pipe_from_pretrained"] = (args, kwargs)
+            return cls()
+
+    fake_torch = SimpleNamespace(float16="float16", float32="float32")
+
+    class _FakeSchedulerCls:
+        @staticmethod
+        def from_config(config: object, **kwargs: object) -> object:
+            return SimpleNamespace(config=config, kwargs=kwargs)
+
+    fake_diffusers = SimpleNamespace(
+        AutoencoderKL=object(),
+        DPMSolverMultistepScheduler=_FakeSchedulerCls,
+        EulerDiscreteScheduler=_FakeSchedulerCls,
+        StableDiffusionPipeline=_FakePipe,
+        StableDiffusionXLPipeline=_FakePipe,
+        UniPCMultistepScheduler=_FakeSchedulerCls,
+    )
+    fake_hf = SimpleNamespace(
+        hf_hub_download=lambda **kwargs: f"/tmp/{kwargs['filename']}"
+    )
+    fake_safetensors_torch = SimpleNamespace(load_file=lambda path: {"path": path})
+
+    def _fake_load_lora_to_unet(unet: object, model_path: str, frames: int = 1) -> None:
+        calls["custom_loader"] = (unet, model_path, frames)
+
+    fake_rootonchair_loader = SimpleNamespace(load_lora_to_unet=_fake_load_lora_to_unet)
+    fake_rootonchair_modules = SimpleNamespace(TransparentVAEDecoder=_FakeTransparentVAE)
+
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "diffusers", fake_diffusers)
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+    monkeypatch.setitem(sys.modules, "safetensors.torch", fake_safetensors_torch)
+    monkeypatch.setitem(
+        sys.modules,
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.rootonchair_sd15.loaders",
+        fake_rootonchair_loader,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.rootonchair_sd15.models.modules",
+        fake_rootonchair_modules,
+    )
+    monkeypatch.setattr(
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.load.configure_diffusers_pipeline",
+        lambda pipe, **kwargs: pipe,
+    )
+
+    from discoverex.adapters.outbound.models.objects.layerdiffuse import load as layerdiffuse_load
+
+    model = SimpleNamespace(
+        model_id="runwayml/stable-diffusion-v1-5",
+        pipeline_variant="sd15_layerdiffuse_transparent",
+        weights_repo="LayerDiffusion/layerdiffusion-v1",
+        transparent_decoder_weight_name="layer_sd15_vae_transparent_decoder.safetensors",
+        attn_weight_name="layer_sd15_transparent_attn.safetensors",
+        revision="main",
+        weights_cache_dir=".cache/layerdiffuse",
+        _layerdiffuse_applied=False,
+        offload_mode="sequential",
+        enable_attention_slicing=True,
+        enable_vae_slicing=True,
+        enable_vae_tiling=True,
+        enable_xformers_memory_efficient_attention=True,
+        enable_fp8_layerwise_casting=False,
+        enable_channels_last=True,
+        sampler="dpmpp_sde_karras",
+    )
+    handle = SimpleNamespace(dtype="float16")
+
+    pipe = layerdiffuse_load.load_pipeline(model=model, handle=handle)
+
+    assert isinstance(pipe, _FakePipe)
+    assert calls["vae_from_pretrained"][0] == ("runwayml/stable-diffusion-v1-5",)
+    assert calls["pipe_from_pretrained"][0] == ("runwayml/stable-diffusion-v1-5",)
+    assert calls["decoder_state_dict"] == {
+        "path": "/tmp/layer_sd15_vae_transparent_decoder.safetensors"
+    }
+    assert calls["custom_loader"][1] == "/tmp/layer_sd15_transparent_attn.safetensors"
+    assert calls["custom_loader"][2] == 1
 
 
 @pytest.mark.parametrize(

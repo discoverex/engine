@@ -139,7 +139,10 @@ def _offload_decode_stack(*, pipe: Any) -> None:
         import torch  # type: ignore
     except Exception:
         torch = None
-    for component in (getattr(pipe, "vae", None),):
+    for component in (
+        getattr(pipe, "_layerdiffuse_base_vae", None),
+        getattr(pipe, "vae", None),
+    ):
         if component is None:
             continue
         try:
@@ -157,29 +160,60 @@ def _prepare_decode_stack(*, pipe: Any, execution_device: Any) -> None:
     except Exception:
         torch = None
         remove_hook_from_module = None
-    vae = getattr(pipe, "vae", None)
-    if vae is None:
-        return
-    if callable(remove_hook_from_module):
+    for component in (
+        getattr(pipe, "_layerdiffuse_base_vae", None),
+        getattr(pipe, "vae", None),
+    ):
+        if component is None:
+            continue
+        if callable(remove_hook_from_module):
+            try:
+                remove_hook_from_module(component, recurse=True)
+            except Exception:
+                pass
         try:
-            remove_hook_from_module(vae, recurse=True)
+            component.to(execution_device)
         except Exception:
             pass
-    try:
-        vae.to(execution_device)
-    except Exception:
-        pass
     if torch is not None and torch.cuda.is_available():
         torch.cuda.empty_cache()
 
 
-def _decode_latents_to_rgba_images(*, pipe: Any, latents: Any) -> list[Image.Image]:
+def _decode_latents_to_results(*, model: Any, pipe: Any, latents: Any) -> list[LayerDiffuseGenerationResult]:
+    transparent_decoder = getattr(model, "_transparent_decoder", None)
+    base_vae = getattr(pipe, "_layerdiffuse_base_vae", None)
+    if transparent_decoder is not None and base_vae is not None:
+        try:
+            transparent_decoder.to(
+                device=getattr(base_vae, "device", getattr(pipe, "_execution_device", "cpu")),
+                dtype=getattr(base_vae, "dtype", None),
+            )
+        except Exception:
+            pass
+        latents_for_decode = latents / base_vae.config.scaling_factor
+        rgba_images, visualization_images = transparent_decoder(base_vae, latents_for_decode)
+        preview_decoded = base_vae.decode(latents_for_decode).sample
+        preview_images = _to_rgba_images(preview_decoded)
+        results: list[LayerDiffuseGenerationResult] = []
+        for preview_image, rgba_image, visualization_image in zip(
+            preview_images,
+            rgba_images,
+            visualization_images,
+            strict=True,
+        ):
+            transparent_rgba = Image.fromarray(rgba_image, mode="RGBA")
+            visualization_rgb = Image.fromarray(visualization_image, mode="RGB")
+            results.append(
+                LayerDiffuseGenerationResult(
+                    preview_rgb=preview_image.convert("RGB"),
+                    transparent_rgba=transparent_rgba,
+                    alpha_mask=transparent_rgba.getchannel("A"),
+                    visualization_rgb=visualization_rgb,
+                )
+            )
+        return results
     decoded = pipe.vae.decode(latents, return_dict=False)[0]
-    return _to_rgba_images(decoded)
-
-
-def _decode_latents_to_results(*, pipe: Any, latents: Any) -> list[LayerDiffuseGenerationResult]:
-    images = _decode_latents_to_rgba_images(pipe=pipe, latents=latents)
+    images = _to_rgba_images(decoded)
     results: list[LayerDiffuseGenerationResult] = []
     for image in images:
         rgba = image.convert("RGBA")
@@ -348,7 +382,7 @@ def generate_rgba(
         max_vram_gb=max_vram_gb,
     )
     _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
-    images = _decode_latents_to_results(pipe=pipe, latents=latents)
+    images = _decode_latents_to_results(model=model, pipe=pipe, latents=latents)
     image = images[0]
     _offload_decode_stack(pipe=pipe)
     return _coerce_generation_result(image)
@@ -389,6 +423,6 @@ def generate_rgba_batch(
         max_vram_gb=max_vram_gb,
     )
     _prepare_decode_stack(pipe=pipe, execution_device=execution_device)
-    images = _decode_latents_to_results(pipe=pipe, latents=latents)
+    images = _decode_latents_to_results(model=model, pipe=pipe, latents=latents)
     _offload_decode_stack(pipe=pipe)
     return images

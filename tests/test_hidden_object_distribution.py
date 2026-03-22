@@ -3,6 +3,7 @@ from __future__ import annotations
 from discoverex.application.use_cases.gen_verify.object_pipeline import (
     resolve_object_prompts,
 )
+from discoverex.application.use_cases.gen_verify.objects.prompts import compose_prompt
 from discoverex.application.use_cases.gen_verify.region_pipeline import (
     build_candidate_regions,
 )
@@ -30,3 +31,10 @@ def test_resolve_object_prompts_supports_multiple_objects() -> None:
 def test_resolve_object_prompts_pads_last_prompt() -> None:
     prompts = resolve_object_prompts('["banana", "key"]', total_regions=4)
     assert prompts == ["banana", "key", "key", "key"]
+
+
+def test_compose_prompt_joins_base_and_specific_prompt() -> None:
+    assert (
+        compose_prompt(base_prompt="isolated single object", prompt="butterfly")
+        == "isolated single object, butterfly"
+    )

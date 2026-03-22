@@ -88,6 +88,8 @@ def run(
     background_negative_prompt = str(args.get("background_negative_prompt", "") or "")
     object_prompt = str(args.get("object_prompt", "") or "")
     object_negative_prompt = str(args.get("object_negative_prompt", "") or "")
+    object_base_prompt = str(args.get("object_base_prompt", "") or "")
+    object_base_negative_prompt = str(args.get("object_base_negative_prompt", "") or "")
     object_generation_size = max(64, int(args.get("object_generation_size") or 512))
     final_prompt = str(args.get("final_prompt", "") or "")
     final_negative_prompt = str(args.get("final_negative_prompt", "") or "")
@@ -117,6 +119,8 @@ def run(
             regions=candidate_regions,
             object_prompt=object_prompt,
             object_negative_prompt=object_negative_prompt,
+            object_base_prompt=object_base_prompt,
+            object_base_negative_prompt=object_base_negative_prompt,
             object_generation_size=object_generation_size,
         )
     else:
@@ -131,6 +135,8 @@ def run(
             regions=placeholder_regions,
             object_prompt=object_prompt,
             object_negative_prompt=object_negative_prompt,
+            object_base_prompt=object_base_prompt,
+            object_base_negative_prompt=object_base_negative_prompt,
             object_generation_size=object_generation_size,
         )
         _stdout_debug("generate_verify_v2 object_generation_complete")
@@ -426,28 +432,33 @@ def _generate_objects(
     regions: list[Region],
     object_prompt: str,
     object_negative_prompt: str,
+    object_base_prompt: str,
+    object_base_negative_prompt: str,
     object_generation_size: int,
 ) -> dict[str, GeneratedObjectAsset]:
-    generated: dict[str, GeneratedObjectAsset] = {}
-    region_prompts = resolve_object_prompts(object_prompt, total_regions=len(regions))
-    for region, region_prompt in zip(regions, region_prompts, strict=True):
-        _stdout_debug(f"generate_verify_v2 object_region_load start region={region.region_id}")
-        handle = context.object_generator_model.load(context.model_versions.object_generator)
-        try:
-            generated.update(
-                generate_region_objects(
-                    context=context,
-                    scene_dir=scene_dir,
-                    regions=[region],
-                    object_handle=handle,
-                    object_prompt=region_prompt,
-                    object_negative_prompt=object_negative_prompt,
-                    object_generation_size=object_generation_size,
-                )
-            )
-        finally:
-            unload_model(context.object_generator_model)
-            _stdout_debug(f"generate_verify_v2 object_region_unload end region={region.region_id}")
+    if not regions:
+        return {}
+    _stdout_debug(
+        f"generate_verify_v2 object_region_load start count={len(regions)}"
+    )
+    handle = context.object_generator_model.load(context.model_versions.object_generator)
+    try:
+        generated = generate_region_objects(
+            context=context,
+            scene_dir=scene_dir,
+            regions=regions,
+            object_handle=handle,
+            object_prompt=object_prompt,
+            object_negative_prompt=object_negative_prompt,
+            object_base_prompt=object_base_prompt,
+            object_base_negative_prompt=object_base_negative_prompt,
+            object_generation_size=object_generation_size,
+        )
+    finally:
+        unload_model(context.object_generator_model)
+        _stdout_debug(
+            f"generate_verify_v2 object_region_unload end count={len(regions)}"
+        )
     return generated
 
 
