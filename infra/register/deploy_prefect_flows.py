@@ -9,7 +9,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, TypedDict, cast
+from uuid import UUID
 
+from prefect.client.orchestration import get_client
+from prefect.client.schemas.actions import DeploymentUpdate
 from prefect.settings import PREFECT_API_URL, temporary_settings
 
 from infra.register.branch_deployments import (
@@ -244,6 +247,36 @@ def _is_process_work_pool(work_pool_name: str) -> bool:
     return normalized.endswith("-process") or "process" in normalized
 
 
+def _process_pull_steps(*, work_pool_name: str) -> list[dict[str, dict[str, str]]] | None:
+    if not _is_process_work_pool(work_pool_name):
+        return None
+    working_dir = (
+        os.environ.get("DISCOVEREX_DEPLOY_WORKING_DIR", "").strip() or "/app"
+    )
+    return [
+        {
+            "prefect.deployments.steps.set_working_directory": {
+                "directory": working_dir,
+            }
+        }
+    ]
+
+
+def _update_process_deployment_pull_steps(
+    deployment_id: str,
+    *,
+    work_pool_name: str,
+) -> None:
+    process_pull_steps = _process_pull_steps(work_pool_name=work_pool_name)
+    if process_pull_steps is None:
+        return
+    with get_client(sync_client=True) as client:
+        client.update_deployment(
+            UUID(deployment_id),
+            DeploymentUpdate(pull_steps=process_pull_steps),
+        )
+
+
 def _validate_required_worker_env() -> None:
     missing = [
         name
@@ -290,8 +323,12 @@ def _deploy_embedded_flow(
     }
     if not _is_process_work_pool(work_pool_name):
         deploy_kwargs["image"] = image
-    deployment_id = sourced_flow.deploy(**deploy_kwargs)
-    return str(deployment_id)
+    deployment_id = str(sourced_flow.deploy(**deploy_kwargs))
+    _update_process_deployment_pull_steps(
+        deployment_id,
+        work_pool_name=work_pool_name,
+    )
+    return deployment_id
 
 
 def main() -> int:

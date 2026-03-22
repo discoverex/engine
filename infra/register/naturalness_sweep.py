@@ -83,16 +83,20 @@ def _load_scenarios(spec: dict[str, Any], sweep_path: Path) -> list[dict[str, st
 def _normalized_scenario(row: dict[str, Any], index: int) -> dict[str, str]:
     scenario_id = str(row.get("scenario_id", "")).strip() or f"scenario-{index:03d}"
     background_prompt = str(row.get("background_prompt", "")).strip()
+    background_asset_ref = str(row.get("background_asset_ref", "")).strip()
     object_prompt = str(row.get("object_prompt", "")).strip()
-    if not background_prompt or not object_prompt:
+    if (not background_prompt and not background_asset_ref) or not object_prompt:
         raise SystemExit(
-            f"scenario {scenario_id} requires background_prompt and object_prompt"
+            f"scenario {scenario_id} requires background_prompt or background_asset_ref, and object_prompt"
         )
     output = {
         "scenario_id": scenario_id,
-        "background_prompt": background_prompt,
         "object_prompt": object_prompt,
     }
+    if background_prompt:
+        output["background_prompt"] = background_prompt
+    if background_asset_ref:
+        output["background_asset_ref"] = background_asset_ref
     for key in (
         "background_negative_prompt",
         "object_negative_prompt",

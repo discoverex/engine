@@ -230,6 +230,20 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
     }
 
 
+def test_process_pull_steps_use_container_working_dir(monkeypatch: Any) -> None:
+    monkeypatch.setenv("DISCOVEREX_DEPLOY_WORKING_DIR", "/app")
+
+    assert deploy_flows._process_pull_steps(
+        work_pool_name="discoverex-fixed-process"
+    ) == [
+        {
+            "prefect.deployments.steps.set_working_directory": {
+                "directory": "/app"
+            }
+        }
+    ]
+
+
 def test_deployment_source_root_uses_env_override(monkeypatch: Any) -> None:
     monkeypatch.setenv("DISCOVEREX_DEPLOY_SOURCE_ROOT", "/app")
 
@@ -363,6 +377,7 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
 
 def test_deploy_embedded_flow_omits_image_for_process_pool(monkeypatch: Any) -> None:
     captured: dict[str, Any] = {}
+    updated: dict[str, Any] = {}
 
     class _FakeSourcedFlow:
         def deploy(self, **kwargs: Any) -> str:
@@ -378,6 +393,13 @@ def test_deploy_embedded_flow_omits_image_for_process_pool(monkeypatch: Any) -> 
     monkeypatch.setattr(deploy_flows, "_load_flow", lambda _entrypoint: _FakeFlow())
     monkeypatch.setattr(
         deploy_flows, "_deployment_source_root", lambda: "/tmp/discoverex-engine"
+    )
+    monkeypatch.setattr(
+        deploy_flows,
+        "_update_process_deployment_pull_steps",
+        lambda deployment_id, work_pool_name: updated.update(
+            {"deployment_id": deployment_id, "work_pool_name": work_pool_name}
+        ),
     )
     monkeypatch.setattr(
         deploy_flows,
@@ -407,6 +429,23 @@ def test_deploy_embedded_flow_omits_image_for_process_pool(monkeypatch: Any) -> 
         "env": {"PREFECT_API_URL": "https://prefect.example/api"},
         "working_dir": "/app",
     }
+    assert updated["deployment_id"] == "deployment-789"
+    assert updated["work_pool_name"] == "discoverex-fixed-process"
+
+
+class _FakeClientContext:
+    def __init__(self, updated: dict[str, Any]) -> None:
+        self._updated = updated
+
+    def __enter__(self) -> "_FakeClientContext":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:  # type: ignore[no-untyped-def]
+        _ = (exc_type, exc, tb)
+
+    def update_deployment(self, deployment_id: Any, deployment: Any) -> None:
+        self._updated["deployment_id"] = str(deployment_id)
+        self._updated["pull_steps"] = deployment.pull_steps
 
 
 def test_build_parser_marks_script_as_remote_source_registrar() -> None:
