@@ -85,25 +85,44 @@ def _normalized_scenario(row: dict[str, Any], index: int) -> dict[str, str]:
     background_prompt = str(row.get("background_prompt", "")).strip()
     background_asset_ref = str(row.get("background_asset_ref", "")).strip()
     object_prompt = str(row.get("object_prompt", "")).strip()
-    if (not background_prompt and not background_asset_ref) or not object_prompt:
+    object_image_ref = str(row.get("object_image_ref", "")).strip()
+    object_mask_ref = str(row.get("object_mask_ref", "")).strip()
+    raw_alpha_mask_ref = str(row.get("raw_alpha_mask_ref", "")).strip()
+    bbox = row.get("bbox")
+    has_fixed_object = bool(object_image_ref and object_mask_ref and isinstance(bbox, dict))
+    if (not background_prompt and not background_asset_ref) or (not object_prompt and not has_fixed_object):
         raise SystemExit(
-            f"scenario {scenario_id} requires background_prompt or background_asset_ref, and object_prompt"
+            f"scenario {scenario_id} requires background_prompt or background_asset_ref, and object_prompt unless fixed object assets are provided"
         )
     output = {
         "scenario_id": scenario_id,
-        "object_prompt": object_prompt,
     }
+    if object_prompt:
+        output["object_prompt"] = object_prompt
     if background_prompt:
         output["background_prompt"] = background_prompt
     if background_asset_ref:
         output["background_asset_ref"] = background_asset_ref
+    if object_image_ref:
+        output["object_image_ref"] = object_image_ref
+    if object_mask_ref:
+        output["object_mask_ref"] = object_mask_ref
+    if raw_alpha_mask_ref:
+        output["raw_alpha_mask_ref"] = raw_alpha_mask_ref
+    if has_fixed_object:
+        output["bbox"] = bbox
+    region_id = str(row.get("region_id", "")).strip()
+    if region_id:
+        output["region_id"] = region_id
     for key in (
         "background_negative_prompt",
         "object_negative_prompt",
         "final_prompt",
         "final_negative_prompt",
     ):
-        value = str(row.get(key, "")).strip()
+        value = row.get(key, "")
+        if isinstance(value, str):
+            value = value.strip()
         if value:
             output[key] = value
     scenario_overrides = str(row.get("scenario_overrides", "")).strip()

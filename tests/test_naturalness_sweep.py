@@ -221,3 +221,60 @@ variants:
     assert job["outputs_prefix"].startswith(
         "exp/discoverex-naturalness-tenpack-variants/tenpack-variants/"
     )
+
+
+def test_build_sweep_manifest_supports_fixed_replay_inputs(tmp_path: Path) -> None:
+    base_job_spec = tmp_path / "base.yaml"
+    base_job_spec.write_text(
+        """
+run_mode: repo
+engine: discoverex
+job_name: base
+inputs:
+  contract_version: v2
+  command: generate
+  config_name: generate
+  config_dir: conf
+  args:
+    background_prompt: old
+  overrides:
+    - profile=generator_pixart_gpu_v2_hidden_object
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    sweep_spec = tmp_path / "sweep.yaml"
+    sweep_spec.write_text(
+        f"""
+sweep_id: replay
+base_job_spec: {base_job_spec.name}
+experiment_name: discoverex-naturalness-replay
+scenarios:
+  - scenario_id: s1
+    background_asset_ref: /app/src/sample/fixed_fixtures/backgrounds/bg.png
+    object_image_ref: /app/src/sample/fixed_fixtures/objects/object.png
+    object_mask_ref: /app/src/sample/fixed_fixtures/objects/object.mask.png
+    raw_alpha_mask_ref: /app/src/sample/fixed_fixtures/objects/object.raw-alpha.png
+    object_prompt: key
+    region_id: replay-1
+    bbox:
+      x: 10
+      y: 20
+      w: 30
+      h: 40
+variants:
+  - variant_id: baseline
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = build_sweep_manifest(sweep_spec)
+
+    job = manifest["jobs"][0]["job_spec"]
+    assert job["inputs"]["args"]["object_image_ref"].endswith("object.png")
+    assert job["inputs"]["args"]["object_mask_ref"].endswith("object.mask.png")
+    assert job["inputs"]["args"]["raw_alpha_mask_ref"].endswith("object.raw-alpha.png")
+    assert job["inputs"]["args"]["bbox"] == {"x": 10, "y": 20, "w": 30, "h": 40}

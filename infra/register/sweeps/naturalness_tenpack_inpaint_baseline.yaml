@@ -9,5 +9,5 @@ fixed_overrides:
   - models.inpaint.pre_match_scale_ratio=[0.08,0.12]
   - models.inpaint.pre_match_variant_count=15
   - +models.inpaint.placement_grid_stride=18
-  - models.inpaint.edge_blend_strength=0.18
-  - models.inpaint.final_polish_strength=0.18
+  - models.inpaint.edge_blend_strength=0.2
+  - models.inpaint.final_polish_strength=0.2

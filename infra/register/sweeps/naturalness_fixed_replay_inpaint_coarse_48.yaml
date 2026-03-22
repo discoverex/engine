@@ -1,0 +1,597 @@
+sweep_id: naturalness-fixed-replay-inpaint-coarse-48
+search_stage: replay
+experiment_name: discoverex-naturalness-fixed-replay-inpaint-coarse-48
+base_job_spec: ../job_specs/prod-genver2-realvisxl5bg-realvisxl5obj-patchsimv2-ldho1-baseprompt-8gb.yaml
+fixed_overrides:
+  - adapters/tracker=mlflow_server
+scenarios:
+  - scenario_id: fixed-replay-001
+    background_asset_ref: /app/src/sample/fixed_fixtures/backgrounds/000-layer-base-scene-b64fe979a0f5.png
+    object_prompt: crystal wine glass
+    object_negative_prompt: (worst quality, low quality, illustration, 3d, 2d, painting, cartoons, sketch), open mouth
+    object_image_ref: /app/src/sample/fixed_fixtures/objects/fixed_object.selected.png
+    object_mask_ref: /app/src/sample/fixed_fixtures/objects/fixed_object.selected.mask.png
+    raw_alpha_mask_ref: /app/src/sample/fixed_fixtures/objects/fixed_object.selected.raw-alpha-mask.png
+    region_id: replay-region-001
+    bbox:
+      x: 814.0
+      y: 215.0
+      w: 72.0
+      h: 144.0
+variants:
+  - variant_id: c01
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c02
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c03
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c04
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c05
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c06
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c07
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c08
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c09
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c10
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c11
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c12
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c13
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c14
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c15
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c16
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c17
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c18
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c19
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c20
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c21
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c22
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c23
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c24
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c25
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c26
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c27
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c28
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c29
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c30
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c31
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c32
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=2
+  - variant_id: c33
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c34
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c35
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c36
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c37
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c38
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c39
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c40
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.95,1.05]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=6
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c41
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c42
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c43
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c44
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=5
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=6
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c45
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c46
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.14
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c47
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.14
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
+  - variant_id: c48
+    overrides:
+      - models.inpaint.overlay_alpha=0.55
+      - models.inpaint.pre_match_scale_ratio=[0.9,1.1]
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.composite_feather_px=1
