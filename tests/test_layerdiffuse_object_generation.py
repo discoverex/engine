@@ -428,7 +428,9 @@ def test_configure_scheduler_maps_dpmpp_sde_karras() -> None:
     configured = _configure_scheduler(
         scheduler=_FakeScheduler(),
         sampler_name="DPM++ SDE Karras",
-        scheduler_cls=_FakeSchedulerCls,
+        dpm_scheduler_cls=_FakeSchedulerCls,
+        unipc_scheduler_cls=object(),
+        euler_scheduler_cls=object(),
     )
 
     assert configured == "configured"
@@ -480,8 +482,10 @@ def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
 
     fake_diffusers = SimpleNamespace(
         DPMSolverMultistepScheduler=_FakeSchedulerCls,
+        EulerDiscreteScheduler=_FakeSchedulerCls,
         StableDiffusionPipeline=_FakePipe,
         StableDiffusionXLPipeline=_FakePipe,
+        UniPCMultistepScheduler=_FakeSchedulerCls,
     )
     fake_hf = SimpleNamespace(hf_hub_download=_fake_hf_hub_download)
     fake_safetensors_torch = SimpleNamespace(load_file=lambda path: {"path": path})
@@ -590,8 +594,10 @@ def test_load_pipeline_skips_transparent_decoder_when_disabled(
     fake_diffusers = SimpleNamespace(
         AutoencoderKL=_FakeAutoencoderKL,
         DPMSolverMultistepScheduler=_FakeSchedulerCls,
+        EulerDiscreteScheduler=_FakeSchedulerCls,
         StableDiffusionPipeline=_FakePipe,
         StableDiffusionXLPipeline=_FakePipe,
+        UniPCMultistepScheduler=_FakeSchedulerCls,
     )
     fake_hf = SimpleNamespace(hf_hub_download=_fake_hf_hub_download)
     fake_rootonchair_loader = SimpleNamespace(load_lora_to_unet=lambda *args, **kwargs: None)
@@ -633,3 +639,68 @@ def test_load_pipeline_skips_transparent_decoder_when_disabled(
     assert isinstance(pipe, _FakePipe)
     assert "downloads" not in calls
     assert "load_lora_weights" in calls
+
+
+@pytest.mark.parametrize(
+    ("sampler_name", "expected_cls", "expected_kwargs"),
+    [
+        (
+            "DPM++ SDE Karras",
+            "dpm",
+            {
+                "algorithm_type": "sde-dpmsolver++",
+                "use_karras_sigmas": True,
+                "solver_order": 2,
+            },
+        ),
+        (
+            "DPM++ SDE",
+            "dpm",
+            {
+                "algorithm_type": "sde-dpmsolver++",
+                "use_karras_sigmas": False,
+                "solver_order": 2,
+            },
+        ),
+        ("unipc", "unipc", {}),
+        ("euler", "euler", {}),
+    ],
+)
+def test_configure_scheduler_supports_requested_sampler_variants(
+    sampler_name: str,
+    expected_cls: str,
+    expected_kwargs: dict[str, object],
+) -> None:
+    calls: list[tuple[str, object, dict[str, object]]] = []
+
+    class _FakeScheduler:
+        config = {"beta_schedule": "scaled_linear"}
+
+    class _FakeDpmScheduler:
+        @staticmethod
+        def from_config(config: object, **kwargs: object) -> object:
+            calls.append(("dpm", config, dict(kwargs)))
+            return ("dpm", config, dict(kwargs))
+
+    class _FakeUniPCScheduler:
+        @staticmethod
+        def from_config(config: object, **kwargs: object) -> object:
+            calls.append(("unipc", config, dict(kwargs)))
+            return ("unipc", config, dict(kwargs))
+
+    class _FakeEulerScheduler:
+        @staticmethod
+        def from_config(config: object, **kwargs: object) -> object:
+            calls.append(("euler", config, dict(kwargs)))
+            return ("euler", config, dict(kwargs))
+
+    result = _configure_scheduler(
+        scheduler=_FakeScheduler(),
+        sampler_name=sampler_name,
+        dpm_scheduler_cls=_FakeDpmScheduler,
+        unipc_scheduler_cls=_FakeUniPCScheduler,
+        euler_scheduler_cls=_FakeEulerScheduler,
+    )
+
+    assert result == (expected_cls, {"beta_schedule": "scaled_linear"}, expected_kwargs)
+    assert calls == [(expected_cls, {"beta_schedule": "scaled_linear"}, expected_kwargs)]

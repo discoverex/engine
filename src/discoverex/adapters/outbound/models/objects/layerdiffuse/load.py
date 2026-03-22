@@ -14,8 +14,10 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
     import torch  # type: ignore
     from diffusers import (  # type: ignore
         DPMSolverMultistepScheduler,
+        EulerDiscreteScheduler,
         StableDiffusionPipeline,
         StableDiffusionXLPipeline,
+        UniPCMultistepScheduler,
     )
     from huggingface_hub import hf_hub_download  # type: ignore
     from .rootonchair_sd15.loaders import load_lora_to_unet
@@ -109,7 +111,9 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
         pipe.scheduler = _configure_scheduler(
             scheduler=scheduler,
             sampler_name=str(getattr(model, "sampler", "") or ""),
-            scheduler_cls=DPMSolverMultistepScheduler,
+            dpm_scheduler_cls=DPMSolverMultistepScheduler,
+            unipc_scheduler_cls=UniPCMultistepScheduler,
+            euler_scheduler_cls=EulerDiscreteScheduler,
         )
     _stdout_debug(
         "object_pipeline_ready "
@@ -139,20 +143,37 @@ def load_transparent_decoder(*, model: Any, handle: Any) -> Any:
     return LayerDiffuseTransparentDecoder()
 
 
-def _configure_scheduler(*, scheduler: Any, sampler_name: str, scheduler_cls: Any) -> Any:
+def _configure_scheduler(
+    *,
+    scheduler: Any,
+    sampler_name: str,
+    dpm_scheduler_cls: Any,
+    unipc_scheduler_cls: Any,
+    euler_scheduler_cls: Any,
+) -> Any:
     normalized = sampler_name.strip().lower().replace("+", "p").replace(" ", "_")
     if normalized in {"", "default"}:
         return scheduler
     if normalized in {
         "dpmpp_sde_karras",
-        "dpmpp_sde",
         "dpmpp_sde_2m_karras",
         "dpmpp_2m_sde_karras",
     }:
-        return scheduler_cls.from_config(
+        return dpm_scheduler_cls.from_config(
             scheduler.config,
             algorithm_type="sde-dpmsolver++",
             use_karras_sigmas=True,
             solver_order=2,
         )
+    if normalized in {"dpmpp_sde", "dpmpp_2m_sde"}:
+        return dpm_scheduler_cls.from_config(
+            scheduler.config,
+            algorithm_type="sde-dpmsolver++",
+            use_karras_sigmas=False,
+            solver_order=2,
+        )
+    if normalized in {"unipc", "unipc_multistep"}:
+        return unipc_scheduler_cls.from_config(scheduler.config)
+    if normalized in {"euler", "euler_discrete"}:
+        return euler_scheduler_cls.from_config(scheduler.config)
     raise ValueError(f"unsupported layerdiffuse sampler '{sampler_name}'")
