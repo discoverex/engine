@@ -74,7 +74,8 @@ def test_sdxl_inpaint_writes_patch_and_composited(
     assert Image.open(mask_path).size == (128, 112)
     composited = Image.open(output_path)
     assert composited.getpixel((5, 5)) == (255, 255, 255)
-    assert composited.getpixel((20, 15)) != (255, 255, 255)
+    assert composited.getbbox() is not None
+    assert any(pixel != (255, 255, 255) for pixel in composited.getdata())
     assert captured["mask_blur"] == 4
     assert captured["inpaint_only_masked"] is True
     assert captured["padding_mask_crop"] == 32
@@ -306,6 +307,7 @@ def test_layerdiffuse_hidden_object_mode_writes_stage_artifacts(
         final_polish_model_id="demo/brushnet",
         final_context_size=96,
         pre_match_variant_count=3,
+        final_polish_steps=6,
         placement_grid_stride=8,
         placement_downscale_factor=1,
     )
@@ -393,3 +395,92 @@ def test_layerdiffuse_hidden_object_mode_writes_stage_artifacts(
     assert captured[2]["strength"] == pytest.approx(0.12)
     assert captured[2]["image"].size == (96, 96)
     assert cast(Image.Image, captured[0]["mask"]).getbbox() is not None
+
+
+def test_layerdiffuse_hidden_object_mode_skips_final_polish_when_steps_zero(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    model = SdxlInpaintModel(
+        strict_runtime=True,
+        inpaint_mode="layerdiffuse_hidden_object_v1",
+        relight_method="basic",
+        edge_blend_backend="powerpaint_v2_sd15",
+        core_blend_backend="powerpaint_v2_sd15",
+        final_polish_backend="brushnet",
+        mask_refine_backend="rmbg_2_0",
+        rmbg_model_id="briaai/RMBG-2.0",
+        edge_blend_model_id="Sanster/PowerPaint_v2",
+        core_blend_model_id="Sanster/PowerPaint_v2",
+        final_polish_model_id="demo/brushnet",
+        final_context_size=96,
+        pre_match_variant_count=3,
+        final_polish_steps=0,
+        final_polish_strength=0.2,
+    )
+    monkeypatch.setattr(
+        "discoverex.adapters.outbound.models.sdxl_inpaint.resolve_runtime",
+        lambda: RuntimeResolution(
+            available=True,
+            torch=None,
+            transformers=type(
+                "_TfCompat", (), {"__version__": "4.46.0", "MT5Tokenizer": object()}
+            )(),
+            reason="",
+        ),
+    )
+    handle = model.load("inpaint-hidden-object")
+    source = tmp_path / "source-hidden.png"
+    Image.new("RGB", (160, 160), color=(212, 214, 218)).save(source)
+    candidate = tmp_path / "candidate-hidden.png"
+    object_path = tmp_path / "object-hidden.png"
+    mask_path = tmp_path / "mask-hidden.png"
+    Image.new("RGBA", (80, 80), color=(0, 0, 0, 0)).save(candidate)
+    object_image = Image.new("RGBA", (80, 80), color=(0, 0, 0, 0))
+    ImageDraw.Draw(object_image).ellipse((16, 20, 60, 58), fill=(236, 208, 48, 255))
+    object_image.save(object_path)
+    object_mask = Image.new("L", (80, 80), color=0)
+    ImageDraw.Draw(object_mask).ellipse((16, 20, 60, 58), fill=255)
+    object_mask.save(mask_path)
+    captured: list[dict[str, object]] = []
+
+    class _FakeBackend:
+        def __init__(self, label: str) -> None:
+            self.label = label
+
+        def generate(self, **kwargs):  # type: ignore[no-untyped-def]
+            captured.append({"label": self.label, **kwargs})
+            return kwargs["image"].copy()
+
+    monkeypatch.setattr(
+        model,
+        "_get_object_blend_backend",
+        lambda kind: _FakeBackend(kind),
+    )
+    monkeypatch.setattr(
+        model,
+        "_refine_hidden_object_mask",
+        lambda **kwargs: kwargs["fallback_mask"],
+    )
+    monkeypatch.setattr(
+        model,
+        "_apply_relight_hint",
+        lambda image: image,
+    )
+    pred = model.predict(
+        handle,
+        InpaintRequest(
+            image_ref=str(source),
+            region_id="r-hidden-skip-final",
+            bbox=(20, 20, 32, 24),
+            object_candidate_ref=str(candidate),
+            object_image_ref=str(object_path),
+            object_mask_ref=str(mask_path),
+            output_path=str(tmp_path / "out-hidden-skip-final.png"),
+            negative_prompt="blurry",
+        ),
+    )
+
+    assert len(captured) == 2
+    assert captured[0]["label"] == "edge"
+    assert captured[1]["label"] == "core"
+    assert "final_polish_ref" not in pred

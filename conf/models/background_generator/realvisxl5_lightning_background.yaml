@@ -18,12 +18,12 @@ strict_runtime: true
 sampler: dpmpp_sde_karras
 hires_sampler: dpmpp_sde_karras
 default_prompt: "cinematic hidden object puzzle background"
-default_negative_prompt: "(worst quality, low quality, illustration, 3d, 2d, painting, cartoons, sketch), open mouth"
+default_negative_prompt: "(worst quality, low quality, blurry, noise, grain), illustration, painting, 3d, 2d, cartoon, sketch, anime, unrealistic, distorted, deformed, bad anatomy, bad perspective, oversaturated, washed out, jpeg artifacts, text, watermark, logo, open mouth"
 default_num_inference_steps: 6
 default_guidance_scale: 1.5
 hires_num_inference_steps: 4
 hires_guidance_scale: 1.5
-hires_strength: 0.5
+hires_strength: 0.4
 canvas_upscaler_model_name: RealESRGAN_x4plus
 canvas_upscaler_scale: 4
 canvas_upscaler_repo_id: ""

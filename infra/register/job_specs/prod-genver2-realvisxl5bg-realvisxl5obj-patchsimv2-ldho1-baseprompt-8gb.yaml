@@ -10,8 +10,8 @@ inputs:
   config_name: generate
   config_dir: conf
   args:
-    background_prompt: stormy harbor at dusk, cinematic hidden object puzzle background, painterly realism, moody maritime lighting, weathered textures, cohesive color palette
-    background_negative_prompt: (worst quality, low quality, illustration, 3d, 2d, painting, cartoons, sketch), open mouth
+    background_prompt: stormy harbor at dusk, cinematic, ultra realistic, highly detailed, natural lighting, dramatic clouds, wet surfaces, volumetric lighting, sharp focus, depth, clean composition, no characters, hidden object puzzle background
+    background_negative_prompt: (worst quality, low quality, blurry, noise, grain), illustration, painting, 3d, 2d, cartoon, sketch, anime, unrealistic, distorted, deformed, bad anatomy, bad perspective, oversaturated, washed out, jpeg artifacts, text, watermark, logo, open mouth
     object_base_prompt: isolated single object on a transparent background
     object_prompt: butterfly | antique brass key | crystal wine glass
     object_base_negative_prompt: opaque background, solid background, busy scene, environment, multiple objects, floor, wall, clutter
@@ -38,7 +38,7 @@ inputs:
     - models.background_upscaler.hires_sampler=dpmpp_sde_karras
     - models.background_upscaler.hires_num_inference_steps=4
     - models.background_upscaler.hires_guidance_scale=1.5
-    - models.background_upscaler.hires_strength=0.5
+    - models.background_upscaler.hires_strength=0.4
     - runtime.model_runtime.batch_size=1
     - models/object_generator=layerdiffuse_realvisxl5_lightning
     - models.object_generator.model_id=SG161222/RealVisXL_V5.0_Lightning

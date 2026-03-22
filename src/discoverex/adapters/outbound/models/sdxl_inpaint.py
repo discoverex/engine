@@ -574,21 +574,24 @@ class SdxlInpaintModel:
             guidance_scale=self.core_blend_cfg,
             backend_kind="core",
         )
-        final_stage = self._run_object_blend_pass(
-            handle=handle,
-            source_image=core_stage["composited"],
-            target_bbox=placement_bbox,
-            localized_mask=placement_object_mask,
-            prompt=(
-                "perform a light final polish so the hidden object feels embedded in "
-                "the scene without changing its identity"
-            ),
-            negative_prompt=request.negative_prompt or self.default_negative_prompt,
-            strength=self.final_polish_strength,
-            num_inference_steps=self.final_polish_steps,
-            guidance_scale=self.final_polish_cfg,
-            backend_kind="final",
-        )
+        final_stage = core_stage
+        final_patch_path: Path | None = None
+        if int(self.final_polish_steps) >= 1 and float(self.final_polish_strength) > 0.0:
+            final_stage = self._run_object_blend_pass(
+                handle=handle,
+                source_image=core_stage["composited"],
+                target_bbox=placement_bbox,
+                localized_mask=placement_object_mask,
+                prompt=(
+                    "perform a light final polish so the hidden object feels embedded in "
+                    "the scene without changing its identity"
+                ),
+                negative_prompt=request.negative_prompt or self.default_negative_prompt,
+                strength=self.final_polish_strength,
+                num_inference_steps=self.final_polish_steps,
+                guidance_scale=self.final_polish_cfg,
+                backend_kind="final",
+            )
         processed_object, processed_mask = self._extract_processed_object_layer(
             composited=final_stage["composited"],
             target_bbox=placement_bbox,
@@ -616,13 +619,14 @@ class SdxlInpaintModel:
         core_patch_path = save_image(
             core_stage["generated_patch"], output.with_suffix(".core-blend.png")
         )
-        final_patch_path = save_image(
-            final_stage["generated_patch"], output.with_suffix(".final-polish.png")
-        )
+        if final_stage is not core_stage:
+            final_patch_path = save_image(
+                final_stage["generated_patch"], output.with_suffix(".final-polish.png")
+            )
         candidate_ref = request.object_candidate_ref or request.object_image_ref
         if candidate_ref is None:
             raise ValueError("generated object candidate ref is required")
-        return {
+        result = {
             "patch": patch_path,
             "candidate": Path(str(candidate_ref)),
             "object": refined_object_path,
@@ -636,7 +640,6 @@ class SdxlInpaintModel:
             "core_mask": core_mask_path,
             "edge_blend": edge_patch_path,
             "core_blend": core_patch_path,
-            "final_polish": final_patch_path,
             "variant_manifest": variant_manifest_path,
             "selected_variant": selected_variant_path,
             "selected_bbox": placement_bbox,
@@ -644,6 +647,9 @@ class SdxlInpaintModel:
             "placement_variant_id": selected_variant["id"],
             "mask_source": self.mask_refine_backend or "layerdiffuse_alpha_first",
         }
+        if final_patch_path is not None:
+            result["final_polish"] = final_patch_path
+        return result
 
     def _predict_with_similarity_overlay_v2(
         self,

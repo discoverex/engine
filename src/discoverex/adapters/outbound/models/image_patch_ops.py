@@ -76,10 +76,8 @@ def apply_alpha_patch_with_opacity(
     *,
     opacity: float,
 ) -> Any:
-    left, top, right, bottom = bbox
-    region_w = max(1, right - left)
-    region_h = max(1, bottom - top)
-    rgba_patch = patch.convert("RGBA").resize((region_w, region_h))
+    left, top, _, _ = bbox
+    rgba_patch = patch.convert("RGBA")
     if opacity < 1.0:
         alpha = rgba_patch.getchannel("A").point(
             lambda value: max(0, min(255, int(round(value * max(0.0, opacity)))))

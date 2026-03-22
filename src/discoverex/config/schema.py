@@ -63,7 +63,7 @@ class PatchSimilarityConfig(BaseModel):
     lbp_weight: float = 0.20
     gabor_weight: float = 0.0
     hog_weight: float = 0.25
-    top_k_candidates: int = 16
+    top_k_candidates: int = 14
     lbp_points: int = 16
     lbp_radius: int = 2
     gabor_frequencies: list[float] = Field(default_factory=lambda: [0.12, 0.2])
