@@ -1,0 +1,20 @@
+sweep_id: objectgen-realvisxl5-fixed-background-smoke
+search_stage: smoke
+experiment_name: discoverex-objectgen-fixed-bg-smoke
+base_job_spec: ../job_specs/prod-genver2-pixart-realvisxl5-patchsimv2-ldho1-8gb.yaml
+fixed_overrides:
+  - adapters/tracker=mlflow_server
+scenarios:
+  - scenario_id: fixed-bg-001
+    background_asset_ref: /app/src/sample/fixed_fixtures/backgrounds/000-layer-base-scene-b64fe979a0f5.png
+    object_prompt: butterfly | antique brass key | crystal wine glass
+    object_negative_prompt: blurry, low quality, artifact
+    final_prompt: polished playable hidden object scene, keep inserted objects matched to the background painting style, lighting direction, palette, texture, and scene atmosphere
+    final_negative_prompt: blurry, low quality, artifact
+parameters:
+  models.object_generator.default_guidance_scale: ["2.0", "4.0"]
+  models.object_generator.default_num_inference_steps: ["20"]
+  models.object_generator.default_prompt:
+    - "'isolated single opaque object on a transparent background'"
+  models.object_generator.default_negative_prompt:
+    - "'transparent object, translucent object, semi-transparent object, opaque background, solid background, busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact'"

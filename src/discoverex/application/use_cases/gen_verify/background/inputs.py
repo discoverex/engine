@@ -31,6 +31,8 @@ def build_background_from_inputs(
     negative_prompt = (background_negative_prompt or "").strip()
 
     if prompt:
+        if fx_handle is None:
+            raise ValueError("background prompt mode requires fx_handle")
         return _build_generated_background(
             context=context,
             scene_dir=scene_dir,

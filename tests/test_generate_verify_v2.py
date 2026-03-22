@@ -14,6 +14,7 @@ from discoverex.application.use_cases.gen_verify.objects.types import (
 from discoverex.application.use_cases.gen_verify.types import RegionPromptRecord
 from discoverex.application.use_cases.generate_verify_v2 import (
     _bucket_patch_size,
+    _build_background,
     _build_object_variants,
     _crop_object_for_patch_selection,
     _find_best_patch,
@@ -516,3 +517,44 @@ def test_validate_region_outputs_requires_every_region_record(tmp_path: Path) ->
         assert "missing candidate payload region=r-3" in str(exc)
     else:
         raise AssertionError("expected RuntimeError")
+
+
+def test_build_background_skips_generator_and_upscaler_for_asset_ref_only(
+    tmp_path: Path, monkeypatch
+) -> None:
+    background_source = tmp_path / "background.png"
+    Image.new("RGBA", (32, 32), (255, 255, 255, 255)).save(background_source)
+    load_calls: list[str] = []
+    unload_calls: list[object] = []
+
+    class _NeverLoadModel:
+        def load(self, version):  # type: ignore[no-untyped-def]
+            load_calls.append(str(version))
+            raise AssertionError("model load should be skipped")
+
+    monkeypatch.setattr(
+        "discoverex.application.use_cases.generate_verify_v2.unload_model",
+        lambda model: unload_calls.append(model),
+    )
+
+    context = SimpleNamespace(
+        background_generator_model=_NeverLoadModel(),
+        background_upscaler_model=_NeverLoadModel(),
+        model_versions=SimpleNamespace(
+            background_generator="bg-gen-v1", background_upscaler="bg-up-v1"
+        ),
+        runtime=SimpleNamespace(width=32, height=32),
+    )
+
+    background, prompt_record = _build_background(
+        context=context,
+        scene_dir=tmp_path / "scene",
+        background_asset_ref=str(background_source),
+        background_prompt=None,
+        background_negative_prompt=None,
+    )
+
+    assert load_calls == []
+    assert unload_calls == []
+    assert prompt_record.mode == "asset_ref"
+    assert background.asset_ref.endswith("background.png")

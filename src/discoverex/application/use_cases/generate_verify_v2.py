@@ -316,40 +316,53 @@ def _build_background(
     background_prompt: str | None,
     background_negative_prompt: str | None,
 ) -> tuple[Background, PromptStageRecord]:
-    handle = context.background_generator_model.load(
-        context.model_versions.background_generator
-    )
-    try:
+    prompt = (background_prompt or "").strip()
+    if prompt:
+        handle = context.background_generator_model.load(
+            context.model_versions.background_generator
+        )
+        try:
+            background, prompt_record = build_background_from_inputs(
+                context=context,
+                scene_dir=scene_dir,
+                fx_handle=handle,
+                background_asset_ref=background_asset_ref,
+                background_prompt=background_prompt,
+                background_negative_prompt=background_negative_prompt,
+            )
+        finally:
+            unload_model(context.background_generator_model)
+        handle = context.background_upscaler_model.load(
+            context.model_versions.background_upscaler
+        )
+        try:
+            background = apply_background_canvas_upscale_if_needed(
+                background=background,
+                context=context,
+                scene_dir=scene_dir,
+                upscaler_handle=handle,
+                prompt=prompt,
+                negative_prompt=(background_negative_prompt or "").strip(),
+            )
+            background = apply_background_detail_reconstruction_if_needed(
+                background=background,
+                context=context,
+                scene_dir=scene_dir,
+                upscaler_handle=handle,
+                prompt=prompt,
+                negative_prompt=(background_negative_prompt or "").strip(),
+            )
+        finally:
+            unload_model(context.background_upscaler_model)
+    else:
         background, prompt_record = build_background_from_inputs(
             context=context,
             scene_dir=scene_dir,
-            fx_handle=handle,
+            fx_handle=None,
             background_asset_ref=background_asset_ref,
             background_prompt=background_prompt,
             background_negative_prompt=background_negative_prompt,
         )
-    finally:
-        unload_model(context.background_generator_model)
-    handle = context.background_upscaler_model.load(context.model_versions.background_upscaler)
-    try:
-        background = apply_background_canvas_upscale_if_needed(
-            background=background,
-            context=context,
-            scene_dir=scene_dir,
-            upscaler_handle=handle,
-            prompt=(background_prompt or "").strip(),
-            negative_prompt=(background_negative_prompt or "").strip(),
-        )
-        background = apply_background_detail_reconstruction_if_needed(
-            background=background,
-            context=context,
-            scene_dir=scene_dir,
-            upscaler_handle=handle,
-            prompt=(background_prompt or "").strip(),
-            negative_prompt=(background_negative_prompt or "").strip(),
-        )
-    finally:
-        unload_model(context.background_upscaler_model)
     _materialize_background_asset(background=background, scene_dir=scene_dir)
     return background, prompt_record
 

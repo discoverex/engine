@@ -106,6 +106,16 @@ def _build_background_stage(
     background_prompt: str | None,
     background_negative_prompt: str | None,
 ) -> tuple[Background, PromptStageRecord]:
+    prompt = (background_prompt or "").strip()
+    if not prompt:
+        return build_background_from_inputs(
+            context=context,
+            scene_dir=scene_dir,
+            fx_handle=None,
+            background_asset_ref=background_asset_ref,
+            background_prompt=background_prompt,
+            background_negative_prompt=background_negative_prompt,
+        )
     handle = context.background_generator_model.load(
         context.model_versions.background_generator
     )
@@ -131,6 +141,8 @@ def _background_canvas_upscale_stage(
     background_prompt: str | None,
     background_negative_prompt: str | None,
 ) -> Background:
+    if not (background_prompt or "").strip():
+        return background
     handle = context.background_upscaler_model.load(
         context.model_versions.background_upscaler
     )
@@ -156,6 +168,8 @@ def _background_detail_reconstruct_stage(
     background_prompt: str | None,
     background_negative_prompt: str | None,
 ) -> Background:
+    if not (background_prompt or "").strip():
+        return background
     handle = context.background_upscaler_model.load(
         context.model_versions.background_upscaler
     )
