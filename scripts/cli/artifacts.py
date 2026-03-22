@@ -459,15 +459,13 @@ def _download_run_bundle(
 
 
 def _read_json_object_uri(env: dict[str, str], object_uri: str) -> dict[str, Any] | list[Any]:
-    bucket, key = _parse_s3_uri(object_uri)
-    payload = _s3_client(env).get_object(Bucket=bucket, Key=key)["Body"].read()
+    payload = _read_object_bytes(env, object_uri)
     return json.loads(payload.decode("utf-8"))
 
 
 def _download_object_uri(env: dict[str, str], object_uri: str, destination: Path) -> None:
-    bucket, key = _parse_s3_uri(object_uri)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    _s3_client(env).download_file(bucket, key, str(destination))
+    destination.write_bytes(_read_object_bytes(env, object_uri))
 
 
 def _parse_s3_uri(object_uri: str) -> tuple[str, str]:
@@ -494,3 +492,36 @@ def _s3_client(env: dict[str, str]) -> Any:
         aws_secret_access_key=env.get("AWS_SECRET_ACCESS_KEY", "").strip() or None,
         region_name=env.get("AWS_DEFAULT_REGION", "").strip() or "us-east-1",
     )
+
+
+def _read_object_bytes(env: dict[str, str], object_uri: str) -> bytes:
+    try:
+        bucket, key = _parse_s3_uri(object_uri)
+        return _s3_client(env).get_object(Bucket=bucket, Key=key)["Body"].read()
+    except Exception:
+        public_url = _public_object_url(env, object_uri)
+        req = request.Request(public_url, method="GET", headers=_public_headers(env))
+        with request.urlopen(req, timeout=60) as resp:
+            return resp.read()
+
+
+def _public_object_url(env: dict[str, str], object_uri: str) -> str:
+    bucket, key = _parse_s3_uri(object_uri)
+    base_url = (
+        env.get("MINIO_PUBLIC_BASE_URL", "").strip().rstrip("/")
+        or env.get("STORAGE_API_URL", "").strip().rstrip("/") + "/objects"
+    )
+    if not base_url:
+        raise RuntimeError("missing MINIO_PUBLIC_BASE_URL or STORAGE_API_URL")
+    quoted_key = parse.quote(key, safe="/")
+    return f"{base_url}/{bucket}/{quoted_key}"
+
+
+def _public_headers(env: dict[str, str]) -> dict[str, str]:
+    headers = {"User-Agent": _USER_AGENT}
+    cf_id = env.get("CF_ACCESS_CLIENT_ID", "").strip()
+    cf_secret = env.get("CF_ACCESS_CLIENT_SECRET", "").strip()
+    if cf_id and cf_secret:
+        headers["CF-Access-Client-Id"] = cf_id
+        headers["CF-Access-Client-Secret"] = cf_secret
+    return headers

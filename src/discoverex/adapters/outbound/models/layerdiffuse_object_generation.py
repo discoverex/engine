@@ -53,6 +53,7 @@ class LayerDiffuseObjectGenerationModel:
         enable_fp8_layerwise_casting: bool = False,
         enable_channels_last: bool = False,
         sampler: str = "dpmpp_sde_karras",
+        use_transparent_decoder: bool = True,
         default_prompt: str = "isolated single object on a transparent background",
         default_negative_prompt: str = "busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact",
         default_num_inference_steps: int = 30,
@@ -77,6 +78,7 @@ class LayerDiffuseObjectGenerationModel:
         self.enable_fp8_layerwise_casting = enable_fp8_layerwise_casting
         self.enable_channels_last = enable_channels_last
         self.sampler = sampler
+        self.use_transparent_decoder = use_transparent_decoder
         self.default_prompt = default_prompt
         self.default_negative_prompt = default_negative_prompt
         self.default_num_inference_steps = default_num_inference_steps

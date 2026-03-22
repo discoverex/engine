@@ -41,6 +41,27 @@ def test_lightning_object_generator_config_loads() -> None:
     )
 
 
+def test_lightning_base_vae_object_generator_config_loads() -> None:
+    cfg = load_pipeline_config(
+        config_name="generate",
+        config_dir="conf",
+        overrides=["models/object_generator=layerdiffuse_realvisxl5_lightning_basevae"],
+    )
+    payload = cfg.models.object_generator.model_dump(mode="python")
+    assert payload["model_id"] == "SG161222/RealVisXL_V5.0_Lightning"
+    assert payload["use_transparent_decoder"] is False
+
+
+def test_single_object_base_vae_debug_flow_config_loads() -> None:
+    cfg = load_pipeline_config(
+        config_name="generate",
+        config_dir="conf",
+        overrides=["flows/generate=single_object_base_vae_debug"],
+    )
+    assert cfg.flows is not None
+    assert cfg.flows.generate.target.endswith("generate_single_object_debug")
+
+
 def test_single_object_debug_run_writes_debug_exports_and_manifest(
     tmp_path: Path,
     monkeypatch,

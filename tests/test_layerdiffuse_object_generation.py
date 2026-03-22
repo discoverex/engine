@@ -551,3 +551,85 @@ def test_sd15_load_pipeline_uses_custom_rootonchair_loader(
     assert calls["custom_loader"][1] == "/tmp/layer_sd15_transparent_attn.safetensors"
     assert calls["custom_loader"][2] == 1
     assert calls["configure"]["offload_mode"] == "sequential"
+
+
+def test_load_pipeline_skips_transparent_decoder_when_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: dict[str, object] = {}
+
+    class _FakeAutoencoderKL:
+        @classmethod
+        def from_pretrained(cls, *args: object, **kwargs: object) -> "_FakeAutoencoderKL":
+            calls["vae_from_pretrained"] = (args, kwargs)
+            return cls()
+
+    class _FakePipe:
+        def __init__(self) -> None:
+            self.unet = object()
+
+        @classmethod
+        def from_pretrained(cls, *args: object, **kwargs: object) -> "_FakePipe":
+            calls["pipe_from_pretrained"] = (args, kwargs)
+            return cls()
+
+        def load_lora_weights(self, *args: object, **kwargs: object) -> None:
+            calls["load_lora_weights"] = (args, kwargs)
+
+    def _fake_hf_hub_download(*, repo_id: str, filename: str, cache_dir: str) -> str:
+        calls.setdefault("downloads", []).append((repo_id, filename, cache_dir))
+        return f"/tmp/{filename}"
+
+    fake_torch = SimpleNamespace(float16="float16", float32="float32")
+
+    class _FakeSchedulerCls:
+        @staticmethod
+        def from_config(config: object, **kwargs: object) -> object:
+            return SimpleNamespace(config=config, kwargs=kwargs)
+
+    fake_diffusers = SimpleNamespace(
+        AutoencoderKL=_FakeAutoencoderKL,
+        DPMSolverMultistepScheduler=_FakeSchedulerCls,
+        StableDiffusionPipeline=_FakePipe,
+        StableDiffusionXLPipeline=_FakePipe,
+    )
+    fake_hf = SimpleNamespace(hf_hub_download=_fake_hf_hub_download)
+    fake_rootonchair_loader = SimpleNamespace(load_lora_to_unet=lambda *args, **kwargs: None)
+
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "diffusers", fake_diffusers)
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+    monkeypatch.setitem(
+        sys.modules,
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.rootonchair_sd15.loaders",
+        fake_rootonchair_loader,
+    )
+    monkeypatch.setattr(
+        "discoverex.adapters.outbound.models.objects.layerdiffuse.load.configure_diffusers_pipeline",
+        lambda pipe, **kwargs: pipe,
+    )
+
+    from discoverex.adapters.outbound.models.objects.layerdiffuse import load as layerdiffuse_load
+
+    model = SimpleNamespace(
+        model_id="SG161222/RealVisXL_V5.0_Lightning",
+        revision="main",
+        weights_cache_dir=".cache/layerdiffuse",
+        _layerdiffuse_applied=False,
+        offload_mode="none",
+        enable_attention_slicing=True,
+        enable_vae_slicing=True,
+        enable_vae_tiling=True,
+        enable_xformers_memory_efficient_attention=True,
+        enable_fp8_layerwise_casting=False,
+        enable_channels_last=True,
+        sampler="dpmpp_sde_karras",
+        use_transparent_decoder=False,
+    )
+    handle = SimpleNamespace(dtype="float16")
+
+    pipe = layerdiffuse_load.load_pipeline(model=model, handle=handle)
+
+    assert isinstance(pipe, _FakePipe)
+    assert "downloads" not in calls
+    assert "load_lora_weights" in calls

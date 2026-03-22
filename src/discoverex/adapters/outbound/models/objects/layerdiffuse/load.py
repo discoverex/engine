@@ -18,18 +18,13 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
         StableDiffusionXLPipeline,
     )
     from huggingface_hub import hf_hub_download  # type: ignore
-    from safetensors.torch import load_file  # type: ignore
-    from .rootonchair_vae import TransparentVAEDecoder
     from .rootonchair_sd15.loaders import load_lora_to_unet
 
     torch_dtype = torch.float32 if "32" in handle.dtype else torch.float16
     is_sdxl = "xl" in str(model.model_id).lower() or "sdxl" in str(model.model_id).lower()
+    use_transparent_decoder = bool(getattr(model, "use_transparent_decoder", True))
     if is_sdxl:
-        transparent_vae = TransparentVAEDecoder.from_pretrained(
-            "madebyollin/sdxl-vae-fp16-fix",
-            torch_dtype=torch_dtype,
-        )
-        decoder_filename = "vae_transparent_decoder.safetensors"
+        vae_model_id = "madebyollin/sdxl-vae-fp16-fix"
         pipeline_cls = StableDiffusionXLPipeline
         pipeline_kwargs: dict[str, Any] = {
             "revision": model.revision,
@@ -41,12 +36,7 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
         lora_repo = "rootonchair/diffuser_layerdiffuse"
         lora_weight_name = "diffuser_layer_xl_transparent_attn.safetensors"
     else:
-        transparent_vae = TransparentVAEDecoder.from_pretrained(
-            model.model_id,
-            subfolder="vae",
-            torch_dtype=torch_dtype,
-        )
-        decoder_filename = "layer_sd15_vae_transparent_decoder.safetensors"
+        vae_model_id = model.model_id
         pipeline_cls = StableDiffusionPipeline
         pipeline_kwargs = {
             "torch_dtype": torch_dtype,
@@ -54,16 +44,47 @@ def load_pipeline(*, model: Any, handle: Any) -> Any:
         }
         lora_repo = "LayerDiffusion/layerdiffusion-v1"
         lora_weight_name = "layer_sd15_transparent_attn.safetensors"
-    transparent_vae.config.force_upcast = False
-    decoder_path = hf_hub_download(
-        repo_id="LayerDiffusion/layerdiffusion-v1",
-        filename=decoder_filename,
-        cache_dir=model.weights_cache_dir,
-    )
-    transparent_vae.set_transparent_decoder(load_file(decoder_path))
+    if use_transparent_decoder:
+        from safetensors.torch import load_file  # type: ignore
+        from .rootonchair_vae import TransparentVAEDecoder
+
+        if is_sdxl:
+            vae = TransparentVAEDecoder.from_pretrained(
+                vae_model_id,
+                torch_dtype=torch_dtype,
+            )
+            decoder_filename = "vae_transparent_decoder.safetensors"
+        else:
+            vae = TransparentVAEDecoder.from_pretrained(
+                vae_model_id,
+                subfolder="vae",
+                torch_dtype=torch_dtype,
+            )
+            decoder_filename = "layer_sd15_vae_transparent_decoder.safetensors"
+        vae.config.force_upcast = False
+        decoder_path = hf_hub_download(
+            repo_id="LayerDiffusion/layerdiffusion-v1",
+            filename=decoder_filename,
+            cache_dir=model.weights_cache_dir,
+        )
+        vae.set_transparent_decoder(load_file(decoder_path))
+    else:
+        from diffusers import AutoencoderKL  # type: ignore
+
+        if is_sdxl:
+            vae = AutoencoderKL.from_pretrained(
+                vae_model_id,
+                torch_dtype=torch_dtype,
+            )
+        else:
+            vae = AutoencoderKL.from_pretrained(
+                vae_model_id,
+                subfolder="vae",
+                torch_dtype=torch_dtype,
+            )
     pipe = pipeline_cls.from_pretrained(
         model.model_id,
-        vae=transparent_vae,
+        vae=vae,
         **pipeline_kwargs,
     )
     if not model._layerdiffuse_applied:
@@ -113,6 +134,8 @@ def load_transparent_decoder(*, model: Any, handle: Any) -> Any:
     from .transparent_decode import LayerDiffuseTransparentDecoder
 
     _ = (model, handle)
+    if not bool(getattr(model, "use_transparent_decoder", True)):
+        return None
     return LayerDiffuseTransparentDecoder()
 
 
