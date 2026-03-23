@@ -105,6 +105,41 @@ cd ~/ComfyUI && source venv/bin/activate && python main.py --listen 0.0.0.0 --po
 cd ~/engine && export $(grep -v '^#' .env | xargs) && uv run discoverex serve --port 5001 --config-name animate_comfyui
 ```
 
+## 버그 수정: RGBA 투명 배경 → 검은 박스 문제 (f1d2446)
+
+### 증상
+
+투명 배경(RGBA)의 소형 이미지를 업스케일하면 투명 영역이 **검은색 박스**로 변환되어 WAN에 전달됨. WAN이 검은 배경 위에서 모션을 생성하여 결과물에 검은 영역이 포함됨.
+
+### 원인
+
+```
+원본 (60×83, RGBA, 투명 배경 44.5%)
+  → convert("RGB")  ← PIL이 투명 픽셀을 검은색(0,0,0)으로 변환 ★
+  → Real-ESRGAN 추론 → 검은 배경 포함 업스케일
+  → white_anchor → 배경 평균 < 200 (검은색) → 미적용
+  → WAN → 검은 배경 그대로 모션 생성
+```
+
+### 수정
+
+`spandrel_upscaler.py`에서 RGBA 이미지의 투명 영역을 **흰색으로 합성** 후 RGB 변환:
+
+```python
+if raw.mode == "RGBA":
+    bg = Image.new("RGB", raw.size, (255, 255, 255))
+    bg.paste(raw, mask=raw.split()[3])  # 알파 채널을 마스크로 사용
+    src = bg
+```
+
+### 결과
+
+- 검은색 픽셀: 16.0% → **0%**
+- white_anchor 정상 작동 (배경 평균 > 200)
+- WAN 흰색 배경 위에서 정상 모션 생성
+
+---
+
 ## 폴백
 
 GPU/spandrel이 없는 환경에서는 YAML에서 `PilImageUpscaler`로 전환 가능:
