@@ -20,6 +20,7 @@ Worker mode is used when the engine is launched from a Prefect flow.
 - entrypoint: Prefect callable in [prefect_flow.py](/home/esillileu/discoverex/engine/prefect_flow.py)
 - runtime env is prepared by [infra/prefect/flow.py](/home/esillileu/discoverex/engine/infra/prefect/flow.py)
 - worker-managed artifacts and MLflow linkage are applied after engine execution
+- control-plane submission and deployment live under [infra/ops](/home/esillileu/discoverex/engine/infra/ops)
 
 ## 2. Public Engine Commands
 
@@ -139,8 +140,24 @@ The `e2e` harness covers:
 - `worker-contract`
 - `live-services`
 
-## 9. Current Operational Notes
+## 9. Prefect Ops Surface
+
+Supported day-to-day Prefect commands:
+
+- `./bin/cli prefect run gen`
+- `./bin/cli prefect run obj`
+- `./bin/cli prefect sweep run --sweep-spec <path>`
+- `./bin/cli prefect sweep collect --sweep-spec <path>`
+
+Sweep behavior:
+
+- input is always a sweep spec YAML via `--sweep-spec`
+- the repo-managed submitted manifest defaults to `infra/ops/manifests/<sweep-id>.submitted.json`
+- the current SSOT sweep path is object-quality
+- `collect` classifies submitted runs as `completed`, `pending`, `failed`, `cancelled`, `failed_to_collect`, or `not_submitted`
+
+## 10. Current Operational Notes
 
 - `generate` and `verify` are the most complete paths.
 - `animate` is still wired through compatibility/stub-oriented handlers.
-- Worker registration and execution assume purpose-scoped Prefect deployments managed from `infra/register`.
+- Worker registration and execution assume purpose-scoped Prefect deployments managed from `infra/ops`.

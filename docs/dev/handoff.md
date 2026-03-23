@@ -19,7 +19,7 @@ It contains:
 - engine CLI: [src/discoverex/adapters/inbound/cli/main.py](/home/esillileu/discoverex/engine/src/discoverex/adapters/inbound/cli/main.py)
 - Prefect runtime: [infra/prefect/flow.py](/home/esillileu/discoverex/engine/infra/prefect/flow.py)
 - public flow exports: [prefect_flow.py](/home/esillileu/discoverex/engine/prefect_flow.py)
-- registration scripts: [infra/register](/home/esillileu/discoverex/engine/infra/register)
+- ops control plane: [infra/ops](/home/esillileu/discoverex/engine/infra/ops)
 - ops CLI: [scripts/cli](/home/esillileu/discoverex/engine/scripts/cli)
 
 ## 3. Current Functional Shape
@@ -34,11 +34,12 @@ It contains:
 ```bash
 just test
 just run discoverex generate --background-asset-ref bg://dummy
-./bin/cli prefect deploy flow generate --branch "$(git branch --show-current)"
+./bin/cli prefect run gen
+./bin/cli prefect sweep run --sweep-spec infra/ops/specs/sweep/object_generation/transparent_three_object.quality.v1.yaml
 ```
 
 ## 5. Open Attention Areas
 
 - keep `animate` expectations conservative until the runtime path is fully implemented
-- verify worker/deployment assumptions after changes to `infra/prefect`, `infra/register`, or `infra/worker`
+- verify worker/deployment assumptions after changes to `infra/prefect`, `infra/ops`, or `infra/worker`
 - keep docs aligned with actual CLI and flow names

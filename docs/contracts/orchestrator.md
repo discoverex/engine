@@ -116,4 +116,4 @@ Current mapping:
 
 - `generate` and `verify` are the most complete contract paths.
 - `animate` is wired into the runtime surface but still depends on compatibility/stub-oriented internal handlers.
-- Deployment creation and job submission are managed by scripts under [infra/register](/home/esillileu/discoverex/engine/infra/register).
+- Deployment creation and job submission are managed by scripts under [infra/ops](/home/esillileu/discoverex/engine/infra/ops).

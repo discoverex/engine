@@ -44,7 +44,9 @@ These are backed by [infra/prefect/flow.py](/home/esillileu/discoverex/engine/in
 
 `./bin/cli` is the operations wrapper for registration and worker lifecycle tasks.
 
-- `./bin/cli prefect ...`: deploy/register/inspect Prefect flows
+- `./bin/cli prefect run gen|obj`: standard Prefect job submission
+- `./bin/cli prefect sweep run|collect`: object-quality sweep submission and collection
+- `./bin/cli prefect deploy|register ...`: lower-level Prefect deployment and submission helpers
 - `./bin/cli worker fixed ...`: embedded fixed worker lifecycle
 - `./bin/cli artifacts ...`: artifact helpers
 - `./bin/cli legacy ...`: legacy helper commands
@@ -77,7 +79,7 @@ These are backed by [infra/prefect/flow.py](/home/esillileu/discoverex/engine/in
 - [src/discoverex](/home/esillileu/discoverex/engine/src/discoverex): engine application, domain, adapters, flows, contracts
 - [conf](/home/esillileu/discoverex/engine/conf): Hydra configs and profiles
 - [infra/prefect](/home/esillileu/discoverex/engine/infra/prefect): Prefect runtime and flow logic
-- [infra/register](/home/esillileu/discoverex/engine/infra/register): deployment and job registration scripts
+- [infra/ops](/home/esillileu/discoverex/engine/infra/ops): deployment and job registration scripts
 - [infra/worker](/home/esillileu/discoverex/engine/infra/worker): embedded worker stack
 - [scripts/cli](/home/esillileu/discoverex/engine/scripts/cli): project operations CLI implementation
 - [tests](/home/esillileu/discoverex/engine/tests): unit, contract, runtime, and E2E-oriented tests
@@ -108,6 +110,7 @@ just test
 - [Architecture](/home/esillileu/discoverex/engine/.context/architecture.md)
 - [Capabilities](/home/esillileu/discoverex/engine/.context/capabilities.md)
 - [CLI Guide](/home/esillileu/discoverex/engine/docs/ops/cli.md)
+- [Object Quality Sweeps](/home/esillileu/discoverex/engine/docs/ops/object-quality-sweeps.md)
 - [Runtime Guide](/home/esillileu/discoverex/engine/docs/ops/runtime.md)
 - [Engine Run Contract](/home/esillileu/discoverex/engine/docs/contracts/engine-run.md)
 - [Orchestrator Contract](/home/esillileu/discoverex/engine/docs/contracts/orchestrator.md)
