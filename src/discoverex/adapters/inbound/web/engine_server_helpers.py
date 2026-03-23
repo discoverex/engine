@@ -171,11 +171,15 @@ def build_keyframe_only_lottie(
         result = converter.convert([frame], preset="original", fps=1)
         lp = result.lottie_path
         if lp and Path(str(lp)).exists():
-            w, h = pil.size
-            sz = round(Path(str(lp)).stat().st_size / (1024 * 1024), 1)
+            lp_path = Path(str(lp))
+            lj = json.loads(lp_path.read_text(encoding="utf-8"))
+            ow, oh = pil.size
+            sz = round(lp_path.stat().st_size / (1024 * 1024), 1)
             return {"lottie_path": str(lp), "lottie_info": {
                 "fps": 1, "frame_count": 1, "duration_ms": 1000,
-                "width": w, "height": h, "file_size_mb": sz}}
+                "width": lj.get("w", 480), "height": lj.get("h", 480),
+                "original_width": ow, "original_height": oh,
+                "file_size_mb": sz}}
     except Exception as e:
         logger.warning("[Classify] keyframe-only lottie failed: %s", e)
     return None
