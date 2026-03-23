@@ -234,12 +234,81 @@ def test_collect_marks_submitted_but_missing_as_failed() -> None:
                 },
             ]
         },
+        flow_run_states={
+            "run-123": {
+                "prefect_state": "Completed",
+                "prefect_state_type": "COMPLETED",
+                "prefect_state_message": "",
+                "flow_run_name": "run-1",
+            }
+        },
     )
 
     assert output["missing_case_count"] == 1
     assert output["missing_cases"][0]["status"] == "failed_to_collect"
     assert output["not_submitted_count"] == 1
     assert output["not_submitted_cases"][0]["status"] == "not_submitted"
+
+
+def test_collect_classifies_pending_failed_and_cancelled_runs() -> None:
+    output = _aggregate(
+        [],
+        submitted_manifest={
+            "results": [
+                {
+                    "job_name": "job-pending",
+                    "policy_id": "combo-001",
+                    "scenario_id": "scenario-001",
+                    "submitted": True,
+                    "flow_run_id": "run-pending",
+                    "deployment": "dep",
+                },
+                {
+                    "job_name": "job-failed",
+                    "policy_id": "combo-002",
+                    "scenario_id": "scenario-001",
+                    "submitted": True,
+                    "flow_run_id": "run-failed",
+                    "deployment": "dep",
+                },
+                {
+                    "job_name": "job-cancelled",
+                    "policy_id": "combo-003",
+                    "scenario_id": "scenario-001",
+                    "submitted": True,
+                    "flow_run_id": "run-cancelled",
+                    "deployment": "dep",
+                },
+            ]
+        },
+        flow_run_states={
+            "run-pending": {
+                "prefect_state": "Running",
+                "prefect_state_type": "RUNNING",
+                "prefect_state_message": "",
+                "flow_run_name": "run-pending",
+            },
+            "run-failed": {
+                "prefect_state": "Failed",
+                "prefect_state_type": "FAILED",
+                "prefect_state_message": "boom",
+                "flow_run_name": "run-failed",
+            },
+            "run-cancelled": {
+                "prefect_state": "Cancelled",
+                "prefect_state_type": "CANCELLED",
+                "prefect_state_message": "",
+                "flow_run_name": "run-cancelled",
+            },
+        },
+    )
+
+    assert output["pending_run_count"] == 1
+    assert output["pending_runs"][0]["status"] == "pending"
+    assert output["failed_run_count"] == 1
+    assert output["failed_runs"][0]["status"] == "failed"
+    assert output["cancelled_run_count"] == 1
+    assert output["cancelled_runs"][0]["status"] == "cancelled"
 
 
 def test_filename_from_object_uri_extracts_custom_engine_path() -> None:
