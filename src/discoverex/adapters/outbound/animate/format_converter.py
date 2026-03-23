@@ -121,12 +121,12 @@ def _save_webm(
 def _save_lottie(
     frames: list[Path], out: Path, fps: int,
     max_size: int | None, png_optimize: bool,
-    canvas_size: int = 480,
+    canvas_scale: float = 4.0,
 ) -> Path | None:
     """Lottie JSON 생성.
 
-    canvas_size: 캔버스 크기 (정사각형). 이미지는 원본 크기 유지, 캔버스 중앙 배치.
-      기준점(anchor)은 이미지 좌상단(left-top).
+    canvas_scale: 캔버스를 이미지 대비 몇 배로 할지 (원본 비율 유지).
+      이미지 크기 유지, 캔버스 중앙 배치. 기준점(anchor)은 이미지 좌상단.
     """
     try:
         first = Image.open(frames[0])
@@ -139,8 +139,9 @@ def _save_lottie(
             iw, ih = ow, oh
             resize = False
 
-        cw, ch = canvas_size, canvas_size
-        # 이미지 좌상단 위치 (캔버스 중앙 배치)
+        # 캔버스 = 이미지 × scale (원본 비율 유지)
+        cw = int(iw * canvas_scale) // 2 * 2
+        ch = int(ih * canvas_scale) // 2 * 2
         img_x = (cw - iw) / 2
         img_y = (ch - ih) / 2
 
