@@ -12,7 +12,7 @@ Use this checklist when validating registration and worker execution for this re
 
 - `./bin/cli prefect deploy flow <flow-kind> --branch <branch>` succeeds.
 - The deployment lands in the intended work pool and queue.
-- The deployment name matches branch-scoped naming rules.
+- The deployment name matches purpose-scoped naming rules.
 
 ## 3. Submission Path
 

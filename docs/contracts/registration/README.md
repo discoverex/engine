@@ -17,7 +17,7 @@ Companion documents:
 
 ## 1. What Gets Registered
 
-This repository registers branch-scoped Prefect deployments for these flow kinds:
+This repository registers purpose-scoped Prefect deployments for these flow kinds:
 
 - `combined`
 - `generate`
@@ -43,24 +43,40 @@ Registration and submission logic lives in:
 
 Operational wrapper commands:
 
-- `./bin/cli prefect deploy flow <flow-kind> --branch <branch>`
-- `./bin/cli prefect register flow <flow-kind> --branch <branch>`
-- `./bin/cli prefect register batch <csv> --branch <branch>`
-- `./bin/cli prefect deploy experiment --experiment <name> --branch <branch>`
-- `./bin/cli prefect register experiment-sweep --experiment <name> --branch <branch>`
+- `./bin/cli prefect deploy flow <flow-kind> --purpose <purpose>`
+- `./bin/cli prefect register flow <flow-kind> --purpose <purpose>`
+- `./bin/cli prefect register batch <csv> --purpose <purpose>`
+- `./bin/cli prefect deploy experiment --experiment <name> --purpose <purpose>`
+- `./bin/cli prefect register experiment-sweep --experiment <name> --purpose <purpose>`
+- `./bin/cli prefect run gen`
+- `./bin/cli prefect run obj`
 
 ## 3. Deployment Naming
 
-Deployments are branch-scoped and normalized through [infra/register/branch_deployments.py](/home/esillileu/discoverex/engine/infra/register/branch_deployments.py).
+Deployments are purpose-scoped and normalized through [infra/register/branch_deployments.py](/home/esillileu/discoverex/engine/infra/register/branch_deployments.py).
 
-Flow-level naming follows the repository flow kinds, for example:
+Flow-level naming follows the repository flow kinds and deployment purposes:
 
-- `discoverex-generate-<branch-slug>`
-- `discoverex-verify-<branch-slug>`
-- `discoverex-animate-<branch-slug>`
-- `discoverex-combined-<branch-slug>`
+- `discoverex-generate-<purpose>`
+- `discoverex-verify-<purpose>`
+- `discoverex-animate-<purpose>`
+- `discoverex-combined-<purpose>`
 
-Experiment deployments use a separate naming path.
+Supported purposes:
+
+- `standard`
+- `batch`
+- `debug`
+- `backfill`
+
+Default queue mapping:
+
+- `standard` -> `gpu-fixed`
+- `batch` -> `gpu-fixed-batch`
+- `debug` -> `gpu-fixed-debug`
+- `backfill` -> `gpu-fixed-backfill`
+
+Experiment deployments may use a separate naming path when they need explicit experiment IDs, but the base operational surface uses the purpose-scoped names above.
 
 ## 4. Expected Flow Parameters
 
@@ -78,6 +94,7 @@ After registration, execution proceeds as:
 
 1. a submitter sends `job_spec_json` to a deployment
 2. Prefect schedules the flow run onto a worker pool and queue
+   default queue selection is purpose-based, but run submission may override the queue for isolated experiments
 3. the worker/runtime layer resolves env and runtime settings
 4. the engine is executed with the extracted inputs payload
 5. worker-owned artifacts are written and uploaded

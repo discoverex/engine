@@ -98,13 +98,29 @@ Subcommands:
 
 Implementation: [scripts/cli/prefect.py](/home/esillileu/discoverex/engine/scripts/cli/prefect.py)
 
+Purpose-based deployments are the default:
+
+- `standard` -> `gpu-fixed`
+- `batch` -> `gpu-fixed-batch`
+- `debug` -> `gpu-fixed-debug`
+- `backfill` -> `gpu-fixed-backfill`
+
+Flow-kind deployments follow this naming pattern:
+
+- `discoverex-generate-<purpose>`
+- `discoverex-verify-<purpose>`
+- `discoverex-animate-<purpose>`
+- `discoverex-combined-<purpose>`
+
+Run submission can still override the queue at submit time when a specific experiment needs isolation.
+
 ### Deploy flow
 
-Registers a branch-scoped Prefect deployment.
+Registers a purpose-scoped Prefect deployment.
 
 ```bash
-./bin/cli prefect deploy flow generate --branch dev --work-pool-name gpu-pool
-./bin/cli prefect deploy flow combined --branch dev
+./bin/cli prefect deploy flow generate --purpose standard
+./bin/cli prefect deploy flow combined --purpose batch
 ```
 
 ### Register flow
@@ -112,8 +128,19 @@ Registers a branch-scoped Prefect deployment.
 Submits a standard job spec to a deployment.
 
 ```bash
-./bin/cli prefect register flow generate --branch dev
-./bin/cli prefect register flow combined --branch dev
+./bin/cli prefect register flow generate --purpose standard
+./bin/cli prefect register flow combined --purpose batch
+```
+
+### Run standard job specs
+
+The shortest path for the current standard specs:
+
+```bash
+./bin/cli prefect run gen
+./bin/cli prefect run obj
+./bin/cli prefect run gen --purpose batch
+./bin/cli prefect run obj --deployment discoverex-generate-debug
 ```
 
 ### Register batch
@@ -121,14 +148,14 @@ Submits a standard job spec to a deployment.
 Fans out jobs from a CSV file.
 
 ```bash
-./bin/cli prefect register batch scenes.csv --branch dev
+./bin/cli prefect register batch scenes.csv --purpose standard
 ```
 
 ### Experiment deployment and sweep
 
 ```bash
-./bin/cli prefect deploy experiment --experiment naturalness --branch dev
-./bin/cli prefect register experiment-sweep --experiment naturalness --branch dev
+./bin/cli prefect deploy experiment --experiment naturalness --purpose batch
+./bin/cli prefect register experiment-sweep --experiment naturalness --purpose batch
 ```
 
 ### Build or submit a raw spec
@@ -167,5 +194,6 @@ This surface operates the embedded Docker-based fixed worker stack defined under
 just init
 just run discoverex generate --background-asset-ref bg://dummy
 just test
-./bin/cli prefect deploy flow generate --branch "$(git branch --show-current)"
+./bin/cli prefect run gen
+./bin/cli prefect registercombined --purpose batch --job-spec-file infra/register/job_specs/generate_verify.standard.yaml
 ```

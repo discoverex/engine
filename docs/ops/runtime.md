@@ -143,4 +143,4 @@ The `e2e` harness covers:
 
 - `generate` and `verify` are the most complete paths.
 - `animate` is still wired through compatibility/stub-oriented handlers.
-- Worker registration and execution assume branch-scoped Prefect deployments managed from `infra/register`.
+- Worker registration and execution assume purpose-scoped Prefect deployments managed from `infra/register`.
