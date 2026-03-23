@@ -12,9 +12,25 @@ class GeneratedObjectAsset:
     object_mask_ref: str
     width: int
     height: int
+    preview_ref: str | None = None
+    transparent_visualization_ref: str | None = None
+    alpha_preview_ref: str | None = None
     raw_alpha_mask_ref: str | None = None
+    original_object_ref: str | None = None
+    original_object_mask_ref: str | None = None
+    original_raw_alpha_mask_ref: str | None = None
+    raw_generated_ref: str | None = None
+    sam_object_ref: str | None = None
+    sam_mask_ref: str | None = None
     mask_source: str = "unknown"
     tight_bbox: tuple[int, int, int, int] | None = None
+    object_prompt: str = ""
+    object_negative_prompt: str = ""
+    object_model_id: str = ""
+    object_sampler: str = ""
+    object_steps: int = 0
+    object_guidance_scale: float = 0.0
+    object_seed: int | None = None
 
 
 @dataclass(frozen=True)

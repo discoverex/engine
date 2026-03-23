@@ -22,6 +22,7 @@ artifacts/
 mlruns/
 mlflow.db
 .prefect-engine-artifacts/
+runtime/
 
 # Tooling / editor
 .DS_Store

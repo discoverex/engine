@@ -84,8 +84,8 @@ def test_sdxl_background_generation_hires_fix_writes_output(
         handle,
         FxRequest(
             mode="hires_fix",
+            image_ref=str(source_path),
             params={
-                "image_ref": str(source_path),
                 "output_path": str(output_path),
                 "width": 256,
                 "height": 256,

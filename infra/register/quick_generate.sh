@@ -17,7 +17,7 @@ set +a
 cd "${ENGINE_ROOT}"
 
 python3 -m infra.register.register_prefect_job \
-  --job-name quick-generate-1-https \
+  --job-name prod-genver-pixart-layerdiffuse-hfregion-simv2-8gb \
   --command generate \
   --execution-profile generator-pixart-gpu \
   --repo-url https://github.com/discoverex/engine.git \
@@ -39,7 +39,7 @@ python3 -m infra.register.register_prefect_job \
   -o runtime.height=1024
 
 python3 -m infra.register.register_prefect_job \
-  --job-name quick-generate-2-https \
+  --job-name prod-genver-pixart-layerdiffuse-hfregion-simv2-8gb-alt \
   --command generate \
   --execution-profile generator-pixart-gpu \
   --repo-url https://github.com/discoverex/engine.git \

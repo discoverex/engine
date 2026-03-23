@@ -1,40 +1,109 @@
 # Engine Run Contract
 
-이 문서는 엔진이 실행될 때 사용하는 내부 사양인 `EngineRunSpec`을 정의합니다.
+This document defines the engine-side execution payload consumed by the runtime when `discoverex` is run directly or through Prefect.
 
-## 1. 개요
+## 1. Contract Purpose
 
-`EngineRunSpec`은 워커 래퍼 없이 엔진을 직접 실행하는 데 필요한 최소한의 정보를 담고 있습니다. 엔진은 이 페이로드를 소비하여 실제 작업을 수행합니다.
+`EngineRunSpec` is the engine-facing payload that describes:
 
-## 2. 스키마 (Schema)
+- which command to run
+- which Hydra config to load
+- which command arguments to pass
+- which runtime mode and extras to use
 
-- `contract_version`: "v1" | "v2"
-- `command`: 실행할 명령어 (예: "generate")
-- `config_name`: Hydra 설정 이름
-- `config_dir`: 설정 디렉토리 경로
-- `args`: 명령어별 인자 딕셔너리
-- `overrides`: Hydra 오버라이드 리스트
-- `runtime`: 실행 환경 설정
-  - `mode`: "worker" | "local_debug"
-  - `bootstrap_mode`: "auto" | "uv" | "pip"
-  - `extras`: 설치할 추가 의존성 리스트
-  - `extra_env`: 추가 환경변수
+The stable public surface is the command plus the `EngineRunSpec` shape. Internal handler names remain implementation details.
 
-## 3. 책임 소재 (Ownership)
+## 2. Stable Commands
 
-- **엔진 (Engine)**: 명령어/설정/인자 해설, CLI 실행 및 결과 페이로드 생성.
-- **워커 래퍼 (Wrapper)**: 리포지토리 URL/참조(Ref), 엔트리포인트, Prefect 제출 및 재시도 로직 관리, artifact 업로드 및 MLflow run linkage 관리.
+Public engine commands:
 
-엔진은 워커가 제공한 런타임 입력만 사용합니다.
-- `MLFLOW_TRACKING_URI`는 그대로 사용합니다.
-- durable artifact가 있으면 `ORCH_ENGINE_ARTIFACT_DIR` 아래에 파일을 쓰고 `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`를 작성합니다.
-- 실행 결과 stdout JSON에는 가능하면 `mlflow_run_id`를 포함해 워커가 후속 run linkage를 수행할 수 있게 합니다.
-- MinIO presign, storage-api 호출, MLflow 재조회는 엔진 책임이 아닙니다.
+- `generate`
+- `verify`
+- `animate`
 
-## 4. 호환성
+Direct CLI-only command:
 
-- `v2` 명령어: `generate`, `verify`, `animate`
-- `v1` Shim: `gen-verify`, `verify-only`, `replay-eval` 지원 유지.
+- `validate`
 
-## 5. 참고 문서
-- 외부 오케스트레이터 계약: `docs/contracts/orchestrator.md`
+Compatibility commands retained for migration:
+
+- `gen-verify` -> `generate`
+- `verify-only` -> `verify`
+- `replay-eval` -> `animate`
+
+## 3. Payload Shape
+
+`EngineRunSpec` contains:
+
+- `contract_version`
+- `command`
+- `config_name`
+- `config_dir`
+- `args`
+- `overrides`
+- `runtime`
+
+`runtime` contains:
+
+- `mode`
+- `bootstrap_mode`
+- `extras`
+- `extra_env`
+
+In practice, direct CLI runs build this payload inline from [src/discoverex/adapters/inbound/cli/main.py](/home/esillileu/discoverex/engine/src/discoverex/adapters/inbound/cli/main.py), and Prefect runs obtain it from `job_spec_json`.
+
+## 4. Engine Responsibilities
+
+The engine is responsible for:
+
+- interpreting `command`, `args`, and Hydra overrides
+- building application context from config
+- running the requested pipeline
+- emitting structured result payloads
+- writing engine-owned durable artifacts only through the worker artifact contract when applicable
+
+The engine is not responsible for:
+
+- Prefect deployment creation
+- worker scheduling
+- object-store presign handling
+- direct artifact upload orchestration
+- MLflow post-upload artifact URI tagging
+
+## 5. Runtime Inputs Used By The Engine
+
+When launched by worker/Prefect runtime, the engine may consume:
+
+- `MLFLOW_TRACKING_URI`
+- `ORCH_ENGINE_ARTIFACT_DIR`
+- `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`
+- `ORCH_JOB_INPUTS_JSON`
+
+The engine should use `MLFLOW_TRACKING_URI` as provided and avoid assuming direct storage credentials.
+
+## 6. Internal Flow Mapping
+
+Current internal flow layer:
+
+- engine entry flow: `discoverex-engine-entry-pipeline`
+- generate flow: `discoverex-generate-pipeline`
+- verify flow: `discoverex-verify-pipeline`
+- variant-pack flow: `discoverex-generate-inpaint-variant-pack`
+
+Current compatibility and internal handlers include:
+
+- `generate_v1_compat`
+- `generate_v2_compat`
+- `generate_verify_v2`
+- `generate_object_only`
+- `generate_single_object_debug`
+- `generate_inpaint_variant_pack`
+- `verify_v1_compat`
+- `animate_replay_eval`
+- `animate_stub`
+
+These names are useful for debugging, but they are not the primary external contract.
+
+## 7. Current Caveat
+
+`animate` remains part of the public contract, but current implementation is not yet a fully realized production animation pipeline.

@@ -20,7 +20,7 @@ from infra.prefect.job_spec import (
 class EnginePayload(TypedDict, total=False):
     command: str
     args: dict[str, Any]
-    resolved_config: object
+    resolved_settings: object
     config_name: str
     config_dir: str
     overrides: list[str]
@@ -93,25 +93,29 @@ def dispatch_engine_job(
         return _dispatch_via_subprocess(payload, cwd=cwd, env=env)
 
     args = coerce_args(payload.get("args"))
-    resolved_config = payload.get("resolved_config")
+    resolved_settings = payload.get("resolved_settings")
+    if not isinstance(resolved_settings, dict):
+        raise RuntimeError("engine dispatch requires resolved_settings in payload")
     resolved_config_name = config_name(cast(dict[str, Any], payload))
     resolved_config_dir = string_value(payload.get("config_dir")) or "conf"
     overrides = coerce_overrides(payload.get("overrides"))
 
-    cfg = engine_entry.load_pipeline_config(
-        config_name=resolved_config_name,
-        config_dir=resolved_config_dir,
-        overrides=overrides,
-        resolved_config=resolved_config,
+    settings = engine_entry.AppSettings.model_validate(resolved_settings)
+    settings = settings.model_copy(
+        update={
+            "pipeline": engine_entry.normalize_pipeline_config_for_worker_runtime(
+                settings.pipeline
+            )
+        }
     )
-    cfg = engine_entry.normalize_pipeline_config_for_worker_runtime(cfg)
+    cfg = settings.pipeline
     execution_snapshot = engine_entry.build_execution_snapshot(
         command=command,
         args=args,
         config_name=resolved_config_name,
         config_dir=resolved_config_dir,
         overrides=overrides,
-        config=cfg,
+        settings=settings,
     )
     execution_snapshot_path = engine_entry.write_execution_snapshot(
         artifacts_root=Path(cfg.runtime.artifacts_root).resolve(),

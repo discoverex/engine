@@ -5,6 +5,10 @@ from pathlib import Path
 from uuid import uuid4
 
 from discoverex.application.context import AppContextLike
+from discoverex.application.services.tracking import (
+    apply_tracking_identity,
+    tracking_run_name,
+)
 from discoverex.application.use_cases.output_exports import export_output_bundle
 from discoverex.domain import (
     integrate_verification,
@@ -15,11 +19,11 @@ from discoverex.domain.scene import Scene
 from discoverex.domain.verification import VerificationBundle, VerificationResult
 from discoverex.execution_snapshot import build_tracking_params
 from discoverex.models.types import PerceptionRequest
-from discoverex.orchestrator_contract.worker_runtime import (
+from discoverex.application.services.worker_artifacts import (
     write_worker_artifact_manifest,
 )
 
-from .gen_verify.persistence import write_naturalness_report
+from .gen_verify.persistence import metadata_dir, write_naturalness_report
 from .worker_artifacts import collect_worker_artifacts
 
 
@@ -83,22 +87,27 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
     artifact_entries = collect_worker_artifacts(
         saved_dir,
         [
-            ("scene", saved_dir / "scene.json"),
-            ("verification", saved_dir / "verification.json"),
+            ("scene", metadata_dir(saved_dir) / "scene.json"),
+            ("verification", metadata_dir(saved_dir) / "verification.json"),
             ("naturalness", naturalness_report),
             ("final_image", scene_artifact if scene_artifact.exists() else None),
-            ("lottie", output_exports.lottie_path),
+            ("background", output_exports.background_path),
             ("output_manifest", output_exports.manifest_path),
             ("execution_config", context.execution_snapshot_path),
             *[
-                (f"output_layer/{layer_path.name}", layer_path)
-                for layer_path in output_exports.layer_paths
+                (f"output_object_png/{path.name}", path)
+                for path in output_exports.object_png_paths
+            ],
+            *[
+                (f"output_object_lottie/{path.name}", path)
+                for path in output_exports.object_lottie_paths
             ],
         ],
     )
     tracking_run_id = context.tracker.log_pipeline_run(
-        run_name="verify_only",
-        params={
+        run_name=tracking_run_name(context.settings, "verify_only"),
+        params=apply_tracking_identity(
+            {
             **build_tracking_params(context.execution_snapshot),
             "scene_id": scene.meta.scene_id,
             "version_id": scene.meta.version_id,
@@ -106,6 +115,8 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
             "config_version": scene.meta.config_version,
             **{f"model_version.{k}": v for k, v in scene.meta.model_versions.items()},
         },
+            context.settings,
+        ),
         metrics={
             "logical_score": scene.verification.logical.score,
             "perception_score": scene.verification.perception.score,

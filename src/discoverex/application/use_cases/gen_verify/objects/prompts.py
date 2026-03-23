@@ -5,6 +5,14 @@ import json
 _DEFAULT_OBJECT_GENERATION_PROMPT = "isolated hidden object"
 
 
+def compose_prompt(*, base_prompt: str, prompt: str) -> str:
+    base_text = base_prompt.strip()
+    prompt_text = prompt.strip()
+    if base_text and prompt_text:
+        return f"{base_text}, {prompt_text}"
+    return prompt_text or base_text
+
+
 def object_generation_prompt(object_prompt: str) -> str:
     prompt = object_prompt.strip() or _DEFAULT_OBJECT_GENERATION_PROMPT
     return (

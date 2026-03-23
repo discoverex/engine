@@ -71,6 +71,7 @@ class FxRequest(BaseModel):
 class FxPrediction(TypedDict, total=False):
     fx: str
     output_path: str
+    output_paths: list[str]
     image_ref: str
     composite_image_ref: str
     artifact_path: str
@@ -82,8 +83,13 @@ class InpaintPrediction(TypedDict, total=False):
     model_id: str
     patch_image_ref: str
     candidate_image_ref: str
+    raw_generated_image_ref: str
+    sam_object_image_ref: str
+    sam_object_mask_ref: str
     object_image_ref: str
     object_mask_ref: str
+    processed_object_image_ref: str
+    processed_object_mask_ref: str
     composited_image_ref: str
     precomposited_image_ref: str
     blend_mask_ref: str
@@ -95,10 +101,25 @@ class InpaintPrediction(TypedDict, total=False):
     final_polish_ref: str
     variant_manifest_ref: str
     placement_variant_id: str
+    selected_variant_ref: str
+    patch_selection_coarse_ref: str
+    patch_selection_fine_ref: str
     mask_source: str
     inpaint_mode: str
     placement_score: float
     selected_bbox: dict[str, float]
+    object_prompt_resolved: str
+    object_negative_prompt_resolved: str
+    generation_prompt_resolved: str
+    object_model_id: str
+    object_sampler: str
+    object_steps: int
+    object_guidance_scale: float
+    object_seed: int | None
+    alpha_has_signal: bool
+    alpha_bbox: list[int]
+    alpha_nonzero_ratio: float
+    alpha_mean: float
 
 
 # ---------------------------------------------------------------------------

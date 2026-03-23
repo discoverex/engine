@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class HydraComponentConfig(BaseModel):
@@ -38,6 +38,46 @@ class FlowsConfig(BaseModel):
     animate: HydraComponentConfig
 
 
+class RegionSelectionConfig(BaseModel):
+    strategy: Literal["patch_similarity_v2", "legacy_detr"] = "patch_similarity_v2"
+    max_regions: int = 3
+    iou_threshold: float = 0.12
+    stride_ratio: float = 0.5
+    scale_factors: list[float] = Field(default_factory=lambda: [1.0, 1.15])
+    enable_fallback_relaxation: bool = True
+    fallback_iou_threshold: float = 0.35
+    fallback_scale_factors: list[float] = Field(default_factory=lambda: [0.9, 1.0])
+
+
+class ObjectVariantsConfig(BaseModel):
+    default_count: int = 3
+    obj_bg_ratio: float = 0.10
+    rotation_degrees: list[float] = Field(default_factory=lambda: [-12.0, 0.0, 12.0])
+    scale_factors: list[float] = Field(default_factory=lambda: [0.9, 1.0, 1.1])
+    max_variants_per_object: int = 8
+    canvas_padding: int = 12
+
+
+class PatchSimilarityConfig(BaseModel):
+    lab_weight: float = 0.35
+    lbp_weight: float = 0.20
+    gabor_weight: float = 0.0
+    hog_weight: float = 0.25
+    top_k_candidates: int = 14
+    lbp_points: int = 16
+    lbp_radius: int = 2
+    gabor_frequencies: list[float] = Field(default_factory=lambda: [0.12, 0.2])
+    gabor_thetas: list[float] = Field(default_factory=lambda: [0.0, 0.78539816339])
+    hog_orientations: int = 9
+    hog_pixels_per_cell: int = 8
+    min_patch_side: int = 48
+
+
+class ColorHarmonizationConfig(BaseModel):
+    enabled: bool = True
+    blend_alpha: float = 0.65
+
+
 class RuntimeModelConfig(BaseModel):
     device: Literal["cpu", "cuda"] = "cuda"
     dtype: str = "float16"
@@ -62,21 +102,43 @@ class RuntimeModelConfig(BaseModel):
 
 class RuntimeEnvConfig(BaseModel):
     artifact_bucket: str = "discoverex-artifacts"
-    s3_endpoint_url: str = "http://127.0.0.1:9000"
-    aws_access_key_id: str = "minioadmin"
-    aws_secret_access_key: str = "minioadmin"
+    s3_endpoint_url: str = ""
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
     metadata_db_url: str = ""
-    tracking_uri: str = "sqlite:///mlflow.db"
+    tracking_uri: str = ""
 
 
 class RuntimeConfig(BaseModel):
     width: int = 1024
     height: int = 768
     background_upscale_factor: int = 1
+    background_upscale_mode: Literal["hires", "realesrgan", "none"] = "none"
     config_version: str = "config-v1"
     artifacts_root: str = "artifacts"
     model_runtime: RuntimeModelConfig = Field(default_factory=RuntimeModelConfig)
     env: RuntimeEnvConfig = Field(default_factory=RuntimeEnvConfig)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_background_upscale_mode(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        if "background_upscale_mode" in value:
+            return value
+        legacy = value.get("background_hires_mode")
+        mapping = {
+            "detail_reconstruct": "hires",
+            "canvas_then_detail": "hires",
+            "canvas_only": "realesrgan",
+            "none": "none",
+        }
+        if isinstance(legacy, str) and legacy.strip():
+            value = dict(value)
+            value["background_upscale_mode"] = mapping.get(
+                legacy.strip(), legacy.strip()
+            )
+        return value
 
     @field_validator("width", "height", "background_upscale_factor")
     @classmethod
@@ -179,6 +241,14 @@ class PipelineConfig(BaseModel):
     models: ModelsConfig
     adapters: AdaptersConfig
     flows: FlowsConfig | None = None
+    region_selection: RegionSelectionConfig = Field(default_factory=RegionSelectionConfig)
+    object_variants: ObjectVariantsConfig = Field(default_factory=ObjectVariantsConfig)
+    patch_similarity: PatchSimilarityConfig = Field(
+        default_factory=PatchSimilarityConfig
+    )
+    color_harmonization: ColorHarmonizationConfig = Field(
+        default_factory=ColorHarmonizationConfig
+    )
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     thresholds: ThresholdsConfig = Field(default_factory=ThresholdsConfig)
     model_versions: ModelVersionsConfig = Field(default_factory=ModelVersionsConfig)

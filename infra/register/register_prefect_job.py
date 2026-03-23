@@ -58,7 +58,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
     parser.add_argument("--deployment", default=None)
     parser.add_argument("--engine", default="discoverex")
-    parser.add_argument("--run-mode", choices=("repo", "inline"), default="repo")
+    parser.add_argument("--run-mode", choices=("repo", "inline"), default="inline")
     parser.add_argument("--repo-url", default=_default_repo_url())
     parser.add_argument("--ref", default=_default_ref())
     parser.add_argument("--job-name", default=None)
@@ -90,8 +90,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--override", "-o", action="append", default=[])
     parser.add_argument(
         "--bootstrap-mode",
-        choices=("auto", "uv", "pip"),
-        default="auto",
+        choices=("auto", "uv", "pip", "none"),
+        default="none",
     )
     parser.add_argument("--runtime-extra", action="append", default=[])
     parser.add_argument("--runtime-env", action="append", default=[])

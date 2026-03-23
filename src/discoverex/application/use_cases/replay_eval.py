@@ -5,9 +5,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from discoverex.application.context import AppContextLike
+from discoverex.application.services.tracking import (
+    apply_tracking_identity,
+    tracking_run_name,
+)
 from discoverex.application.use_cases.verify_only import run_verify_only
 from discoverex.execution_snapshot import build_tracking_params
-from discoverex.orchestrator_contract.worker_runtime import (
+from discoverex.application.services.worker_artifacts import (
     write_worker_artifact_manifest,
 )
 
@@ -49,11 +53,14 @@ def run_replay_eval(
             after_scores.append(float(after_total_score))
     avg_after = sum(after_scores) / len(after_scores) if after_scores else 0.0
     tracking_run_id = context.tracker.log_pipeline_run(
-        run_name="replay_eval",
-        params={
+        run_name=tracking_run_name(context.settings, "replay_eval"),
+        params=apply_tracking_identity(
+            {
             **build_tracking_params(context.execution_snapshot),
             "input_scene_count": len(scene_json_paths),
         },
+            context.settings,
+        ),
         metrics={"avg_after_total_score": avg_after},
         artifacts=[
             report_path,

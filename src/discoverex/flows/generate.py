@@ -9,8 +9,8 @@ from typing import Any
 from prefect import flow, task
 
 from discoverex.application.context import AppContextLike
+from discoverex.application.services.runtime import require_resolved_settings
 from discoverex.application.use_cases.gen_verify.background_pipeline import (
-    apply_background_canvas_upscale_if_needed,
     apply_background_detail_reconstruction_if_needed,
     build_background_from_inputs,
 )
@@ -54,6 +54,7 @@ from discoverex.domain.region import Region
 from discoverex.domain.scene import Background, LayerBBox, LayerItem, LayerType, Scene
 from discoverex.models.types import HiddenRegionRequest
 from discoverex.runtime_logging import format_seconds, get_logger
+from discoverex.settings import AppSettings
 
 from .common import build_scene_payload
 
@@ -62,12 +63,12 @@ logger = get_logger("discoverex.generate.flow")
 
 @task(name="discoverex-generate-context", persist_result=False)
 def _build_context(
-    config: PipelineConfig,
+    settings: AppSettings,
     execution_snapshot: dict[str, Any] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> AppContextLike:
     return build_context(
-        config=config,
+        settings=settings,
         execution_snapshot=execution_snapshot,
         execution_snapshot_path=execution_snapshot_path,
     )
@@ -104,11 +105,21 @@ def _build_background_stage(
     background_prompt: str | None,
     background_negative_prompt: str | None,
 ) -> tuple[Background, PromptStageRecord]:
+    prompt = (background_prompt or "").strip()
+    if not prompt:
+        return build_background_from_inputs(
+            context=context,
+            scene_dir=scene_dir,
+            fx_handle=None,
+            background_asset_ref=background_asset_ref,
+            background_prompt=background_prompt,
+            background_negative_prompt=background_negative_prompt,
+        )
     handle = context.background_generator_model.load(
         context.model_versions.background_generator
     )
     try:
-        return build_background_from_inputs(
+        background, prompt_record = build_background_from_inputs(
             context=context,
             scene_dir=scene_dir,
             fx_handle=handle,
@@ -116,6 +127,16 @@ def _build_background_stage(
             background_prompt=background_prompt,
             background_negative_prompt=background_negative_prompt,
         )
+        background = apply_background_detail_reconstruction_if_needed(
+            background=background,
+            context=context,
+            scene_dir=scene_dir,
+            upscaler_handle=handle,
+            prompt=prompt,
+            negative_prompt=(background_negative_prompt or "").strip(),
+            predictor_model=context.background_generator_model,
+        )
+        return background, prompt_record
     finally:
         unload_model(context.background_generator_model)
 
@@ -129,20 +150,8 @@ def _background_canvas_upscale_stage(
     background_prompt: str | None,
     background_negative_prompt: str | None,
 ) -> Background:
-    handle = context.background_upscaler_model.load(
-        context.model_versions.background_upscaler
-    )
-    try:
-        return apply_background_canvas_upscale_if_needed(
-            background=background,
-            context=context,
-            scene_dir=scene_dir,
-            upscaler_handle=handle,
-            prompt=(background_prompt or "").strip(),
-            negative_prompt=(background_negative_prompt or "").strip(),
-        )
-    finally:
-        unload_model(context.background_upscaler_model)
+    _ = (context, scene_dir, background_prompt, background_negative_prompt)
+    return background
 
 
 @task(name="discoverex-generate-background-detail-reconstruct", persist_result=False)
@@ -154,20 +163,8 @@ def _background_detail_reconstruct_stage(
     background_prompt: str | None,
     background_negative_prompt: str | None,
 ) -> Background:
-    handle = context.background_upscaler_model.load(
-        context.model_versions.background_upscaler
-    )
-    try:
-        return apply_background_detail_reconstruction_if_needed(
-            background=background,
-            context=context,
-            scene_dir=scene_dir,
-            upscaler_handle=handle,
-            prompt=(background_prompt or "").strip(),
-            negative_prompt=(background_negative_prompt or "").strip(),
-        )
-    finally:
-        unload_model(context.background_upscaler_model)
+    _ = (context, scene_dir, background_prompt, background_negative_prompt)
+    return background
 
 
 @task(name="discoverex-generate-regions", persist_result=False)
@@ -504,6 +501,7 @@ def run_generate_flow(
     execution_snapshot: dict[str, Any] | None = None,
     execution_snapshot_path: Path | None = None,
 ) -> dict[str, str]:
+    settings = require_resolved_settings(execution_snapshot, consumer="generate flow")
     started = perf_counter()
     background_asset_ref = str(args.get("background_asset_ref", "") or "")
     background_prompt = str(args.get("background_prompt", "") or "")
@@ -519,7 +517,7 @@ def run_generate_flow(
         bool(final_prompt),
     )
     context = _build_context.submit(
-        config,
+        settings,
         execution_snapshot,
         execution_snapshot_path,
     ).result()
@@ -620,7 +618,9 @@ def run_generate_flow(
     )
     return build_scene_payload(
         scene,
-        config.runtime.artifacts_root,
-        str(execution_snapshot_path) if execution_snapshot_path is not None else None,
-        getattr(context, "tracking_run_id", None),
+        artifacts_root=config.runtime.artifacts_root,
+        execution_config_path=execution_snapshot_path,
+        mlflow_run_id=getattr(context, "tracking_run_id", None),
+        effective_tracking_uri=settings.tracking.uri,
+        flow_run_id=settings.execution.flow_run_id,
     )

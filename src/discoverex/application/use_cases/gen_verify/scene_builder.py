@@ -51,7 +51,7 @@ def build_scene(
     runtime_cfg: RuntimeConfig,
     run_ids: RunIds,
 ) -> Scene:
-    answer_ids = [regions[0].region_id] if regions else []
+    answer_ids = [region.region_id for region in regions]
     now = datetime.now(timezone.utc)
     return Scene(
         meta=SceneMeta(
@@ -81,7 +81,7 @@ def build_scene(
         goal=Goal(
             goal_type=GoalType.RELATION,
             constraint_struct={
-                "description": "select target region based on relation template"
+                "description": "find every hidden object region in the scene"
             },
             scope_region_ids=[r.region_id for r in regions],
             answer_form=AnswerForm.REGION_SELECT,

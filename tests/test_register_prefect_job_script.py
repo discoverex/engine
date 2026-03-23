@@ -16,10 +16,6 @@ def test_prefect_wrapper_dry_run_defaults_to_remote_worker_profile() -> None:
             "--dry-run",
             "--command",
             "generate",
-            "--repo-url",
-            "https://github.com/example/engine.git",
-            "--ref",
-            "feat/real-job",
             "--background-asset-ref",
             "bg://real-asset",
             "--mlflow-tracking-uri",
@@ -43,12 +39,14 @@ def test_prefect_wrapper_dry_run_defaults_to_remote_worker_profile() -> None:
     )
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
-    assert payload["run_mode"] == "repo"
-    assert payload["repo_url"] == "https://github.com/example/engine.git"
-    assert payload["ref"] == "feat/real-job"
+    assert payload["run_mode"] == "inline"
+    assert payload["repo_url"] is None
+    assert payload["ref"] is None
     assert payload["entrypoint"] == ["prefect_flow.py:run_generate_job_flow"]
     assert payload["job_name"] == "generate--generate--generator-pixart-gpu"
     assert payload["inputs"]["overrides"] == [
+        "adapters/artifact_store=local",
+        "adapters/tracker=mlflow_server",
         "profile=generator_pixart_gpu_v2_8gb",
         "runtime/model_runtime=gpu",
         "flows/generate=v2",
@@ -69,8 +67,8 @@ def test_prefect_wrapper_dry_run_defaults_to_remote_worker_profile() -> None:
         "ml-gpu",
     ]
     assert payload["env"] == {
-        "cf_access_client_id": "cf-id",
-        "cf_access_client_secret": "cf-secret",
+        "CF_ACCESS_CLIENT_ID": "cf-id",
+        "CF_ACCESS_CLIENT_SECRET": "cf-secret",
     }
 
 
@@ -104,7 +102,11 @@ def test_prefect_wrapper_allows_local_tiny_profile_override() -> None:
     ]
     assert payload["job_name"] == "generate--generate--local-tiny-cpu"
     assert payload["inputs"]["overrides"] == [
+        "adapters/artifact_store=local",
+        "adapters/tracker=mlflow_server",
         "runtime/model_runtime=cpu",
+        "runtime.width=256",
+        "runtime.height=256",
         "models/background_generator=tiny_sd_cpu",
         "models/hidden_region=tiny_torch",
         "models/inpaint=tiny_torch",
@@ -122,10 +124,6 @@ def test_prefect_wrapper_forwards_prompt_args() -> None:
             "--dry-run",
             "--command",
             "generate",
-            "--repo-url",
-            "https://github.com/example/engine.git",
-            "--ref",
-            "feat/real-job",
             "--background-prompt",
             "stormy harbor at dusk",
             "--background-negative-prompt",

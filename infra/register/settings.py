@@ -13,8 +13,15 @@ class RegisterSettings(BaseSettings):
     prefect_api_url: str = ""
     prefect_deployment_prefix: str = "discoverex-engine"
     prefect_project_name: str = "discoverex-engine"
-    prefect_work_pool: str = "local-process"
+    prefect_work_pool: str = "discoverex-fixed"
     prefect_work_queue: str = "gpu-fixed"
+    prefect_work_image: str = "discoverex-worker:local"
+    prefect_work_runtime_dir: str = str(
+        (SCRIPT_DIR.parent.parent / "runtime" / "worker").resolve()
+    )
+    prefect_work_model_cache_dir: str = str(
+        (Path.home() / ".cache" / "discoverex-models").resolve()
+    )
     register_flow_entrypoint: str = "prefect_flow.py:run_combined_job_flow"
     register_flow_ref: str = "dev"
     register_deployment_version: str = ""

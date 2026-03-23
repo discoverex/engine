@@ -1,0 +1,140 @@
+{
+  "sweep_id": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly",
+  "search_stage": "debug",
+  "experiment_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly",
+  "combo_count": 8,
+  "scenario_count": 2,
+  "variant_count": 0,
+  "job_count": 16,
+  "deployment": "discoverex-generate-fix-obj-gen-batch",
+  "results": [
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-001--butterfly-realvisxl5-lightning",
+      "combo_id": "combo-001",
+      "scenario_id": "butterfly-realvisxl5-lightning",
+      "submitted": true,
+      "flow_run_id": "c6d3b5fc-d55c-45d1-b415-09ab0f57a449",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-001--butterfly-realvisxl5-regular",
+      "combo_id": "combo-001",
+      "scenario_id": "butterfly-realvisxl5-regular",
+      "submitted": true,
+      "flow_run_id": "42d8f156-bfec-4400-a55b-1ed14ccb06fd",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-002--butterfly-realvisxl5-lightning",
+      "combo_id": "combo-002",
+      "scenario_id": "butterfly-realvisxl5-lightning",
+      "submitted": true,
+      "flow_run_id": "50fb85bf-0c75-43de-923c-58da8d5fc52a",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-002--butterfly-realvisxl5-regular",
+      "combo_id": "combo-002",
+      "scenario_id": "butterfly-realvisxl5-regular",
+      "submitted": true,
+      "flow_run_id": "971355a5-33aa-461f-87cf-d984fc7d6c2e",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-003--butterfly-realvisxl5-lightning",
+      "combo_id": "combo-003",
+      "scenario_id": "butterfly-realvisxl5-lightning",
+      "submitted": true,
+      "flow_run_id": "6412b7ec-b80d-4556-93e4-92777ff1558f",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-003--butterfly-realvisxl5-regular",
+      "combo_id": "combo-003",
+      "scenario_id": "butterfly-realvisxl5-regular",
+      "submitted": true,
+      "flow_run_id": "6e4a4a85-c18c-495e-a4d1-d05dc5e197dc",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-004--butterfly-realvisxl5-lightning",
+      "combo_id": "combo-004",
+      "scenario_id": "butterfly-realvisxl5-lightning",
+      "submitted": true,
+      "flow_run_id": "a0e79814-a409-415a-988c-38b2562294c7",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-004--butterfly-realvisxl5-regular",
+      "combo_id": "combo-004",
+      "scenario_id": "butterfly-realvisxl5-regular",
+      "submitted": true,
+      "flow_run_id": "0f4c296d-816e-4e0c-b313-595ba12b4556",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-005--butterfly-realvisxl5-lightning",
+      "combo_id": "combo-005",
+      "scenario_id": "butterfly-realvisxl5-lightning",
+      "submitted": true,
+      "flow_run_id": "f462aeaa-5d24-4add-8a4f-3b3caa2fbd53",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-005--butterfly-realvisxl5-regular",
+      "combo_id": "combo-005",
+      "scenario_id": "butterfly-realvisxl5-regular",
+      "submitted": true,
+      "flow_run_id": "51236413-17a2-43a3-8152-8de25921c81c",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-006--butterfly-realvisxl5-lightning",
+      "combo_id": "combo-006",
+      "scenario_id": "butterfly-realvisxl5-lightning",
+      "submitted": true,
+      "flow_run_id": "df6fca7d-ed00-4133-ae23-d2acc40a3311",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-006--butterfly-realvisxl5-regular",
+      "combo_id": "combo-006",
+      "scenario_id": "butterfly-realvisxl5-regular",
+      "submitted": true,
+      "flow_run_id": "d714ccec-2114-43d1-8c5a-232a33ccce47",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-007--butterfly-realvisxl5-lightning",
+      "combo_id": "combo-007",
+      "scenario_id": "butterfly-realvisxl5-lightning",
+      "submitted": true,
+      "flow_run_id": "0ee353ff-c2ae-4918-97ff-8f55fd64dfc4",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-007--butterfly-realvisxl5-regular",
+      "combo_id": "combo-007",
+      "scenario_id": "butterfly-realvisxl5-regular",
+      "submitted": true,
+      "flow_run_id": "049f01f5-b175-41c8-8021-de6c90379e63",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-008--butterfly-realvisxl5-lightning",
+      "combo_id": "combo-008",
+      "scenario_id": "butterfly-realvisxl5-lightning",
+      "submitted": true,
+      "flow_run_id": "ac613d9d-e381-45b1-8eb2-ca152206ec84",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-model-steps-guidance-butterfly--debug--combo-008--butterfly-realvisxl5-regular",
+      "combo_id": "combo-008",
+      "scenario_id": "butterfly-realvisxl5-regular",
+      "submitted": true,
+      "flow_run_id": "1d8eecdb-e12e-4093-b4e0-c8048f35e77b",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    }
+  ]
+}

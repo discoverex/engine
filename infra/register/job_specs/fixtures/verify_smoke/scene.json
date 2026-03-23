@@ -1,0 +1,122 @@
+{
+  "meta": {
+    "scene_id": "verify-smoke-scene",
+    "version_id": "v1",
+    "status": "approved",
+    "pipeline_run_id": "seed-run",
+    "model_versions": {
+      "perception": "perception-v0"
+    },
+    "config_version": "config-v1",
+    "created_at": "2026-03-21T00:00:00Z",
+    "updated_at": "2026-03-21T00:00:00Z"
+  },
+  "background": {
+    "asset_ref": "infra/register/job_specs/fixtures/verify_smoke/assets/background.png",
+    "width": 64,
+    "height": 64,
+    "metadata": {
+      "inpaint_layer_candidates": [
+        {
+          "region_id": "r1",
+          "candidate_image_ref": "infra/register/job_specs/fixtures/verify_smoke/assets/object.png",
+          "object_image_ref": "infra/register/job_specs/fixtures/verify_smoke/assets/object.png",
+          "object_mask_ref": "infra/register/job_specs/fixtures/verify_smoke/assets/object.png",
+          "patch_image_ref": "infra/register/job_specs/fixtures/verify_smoke/assets/object.png",
+          "layer_image_ref": "infra/register/job_specs/fixtures/verify_smoke/assets/object.png",
+          "bbox": {
+            "x": 36,
+            "y": 18,
+            "w": 12,
+            "h": 12
+          }
+        }
+      ]
+    }
+  },
+  "regions": [
+    {
+      "region_id": "r1",
+      "geometry": {
+        "type": "bbox",
+        "bbox": {
+          "x": 36,
+          "y": 18,
+          "w": 12,
+          "h": 12
+        }
+      },
+      "role": "answer",
+      "source": "manual",
+      "attributes": {},
+      "version": 1
+    }
+  ],
+  "composite": {
+    "final_image_ref": "infra/register/job_specs/fixtures/verify_smoke/assets/composite.png"
+  },
+  "layers": {
+    "items": [
+      {
+        "layer_id": "layer-base",
+        "type": "base",
+        "image_ref": "infra/register/job_specs/fixtures/verify_smoke/assets/background.png",
+        "z_index": 0,
+        "order": 0
+      },
+      {
+        "layer_id": "layer-object",
+        "type": "inpaint_patch",
+        "image_ref": "infra/register/job_specs/fixtures/verify_smoke/assets/object.png",
+        "bbox": {
+          "x": 36,
+          "y": 18,
+          "w": 12,
+          "h": 12
+        },
+        "z_index": 10,
+        "order": 1,
+        "source_region_id": "r1"
+      },
+      {
+        "layer_id": "layer-final",
+        "type": "fx_overlay",
+        "image_ref": "infra/register/job_specs/fixtures/verify_smoke/assets/composite.png",
+        "z_index": 100,
+        "order": 2
+      }
+    ]
+  },
+  "goal": {
+    "goal_type": "relation",
+    "constraint_struct": {},
+    "answer_form": "region_select"
+  },
+  "answer": {
+    "answer_region_ids": [
+      "r1"
+    ],
+    "uniqueness_intent": true
+  },
+  "verification": {
+    "logical": {
+      "score": 1.0,
+      "pass": true,
+      "signals": {}
+    },
+    "perception": {
+      "score": 1.0,
+      "pass": true,
+      "signals": {}
+    },
+    "final": {
+      "total_score": 1.0,
+      "pass": true,
+      "failure_reason": ""
+    }
+  },
+  "difficulty": {
+    "estimated_score": 0.1,
+    "source": "rule_based"
+  }
+}

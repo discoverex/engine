@@ -156,7 +156,7 @@ def test_default_register_job_spec_points_to_repo_standard_file() -> None:
         / "infra"
         / "register"
         / "job_specs"
-        / "real-generate-pixart-hidden-object-naturalness-v2-8gb-safe.yaml"
+        / "prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml"
     )
 
 

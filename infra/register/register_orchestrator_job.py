@@ -177,7 +177,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
     parser.add_argument("--deployment", default=None)
     parser.add_argument("--engine", default="discoverex")
-    parser.add_argument("--run-mode", choices=("repo", "inline"), default="repo")
+    parser.add_argument("--run-mode", choices=("repo", "inline"), default="inline")
     parser.add_argument("--repo-url", default=SETTINGS.engine_repo_url)
     parser.add_argument("--ref", default=SETTINGS.engine_repo_ref or "main")
     parser.add_argument("--job-name", default=None)
@@ -203,8 +203,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--override", "-o", action="append", default=[])
     parser.add_argument(
         "--bootstrap-mode",
-        choices=("auto", "uv", "pip"),
-        default="auto",
+        choices=("auto", "uv", "pip", "none"),
+        default="none",
     )
     parser.add_argument("--runtime-extra", action="append", default=[])
     parser.add_argument("--runtime-env", action="append", default=[])
@@ -284,11 +284,13 @@ def _build_engine_args(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _build_profile_overrides(args: argparse.Namespace) -> list[str]:
-    overrides: list[str] = []
+    overrides: list[str] = _worker_runtime_adapter_overrides(args)
     if args.execution_profile == "local-tiny-cpu":
         overrides.extend(
             [
                 "runtime/model_runtime=cpu",
+                "runtime.width=256",
+                "runtime.height=256",
                 "models/background_generator=tiny_sd_cpu",
                 "models/hidden_region=tiny_torch",
                 "models/inpaint=tiny_torch",
@@ -340,6 +342,16 @@ def _build_profile_overrides(args: argparse.Namespace) -> list[str]:
     return overrides
 
 
+def _worker_runtime_adapter_overrides(args: argparse.Namespace) -> list[str]:
+    runtime_mode = str(getattr(args, "run_mode", "")).strip()
+    if runtime_mode != "inline":
+        return []
+    return [
+        "adapters/artifact_store=local",
+        "adapters/tracker=mlflow_server",
+    ]
+
+
 def _build_runtime_env(args: argparse.Namespace) -> dict[str, str]:
     return _parse_kv_pairs(args.runtime_env)
 
@@ -347,8 +359,8 @@ def _build_runtime_env(args: argparse.Namespace) -> dict[str, str]:
 def _build_runner_env(args: argparse.Namespace) -> dict[str, str]:
     env = _parse_kv_pairs(args.runner_env)
     optional_env = {
-        "cf_access_client_id": args.cf_access_client_id,
-        "cf_access_client_secret": args.cf_access_client_secret,
+        "CF_ACCESS_CLIENT_ID": args.cf_access_client_id,
+        "CF_ACCESS_CLIENT_SECRET": args.cf_access_client_secret,
     }
     for key, value in optional_env.items():
         if value:
@@ -382,6 +394,10 @@ def _build_job_spec(args: argparse.Namespace) -> JobSpec:
 
     runtime_extras = _build_runtime_extras(args)
     overrides = [*_build_profile_overrides(args), *args.override]
+    _validate_worker_runtime_overrides(
+        overrides=overrides,
+        run_mode=args.run_mode,
+    )
     flow_kind = _flow_kind_for_command(args.command)
     entrypoint = [flow_entrypoint_for_kind(flow_kind)]
     inputs: JobSpecInputs = {
@@ -396,6 +412,9 @@ def _build_job_spec(args: argparse.Namespace) -> JobSpec:
             "bootstrap_mode": args.bootstrap_mode,
             "extras": runtime_extras,
             "extra_env": _build_runtime_env(args),
+            "repo_strategy": "none",
+            "deps_strategy": "none",
+            "workspace_strategy": "reuse",
         },
     }
     return {
@@ -410,6 +429,31 @@ def _build_job_spec(args: argparse.Namespace) -> JobSpec:
         "env": _build_runner_env(args),
         "outputs_prefix": args.outputs_prefix,
     }
+
+
+def _validate_worker_runtime_overrides(
+    *,
+    overrides: list[str],
+    run_mode: str,
+) -> None:
+    if run_mode != "inline":
+        return
+    artifact_store = _override_value(overrides, "adapters/artifact_store")
+    if artifact_store and artifact_store != "local":
+        raise SystemExit(
+            "worker runtime requires adapters/artifact_store=local"
+        )
+    tracker = _override_value(overrides, "adapters/tracker")
+    if tracker and tracker != "mlflow_server":
+        raise SystemExit("worker runtime requires adapters/tracker=mlflow_server")
+
+
+def _override_value(overrides: list[str], key: str) -> str | None:
+    prefix = f"{key}="
+    for raw in reversed(overrides):
+        if raw.startswith(prefix):
+            return raw.removeprefix(prefix).strip()
+    return None
 
 
 def _resolved_config_name(args: argparse.Namespace) -> str:

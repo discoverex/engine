@@ -7,10 +7,12 @@ from typing import Any
 from prefect import flow
 
 from discoverex.runtime_logging import format_seconds, get_logger
+from discoverex.settings import AppSettings
 
 from .common import build_error_payload
 from .engine import (
     FlowCommand,
+    build_app_settings,
     build_execution_snapshot,
     load_pipeline_config,
     log_runtime_env_diagnostics,
@@ -31,7 +33,7 @@ def engine_entry_flow(
     config_name: str,
     config_dir: str = "conf",
     overrides: list[str] | None = None,
-    resolved_config: object | None = None,
+    resolved_settings: object | None = None,
 ) -> dict[str, Any]:
     started = perf_counter()
     logger.info(
@@ -40,21 +42,23 @@ def engine_entry_flow(
         config_name,
         len(overrides or []),
     )
-    log_runtime_env_diagnostics()
-    cfg = load_pipeline_config(
-        config_name=config_name,
-        config_dir=config_dir,
-        overrides=overrides or [],
-        resolved_config=resolved_config,
+    if not isinstance(resolved_settings, dict):
+        raise RuntimeError("engine entry requires resolved_settings")
+    settings = AppSettings.model_validate(resolved_settings)
+    settings = settings.model_copy(
+        update={
+            "pipeline": normalize_pipeline_config_for_worker_runtime(settings.pipeline)
+        }
     )
-    cfg = normalize_pipeline_config_for_worker_runtime(cfg)
+    cfg = settings.pipeline
+    log_runtime_env_diagnostics(settings)
     execution_snapshot = build_execution_snapshot(
         command=command,
         args=args,
         config_name=config_name,
         config_dir=config_dir,
         overrides=overrides or [],
-        config=cfg,
+        settings=settings,
     )
     execution_config_path = write_execution_snapshot(
         artifacts_root=Path(cfg.runtime.artifacts_root).resolve(),
@@ -106,6 +110,7 @@ def run_engine_entry(
     config_dir: str = "conf",
     overrides: list[str] | None = None,
     resolved_config: object | None = None,
+    resolved_settings: object | None = None,
 ) -> dict[str, Any]:
     return engine_entry_flow(
         command=command,
@@ -113,7 +118,7 @@ def run_engine_entry(
         config_name=config_name,
         config_dir=config_dir,
         overrides=overrides,
-        resolved_config=resolved_config,
+        resolved_settings=resolved_settings,
     )
 
 
@@ -124,7 +129,7 @@ def run_prefect_engine_entry_flow(
     config_name: str,
     config_dir: str = "conf",
     overrides: list[str] | None = None,
-    resolved_config: object | None = None,
+    resolved_settings: object | None = None,
 ) -> dict[str, Any]:
     return run_engine_entry(
         command=command,
@@ -132,5 +137,5 @@ def run_prefect_engine_entry_flow(
         config_name=config_name,
         config_dir=config_dir,
         overrides=overrides,
-        resolved_config=resolved_config,
+        resolved_settings=resolved_settings,
     )

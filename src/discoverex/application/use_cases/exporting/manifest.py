@@ -1,122 +1,54 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 from discoverex.adapters.outbound.io.json_files import write_json_file
-from discoverex.artifact_paths import (
-    composite_output_path,
-    metadata_dir,
-    output_manifest_path,
-    outputs_dir,
-    scene_json_path,
-    verification_json_path,
-)
+from discoverex.artifact_paths import output_manifest_path
 from discoverex.domain.scene import Scene
 
-from .shared import (
-    build_object_entries,
-    build_object_source_entries,
-    candidate_by_region,
-    object_entry_by_region,
-)
-from .types import ObjectEntry
+from .shared import file_name
+from .types import ObjectRenderSpec, OriginalAssetEntry
 
 
 def write_output_manifest(
     *,
     scene: Scene,
     artifacts_root: Path,
-    exported_layers: list[Path],
-    source_layer_paths: list[Path],
-    lottie_path: Path,
+    background_path: Path,
+    object_png_paths: list[Path],
+    original_entries: list[OriginalAssetEntry],
+    object_specs: list[ObjectRenderSpec],
 ) -> Path:
     scene_id = scene.meta.scene_id
     version_id = scene.meta.version_id
     manifest_path = output_manifest_path(artifacts_root, scene_id, version_id)
-    candidates = candidate_by_region(scene)
-    object_entries = build_object_entries(scene=scene, candidates=candidates)
-    entries_by_region = object_entry_by_region(object_entries)
-    from delivery.spot_the_hidden.converter import build_game_bundle
-
-    bundle = build_game_bundle(
-        scene=scene,
-        source_scene_json=str(scene_json_path(artifacts_root, scene_id, version_id)),
-    )
+    png_by_object = {path.stem: path for path in object_png_paths}
     payload = {
-        "scene_id": scene_id,
-        "version_id": version_id,
-        "pipeline_run_id": scene.meta.pipeline_run_id,
-        "status": scene.meta.status.value,
-        "created_at": scene.meta.created_at.isoformat(),
-        "updated_at": scene.meta.updated_at.isoformat(),
-        "lottie_path": lottie_path.name,
-        "preview_image_path": composite_output_path(
-            artifacts_root, scene_id, version_id
-        ).name,
-        "scene_path": str(
-            scene_json_path(artifacts_root, scene_id, version_id).relative_to(
-                outputs_dir(artifacts_root, scene_id, version_id).parent
-            )
-        ),
-        "verification_path": str(
-            verification_json_path(artifacts_root, scene_id, version_id).relative_to(
-                outputs_dir(artifacts_root, scene_id, version_id).parent
-            )
-        ),
-        "metadata_dir": str(
-            metadata_dir(artifacts_root, scene_id, version_id).relative_to(
-                outputs_dir(artifacts_root, scene_id, version_id).parent
-            )
-        ),
-        "layers": build_layer_manifest(
-            scene=scene,
-            exported_layers=exported_layers,
-            entries_by_region=entries_by_region,
-        ),
-        "source_layers": [
-            {"path": f"layers/source-objects/{path.name}"}
-            for path in source_layer_paths
+        "scene_ref": {
+            "title": str(scene.background.metadata.get("name") or scene.meta.scene_id),
+            "scene_id": scene_id,
+            "version_id": version_id,
+        },
+        "background_img": {
+            "image_id": "background",
+            "src": file_name(background_path),
+            "prompt": str(scene.background.metadata.get("prompt") or ""),
+            "width": int(scene.background.width),
+            "height": int(scene.background.height),
+        },
+        "answers": [
+            {
+                "lottie_id": spec.lottie_id,
+                "name": spec.name,
+                "title": spec.title,
+                "src": file_name(png_by_object[spec.object_id]),
+                "bbox": spec.bbox,
+                "prompt": spec.prompt,
+                "order": spec.order,
+            }
+            for spec in object_specs
+            if spec.object_id in png_by_object
         ],
-        "object_entries": object_entries,
-        "object_sources": build_object_source_entries(
-            candidates=candidates,
-            entries_by_region=entries_by_region,
-        ),
-        "delivery_bundle": bundle.model_dump(mode="json"),
+        "original": original_entries,
     }
     return write_json_file(manifest_path, payload)
-
-
-def build_layer_manifest(
-    *,
-    scene: Scene,
-    exported_layers: list[Path],
-    entries_by_region: dict[str, ObjectEntry],
-) -> list[dict[str, Any]]:
-    visible_layers = [
-        item
-        for item in sorted(scene.layers.items, key=lambda item: item.order)
-        if Path(item.image_ref).exists()
-    ]
-    manifest: list[dict[str, Any]] = []
-    for layer, path in zip(visible_layers, exported_layers, strict=False):
-        region_entry = (
-            entries_by_region.get(layer.source_region_id)
-            if layer.source_region_id is not None
-            else None
-        )
-        manifest.append(
-            {
-                "layer_id": layer.layer_id,
-                "type": layer.type.value,
-                "path": f"layers/objects/{path.name}",
-                "source_region_id": layer.source_region_id,
-                "object_number": region_entry["object_number"] if region_entry else None,
-                "center": region_entry["center"] if region_entry else None,
-                "description": (
-                    "aligned object render with alpha" if region_entry else None
-                ),
-            }
-        )
-    return manifest

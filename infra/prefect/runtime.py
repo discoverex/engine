@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import sys
-import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -28,7 +27,7 @@ def build_runtime_env(
 ) -> dict[str, str]:
     env = os.environ.copy()
     env.update(coerce_env_map(job_spec.get("env")))
-    ensure_worker_artifact_env(env)
+    env.update(runtime_extra_env(job_spec))
     py_path = str(repo_root() / "src")
     existing = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = py_path if not existing else f"{py_path}:{existing}"
@@ -40,6 +39,7 @@ def build_runtime_env(
     env["ORCH_OUTPUTS_PREFIX"] = outputs_prefix
     set_if_value(env, "ORCH_RESUME_KEY", resume_key)
     set_if_value(env, "ORCH_CHECKPOINT_DIR", checkpoint_dir)
+    ensure_worker_artifact_env(env)
     return env
 
 
@@ -51,17 +51,42 @@ def coerce_env_map(raw: object) -> dict[str, str]:
     return {str(key): str(value) for key, value in raw.items()}
 
 
+def runtime_extra_env(job_spec: dict[str, Any]) -> dict[str, str]:
+    payload = job_spec.get("inputs", {})
+    if not isinstance(payload, dict):
+        return {}
+    runtime = payload.get("runtime", {})
+    if not isinstance(runtime, dict):
+        return {}
+    return coerce_env_map(runtime.get("extra_env"))
+
+
 def ensure_worker_artifact_env(env: dict[str, str]) -> None:
     if (
         env.get(ARTIFACT_DIR_ENV, "").strip()
         and env.get(ARTIFACT_MANIFEST_ENV, "").strip()
     ):
         return
-    base_dir = repo_root() / ".prefect-engine-artifacts"
-    base_dir.mkdir(parents=True, exist_ok=True)
-    artifact_dir = Path(tempfile.mkdtemp(prefix="run-", dir=str(base_dir))).resolve()
+    artifact_dir = _default_worker_artifact_dir(env)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
     env[ARTIFACT_DIR_ENV] = str(artifact_dir)
     env[ARTIFACT_MANIFEST_ENV] = str(artifact_dir / "engine-artifacts.json")
+
+
+def _default_worker_artifact_dir(env: dict[str, str]) -> Path:
+    runtime_root = str(env.get("DISCOVEREX_WORKER_RUNTIME_DIR", "")).strip()
+    if runtime_root:
+        base_dir = Path(runtime_root).expanduser()
+    else:
+        base_dir = repo_root() / ".prefect-engine-artifacts"
+    flow_run_id = str(env.get("ORCH_FLOW_RUN_ID", "")).strip() or "unknown-flow-run"
+    attempt = str(env.get("ORCH_ATTEMPT", "")).strip() or "1"
+    return (
+        base_dir
+        / "engine-runs"
+        / flow_run_id
+        / f"attempt-{attempt}"
+    ).resolve()
 
 
 @contextmanager
@@ -109,7 +134,7 @@ def summarize_run_request(
     outputs_prefix: str,
 ) -> dict[str, Any]:
     runtime = payload.get("runtime", {})
-    runtime_env = runtime.get("extra_env", {}) if isinstance(runtime, dict) else {}
+    runtime_env = runtime_extra_env({"inputs": payload})
     resolved_config = redact_resolved_config(payload)
     env_presence = {
         "artifact_dir": bool(env.get(ARTIFACT_DIR_ENV, "").strip()),

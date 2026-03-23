@@ -1,0 +1,110 @@
+{
+  "selected_variant_id": "variant-03",
+  "variants": [
+    {
+      "id": "variant-00",
+      "score": 0.814737,
+      "scale_ratio": 0.9,
+      "rotation_deg": -25.0,
+      "saturation_mul": 0.7,
+      "contrast_mul": 0.75,
+      "sharpness_mul": 0.78,
+      "placement_bbox": [
+        912,
+        720,
+        968,
+        798
+      ]
+    },
+    {
+      "id": "variant-01",
+      "score": 0.814763,
+      "scale_ratio": 0.9333333333333333,
+      "rotation_deg": -16.666666666666668,
+      "saturation_mul": 0.77,
+      "contrast_mul": 0.8166666666666667,
+      "sharpness_mul": 0.8266666666666667,
+      "placement_bbox": [
+        672,
+        192,
+        723,
+        275
+      ]
+    },
+    {
+      "id": "variant-02",
+      "score": 0.817086,
+      "scale_ratio": 0.9666666666666667,
+      "rotation_deg": -8.333333333333336,
+      "saturation_mul": 0.84,
+      "contrast_mul": 0.8833333333333333,
+      "sharpness_mul": 0.8733333333333334,
+      "placement_bbox": [
+        672,
+        192,
+        713,
+        277
+      ]
+    },
+    {
+      "id": "variant-03",
+      "score": 0.831739,
+      "scale_ratio": 1.0,
+      "rotation_deg": 0.0,
+      "saturation_mul": 0.91,
+      "contrast_mul": 0.95,
+      "sharpness_mul": 0.92,
+      "placement_bbox": [
+        672,
+        192,
+        709,
+        278
+      ]
+    },
+    {
+      "id": "variant-04",
+      "score": 0.797366,
+      "scale_ratio": 1.0333333333333334,
+      "rotation_deg": 8.333333333333329,
+      "saturation_mul": 0.98,
+      "contrast_mul": 1.0166666666666666,
+      "sharpness_mul": 0.9666666666666667,
+      "placement_bbox": [
+        672,
+        192,
+        721,
+        285
+      ]
+    },
+    {
+      "id": "variant-05",
+      "score": 0.787532,
+      "scale_ratio": 1.0666666666666669,
+      "rotation_deg": 16.66666666666667,
+      "saturation_mul": 1.05,
+      "contrast_mul": 1.0833333333333333,
+      "sharpness_mul": 1.0133333333333334,
+      "placement_bbox": [
+        672,
+        192,
+        730,
+        286
+      ]
+    },
+    {
+      "id": "variant-06",
+      "score": 0.772746,
+      "scale_ratio": 1.1,
+      "rotation_deg": 25.0,
+      "saturation_mul": 1.12,
+      "contrast_mul": 1.15,
+      "sharpness_mul": 1.06,
+      "placement_bbox": [
+        672,
+        192,
+        742,
+        289
+      ]
+    }
+  ]
+}

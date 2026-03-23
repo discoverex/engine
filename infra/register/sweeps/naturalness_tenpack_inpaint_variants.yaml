@@ -1,7 +1,7 @@
 sweep_id: naturalness-fivepack-inpaint-variants
 search_stage: replay
 experiment_name: discoverex-naturalness-fivepack-variants
-base_job_spec: ../job_specs/real-generate-pixart-hidden-object-naturalness-v2-8gb-safe.yaml
+base_job_spec: ../job_specs/prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml
 scenarios_csv: naturalness_fivepack_scenarios.csv
 fixed_overrides:
   - adapters/tracker=mlflow_server

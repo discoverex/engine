@@ -16,6 +16,10 @@ defaults:
   - flows/generate: default
   - flows/verify: default
   - flows/animate: stub
+  - region_selection: default
+  - object_variants: default
+  - patch_similarity: default
+  - color_harmonization: default
   - _self_
   - profile: default
 

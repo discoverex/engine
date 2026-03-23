@@ -4,112 +4,101 @@ import json
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from discoverex.artifact_paths import scene_json_path
+from PIL import Image
+
 from discoverex.domain.scene import Scene
 
-from .shared import (
-    build_object_entries,
-    candidate_by_region,
-    lottie_layer_name,
-    object_entry_by_region,
-)
+from .shared import bbox_center
+from .types import ObjectRenderSpec
 
 
-def write_lottie_bundle(
+def write_object_lottie_bundles(
     *,
     scene: Scene,
-    lottie_path: Path,
-    exported_layers: list[Path],
-    artifacts_root: Path,
-) -> None:
-    animation_json = build_lottie_animation(
-        scene=scene,
-        exported_layers=exported_layers,
-        artifacts_root=artifacts_root,
-    )
-    bundle_manifest = {
-        "version": "2.0",
-        "generator": "discoverex",
-        "animations": [{"id": "scene", "path": "animations/scene.json"}],
-    }
-    with ZipFile(lottie_path, "w", compression=ZIP_DEFLATED) as archive:
-        archive.writestr(
-            "manifest.json",
-            json.dumps(bundle_manifest, ensure_ascii=True, indent=2),
-        )
-        archive.writestr(
-            "animations/scene.json",
-            json.dumps(animation_json, ensure_ascii=False, indent=2),
-        )
-        for layer_path in exported_layers:
-            archive.write(layer_path, arcname=f"images/{layer_path.name}")
-
-
-def build_lottie_animation(
-    *,
-    scene: Scene,
-    exported_layers: list[Path],
-    artifacts_root: Path,
-) -> dict[str, object]:
-    layer_lookup = {
-        path.name.split("-", 1)[1].rsplit(".", 1)[0]: path for path in exported_layers
-    }
-    candidates = candidate_by_region(scene)
-    object_entries = build_object_entries(scene=scene, candidates=candidates)
-    entries_by_region = object_entry_by_region(object_entries)
-    assets: list[dict[str, object]] = []
-    layers: list[dict[str, object]] = []
-    for index, layer in enumerate(
-        sorted(scene.layers.items, key=lambda item: item.order), start=1
-    ):
-        exported_path = layer_lookup.get(layer.layer_id)
-        if exported_path is None:
+    specs: list[ObjectRenderSpec],
+    object_png_paths: list[Path],
+    lottie_dir: Path,
+) -> list[Path]:
+    lottie_dir.mkdir(parents=True, exist_ok=True)
+    png_by_object = {path.stem: path for path in object_png_paths}
+    exported: list[Path] = []
+    for spec in specs:
+        png_path = png_by_object.get(spec.object_id)
+        if png_path is None:
             continue
-        asset_id = f"image_{index}"
-        entry = (
-            entries_by_region.get(layer.source_region_id)
-            if layer.source_region_id is not None
-            else None
+        target = lottie_dir / f"{spec.object_id}.lottie"
+        animation_json = build_object_lottie_animation(
+            scene=scene,
+            spec=spec,
+            object_png_path=png_path,
         )
-        assets.append(
+        with ZipFile(target, "w", compression=ZIP_DEFLATED) as archive:
+            archive.writestr(
+                "manifest.json",
+                json.dumps(
+                    {
+                        "version": "2.0",
+                        "generator": "discoverex",
+                        "animations": [{"id": spec.object_id, "path": f"animations/{spec.object_id}.json"}],
+                    },
+                    ensure_ascii=True,
+                    indent=2,
+                ),
+            )
+            archive.writestr(
+                f"animations/{spec.object_id}.json",
+                json.dumps(animation_json, ensure_ascii=False, indent=2),
+            )
+            archive.write(png_path, arcname=f"images/{png_path.name}")
+        exported.append(target)
+    return exported
+
+
+def build_object_lottie_animation(
+    *,
+    scene: Scene,
+    spec: ObjectRenderSpec,
+    object_png_path: Path,
+) -> dict[str, object]:
+    with Image.open(object_png_path).convert("RGBA") as object_image:
+        asset_width = max(1, int(object_image.width))
+        asset_height = max(1, int(object_image.height))
+    center_x, center_y = bbox_center(spec.bbox)
+    scale_x = (spec.bbox["w"] / asset_width) * 100.0
+    scale_y = (spec.bbox["h"] / asset_height) * 100.0
+    return {
+        "v": "5.12.2",
+        "fr": 60,
+        "ip": 0,
+        "op": 60,
+        "w": int(scene.background.width),
+        "h": int(scene.background.height),
+        "nm": spec.object_id,
+        "ddd": 0,
+        "assets": [
             {
-                "id": asset_id,
-                "w": scene.background.width,
-                "h": scene.background.height,
+                "id": spec.lottie_id,
+                "w": asset_width,
+                "h": asset_height,
                 "u": "images/",
-                "p": exported_path.name,
+                "p": object_png_path.name,
                 "e": 0,
             }
-        )
-        layers.append(
+        ],
+        "layers": [
             {
                 "ddd": 0,
-                "ind": index,
+                "ind": 1,
                 "ty": 2,
-                "nm": lottie_layer_name(layer=layer, object_entry=entry),
-                "cl": layer.type.value,
-                "refId": asset_id,
+                "nm": spec.name,
+                "refId": spec.lottie_id,
                 "sr": 1,
                 "ks": {
                     "o": {"a": 0, "k": 100},
                     "r": {"a": 0, "k": 0},
-                    "p": {
-                        "a": 0,
-                        "k": [
-                            scene.background.width / 2,
-                            scene.background.height / 2,
-                            0,
-                        ],
-                    },
-                    "a": {
-                        "a": 0,
-                        "k": [
-                            scene.background.width / 2,
-                            scene.background.height / 2,
-                            0,
-                        ],
-                    },
-                    "s": {"a": 0, "k": [100, 100, 100]},
+                    "p": {"a": 0, "k": [center_x, center_y, 0]},
+                    "a": {"a": 0, "k": [asset_width / 2.0, asset_height / 2.0, 0]},
+                    "s": {"a": 0, "k": [scale_x, scale_y, 100]},
                 },
                 "ao": 0,
                 "ip": 0,
@@ -117,27 +106,14 @@ def build_lottie_animation(
                 "st": 0,
                 "bm": 0,
             }
-        )
-    return {
-        "v": "5.12.2",
-        "fr": 60,
-        "ip": 0,
-        "op": 60,
-        "w": scene.background.width,
-        "h": scene.background.height,
-        "nm": f"{scene.meta.scene_id}:{scene.meta.version_id}",
-        "ddd": 0,
-        "assets": assets,
-        "layers": layers,
+        ],
         "markers": [],
         "metadata": {
             "scene_id": scene.meta.scene_id,
             "version_id": scene.meta.version_id,
-            "scene_json": str(
-                scene_json_path(
-                    artifacts_root, scene.meta.scene_id, scene.meta.version_id
-                )
-            ),
-            "object_entries": object_entries,
+            "region_id": spec.region_id,
+            "bbox": spec.bbox,
+            "prompt": spec.prompt,
+            "order": spec.order,
         },
     }

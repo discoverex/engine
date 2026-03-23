@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from urllib import request
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -72,12 +74,51 @@ def test_mlflow_tracker_logs_artifacts_for_local_tracking(
     assert fake.tags == {"run_name": "generate"}
 
 
-def test_mlflow_tracker_uses_tags_for_remote_tracking(
+def test_mlflow_tracker_uses_direct_remote_api_with_cf_headers(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    fake = _FakeMLflow()
-    monkeypatch.setitem(sys.modules, "mlflow", fake)
+    calls: list[tuple[str, str, dict[str, str], dict[str, object]]] = []
 
+    class _FakeResponse:
+        def __init__(self, payload: dict[str, object]) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            import json
+
+            return json.dumps(self._payload, ensure_ascii=True).encode("utf-8")
+
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:  # type: ignore[no-untyped-def]
+            _ = (exc_type, exc, tb)
+
+    def _fake_urlopen(req: request.Request, timeout: int = 60) -> _FakeResponse:
+        import json
+
+        body = req.data.decode("utf-8") if isinstance(req.data, bytes) else ""
+        payload = json.loads(body) if body else {}
+        headers = dict(req.header_items())
+        method = req.get_method()
+        calls.append((req.full_url, method, headers, payload))
+        split = urlsplit(req.full_url)
+        if split.path.endswith("/experiments/get-by-name"):
+            assert method == "GET"
+            assert parse_qs(split.query) == {"experiment_name": ["discoverex-core"]}
+            return _FakeResponse({"experiment": {"experiment_id": "exp-123"}})
+        if split.path.endswith("/runs/create"):
+            assert method == "POST"
+            return _FakeResponse({"run": {"info": {"run_id": "run-123"}}})
+        if split.path.endswith("/runs/log-batch"):
+            assert method == "POST"
+            return _FakeResponse({})
+        if split.path.endswith("/runs/update"):
+            assert method == "POST"
+            return _FakeResponse({})
+        raise AssertionError(req.full_url)
+
+    monkeypatch.setattr(request, "urlopen", _fake_urlopen)
     scene_json = tmp_path / "scene.json"
     scene_json.write_text("{}", encoding="utf-8")
     verification = tmp_path / "verification.json"
@@ -89,6 +130,8 @@ def test_mlflow_tracker_uses_tags_for_remote_tracking(
     tracker = MLflowTrackerAdapter(
         tracking_uri="https://mlflow.example.com",
         artifact_bucket="orchestrator-artifacts",
+        cf_access_client_id="cf-id",
+        cf_access_client_secret="cf-secret",
     )
     run_id = tracker.log_pipeline_run(
         run_name="generate",
@@ -96,11 +139,85 @@ def test_mlflow_tracker_uses_tags_for_remote_tracking(
             "scene_id": "scene-1",
             "version_id": "ver-1",
             "background_prompt_used": "forest",
+            "prefect.flow_run_id": "prefect-flow-123",
+            "prefect.flow_run_name": "test-verify-smoke-none-none-none",
         },
         metrics={"pass": 1.0},
         artifacts=[scene_json, verification, prompt_bundle, execution_config],
     )
 
     assert run_id == "run-123"
-    assert fake.logged_artifacts == []
-    assert fake.tags == {"run_name": "generate"}
+    assert [urlsplit(url).path.rsplit("/", 1)[-1] for url, _, _, _ in calls] == [
+        "get-by-name",
+        "create",
+        "log-batch",
+        "update",
+    ]
+    assert calls[0][2]["Cf-access-client-id"] == "cf-id"
+    assert calls[0][2]["Cf-access-client-secret"] == "cf-secret"
+    assert calls[1][3]["tags"] == [
+        {"key": "mlflow.runName", "value": "generate"},
+        {"key": "prefect.flow_run_id", "value": "prefect-flow-123"},
+        {"key": "prefect.flow_run_name", "value": "test-verify-smoke-none-none-none"},
+    ]
+    assert calls[2][3]["run_id"] == "run-123"
+
+
+def test_mlflow_tracker_creates_experiment_when_get_by_name_returns_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str]] = []
+
+    class _FakeResponse:
+        def __init__(self, payload: dict[str, object]) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            import json
+
+            return json.dumps(self._payload, ensure_ascii=True).encode("utf-8")
+
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:  # type: ignore[no-untyped-def]
+            _ = (exc_type, exc, tb)
+
+    def _fake_urlopen(req: request.Request, timeout: int = 60) -> _FakeResponse:
+        _ = timeout
+        split = urlsplit(req.full_url)
+        calls.append((req.get_method(), split.path))
+        if split.path.endswith("/experiments/get-by-name"):
+            raise request.HTTPError(
+                req.full_url,
+                404,
+                "Not Found",
+                hdrs=None,
+                fp=None,
+            )
+        if split.path.endswith("/experiments/create"):
+            return _FakeResponse({"experiment_id": "exp-404-created"})
+        if split.path.endswith("/runs/create"):
+            return _FakeResponse({"run": {"info": {"run_id": "run-123"}}})
+        if split.path.endswith("/runs/log-batch"):
+            return _FakeResponse({})
+        if split.path.endswith("/runs/update"):
+            return _FakeResponse({})
+        raise AssertionError(req.full_url)
+
+    monkeypatch.setattr(request, "urlopen", _fake_urlopen)
+
+    tracker = MLflowTrackerAdapter(tracking_uri="https://mlflow.example.com")
+
+    run_id = tracker.log_pipeline_run(
+        run_name="generate",
+        params={"scene_id": "scene-1"},
+        metrics={"pass": 1.0},
+        artifacts=[],
+    )
+
+    assert run_id == "run-123"
+    assert calls[:2] == [
+        ("GET", "/api/2.0/mlflow/experiments/get-by-name"),
+        ("POST", "/api/2.0/mlflow/experiments/create"),
+    ]

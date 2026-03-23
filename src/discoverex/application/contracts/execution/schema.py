@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 EngineCommandV1 = Literal["gen-verify", "verify-only", "replay-eval"]
 EngineCommandV2 = Literal["generate", "verify", "animate"]
 RuntimeMode = Literal["worker", "local", "local_debug"]
-BootstrapMode = Literal["auto", "uv", "pip"]
+BootstrapMode = Literal["auto", "uv", "pip", "none"]
 RepoStrategy = Literal["none", "ensure", "update"]
 DepsStrategy = Literal["none", "ensure", "sync"]
 WorkspaceStrategy = Literal["reuse", "fresh"]
@@ -17,8 +17,10 @@ class JobRuntime(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     mode: RuntimeMode = "worker"
-    bootstrap_mode: BootstrapMode = "auto"
-    extras: list[str] = Field(default_factory=lambda: ["tracking", "storage"])
+    bootstrap_mode: BootstrapMode = "none"
+    extras: list[str] = Field(
+        default_factory=lambda: ["tracking", "storage", "ml-gpu"]
+    )
     extra_env: dict[str, str] = Field(default_factory=dict)
     repo_strategy: RepoStrategy = "none"
     deps_strategy: DepsStrategy = "none"
@@ -43,6 +45,7 @@ class EngineRunSpecV1(BaseModel):
     config_name: str | None = None
     config_dir: str | None = None
     resolved_config: dict[str, Any] | None = None
+    resolved_settings: dict[str, Any] | None = None
     args: dict[str, Any] = Field(default_factory=dict)
     overrides: list[str] = Field(default_factory=list)
     runtime: JobRuntime = Field(default_factory=JobRuntime)
@@ -68,6 +71,7 @@ class EngineRunSpecV2(BaseModel):
     config_name: str | None = None
     config_dir: str | None = None
     resolved_config: dict[str, Any] | None = None
+    resolved_settings: dict[str, Any] | None = None
     args: dict[str, Any] = Field(default_factory=dict)
     overrides: list[str] = Field(default_factory=list)
     runtime: JobRuntime = Field(default_factory=JobRuntime)

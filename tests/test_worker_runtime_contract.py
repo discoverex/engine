@@ -10,7 +10,7 @@ from discoverex.orchestrator_contract.artifacts import (
     ARTIFACT_DIR_ENV,
     ARTIFACT_MANIFEST_ENV,
 )
-from discoverex.orchestrator_contract.worker_runtime import (
+from discoverex.application.services.worker_artifacts import (
     normalize_pipeline_config_for_worker_runtime,
     write_worker_artifact_manifest,
 )
@@ -50,17 +50,19 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
 ) -> None:
     artifact_root = tmp_path / "engine"
     manifest_path = tmp_path / "engine-artifacts.json"
-    saved_dir = artifact_root / "scenes" / "scene-1" / "version-1" / "metadata"
-    saved_dir.mkdir(parents=True)
-    scene_path = saved_dir / "scene.json"
-    verification_path = saved_dir / "verification.json"
-    naturalness_path = saved_dir / "naturalness.json"
+    saved_dir = artifact_root / "scenes" / "scene-1" / "version-1"
+    metadata_dir = saved_dir / "metadata"
+    metadata_dir.mkdir(parents=True)
+    scene_path = metadata_dir / "scene.json"
+    verification_path = metadata_dir / "verification.json"
+    naturalness_path = metadata_dir / "naturalness.json"
     lottie_path = (
         artifact_root
         / "scenes"
         / "scene-1"
         / "version-1"
         / "outputs"
+        / "layers"
         / "animation.lottie"
     )
     lottie_path.parent.mkdir(parents=True, exist_ok=True)
@@ -111,7 +113,7 @@ def test_write_worker_artifact_manifest_collects_files_under_worker_root(
         },
         {
             "logical_name": "lottie_bundle",
-            "relative_path": "scenes/scene-1/version-1/outputs/animation.lottie",
+            "relative_path": "scenes/scene-1/version-1/outputs/layers/animation.lottie",
             "content_type": "application/zip",
             "mlflow_tag": "artifact_lottie_uri",
             "description": None,

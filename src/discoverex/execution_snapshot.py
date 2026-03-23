@@ -1,33 +1,18 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
 from discoverex.config import PipelineConfig
+from discoverex.settings import AppSettings, settings_env_snapshot
 
 _SENSITIVE_KEY_PATTERN = re.compile(
     r"(secret|token|password|credential|api[_-]?key|access[_-]?key|tracking_uri|db_url)",
     re.IGNORECASE,
 )
-_ENV_KEYS = (
-    "MLFLOW_TRACKING_URI",
-    "MLFLOW_S3_ENDPOINT_URL",
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-    "ARTIFACT_BUCKET",
-    "METADATA_DB_URL",
-    "cf_access_client_id",
-    "cf_access_client_secret",
-    "PREFECT_FLOW_RUN_ID",
-    "PREFECT_FLOW_RUN_NAME",
-    "PREFECT_DEPLOYMENT_NAME",
-)
-
-
 def build_execution_snapshot(
     *,
     command: str,
@@ -35,21 +20,29 @@ def build_execution_snapshot(
     config_name: str,
     config_dir: str,
     overrides: list[str],
-    config: PipelineConfig,
+    settings: AppSettings | None = None,
+    config: PipelineConfig | None = None,
 ) -> dict[str, Any]:
-    env_values = {
-        key: value for key in _ENV_KEYS if (value := os.getenv(key, "").strip())
-    }
+    if settings is None:
+        if config is None:
+            raise ValueError("settings or config is required")
+        settings = AppSettings.from_pipeline(
+            pipeline=config,
+            config_name=config_name,
+            config_dir=config_dir,
+            overrides=overrides,
+        )
     snapshot = {
         "command": command,
         "config_name": config_name,
         "config_dir": config_dir,
         "args": args,
         "overrides": overrides,
-        "resolved_config": config.model_dump(mode="python"),
-        "runtime_env": env_values,
+        "resolved_config": settings.pipeline.model_dump(mode="python"),
+        "resolved_settings": settings.model_dump(mode="python"),
+        "runtime_env": settings_env_snapshot(),
     }
-    return cast(dict[str, Any], _redact(snapshot))
+    return cast(dict[str, Any], snapshot)
 
 
 def redact_for_logging(value: Any) -> Any:
@@ -101,7 +94,14 @@ def build_tracking_params(snapshot: dict[str, Any] | None) -> dict[str, str]:
     }
     args = snapshot.get("args", {})
     if isinstance(args, dict):
-        for key in ("sweep_id", "combo_id", "scenario_id", "search_stage"):
+        for key in (
+            "sweep_id",
+            "combo_id",
+            "policy_id",
+            "variant_id",
+            "scenario_id",
+            "search_stage",
+        ):
             value = str(args.get(key, "")).strip()
             if value:
                 params[f"args.{key}"] = value

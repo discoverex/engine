@@ -11,11 +11,13 @@ def test_collect_worker_artifacts_includes_nested_saved_dir_outputs(
     tmp_path: Path,
 ) -> None:
     saved_dir = tmp_path / "scenes" / "scene-1" / "version-1"
+    metadata_dir = saved_dir / "metadata"
     nested_dir = saved_dir / "layers" / "objects"
     nested_dir.mkdir(parents=True)
+    metadata_dir.mkdir(parents=True)
 
-    scene_path = saved_dir / "scene.json"
-    verification_path = saved_dir / "verification.json"
+    scene_path = metadata_dir / "scene.json"
+    verification_path = metadata_dir / "verification.json"
     composite_path = saved_dir / "composite.png"
     patch_path = nested_dir / "patch.png"
     mask_path = nested_dir / "mask.png"

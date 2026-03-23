@@ -1,504 +1,103 @@
-# Engine Registration Requirements
+# Registration Contract
 
-This directory defines the requirements that an external engine repository must
-satisfy so this orchestrator can register and execute the engine's Prefect flow.
+This directory documents how this repository exposes Prefect flows for deployment and how workers execute the engine after registration.
 
-The engine is assumed to live in a separate repository. Registration is still
-performed from this orchestrator repository, but the engine repo must provide a
-compatible flow source, callable, and runtime contract.
+The source of truth for the implementation lives in:
 
-Start here, then read the companion docs in this same directory:
+- [infra/register](/home/esillileu/discoverex/engine/infra/register)
+- [infra/prefect](/home/esillileu/discoverex/engine/infra/prefect)
+- [prefect_flow.py](/home/esillileu/discoverex/engine/prefect_flow.py)
 
-- requirements overview:
-  [README.md](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/README.md)
-- runtime env and auth boundary:
-  [runtime-auth-and-env.md](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/runtime-auth-and-env.md)
-- artifact persistence contract:
-  [artifact-persistence-contract.md](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/artifact-persistence-contract.md)
-- worker-managed output directory contract:
-  [worker-managed-output-directory-contract.md](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/worker-managed-output-directory-contract.md)
-- implementation checklist:
-  [implementation-checklist.md](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/implementation-checklist.md)
-- registration handoff form:
-  [register.engine.env.example](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/register.engine.env.example)
-- example submit payload:
-  [job_spec.repo.example.json](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/job_spec.repo.example.json)
-- example engine artifact manifest:
-  [engine-artifacts.manifest.example.json](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/engine-artifacts.manifest.example.json)
+Companion documents:
 
-## 1) Scope
+- [runtime-auth-and-env.md](/home/esillileu/discoverex/engine/docs/contracts/registration/runtime-auth-and-env.md)
+- [artifact-persistence-contract.md](/home/esillileu/discoverex/engine/docs/contracts/registration/artifact-persistence-contract.md)
+- [worker-managed-output-directory-contract.md](/home/esillileu/discoverex/engine/docs/contracts/registration/worker-managed-output-directory-contract.md)
+- [implementation-checklist.md](/home/esillileu/discoverex/engine/docs/contracts/registration/implementation-checklist.md)
 
-This is a contract for the engine repository, not an operator runbook for this
-repository.
+## 1. What Gets Registered
 
-The engine team is responsible for:
+This repository registers branch-scoped Prefect deployments for these flow kinds:
 
-- exposing a registerable Prefect flow callable
-- keeping that flow's parameter schema compatible with the orchestrator
-- keeping the engine repo layout and dependencies executable by workers
-- providing the source location and entrypoint needed for registration
+- `combined`
+- `generate`
+- `verify`
+- `animate`
 
-This repository is responsible for:
+The public callables live at the repository root:
 
-- calling the registrar
-- creating deployments in Prefect
-- routing deployments to the expected pool and queues
-- submitting `job_spec_json` payloads to those deployments
+- `prefect_flow.py:run_job_flow`
+- `prefect_flow.py:run_generate_job_flow`
+- `prefect_flow.py:run_verify_job_flow`
+- `prefect_flow.py:run_animate_job_flow`
+- `prefect_flow.py:run_combined_job_flow`
 
-## 1.1 Responsibility boundary
+## 2. Registration Implementation
 
-The external engine repo owns:
+Registration and submission logic lives in:
 
-- engine source code and dependency graph
-- Prefect flow callable exposed for registration
-- compatibility of that flow's parameter schema
-- engine process behavior after the worker launches the entrypoint
+- [infra/register/deploy_prefect_flows.py](/home/esillileu/discoverex/engine/infra/register/deploy_prefect_flows.py)
+- [infra/register/register_prefect_job.py](/home/esillileu/discoverex/engine/infra/register/register_prefect_job.py)
+- [infra/register/register_orchestrator_job.py](/home/esillileu/discoverex/engine/infra/register/register_orchestrator_job.py)
+- [scripts/cli/prefect.py](/home/esillileu/discoverex/engine/scripts/cli/prefect.py)
 
-This orchestrator owns:
+Operational wrapper commands:
 
-- Prefect deployment creation and refresh
-- worker scheduling via pool and queue selection
-- repository checkout for `repo` mode jobs
-- runtime environment injection for the child process
-- artifact upload orchestration
-- storage and MLflow access mediation
+- `./bin/cli prefect deploy flow <flow-kind> --branch <branch>`
+- `./bin/cli prefect register flow <flow-kind> --branch <branch>`
+- `./bin/cli prefect register batch <csv> --branch <branch>`
+- `./bin/cli prefect deploy experiment --experiment <name> --branch <branch>`
+- `./bin/cli prefect register experiment-sweep --experiment <name> --branch <branch>`
 
-The worker is the boundary component between orchestration and engine runtime.
+## 3. Deployment Naming
 
-The engine must not assume ownership of:
+Deployments are branch-scoped and normalized through [infra/register/branch_deployments.py](/home/esillileu/discoverex/engine/infra/register/branch_deployments.py).
 
-- Prefect API authentication details
-- storage presign APIs
-- object-store credentials
-- MLflow backend address or database credentials
-- Cloudflare Access header injection
+Flow-level naming follows the repository flow kinds, for example:
 
-For durable engine-owned artifacts, the official storage contract is:
+- `discoverex-generate-<branch-slug>`
+- `discoverex-verify-<branch-slug>`
+- `discoverex-animate-<branch-slug>`
+- `discoverex-combined-<branch-slug>`
 
-- engine writes files into `ORCH_ENGINE_ARTIFACT_DIR`
-- engine writes `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`
-- worker uploads those files after execution
-- worker records uploaded object URIs and mirrors selected URIs into MLflow tags
+Experiment deployments use a separate naming path.
 
-## 2) Required engine deliverables
+## 4. Expected Flow Parameters
 
-The external engine repo must provide all of the following.
-
-### 2.1 Registerable flow callable
-
-The repo must expose a Prefect flow callable that can be referenced as:
-
-- `path/to/file.py:callable_name`
-
-Examples:
-
-- `src/flows/my_engine_flow.py:my_engine_flow`
-- `engine/prefect_flow.py:run_job_flow`
-
-The orchestrator registrar passes this value as `REGISTER_FLOW_ENTRYPOINT`.
-
-### 2.2 Source root visible to the registrar
-
-The engine repo must be made visible to the registration runtime at a stable
-source root.
-
-Examples:
-
-- `/app`
-- `/workspace/engine`
-- mounted git checkout path inside a container
-
-The orchestrator registrar passes this value as `REGISTER_FLOW_SOURCE`.
-
-### 2.3 Compatible flow signature
-
-If the engine flow is intended to replace the current compatibility wrapper
-without changing submitters, its live Prefect flow signature must accept:
+Registered flows accept:
 
 - `job_spec_json`
-- `resume_key` optional
-- `checkpoint_dir` optional
+- optional `resume_key`
+- optional `checkpoint_dir`
 
-Current compatible reference:
+These match the call signatures implemented in [infra/prefect/flow.py](/home/esillileu/discoverex/engine/infra/prefect/flow.py).
 
-- [src/flows/engine_run/flow.py](/home/esillileu/discoverex/orchestrator/src/flows/engine_run/flow.py)
+## 5. Runtime Model
 
-Contract rule:
+After registration, execution proceeds as:
 
-- the registered deployment parameter schema must match the live flow signature
+1. a submitter sends `job_spec_json` to a deployment
+2. Prefect schedules the flow run onto a worker pool and queue
+3. the worker/runtime layer resolves env and runtime settings
+4. the engine is executed with the extracted inputs payload
+5. worker-owned artifacts are written and uploaded
+6. engine-owned artifacts are optionally uploaded through the manifest contract
 
-If the engine flow exposes a different signature, this repository's submit and
-observability paths will need coordinated changes.
+## 6. Source and Import Requirements
 
-### 2.4 Job spec compatibility
+The runtime assumes this repository is importable enough to load:
 
-The engine flow must accept `job_spec_json` values that validate against:
+- [prefect_flow.py](/home/esillileu/discoverex/engine/prefect_flow.py)
+- [infra/prefect/flow.py](/home/esillileu/discoverex/engine/infra/prefect/flow.py)
 
-- [src/flows/job_spec.py](/home/esillileu/discoverex/orchestrator/src/flows/job_spec.py)
+The embedded worker stack mounts the minimal live source paths documented in [infra/worker/README.md](/home/esillileu/discoverex/engine/infra/worker/README.md).
 
-Reference payload:
+## 7. Stable Contract Boundary
 
-- [job_spec.repo.example.json](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/job_spec.repo.example.json)
+The stable registration contract for consumers of this repository is:
 
-Required minimum payload shape:
+- use one of the public Prefect callables in `prefect_flow.py`
+- provide a valid `job_spec_json`
+- rely on worker-managed runtime env and artifact handling
 
-```json
-{
-  "engine": "my-engine",
-  "repo_url": "https://github.com/example/engine.git",
-  "ref": "main",
-  "entrypoint": ["python", "-m", "engine.main"]
-}
-```
-
-### 2.5 Worker execution compatibility
-
-The engine repo must remain runnable under the worker contract documented in:
-
-- [docs/dev/engine-implementation-contract.md](/home/esillileu/discoverex/orchestrator/docs/dev/engine-implementation-contract.md)
-
-In practice this means:
-
-- non-interactive entrypoint
-- repo checkout works from `repo_url` and `ref`
-- worker can run the declared command in a temp workdir
-- engine tolerates orchestrator-provided environment variables
-- engine does not require direct object-store credentials
-
-## 2.6 Worker-provided runtime environment
-
-Before the engine process starts, the worker injects runtime variables including:
-
-- `ORCH_ENGINE`
-- `ORCH_RUN_MODE`
-- `ORCH_FLOW_RUN_ID`
-- `ORCH_ATTEMPT`
-- `ORCH_OUTPUTS_PREFIX`
-- `ORCH_RESOLVED_COMMIT`
-- `ORCH_JOB_INPUTS_JSON`
-- `ORCH_ENGINE_ARTIFACT_DIR`
-- `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`
-- `MLFLOW_TRACKING_URI`
-
-Conditionally injected:
-
-- `ORCH_JOB_NAME`
-- `ORCH_JOB_CONFIG_PATH`
-
-The engine may also receive additional environment values from `job_spec.env`.
-
-Reference implementation:
-
-- [src/runner/entrypoint/core.py](/home/esillileu/discoverex/orchestrator/src/runner/entrypoint/core.py)
-
-## 2.7 Worker-managed auth and proxy behavior
-
-The engine should treat service authentication as worker-managed unless the
-worker explicitly exposes a worker-facing public endpoint.
-
-### Prefect
-
-The engine does not talk to Prefect directly for normal job execution.
-Prefect auth is handled by the register path, worker, submitter, and
-observability tooling.
-
-### Storage
-
-The engine should not call storage presign APIs or upload orchestration
-artifacts directly.
-
-The worker owns:
-
-- `STORAGE_API_URL`
-- Cloudflare Access headers for storage-api
-- presign requests
-- signed object URL uploads
-
-### MLflow
-
-If the engine writes MLflow metadata, it should use only the exposed
-`MLFLOW_TRACKING_URI`.
-
-When the tracking URI is a remote HTTP(S) endpoint and Cloudflare Access is
-required, the worker may start a local proxy and rewrite `MLFLOW_TRACKING_URI`
-for the child process.
-
-Important boundary rules:
-
-- the engine should use `MLFLOW_TRACKING_URI` as given
-- the engine should not depend on Cloudflare Access headers directly
-- the engine should not require backend MLflow container addresses
-- the engine should not derive durable object URIs from local filenames or local storage layout assumptions
-- the worker is responsible for linking uploaded object URIs back into MLflow tags
-- the worker strips `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET` before
-  launching the engine when proxying MLflow
-
-Reference implementation:
-
-- [src/runner/mlflow_proxy.py](/home/esillileu/discoverex/orchestrator/src/runner/mlflow_proxy.py)
-- [docs/dev/service-auth-model.md](/home/esillileu/discoverex/orchestrator/docs/dev/service-auth-model.md)
-
-## 3) Deployment naming requirements
-
-Unless there is a coordinated cutover, the engine flow must be registered under
-the deployment names already expected by this repository.
-
-Required names:
-
-- fixed primary: `e2e-test`
-- colab primary: `e2e-test-colab`
-
-Compatibility aliases during cutover:
-
-- fixed alias: `e2e-test-legacy`
-- colab alias: `e2e-test-colab-legacy`
-
-Current flow name expected in Prefect UI:
-
-- `e2e-job`
-
-That yields deployment identifiers such as:
-
-- `e2e-job/e2e-test`
-- `e2e-job/e2e-test-colab`
-
-If these names change, at minimum the following paths must be reviewed:
-
-- [scripts/ops/prefect_submit_router.py](/home/esillileu/discoverex/orchestrator/scripts/ops/prefect_submit_router.py)
-- [scripts/observability/prefect_fixed_dummy_smoke.py](/home/esillileu/discoverex/orchestrator/scripts/observability/prefect_fixed_dummy_smoke.py)
-- [docs/dev/service-contracts.md](/home/esillileu/discoverex/orchestrator/docs/dev/service-contracts.md)
-
-## 4) Registration input form
-
-The engine team must hand the following values to whoever operates
-registration from this repository.
-
-Use [register.engine.env.example](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/register.engine.env.example)
-as the handoff form.
-
-Fields the engine repo must supply:
-
-- `REGISTER_FLOW_SOURCE`
-- `REGISTER_FLOW_ENTRYPOINT`
-- optional `REGISTER_DEPLOYMENT_VERSION`
-
-Fields normally fixed by orchestrator operations:
-
-- `PREFECT_API_URL`
-- `PREFECT_WORK_POOL`
-- deployment names
-- queue names
-- access headers and service tokens
-
-## 4.1 Registration method expected by this repository
-
-This repository registers the engine flow by resolving:
-
-- `REGISTER_FLOW_SOURCE`
-- `REGISTER_FLOW_ENTRYPOINT`
-
-into:
-
-```python
-flow.from_source(source=..., entrypoint=...)
-```
-
-It then deploys that flow into the configured Prefect work pool and work
-queues.
-
-That means the engine repo must provide:
-
-- a source tree readable from the registration runtime
-- an importable Prefect flow callable at the declared entrypoint
-- any import-time dependencies required to load that flow
-
-## 5) What this repository will do with those inputs
-
-This repository currently registers deployments by:
-
-1. loading the engine flow from `flow.from_source(source=..., entrypoint=...)`
-2. creating deployments in the configured pool and queues
-3. submitting `job_spec_json` to those deployments later
-
-Canonical registration implementation:
-
-- [src/deployments/register/main.py](/home/esillileu/discoverex/orchestrator/src/deployments/register/main.py)
-- [infra/images/entrypoints/register-entrypoint.sh](/home/esillileu/discoverex/orchestrator/infra/images/entrypoints/register-entrypoint.sh)
-
-The engine repo does not need to copy this repository's register scripts. It
-needs only to satisfy the input contract those scripts consume.
-
-## 5.1 Job execution path after deployment registration
-
-Once the deployment exists, this repository executes jobs as follows:
-
-1. submitter sends `job_spec_json` to the deployment
-2. Prefect places the run on the configured pool and queue
-3. worker polls and claims the flow run
-4. flow validates `job_spec_json`
-5. worker prepares repo checkout or inline execution context
-6. worker injects runtime env and launches the engine entrypoint
-7. worker captures `stdout.log`, `stderr.log`, `result.json`
-8. worker uploads artifacts through storage-api
-9. engine may write MLflow metadata through the worker-facing tracking URI
-
-The engine repo must be compatible with the entire path above, not only the
-registration step.
-
-## 5.2 Required job spec and execution method
-
-Normal execution is driven by a `job_spec_json` payload. The primary supported
-mode for an external engine repo is `run_mode=repo`.
-
-Expected repo-mode fields:
-
-- `engine`
-- `repo_url`
-- `ref`
-- `entrypoint`
-
-Optional fields:
-
-- `config`
-- `job_name`
-- `inputs`
-- `env`
-- `outputs_prefix`
-
-Execution model:
-
-- worker clones `repo_url`
-- worker resolves `ref` to a concrete commit
-- worker checks out the repo into a temp workdir
-- worker may run `uv sync` or `uv sync --frozen` when `pyproject.toml` and
-  `uv.lock` are present
-- worker runs the declared `entrypoint`
-
-The engine should therefore provide:
-
-- a cloneable repository
-- a resolvable branch, tag, or commit ref
-- a deterministic entrypoint command
-- repo-local config paths only
-
-## 5.3 What is persisted today without extra engine-side storage support
-
-With the current worker contract, the following are already persisted without
-the engine implementing any direct storage upload logic:
-
-- Prefect flow-run state in Prefect
-- `stdout.log`
-- `stderr.log`
-- `result.json`
-- `artifacts.json` manifest for the worker-managed artifacts
-- MLflow params, metrics, tags, status, and run metadata written through
-  `MLFLOW_TRACKING_URI`
-
-This is enough for:
-
-- deployment registration
-- flow execution
-- Prefect-side run tracking
-- worker-managed execution logs
-- worker-managed final result metadata
-- MLflow-based progress and run metadata tracking
-
-## 5.4 Official durable artifact contract
-
-Engine-owned durable artifacts are now covered by the worker-managed output
-directory contract.
-
-Official behavior:
-
-- the worker creates `ORCH_ENGINE_ARTIFACT_DIR`
-- the worker creates `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`
-- the engine writes durable files only under that directory
-- the engine writes a manifest describing those files
-- after process exit, the worker requests presigned URLs through storage-api
-- the worker uploads the declared files and writes `engine-artifacts.json`
-- the worker records returned `object_uri` values in worker-owned manifests
-- the worker mirrors selected uploaded URIs into MLflow tags when `mlflow_tag`
-  is declared in the manifest
-
-This is the only canonical artifact contract for this repository.
-
-## 5.5 MLflow run linkage contract
-
-MLflow ownership is split intentionally:
-
-- the engine writes params, metrics, and run metadata through
-  `MLFLOW_TRACKING_URI`
-- the engine does not infer object URIs or write worker-owned artifact-link tags
-- the engine stdout JSON payload should include `mlflow_run_id`
-- the worker uses that `mlflow_run_id` to attach post-upload artifact URI tags
-
-The engine must not depend on:
-
-- direct MinIO credentials
-- storage-api presign routes
-- MLflow backend container addresses
-- worker-side Cloudflare Access headers
-
-## 5.6 Presign support requirement
-
-Direct presign support in the engine is not part of the supported contract.
-
-The default and preferred model is:
-
-- no presign logic in the engine
-- no direct MinIO upload logic in the engine
-- worker-managed upload after engine exit
-
-## 6) Acceptance checklist for an external engine repo
-
-An engine repo is ready for integration when all of the following are true.
-
-1. The repo exposes a Prefect flow callable at a stable source path.
-2. The flow callable accepts the required orchestrator parameters.
-3. `job_spec_json` is parsed compatibly with [job_spec.py](/home/esillileu/discoverex/orchestrator/src/flows/job_spec.py).
-4. The engine entrypoint can run under the worker contract.
-5. The engine does not require direct storage credentials, MLflow backend addresses, or Prefect auth details.
-6. The engine can operate with worker-managed `MLFLOW_TRACKING_URI` and optional proxy rewriting.
-7. The repo owner can provide `REGISTER_FLOW_SOURCE` and `REGISTER_FLOW_ENTRYPOINT`.
-8. The flow can be registered under the expected deployment names and queues.
-
-For full durable artifact support beyond logs/result metadata:
-
-9. the engine must follow the worker-managed artifact directory and manifest contract
-
-## 7) Verification after integration
-
-After the engine repo is wired into registration, this repository should verify:
-
-1. the deployment exists in Prefect
-2. the deployment is attached to the intended pool and queue
-3. a flow run can be created with valid `job_spec_json`
-4. the worker can execute the engine successfully
-
-Useful downstream checks:
-
-```bash
-prefect deployment ls
-
-./bin/cli observability fixed-dummy-smoke \
-  --deployment-name e2e-test \
-  --timeout-sec 240
-```
-
-## 8) Reference map
-
-Primary handoff files:
-
-- [docs/dev/engine-prefect-registration/README.md](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/README.md)
-- [docs/dev/engine-prefect-registration/runtime-auth-and-env.md](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/runtime-auth-and-env.md)
-- [docs/dev/engine-prefect-registration/artifact-persistence-contract.md](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/artifact-persistence-contract.md)
-- [docs/dev/engine-prefect-registration/worker-managed-output-directory-contract.md](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/worker-managed-output-directory-contract.md)
-- [docs/dev/engine-prefect-registration/implementation-checklist.md](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/implementation-checklist.md)
-- [docs/dev/engine-prefect-registration/register.engine.env.example](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/register.engine.env.example)
-- [docs/dev/engine-prefect-registration/job_spec.repo.example.json](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/job_spec.repo.example.json)
-- [docs/dev/engine-prefect-registration/engine-artifacts.manifest.example.json](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/engine-artifacts.manifest.example.json)
-
-Related contracts:
-
-- [docs/dev/engine-implementation-contract.md](/home/esillileu/discoverex/orchestrator/docs/dev/engine-implementation-contract.md)
-- [docs/dev/service-contracts.md](/home/esillileu/discoverex/orchestrator/docs/dev/service-contracts.md)
+Internal implementation details such as compatibility handler names, lazy imports, or specific stage task layout are intentionally outside the stable registration boundary.

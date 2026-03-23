@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, cast
 
@@ -13,8 +14,11 @@ from discoverex.application.contracts.execution.schema import (
     JobSpec,
 )
 from discoverex.application.services.execution_preparer import prepare_execution
+from discoverex.settings import build_settings
 
 from .engine_entry import run_engine_entry
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 def build_inline_job_spec(
@@ -57,13 +61,26 @@ def run_engine_job(
     engine_inputs = parsed.inputs
     preparation = prepare_execution(parsed, cwd=cwd)
     _ = (resume_key, checkpoint_dir)
+    resolved_settings = engine_inputs.resolved_settings
+    if resolved_settings is None:
+        config_dir = engine_inputs.config_dir or "conf"
+        config_dir_path = Path(config_dir)
+        if not config_dir_path.is_absolute() and not config_dir_path.exists():
+            config_dir = str(REPO_ROOT / config_dir)
+        resolved_settings = build_settings(
+            config_name=engine_inputs.config_name or _default_config_name(parsed),
+            config_dir=config_dir,
+            overrides=list(engine_inputs.overrides),
+            resolved_config=engine_inputs.resolved_config,
+            env=dict(os.environ),
+        ).model_dump(mode="python")
     payload = run_engine_entry(
         command=cast(Any, _mapped_command(parsed)),
         args=dict(engine_inputs.args),
         config_name=engine_inputs.config_name or _default_config_name(parsed),
         config_dir=engine_inputs.config_dir or "conf",
         overrides=list(engine_inputs.overrides),
-        resolved_config=engine_inputs.resolved_config,
+        resolved_settings=resolved_settings,
     )
     payload.setdefault("job_name", parsed.job_name)
     payload.setdefault("engine", parsed.engine)
@@ -99,6 +116,7 @@ def _inline_job_spec_from_engine_payload(job_spec: dict[str, Any]) -> JobSpec:
         "config_name": job_spec.get("config_name"),
         "config_dir": job_spec.get("config_dir"),
         "resolved_config": job_spec.get("resolved_config"),
+        "resolved_settings": job_spec.get("resolved_settings"),
         "args": job_spec.get("args", {}),
         "overrides": job_spec.get("overrides", []),
         "runtime": job_spec.get("runtime", {}),

@@ -51,9 +51,9 @@ def background_params(request: Any, model: Any) -> BackgroundParams:
 
 
 def canvas_params(request: Any, model: Any) -> tuple[Path, Path, int, int, float]:
-    image_ref = request.params.get("image_ref")
+    image_ref = getattr(request, "image_ref", None)
     if not isinstance(image_ref, (str, Path)) or not str(image_ref):
-        raise ValueError("FxRequest.params.image_ref is required for canvas_upscale")
+        raise ValueError("FxRequest.image_ref is required for canvas_upscale")
     return (
         output_path_from_request(request),
         Path(str(image_ref)),
@@ -64,9 +64,9 @@ def canvas_params(request: Any, model: Any) -> tuple[Path, Path, int, int, float
 
 
 def detail_params(request: Any, model: Any) -> DetailParams:
-    image_ref = request.params.get("image_ref")
+    image_ref = getattr(request, "image_ref", None)
     if not isinstance(image_ref, (str, Path)) or not str(image_ref):
-        raise ValueError("FxRequest.params.image_ref is required for detail_reconstruct")
+        raise ValueError("FxRequest.image_ref is required for detail_reconstruct")
     base = background_params(request, model)
     return DetailParams(
         **base.__dict__,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from time import perf_counter
+from typing import Any
 
 from discoverex.application.context import AppContextLike
 from discoverex.domain.scene import Background
@@ -13,6 +14,22 @@ from ..runtime_metrics import track_stage_vram
 from .io import read_background_image_size
 
 logger = get_logger("discoverex.generate.background")
+
+
+def resolve_background_upscale_mode(context: AppContextLike) -> str:
+    mode = getattr(context.runtime, "background_upscale_mode", None)
+    if isinstance(mode, str) and mode.strip():
+        return mode.strip()
+    if mode is not None:
+        return mode
+    legacy = str(getattr(context.runtime, "background_hires_mode", "none")).strip()
+    mapping = {
+        "detail_reconstruct": "hires",
+        "canvas_then_detail": "hires",
+        "canvas_only": "realesrgan",
+        "none": "none",
+    }
+    return mapping.get(legacy, "none")
 
 
 def apply_background_canvas_upscale_if_needed(
@@ -96,6 +113,7 @@ def apply_background_detail_reconstruction_if_needed(
     upscaler_handle: ModelHandle,
     prompt: str,
     negative_prompt: str,
+    predictor_model: Any | None = None,
 ) -> Background:
     _ = (prompt, negative_prompt)
     factor = max(1, int(getattr(context.runtime, "background_upscale_factor", 1)))
@@ -121,16 +139,17 @@ def apply_background_detail_reconstruction_if_needed(
         background.height,
     )
     started = perf_counter()
+    model = predictor_model or context.background_upscaler_model
     with track_stage_vram(context, "background_detail_reconstruction"):
-        prediction = context.background_upscaler_model.predict(
+        prediction = model.predict(
             upscaler_handle,
             FxRequest(
                 mode="detail_reconstruct",
                 image_ref=background.asset_ref,
                 params={
                     "output_path": str(output_path),
-                    "width": background.width,
-                    "height": background.height,
+                    "width": int(background.width * factor),
+                    "height": int(background.height * factor),
                 },
             ),
         )
@@ -165,15 +184,8 @@ def apply_background_hires_fix_if_needed(
     upscaler_handle: ModelHandle,
     prompt: str,
     negative_prompt: str,
+    predictor_model: Any | None = None,
 ) -> Background:
-    background = apply_background_canvas_upscale_if_needed(
-        background=background,
-        context=context,
-        scene_dir=scene_dir,
-        upscaler_handle=upscaler_handle,
-        prompt=prompt,
-        negative_prompt=negative_prompt,
-    )
     return apply_background_detail_reconstruction_if_needed(
         background=background,
         context=context,
@@ -181,4 +193,5 @@ def apply_background_hires_fix_if_needed(
         upscaler_handle=upscaler_handle,
         prompt=prompt,
         negative_prompt=negative_prompt,
+        predictor_model=predictor_model,
     )

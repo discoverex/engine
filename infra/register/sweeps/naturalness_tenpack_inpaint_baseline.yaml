@@ -1,7 +1,7 @@
 sweep_id: naturalness-tenpack-inpaint-baseline
 search_stage: baseline
 experiment_name: discoverex-naturalness-tenpack
-base_job_spec: ../job_specs/real-generate-pixart-hidden-object-naturalness-v2-8gb-safe.yaml
+base_job_spec: ../job_specs/prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml
 scenarios_csv: naturalness_tenpack_scenarios.csv
 fixed_overrides:
   - adapters/tracker=mlflow_server
@@ -9,5 +9,5 @@ fixed_overrides:
   - models.inpaint.pre_match_scale_ratio=[0.08,0.12]
   - models.inpaint.pre_match_variant_count=15
   - +models.inpaint.placement_grid_stride=18
-  - models.inpaint.edge_blend_strength=0.18
-  - models.inpaint.final_polish_strength=0.18
+  - models.inpaint.edge_blend_strength=0.2
+  - models.inpaint.final_polish_strength=0.2

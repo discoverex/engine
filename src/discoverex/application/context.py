@@ -24,9 +24,11 @@ from discoverex.config import (
     RuntimeConfig,
     ThresholdsConfig,
 )
+from discoverex.settings import AppSettings
 
 
 class AppContextLike(Protocol):
+    settings: AppSettings
     background_generator_model: BackgroundGenerationPort
     background_upscaler_model: BackgroundUpscalerPort
     object_generator_model: ObjectGenerationPort

@@ -2,14 +2,17 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, TypedDict, cast
+from uuid import UUID
 
-from prefect import flow
-from prefect.runner.storage import GitRepository
+from prefect.client.orchestration import get_client
+from prefect.client.schemas.actions import DeploymentUpdate
 from prefect.settings import PREFECT_API_URL, temporary_settings
 
 from infra.register.branch_deployments import (
@@ -20,7 +23,6 @@ from infra.register.branch_deployments import (
 )
 from infra.register.register_orchestrator_job import _extra_headers, _normalize_api_url
 from infra.register.settings import SETTINGS, default_deployment_version
-
 
 class DeploymentMetadata(TypedDict, total=False):
     deployment_name: str
@@ -40,7 +42,7 @@ class DeploymentMetadata(TypedDict, total=False):
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Register a remote-source Prefect deployment for an engine flow kind."
+            "Register an embedded-source Prefect deployment for an engine flow kind."
         )
     )
     parser.add_argument("--engine", default=SETTINGS.engine_name)
@@ -69,19 +71,6 @@ def _resolved_entrypoint(flow_kind: str, cli_value: str | None) -> str:
     if explicit:
         return explicit
     return flow_entrypoint_for_kind(flow_kind)
-
-
-def _is_commit_sha(value: str) -> bool:
-    text = value.strip().lower()
-    if len(text) != 40:
-        return False
-    return all(ch in "0123456789abcdef" for ch in text)
-
-
-def _flow_source(repo_url: str, ref: str) -> GitRepository:
-    if _is_commit_sha(ref):
-        return GitRepository(url=repo_url, pull_interval=None, commit_sha=ref)
-    return GitRepository(url=repo_url, pull_interval=None, branch=ref)
 
 
 def _deployment_metadata(
@@ -141,38 +130,161 @@ def _prefect_settings(prefect_api_url: str) -> Iterator[None]:
             os.environ["PREFECT_CLIENT_CUSTOM_HEADERS"] = previous_headers
 
 
-def _deploy_remote_flow(
+def _load_flow(entrypoint: str) -> Any:
+    module_name, attr_name = entrypoint.split(":", 1)
+    if module_name.endswith(".py"):
+        module_name = module_name[:-3]
+    module = importlib.import_module(module_name)
+    return getattr(module, attr_name)
+
+
+def _deployment_runtime_root() -> str:
+    override = os.environ.get("DISCOVEREX_DEPLOY_RUNTIME_ROOT", "").strip()
+    if override:
+        return override
+    return SETTINGS.prefect_work_runtime_dir
+
+
+def _deployment_model_cache_root() -> str:
+    override = os.environ.get("DISCOVEREX_DEPLOY_MODEL_CACHE_ROOT", "").strip()
+    if override:
+        return override
+    return SETTINGS.prefect_work_model_cache_dir
+
+
+def _deployment_job_variables(*, work_pool_name: str) -> dict[str, Any]:
+    _validate_required_worker_env()
+    process_working_dir = (
+        os.environ.get("DISCOVEREX_DEPLOY_WORKING_DIR", "").strip() or "/app"
+    )
+    env_pairs = (
+        ("PREFECT_API_URL", os.environ.get("PREFECT_API_URL", "")),
+        (
+            "PREFECT_CLIENT_CUSTOM_HEADERS",
+            os.environ.get("PREFECT_CLIENT_CUSTOM_HEADERS", ""),
+        ),
+        ("CF_ACCESS_CLIENT_ID", os.environ.get("CF_ACCESS_CLIENT_ID", "")),
+        (
+            "CF_ACCESS_CLIENT_SECRET",
+            os.environ.get("CF_ACCESS_CLIENT_SECRET", ""),
+        ),
+        ("STORAGE_API_URL", os.environ.get("STORAGE_API_URL", "")),
+        ("MLFLOW_TRACKING_URI", os.environ.get("MLFLOW_TRACKING_URI", "")),
+        (
+            "MLFLOW_S3_ENDPOINT_URL",
+            os.environ.get("MLFLOW_S3_ENDPOINT_URL", ""),
+        ),
+        ("AWS_ACCESS_KEY_ID", os.environ.get("AWS_ACCESS_KEY_ID", "")),
+        (
+            "AWS_SECRET_ACCESS_KEY",
+            os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+        ),
+        ("ARTIFACT_BUCKET", os.environ.get("ARTIFACT_BUCKET", "")),
+        ("DISCOVEREX_WORKER_RUNTIME_DIR", "/var/lib/discoverex"),
+        ("DISCOVEREX_CACHE_DIR", "/var/lib/discoverex/cache"),
+        ("MODEL_CACHE_DIR", "/var/lib/discoverex/cache/models"),
+        ("UV_CACHE_DIR", "/var/lib/discoverex/cache/uv"),
+        ("HF_HOME", "/var/lib/discoverex/cache/models/hf"),
+        ("HF_TOKEN", os.environ.get("HF_TOKEN", "")),
+        (
+            "HUGGINGFACE_HUB_TOKEN",
+            os.environ.get("HUGGINGFACE_HUB_TOKEN", ""),
+        ),
+        ("HUGGINGFACE_TOKEN", os.environ.get("HUGGINGFACE_TOKEN", "")),
+        ("ORCHESTRATOR_CHECKPOINT_DIR", "/var/lib/discoverex/checkpoints"),
+        ("NVIDIA_VISIBLE_DEVICES", "all"),
+    )
+    env = {key: value for key, value in env_pairs if value}
+    return {
+        "env": env,
+        "working_dir": process_working_dir,
+    }
+
+
+def _is_process_work_pool(work_pool_name: str) -> bool:
+    normalized = work_pool_name.strip().lower()
+    return normalized.endswith("-process") or "process" in normalized
+
+
+def _process_pull_steps(*, work_pool_name: str) -> list[dict[str, dict[str, str]]] | None:
+    if not _is_process_work_pool(work_pool_name):
+        return None
+    working_dir = (
+        os.environ.get("DISCOVEREX_DEPLOY_WORKING_DIR", "").strip() or "/app"
+    )
+    return [
+        {
+            "prefect.deployments.steps.set_working_directory": {
+                "directory": working_dir,
+            }
+        }
+    ]
+
+
+def _update_process_deployment_pull_steps(
+    deployment_id: str,
+    *,
+    work_pool_name: str,
+) -> None:
+    process_pull_steps = _process_pull_steps(work_pool_name=work_pool_name)
+    if process_pull_steps is None:
+        return
+    with get_client(sync_client=True) as client:
+        client.update_deployment(
+            UUID(deployment_id),
+            DeploymentUpdate(pull_steps=process_pull_steps),
+        )
+
+
+def _validate_required_worker_env() -> None:
+    missing = [
+        name
+        for name in ("PREFECT_API_URL", "STORAGE_API_URL", "MLFLOW_TRACKING_URI")
+        if not os.environ.get(name, "").strip()
+    ]
+    if missing:
+        missing_text = ", ".join(missing)
+        raise RuntimeError(
+            "worker deployment requires environment variables: "
+            f"{missing_text}"
+        )
+
+
+def _deploy_embedded_flow(
     *,
     engine: str,
     flow_kind: str,
     branch: str,
-    repo_url: str,
-    ref: str,
     flow_entrypoint: str,
     work_pool_name: str,
     work_queue_name: str,
+    image: str,
     deployment_version: str,
     deployment_name: str,
     deployment_suffix: str,
 ) -> str:
-    remote_flow = flow.from_source(
-        source=_flow_source(repo_url, ref),
-        entrypoint=flow_entrypoint,
-    )
-    remote_flow = cast(Any, remote_flow)
-    deployment_id = remote_flow.deploy(
-        name=deployment_name,
-        work_pool_name=work_pool_name,
-        work_queue_name=work_queue_name,
-        job_variables={},
-        build=False,
-        push=False,
-        description=f"Execute the {flow_kind} flow for branch {branch!r}.",
-        tags=[engine, flow_kind, branch],
-        version=deployment_version,
-        print_next_steps=False,
-    )
-    return str(deployment_id)
+    embedded_flow = cast(Any, _load_flow(flow_entrypoint))
+    deploy_kwargs: dict[str, Any] = {
+        "name": deployment_name,
+        "work_pool_name": work_pool_name,
+        "work_queue_name": work_queue_name,
+        "job_variables": _deployment_job_variables(work_pool_name=work_pool_name),
+        "image": image,
+        "build": False,
+        "push": False,
+        "description": f"Execute the {flow_kind} flow for branch {branch!r}.",
+        "tags": [engine, flow_kind, branch],
+        "version": deployment_version,
+        "print_next_steps": False,
+    }
+    process_pull_steps = _process_pull_steps(work_pool_name=work_pool_name)
+    deployment_id = str(embedded_flow.deploy(**deploy_kwargs))
+    if process_pull_steps is not None:
+        _update_process_deployment_pull_steps(
+            deployment_id,
+            work_pool_name=work_pool_name,
+        )
+    return deployment_id
 
 
 def main() -> int:
@@ -196,15 +308,14 @@ def main() -> int:
         print(json.dumps(deployment, ensure_ascii=True))
         return 0
     with _prefect_settings(args.prefect_api_url):
-        deployment["deployment_id"] = _deploy_remote_flow(
+        deployment["deployment_id"] = _deploy_embedded_flow(
             engine=args.engine,
             flow_kind=args.flow_kind,
             branch=args.branch,
-            repo_url=args.repo_url,
-            ref=deployment["ref"],
             flow_entrypoint=deployment["entrypoint"],
             work_pool_name=args.work_pool_name,
             work_queue_name=args.work_queue_name,
+            image=SETTINGS.prefect_work_image,
             deployment_version=args.deployment_version,
             deployment_name=deployment["deployment_name"],
             deployment_suffix=args.deployment_suffix,

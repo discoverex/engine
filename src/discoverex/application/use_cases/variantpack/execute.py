@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from discoverex.execution_snapshot import update_execution_snapshot
+from discoverex.settings import AppSettings
 
 from .artifacts import variant_artifact_entries
 from .config import variant_config
@@ -44,7 +45,14 @@ def execute_variant(
     )
     variant_snapshot["args"] = variant_args(args, variant_id=variant_id)
     update_execution_snapshot(variant_snapshot_path, variant_snapshot)
-    variant_context = build_context(variant_cfg, variant_snapshot, variant_snapshot_path)
+    resolved_settings = variant_snapshot.get("resolved_settings")
+    if not isinstance(resolved_settings, dict):
+        raise RuntimeError("variant execution requires resolved_settings in snapshot")
+    variant_context = build_context(
+        AppSettings.model_validate(resolved_settings),
+        variant_snapshot,
+        variant_snapshot_path,
+    )
     run_ids = variant_run_ids(scene_id=prepare_scene_id, variant_id=variant_id)
     scene_dir = Path(variant_context.artifacts_root) / "scenes" / run_ids.scene_id / run_ids.version_id
     variant_background = reset_variant_background(background)
@@ -93,15 +101,14 @@ def execute_variant(
     )
     payload = build_scene_payload(
         scene,
-        variant_cfg.runtime.artifacts_root,
-        str(variant_snapshot_path),
-        getattr(variant_context, "tracking_run_id", None),
+        artifacts_root=variant_cfg.runtime.artifacts_root,
+        execution_config_path=variant_snapshot_path,
+        mlflow_run_id=getattr(variant_context, "tracking_run_id", None),
+        effective_tracking_uri=variant_context.settings.tracking.uri,
+        flow_run_id=variant_context.settings.execution.flow_run_id,
     )
     payload["variant_id"] = variant_id
     payload["saved_dir"] = str(saved_dir)
-    payload["lottie_path"] = str(
-        Path(variant_cfg.runtime.artifacts_root) / "scenes" / run_ids.scene_id / run_ids.version_id / "output" / "animation.lottie"
-    )
     return payload, {"variant_id": variant_id, "overrides": variant_overrides, **payload}
 
 

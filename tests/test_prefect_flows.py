@@ -12,14 +12,17 @@ from prefect.runtime import flow_run
 
 import infra.prefect.dispatch as prefect_dispatch
 import infra.prefect.flow as prefect_entrypoint
+from infra.prefect.artifacts import summarize_payload
 from discoverex.application.flows.run_engine_job import run_engine_job
 from discoverex.config_loader import load_pipeline_config
+from discoverex.settings import build_settings
 from infra.prefect.job_spec import (
     coerce_args,
     coerce_overrides,
     config_name,
     mapped_command,
 )
+from infra.prefect.runtime import build_runtime_env
 
 
 class _FakeLogger:
@@ -71,6 +74,7 @@ def test_run_engine_job_executes_engine_entry_directly(
 
     assert captured["command"] == "generate"
     assert captured["config_name"] == "generate"
+    assert isinstance(captured["resolved_settings"], dict)
     assert payload["ok"] is True
     assert payload["preparation"]["mode"] == "worker"
 
@@ -107,6 +111,7 @@ def test_run_engine_job_accepts_bare_engine_payload(
     )
 
     assert captured["command"] == "generate"
+    assert isinstance(captured["resolved_settings"], dict)
     assert payload["preparation"]["mode"] == "worker"
     assert payload["run_mode"] == "inline"
 
@@ -152,7 +157,13 @@ def test_run_engine_job_prefers_inline_resolved_config(
         cwd=tmp_path,
     )
 
-    assert captured["resolved_config"] == resolved
+    assert captured["resolved_settings"] == build_settings(
+        config_name="ignored",
+        config_dir=str(Path(__file__).resolve().parents[1] / "missing-conf-dir"),
+        overrides=[],
+        resolved_config=resolved,
+        env=dict(os.environ),
+    ).model_dump(mode="python")
     assert payload["ok"] is True
 
 
@@ -169,6 +180,26 @@ def test_repo_root_prefect_entrypoint_exposes_run_job_flow(
     assert module.run_generate_job_flow is prefect_entrypoint.run_generate_job_flow
     assert module.run_combined_job_flow.name == "discoverex-combined-flow"
     assert module.run_combined_job_flow is prefect_entrypoint.run_combined_job_flow
+
+
+def test_summarize_payload_includes_tracking_and_artifact_ids() -> None:
+    summary = summarize_payload(
+        {
+            "status": "approved",
+            "flow_run_id": "prefect-flow-123",
+            "attempt": 1,
+            "artifact_bucket": "orchestrator-artifacts",
+            "artifact_prefix": "jobs/prefect-flow-123/attempt-1/",
+            "mlflow_run_id": "mlflow-run-123",
+            "effective_tracking_uri": "https://mlflow.example.com",
+        }
+    )
+
+    assert summary["flow_run_id"] == "prefect-flow-123"
+    assert summary["artifact_bucket"] == "orchestrator-artifacts"
+    assert summary["artifact_prefix"] == "jobs/prefect-flow-123/attempt-1/"
+    assert summary["mlflow_run_id"] == "mlflow-run-123"
+    assert summary["effective_tracking_uri"] == "https://mlflow.example.com"
 
 
 def test_dispatch_engine_job_calls_nested_generate_pipeline(
@@ -216,6 +247,12 @@ def test_dispatch_engine_job_calls_nested_generate_pipeline(
             "command": "generate",
             "config_name": "generate",
             "config_dir": "conf",
+            "resolved_settings": build_settings(
+                config_name="generate",
+                config_dir="conf",
+                overrides=["profile=generator_pixart_gpu_v2_hidden_object"],
+                env={},
+            ).model_dump(mode="python"),
             "args": {"background_prompt": "harbor"},
             "overrides": ["profile=generator_pixart_gpu_v2_hidden_object"],
         },
@@ -258,6 +295,115 @@ def test_flow_kind_entrypoint_rejects_mismatched_command(
                 ensure_ascii=True,
             )
         )
+
+
+def test_build_runtime_env_merges_runtime_extra_env(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("BASE_ONLY", "1")
+    monkeypatch.setenv("SHARED_KEY", "from-os")
+    monkeypatch.setattr("infra.prefect.runtime.repo_root", lambda: tmp_path)
+
+    env = build_runtime_env(
+        job_spec={
+            "engine": "discoverex",
+            "run_mode": "repo",
+            "job_name": "job-1",
+            "env": {
+                "RUNNER_ONLY": "runner",
+                "SHARED_KEY": "from-job-spec-env",
+            },
+            "inputs": {
+                "runtime": {
+                    "extra_env": {
+                        "EXTRA_ONLY": "extra",
+                        "SHARED_KEY": "from-runtime-extra-env",
+                        "MLFLOW_TRACKING_URI": "http://mlflow.example.com",
+                        "UV_CACHE_DIR": "/cache/uv",
+                    }
+                }
+            },
+        },
+        flow_run_id="flow-1",
+        attempt=1,
+        outputs_prefix="jobs/flow-1/attempt-1/",
+        resume_key=None,
+        checkpoint_dir=None,
+    )
+
+    assert env["BASE_ONLY"] == "1"
+    assert env["RUNNER_ONLY"] == "runner"
+    assert env["EXTRA_ONLY"] == "extra"
+    assert env["SHARED_KEY"] == "from-runtime-extra-env"
+    assert env["MLFLOW_TRACKING_URI"] == "http://mlflow.example.com"
+    assert env["UV_CACHE_DIR"] == "/cache/uv"
+
+
+def test_build_runtime_env_preserves_huggingface_auth_from_worker_env(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("HF_TOKEN", "hf-token")
+    monkeypatch.setenv("HUGGINGFACE_HUB_TOKEN", "hub-token")
+    monkeypatch.setenv("HUGGINGFACE_TOKEN", "legacy-token")
+    monkeypatch.setattr("infra.prefect.runtime.repo_root", lambda: tmp_path)
+
+    env = build_runtime_env(
+        job_spec={
+            "engine": "discoverex",
+            "run_mode": "inline",
+            "job_name": "job-1",
+            "env": {},
+            "inputs": {"runtime": {"extra_env": {}}},
+        },
+        flow_run_id="flow-1",
+        attempt=1,
+        outputs_prefix="jobs/flow-1/attempt-1/",
+        resume_key=None,
+        checkpoint_dir=None,
+    )
+
+    assert env["HF_TOKEN"] == "hf-token"
+    assert env["HUGGINGFACE_HUB_TOKEN"] == "hub-token"
+    assert env["HUGGINGFACE_TOKEN"] == "legacy-token"
+
+
+def test_build_runtime_env_places_worker_artifacts_under_runtime_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("DISCOVEREX_WORKER_RUNTIME_DIR", str(tmp_path / "runtime"))
+    monkeypatch.setattr("infra.prefect.runtime.repo_root", lambda: tmp_path)
+
+    env = build_runtime_env(
+        job_spec={
+            "engine": "discoverex",
+            "run_mode": "inline",
+            "job_name": "job-1",
+            "env": {},
+            "inputs": {"runtime": {"extra_env": {}}},
+        },
+        flow_run_id="flow-xyz",
+        attempt=3,
+        outputs_prefix="jobs/flow-xyz/attempt-3/",
+        resume_key=None,
+        checkpoint_dir=None,
+    )
+
+    assert env["ORCH_ENGINE_ARTIFACT_DIR"] == str(
+        (tmp_path / "runtime" / "engine-runs" / "flow-xyz" / "attempt-3").resolve()
+    )
+    assert env["ORCH_ENGINE_ARTIFACT_MANIFEST_PATH"] == str(
+        (
+            tmp_path
+            / "runtime"
+            / "engine-runs"
+            / "flow-xyz"
+            / "attempt-3"
+            / "engine-artifacts.json"
+        ).resolve()
+    )
 
 
 def test_repo_root_prefect_entrypoint_routes_job_into_engine_entry(
@@ -467,6 +613,72 @@ def test_repo_root_prefect_entrypoint_raises_on_failed_payload(
     assert uploaded
     stderr_text = capsys.readouterr().err
     assert "[discoverex-engine-flow] failure-context" in stderr_text
+
+
+def test_repo_root_prefect_entrypoint_runs_preflight_before_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        prefect_entrypoint,
+        "validate_runtime_services",
+        lambda **kwargs: calls.append("preflight"),
+    )
+    monkeypatch.setattr(
+        prefect_entrypoint,
+        "engine_job_task",
+        lambda payload, cwd, env: prefect_dispatch.DispatchResult(
+            payload={"status": "completed"},
+            stdout='{"status":"completed"}\n',
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
+
+    output = prefect_entrypoint.run_job_flow.fn(
+        json.dumps(
+            {
+                "run_mode": "inline",
+                "engine": "discoverex",
+                "inputs": {
+                    "contract_version": "v2",
+                    "command": "generate",
+                    "args": {"background_prompt": "test"},
+                },
+            },
+            ensure_ascii=True,
+        )
+    )
+
+    assert output["status"] == "completed"
+    assert calls == ["preflight"]
+
+
+def test_repo_root_prefect_entrypoint_fails_when_preflight_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        prefect_entrypoint,
+        "validate_runtime_services",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("preflight failed")),
+    )
+    monkeypatch.setattr(prefect_entrypoint, "get_run_logger", lambda: _FakeLogger([]))
+
+    with pytest.raises(RuntimeError, match="preflight failed"):
+        prefect_entrypoint.run_job_flow.fn(
+            json.dumps(
+                {
+                    "run_mode": "inline",
+                    "engine": "discoverex",
+                    "inputs": {
+                        "contract_version": "v2",
+                        "command": "generate",
+                        "args": {"background_prompt": "test"},
+                    },
+                },
+                ensure_ascii=True,
+            )
+        )
 
 
 def _capture_uploaded(

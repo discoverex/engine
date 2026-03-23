@@ -64,7 +64,7 @@ As of 2026-03-15, the repository has completed the core engine-side refactor and
 - some docs still need final wording cleanup so they describe the worker contract below as the only authoritative path
 - the prior `exit_code: -9` kill seen during one remote generate run is not currently reproducible after the repo-local `.venv` bootstrap and subprocess dispatch fixes; keep runtime-metric inspection available for future regressions
 - the low-memory fallback submit spec remains available for comparison runs:
-  - `infra/register/job_specs/real-generate-sdxl-gpu-8gb-safe.json`
+  - `infra/register/job_specs/prod-gen-sdxl-none-hfregion-sdxlinpaint-fast-8gb.yaml`
 
 ## 2026-03-15 Runtime Incident Update
 

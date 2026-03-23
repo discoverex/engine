@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
+from discoverex.application.services.artifact_io import (
+    publish_worker_artifacts,
+    summarize_engine_payload,
+)
+from discoverex.settings import AppSettings
 from infra.prefect.job_spec import string_value
 from infra.prefect.runtime import (
     ARTIFACT_DIR_ENV,
@@ -62,40 +66,23 @@ def upload_worker_artifacts(
     *,
     flow_run_id: str,
     attempt: int,
+    parsed: dict[str, Any],
     local_paths: dict[str, str],
     require_manifest: bool,
     logger: Any,
 ) -> dict[str, Any]:
-    if not os.getenv("STORAGE_API_URL", "").strip():
+    settings = _settings_from_payload(parsed)
+    if settings is None or not settings.storage.storage_api_url.strip():
         logger.info("storage upload skipped: STORAGE_API_URL not configured")
         return {}
-    from discoverex.orchestrator_contract.output_uploads import (
-        upload_engine_artifacts,
-        upload_outputs,
-    )
-
-    uploaded = upload_outputs(
+    return publish_worker_artifacts(
         flow_run_id=flow_run_id,
         attempt=attempt,
-        local_paths=local_paths,
-    )
-    engine_uploaded = upload_engine_artifacts(
-        flow_run_id=flow_run_id,
-        attempt=attempt,
+        parsed=parsed,
         local_paths=local_paths,
         require_manifest=require_manifest,
+        settings=settings,
     )
-    payload: dict[str, Any] = {
-        "stdout_uri": uploaded.get("stdout"),
-        "stderr_uri": uploaded.get("stderr"),
-        "result_uri": uploaded.get("result"),
-        "manifest_uri": uploaded.get("manifest"),
-    }
-    if engine_uploaded.manifest_uri:
-        payload["engine_manifest_uri"] = engine_uploaded.manifest_uri
-    if engine_uploaded.artifact_uris:
-        payload["engine_artifact_uris"] = engine_uploaded.artifact_uris
-    return {key: value for key, value in payload.items() if value}
 
 
 def payload_status(parsed: dict[str, Any]) -> str:
@@ -117,27 +104,24 @@ def raise_if_failed_payload(parsed: dict[str, Any]) -> None:
 
 
 def summarize_payload(parsed: dict[str, Any]) -> dict[str, str]:
-    keys = (
-        "status",
-        "job_name",
-        "engine",
-        "run_mode",
-        "scene_id",
-        "version_id",
-        "scene_json",
-        "report",
-        "execution_config",
-        "stdout_uri",
-        "stderr_uri",
-        "result_uri",
-        "manifest_uri",
-        "engine_manifest_uri",
-    )
-    summary = {
-        key: string_value(parsed.get(key))
-        for key in keys
-        if string_value(parsed.get(key))
-    }
-    if not summary:
-        return {"status": "completed"}
-    return summary
+    return summarize_engine_payload(parsed)
+
+
+def _settings_from_payload(parsed: dict[str, Any]) -> AppSettings | dict[str, Any] | None:
+    execution_config = string_value(parsed.get("execution_config"))
+    if not execution_config:
+        return None
+    path = Path(execution_config)
+    if not path.exists():
+        return None
+    try:
+        snapshot = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    resolved = snapshot.get("resolved_settings")
+    if not isinstance(resolved, dict):
+        return None
+    try:
+        return AppSettings.model_validate(resolved)
+    except Exception:
+        return None

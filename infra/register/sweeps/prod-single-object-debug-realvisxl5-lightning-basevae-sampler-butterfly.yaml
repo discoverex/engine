@@ -1,0 +1,18 @@
+sweep_id: prod-single-object-debug-realvisxl5-lightning-basevae-sampler-butterfly
+search_stage: debug
+experiment_name: prod-single-object-debug-realvisxl5-lightning-basevae-sampler-butterfly
+base_job_spec: ../job_specs/prod-genobjdebug-none-realvisxl5-lightning-basevae-none-8gb.yaml
+fixed_overrides:
+  - adapters/tracker=mlflow_server
+scenarios:
+  - scenario_id: butterfly-realvisxl5-lightning-basevae
+    background_prompt: unused-for-single-object-debug-flow
+    background_negative_prompt: ""
+    object_prompt: butterfly
+    object_negative_prompt: blurry, low quality, artifact
+parameters:
+  models.object_generator.sampler:
+    - dpmpp_sde_karras
+    - dpmpp_sde
+    - unipc
+    - euler

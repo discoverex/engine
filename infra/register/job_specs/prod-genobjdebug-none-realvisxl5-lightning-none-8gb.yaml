@@ -1,0 +1,52 @@
+run_mode: repo
+engine: discoverex
+entrypoint:
+  - prefect_flow.py:run_generate_job_flow
+config: null
+job_name: prod-genobjdebug-none-realvisxl5-lightning-none-8gb
+inputs:
+  contract_version: v2
+  command: generate
+  config_name: generate
+  config_dir: conf
+  args:
+    object_prompt: butterfly
+    object_negative_prompt: blurry, low quality, artifact
+    object_generation_size: 512
+    object_count: 1
+  overrides:
+    - profile=generator_pixart_gpu_v2_hidden_object
+    - runtime/model_runtime=gpu
+    - flows/generate=single_object_debug
+    - runtime.model_runtime.batch_size=1
+    - runtime.width=512
+    - runtime.height=512
+    - runtime.background_upscale_factor=2
+    - runtime.model_runtime.enable_attention_slicing=true
+    - runtime.model_runtime.enable_vae_slicing=true
+    - runtime.model_runtime.enable_vae_tiling=true
+    - runtime.model_runtime.enable_xformers_memory_efficient_attention=true
+    - runtime.model_runtime.enable_channels_last=true
+    - models/object_generator=layerdiffuse_realvisxl5_lightning
+    - models.object_generator.model_id=SG161222/RealVisXL_V5.0_Lightning
+    - models.object_generator.sampler=dpmpp_sde_karras
+    - models.object_generator.default_num_inference_steps=5
+    - models.object_generator.default_guidance_scale=1.0
+    - models.object_generator.dtype=float16
+    - models.object_generator.precision=fp16
+    - models/hidden_region=dummy
+    - models/perception=dummy
+    - models/inpaint=dummy
+    - models/fx=dummy
+    - runtime.model_runtime.offload_mode=sequential
+  runtime:
+    mode: worker
+    bootstrap_mode: none
+    extras:
+      - tracking
+      - storage
+      - ml-gpu
+      - validator
+    extra_env: {}
+env: {}
+outputs_prefix: null
