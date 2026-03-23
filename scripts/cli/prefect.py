@@ -15,7 +15,7 @@ from uuid import UUID
 import typer
 import yaml
 
-from infra.register.branch_deployments import (
+from infra.ops.branch_deployments import (
     DEFAULT_FLOW_KIND,
     SUPPORTED_FLOW_KINDS,
     SUPPORTED_DEPLOYMENT_PURPOSES,
@@ -41,24 +41,27 @@ app = typer.Typer(
 deploy_app = typer.Typer(no_args_is_help=True, add_completion=False)
 register_app = typer.Typer(no_args_is_help=True, add_completion=False)
 run_app = typer.Typer(no_args_is_help=True, add_completion=False)
+sweep_app = typer.Typer(no_args_is_help=True, add_completion=False)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-INFRA_DIR = REPO_ROOT / "infra" / "register"
+INFRA_DIR = REPO_ROOT / "infra" / "ops"
 DEFAULT_REGISTER_JOB_SPEC = (
     INFRA_DIR
-    / "job_specs"
+    / "specs"
+    / "job"
     / "generate_verify.standard.yaml"
 )
 DEFAULT_OBJECT_REGISTER_JOB_SPEC = (
     INFRA_DIR
-    / "job_specs"
+    / "specs"
+    / "job"
     / "object_generation.standard.yaml"
 )
 DEFAULT_NATURALNESS_SWEEP_SPEC = (
-    INFRA_DIR / "sweeps" / "combined" / "patch_selection_inpaint.grid.medium.yaml"
+    INFRA_DIR / "specs" / "sweep" / "combined" / "patch_selection_inpaint.grid.medium.yaml"
 )
 DEFAULT_OBJECT_QUALITY_SWEEP_SPEC = (
-    INFRA_DIR / "sweeps" / "object_generation" / "transparent_three_object.quality.v1.yaml"
+    INFRA_DIR / "specs" / "sweep" / "object_generation" / "transparent_three_object.quality.v1.yaml"
 )
 DEFAULT_EXPERIMENT_QUEUE = "gpu-fixed-batch"
 DEFAULT_EXPERIMENT_NAME = "naturalness"
@@ -94,6 +97,14 @@ def _run_infra_script(module_name: str, args: list[str]) -> int:
     cmd = [sys.executable, "-m", module_name, *args]
     proc = subprocess.run(cmd, check=False)
     return proc.returncode
+
+
+def _default_submitted_manifest_path(sweep_spec: Path) -> Path:
+    payload = yaml.safe_load(sweep_spec.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise typer.BadParameter(f"sweep spec at {sweep_spec} must decode to an object")
+    sweep_id = str(payload.get("sweep_id", "")).strip() or sweep_spec.stem
+    return INFRA_DIR / "manifests" / f"{sweep_id}.submitted.json"
 
 
 def _extract_option(args: list[str], option: str) -> tuple[str | None, list[str]]:
@@ -194,7 +205,7 @@ def _prefect_client_settings() -> Mapping[Any, Any]:
         PREFECT_CLIENT_CUSTOM_HEADERS,
     )
 
-    from infra.register.settings import SETTINGS
+    from infra.ops.settings import SETTINGS
 
     api_url = SETTINGS.prefect_api_url or "https://prefect-api.discoverex.qzz.io/api"
     headers: dict[str, str] = {}
@@ -314,7 +325,7 @@ def deploy_flow(
             f"flow_kind must be one of: {', '.join(SUPPORTED_FLOW_KINDS)}"
         )
     exit_code = _run_infra_script(
-        "infra.register.deploy_prefect_flows", ["--flow-kind", flow_kind, *ctx.args]
+        "infra.ops.deploy_prefect_flows", ["--flow-kind", flow_kind, *ctx.args]
     )
     raise typer.Exit(exit_code)
 
@@ -343,7 +354,7 @@ def register_flow(
     ]
     if not _contains_any(remaining, ("--job-spec-file", "--job-spec-json")):
         submit_args.extend(["--job-spec-file", str(DEFAULT_REGISTER_JOB_SPEC)])
-    exit_code = _run_infra_script("infra.register.submit_job_spec", submit_args)
+    exit_code = _run_infra_script("infra.ops.submit_job_spec", submit_args)
     raise typer.Exit(exit_code)
 
 
@@ -392,7 +403,7 @@ def register_batch(
             "--job-spec-json",
             _build_job_spec_json_for_row(template, row, row_index=row_index),
         ]
-        exit_code = _run_infra_script("infra.register.submit_job_spec", submit_args)
+        exit_code = _run_infra_script("infra.ops.submit_job_spec", submit_args)
         if exit_code != 0:
             raise typer.Exit(exit_code)
 
@@ -424,7 +435,7 @@ def register_experiment_sweep(
     submit_args.extend(["--experiment", experiment])
     submit_args.extend(remaining)
     exit_code = _run_infra_script(
-        "infra.register.naturalness_sweep",
+        "infra.ops.naturalness_sweep",
         submit_args,
     )
     raise typer.Exit(exit_code)
@@ -457,7 +468,7 @@ def register_object_quality_sweep(
     submit_args.extend(["--experiment", experiment])
     submit_args.extend(remaining)
     exit_code = _run_infra_script(
-        "infra.register.object_generation_sweep",
+        "infra.ops.object_generation_sweep",
         submit_args,
     )
     raise typer.Exit(exit_code)
@@ -494,7 +505,7 @@ def deploy_experiment(
     )
     deploy_args.extend(remaining)
     exit_code = _run_infra_script(
-        "infra.register.deploy_prefect_flows",
+        "infra.ops.deploy_prefect_flows",
         deploy_args,
     )
     raise typer.Exit(exit_code)
@@ -507,7 +518,7 @@ def deploy_experiment(
 )
 def deploy(ctx: typer.Context) -> None:
     exit_code = _run_infra_script(
-        "infra.register.deploy_prefect_flows",
+        "infra.ops.deploy_prefect_flows",
         ["--flow-kind", DEFAULT_FLOW_KIND, *ctx.args],
     )
     raise typer.Exit(exit_code)
@@ -533,7 +544,7 @@ def register(ctx: typer.Context) -> None:
     ]
     if not _contains_any(remaining, ("--job-spec-file", "--job-spec-json")):
         submit_args.extend(["--job-spec-file", str(DEFAULT_REGISTER_JOB_SPEC)])
-    exit_code = _run_infra_script("infra.register.submit_job_spec", submit_args)
+    exit_code = _run_infra_script("infra.ops.submit_job_spec", submit_args)
     raise typer.Exit(exit_code)
 
 
@@ -553,7 +564,7 @@ def _run_standard_job_spec(
     ]
     if extra_args:
         submit_args.extend(extra_args)
-    exit_code = _run_infra_script("infra.register.submit_job_spec", submit_args)
+    exit_code = _run_infra_script("infra.ops.submit_job_spec", submit_args)
     raise typer.Exit(exit_code)
 
 
@@ -563,7 +574,7 @@ def _run_standard_job_spec(
     help="Register a job using the raw orchestrator script.",
 )
 def register_raw(ctx: typer.Context) -> None:
-    exit_code = _run_infra_script("infra.register.register_orchestrator_job", ctx.args)
+    exit_code = _run_infra_script("infra.ops.register_orchestrator_job", ctx.args)
     raise typer.Exit(exit_code)
 
 
@@ -601,12 +612,76 @@ def run_obj(
     )
 
 
+@sweep_app.command(
+    "run",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Submit an object-quality sweep using a YAML sweep spec.",
+)
+def sweep_run(
+    ctx: typer.Context,
+    experiment: str = typer.Option("object-quality", "--experiment"),
+    sweep_spec: Path = typer.Option(
+        DEFAULT_OBJECT_QUALITY_SWEEP_SPEC,
+        "--sweep-spec",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+    ),
+) -> None:
+    deployment, remaining = _extract_option(ctx.args, "--deployment")
+    purpose, remaining = _resolve_purpose(remaining, default=DEFAULT_EXPERIMENT_PURPOSE)
+    submit_args = [str(sweep_spec)]
+    if not _contains_any(remaining, ("--output", "--submitted-manifest")):
+        submit_args.extend(["--output", str(_default_submitted_manifest_path(sweep_spec))])
+    submit_args.extend(
+        ["--deployment", deployment or _experiment_deployment_name(purpose, experiment)]
+    )
+    submit_args.extend(["--purpose", purpose])
+    submit_args.extend(["--experiment", experiment])
+    submit_args.extend(remaining)
+    exit_code = _run_infra_script(
+        "infra.ops.object_generation_sweep",
+        submit_args,
+    )
+    raise typer.Exit(exit_code)
+
+
+@sweep_app.command(
+    "collect",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Collect and aggregate an object-quality sweep from a YAML sweep spec.",
+)
+def sweep_collect(
+    ctx: typer.Context,
+    sweep_spec: Path = typer.Option(
+        DEFAULT_OBJECT_QUALITY_SWEEP_SPEC,
+        "--sweep-spec",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+    ),
+) -> None:
+    submitted_manifest, remaining = _extract_option(ctx.args, "--submitted-manifest")
+    collect_args = [
+        "--submitted-manifest",
+        submitted_manifest or str(_default_submitted_manifest_path(sweep_spec)),
+        *remaining,
+    ]
+    exit_code = _run_infra_script(
+        "infra.ops.collect_object_generation_sweep",
+        collect_args,
+    )
+    raise typer.Exit(exit_code)
+
+
 @app.command(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
     help="Build a job specification JSON file.",
 )
 def build_spec(ctx: typer.Context) -> None:
-    exit_code = _run_infra_script("infra.register.build_job_spec", ctx.args)
+    exit_code = _run_infra_script("infra.ops.build_job_spec", ctx.args)
     raise typer.Exit(exit_code)
 
 
@@ -615,7 +690,7 @@ def build_spec(ctx: typer.Context) -> None:
     help="Submit a pre-built job specification to Prefect.",
 )
 def submit_spec(ctx: typer.Context) -> None:
-    exit_code = _run_infra_script("infra.register.submit_job_spec", ctx.args)
+    exit_code = _run_infra_script("infra.ops.submit_job_spec", ctx.args)
     raise typer.Exit(exit_code)
 
 
@@ -675,3 +750,4 @@ def inspect_run(
 app.add_typer(deploy_app, name="deploy")
 app.add_typer(register_app, name="register")
 app.add_typer(run_app, name="run")
+app.add_typer(sweep_app, name="sweep")

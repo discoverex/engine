@@ -78,12 +78,12 @@ packages = ["src/discoverex", "infra", "delivery"]
 discoverex = "discoverex.adapters.inbound.cli.main:app"
 discoverex-orch-launcher = "discoverex.orchestrator_contract.launcher:main"
 discoverex-execution-launcher = "discoverex.adapters.outbound.execution.launcher:main"
-discoverex-build-job-spec = "infra.register.build_job_spec:main"
-discoverex-check-flow-run-status = "infra.register.check_flow_run_status:main"
-discoverex-deploy-prefect-flows = "infra.register.deploy_prefect_flows:main"
-discoverex-register-orchestrator-job = "infra.register.register_orchestrator_job:main"
-discoverex-register-prefect-job = "infra.register.register_prefect_job:main"
-discoverex-submit-job-spec = "infra.register.submit_job_spec:main"
+discoverex-build-job-spec = "infra.ops.build_job_spec:main"
+discoverex-check-flow-run-status = "infra.ops.check_flow_run_status:main"
+discoverex-deploy-prefect-flows = "infra.ops.deploy_prefect_flows:main"
+discoverex-register-orchestrator-job = "infra.ops.register_orchestrator_job:main"
+discoverex-register-prefect-job = "infra.ops.register_prefect_job:main"
+discoverex-submit-job-spec = "infra.ops.submit_job_spec:main"
 discoverex-worker = "infra.worker.start:main"
 
 [tool.uv]
@@ -120,7 +120,7 @@ warn_unused_configs = true
 warn_unused_ignores = false
 plugins = ["pydantic.mypy"]
 mypy_path = ["src"]
-files = ["src", "infra/register", "tests"]
+files = ["src", "infra/ops", "tests"]
 exclude = ["^src/sample/", "^src/ML/"]
 
 [[tool.mypy.overrides]]
