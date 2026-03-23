@@ -52,7 +52,14 @@ class SpandrelUpscaler:
     def _ai_upscale(self, image: Path, scale_factor: float) -> Path:
         import spandrel
 
-        src = Image.open(image).convert("RGB")
+        raw = Image.open(image)
+        # RGBA 투명 영역을 흰색으로 채운 후 RGB 변환 (검은 박스 방지)
+        if raw.mode == "RGBA":
+            bg = Image.new("RGB", raw.size, (255, 255, 255))
+            bg.paste(raw, mask=raw.split()[3])
+            src = bg
+        else:
+            src = raw.convert("RGB")
         ow, oh = src.size
 
         # 모델 로드 (최초 1회)
