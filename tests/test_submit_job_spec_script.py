@@ -32,14 +32,15 @@ def test_submit_job_spec_resolves_deployment_from_inputs(
             return [
                 SimpleNamespace(
                     id="12345678-1234-5678-1234-567812345678",
-                    name="discoverex-generate-dev",
+                    name="discoverex-generate-standard",
                 )
             ]
 
-        def create_flow_run_from_deployment(self, deployment_id, *, parameters, name):  # type: ignore[no-untyped-def]
+        def create_flow_run_from_deployment(self, deployment_id, *, parameters, name, work_queue_name=None):  # type: ignore[no-untyped-def]
             captured["deployment_id"] = deployment_id
             captured["parameters"] = parameters
             captured["name"] = name
+            captured["work_queue_name"] = work_queue_name
             return SimpleNamespace(id="flow-456", name="run-789")
 
     @contextmanager
@@ -81,10 +82,11 @@ def test_submit_job_spec_resolves_deployment_from_inputs(
         prefect_api_url="http://127.0.0.1:4200/api",
     )
 
-    assert output["deployment"] == "discoverex-generate-dev"
+    assert output["deployment"] == "discoverex-generate-standard"
     assert output["deployment_id"] == "12345678-1234-5678-1234-567812345678"
     assert output["flow_run_id"] == "flow-456"
     assert output["flow_run_name"] == "run-789"
+    assert output["work_queue_name"] is None
     assert captured["sync_client"] is True
     assert captured["settings_updates"] == {
         register_job.PREFECT_API_URL: "http://127.0.0.1:4200/api"
@@ -144,12 +146,12 @@ def test_submit_job_spec_preserves_explicit_resolved_config(
             return [
                 SimpleNamespace(
                     id="12345678-1234-5678-1234-567812345678",
-                    name="discoverex-generate-dev",
+                    name="discoverex-generate-standard",
                 )
             ]
 
-        def create_flow_run_from_deployment(self, deployment_id, *, parameters, name):  # type: ignore[no-untyped-def]
-            _ = (deployment_id, name)
+        def create_flow_run_from_deployment(self, deployment_id, *, parameters, name, work_queue_name=None):  # type: ignore[no-untyped-def]
+            _ = (deployment_id, name, work_queue_name)
             captured["parameters"] = parameters
             return SimpleNamespace(id="flow-456", name="run-789")
 

@@ -43,6 +43,8 @@ fixed_overrides:
 scenario:
   scenario_id: transparent-three-object-quality
   object_prompt: butterfly | antique brass key | dinosaur
+  object_prompt_style: transparent_only
+  object_negative_profile: anti_white
   object_count: 3
 parameters:
   models.object_generator.default_num_inference_steps: ["5", "8"]
@@ -59,6 +61,8 @@ parameters:
     assert manifest["job_count"] == 4
     first = manifest["jobs"][0]["job_spec"]
     assert first["inputs"]["args"]["sweep_id"] == "object-quality.test"
+    assert first["inputs"]["args"]["object_prompt_style"] == "transparent_only"
+    assert first["inputs"]["args"]["object_negative_profile"] == "anti_white"
     assert first["inputs"]["args"]["object_generation_size"] == "512"
     assert "runtime.model_runtime.seed=7" in first["inputs"]["overrides"]
 
@@ -96,10 +100,12 @@ def test_submit_manifest_records_flow_run_ids(monkeypatch) -> None:  # type: ign
         purpose="batch",
         experiment="object-quality",
         deployment=None,
+        work_queue_name="gpu-fixed-batch-1",
         dry_run=False,
     )
 
     assert captured["deployment"] == "discoverex-generate-batch-object-quality"
+    assert captured["work_queue_name"] == "gpu-fixed-batch-1"
     assert result["results"][0]["flow_run_id"] == "run-123"
 
 
@@ -193,6 +199,7 @@ def test_submit_manifest_retries_only_missing_or_unsubmitted(
         purpose="batch",
         experiment="object-quality",
         deployment=None,
+        work_queue_name="gpu-fixed-batch-1",
         dry_run=False,
         submitted_manifest=submitted_manifest,
         artifacts_root=artifacts_root,

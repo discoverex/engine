@@ -97,6 +97,8 @@ def test_object_only_passes_generate_verify_v2_style_object_args(
             "object_negative_prompt": "blurry, low quality, artifact",
             "object_base_prompt": "isolated single object on a transparent background",
             "object_base_negative_prompt": "opaque background, solid background",
+            "object_prompt_style": "transparent_only",
+            "object_negative_profile": "anti_white",
             "object_generation_size": 640,
             "object_count": 1,
         },
@@ -115,6 +117,8 @@ def test_object_only_passes_generate_verify_v2_style_object_args(
         captured_generation["object_base_negative_prompt"]
         == "opaque background, solid background"
     )
+    assert captured_generation["object_prompt_style"] == "transparent_only"
+    assert captured_generation["object_negative_profile"] == "anti_white"
     assert captured_generation["object_generation_size"] == 640
 
 
