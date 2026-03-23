@@ -128,6 +128,79 @@ if img_layer:
 | `adapters/outbound/animate/format_converter.py` | canvas_padding, anchor=[0,0], position=[img_x, img_y] |
 | `adapters/outbound/animate/lottie_baker_transform.py` | null 레이어 기준점을 이미지 좌상단에서 추출 |
 
+---
+
+## 변경 3: 캔버스 480×480 고정 (1eff692)
+
+canvas_padding 비율 방식에서 **고정 480×480 캔버스**로 변경.
+
+```python
+# format_converter.py
+canvas_size: int = 480  # 고정
+
+cw, ch = canvas_size, canvas_size
+img_x = (cw - iw) / 2   # 이미지 좌상단 x
+img_y = (ch - ih) / 2   # 이미지 좌상단 y
+```
+
+```
+캔버스 480×480 (투명 배경)
+┌──────────────────────────────┐
+│                              │
+│        ★┌──────┐            │  ★ = anchor [0,0] (이미지 좌상단)
+│        │ 나비  │            │  position = [218, 203]
+│        │44×74  │            │  이미지 크기 유지
+│        └──────┘            │
+│                              │
+└──────────────────────────────┘
+```
+
+---
+
+## 변경 4: 두 경로 모두 적용 확인 (8a55735)
+
+Lottie 생성 경로가 2개 있으며, 둘 다 동일한 `_save_lottie()` 함수를 거친다.
+
+### 경로 1: KEYFRAME_ONLY (모션 불필요)
+
+```
+이미지 분류 → keyframe_only 판정
+  → build_keyframe_only_lottie()
+    → converter.convert([단일 프레임], preset="original", fps=1)
+      → _save_lottie()  ← 캔버스 480, anchor [0,0] 적용 ✅
+```
+
+### 경로 2: MOTION_NEEDED (모션 + 키프레임)
+
+```
+WAN 모션 생성 → 배경 제거 → 투명 프레임
+  → api_select_video()
+    → converter.convert_with_opts(frames, fps, max_size)
+      → _save_lottie()  ← 캔버스 480, anchor [0,0] 적용 ✅
+```
+
+### lottie_info 응답 통일
+
+두 경로 모두 동일한 형식으로 응답:
+
+```json
+{
+  "width": 480,
+  "height": 480,
+  "original_width": 60,
+  "original_height": 83,
+  "fps": 16,
+  "frame_count": 64,
+  "file_size_mb": 1.2
+}
+```
+
+| 파일 | 수정 내용 |
+|------|----------|
+| `engine_server_helpers.py` | `build_keyframe_only_lottie` 응답에 `original_width/height` 추가, `width/height`를 Lottie JSON에서 읽도록 수정 |
+
+---
+
 ## 테스트
 
 247 passed, 7 skipped, 0 failed
