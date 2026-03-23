@@ -376,11 +376,6 @@ def test_layerdiffuse_hidden_object_mode_writes_stage_artifacts(
     )
     monkeypatch.setattr(
         model,
-        "_refine_hidden_object_mask",
-        lambda **kwargs: kwargs["fallback_mask"],
-    )
-    monkeypatch.setattr(
-        model,
         "_apply_relight_hint",
         lambda image: image,
     )
@@ -400,7 +395,7 @@ def test_layerdiffuse_hidden_object_mode_writes_stage_artifacts(
 
     assert pred["inpaint_mode"] == "layerdiffuse_hidden_object_v1"
     assert pred["placement_variant_id"].startswith("variant-")
-    assert pred["mask_source"] == "rmbg_2_0"
+    assert pred["mask_source"] == "object_alpha"
     assert Path(pred["variant_manifest_ref"]).exists()
     assert Path(pred["precomposited_image_ref"]).exists()
     assert Path(pred["edge_mask_ref"]).exists()
@@ -482,11 +477,6 @@ def test_layerdiffuse_hidden_object_mode_skips_final_polish_when_steps_zero(
     )
     monkeypatch.setattr(
         model,
-        "_refine_hidden_object_mask",
-        lambda **kwargs: kwargs["fallback_mask"],
-    )
-    monkeypatch.setattr(
-        model,
         "_apply_relight_hint",
         lambda image: image,
     )
@@ -508,8 +498,6 @@ def test_layerdiffuse_hidden_object_mode_skips_final_polish_when_steps_zero(
     assert captured[0]["label"] == "edge"
     assert captured[1]["label"] == "core"
     assert "final_polish_ref" not in pred
-
-
 def test_load_object_assets_uses_object_alpha_instead_of_external_mask(
     tmp_path: Path,
 ) -> None:

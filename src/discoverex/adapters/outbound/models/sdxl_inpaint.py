@@ -474,10 +474,7 @@ class SdxlInpaintModel:
     ) -> dict[str, Any]:
         self._validate_hidden_object_backends()
         object_image, object_mask = self._load_object_assets(request=request)
-        refined_mask = self._refine_hidden_object_mask(
-            image=object_image.convert("RGB"),
-            fallback_mask=object_mask,
-        )
+        refined_mask = object_mask.convert("L")
         object_image = object_image.convert("RGBA")
         object_image.putalpha(refined_mask)
         refined_object_path = save_image(
@@ -648,7 +645,7 @@ class SdxlInpaintModel:
             "selected_bbox": placement_bbox,
             "placement_score": placement_score,
             "placement_variant_id": selected_variant["id"],
-            "mask_source": self.mask_refine_backend or "layerdiffuse_alpha_first",
+            "mask_source": "object_alpha",
         }
         if final_patch_path is not None:
             result["final_polish"] = final_patch_path

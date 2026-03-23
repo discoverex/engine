@@ -35,15 +35,46 @@ def move_if_needed(source: Path, target_dir: Path) -> Path:
     return target
 
 
+def normalize_object_assets(
+    *,
+    object_path: Path,
+    mask_path: Path,
+) -> tuple[Path, Path, tuple[int, int, int, int]]:
+    normalized_object = object_path.with_suffix(".object.normalized.png")
+    normalized_mask = object_path.with_suffix(".mask.normalized.png")
+    with (
+        Image.open(object_path).convert("RGBA") as object_image,
+        Image.open(mask_path).convert("L") as mask_image,
+    ):
+        if mask_image.size != object_image.size:
+            mask_image = mask_image.resize(object_image.size, Image.Resampling.NEAREST)
+        normalized_rgba = object_image.copy()
+        normalized_rgba.putalpha(mask_image)
+        tight_bbox = mask_image.getbbox() or (
+            0,
+            0,
+            mask_image.width,
+            mask_image.height,
+        )
+        normalized_rgba.save(normalized_object)
+        mask_image.save(normalized_mask)
+    return normalized_object, normalized_mask, tight_bbox
+
+
 def resize_object_assets(
     *,
     object_path: Path,
+    mask_path: Path,
     size: int,
 ) -> tuple[Path, Path]:
     resized_object = object_path.with_suffix(".object.scaled.png")
     resized_mask = object_path.with_suffix(".mask.scaled.png")
-    with Image.open(object_path).convert("RGBA") as object_image:
-        mask_image = object_image.getchannel("A")
+    with (
+        Image.open(object_path).convert("RGBA") as object_image,
+        Image.open(mask_path).convert("L") as mask_image,
+    ):
+        if mask_image.size != object_image.size:
+            mask_image = mask_image.resize(object_image.size, Image.Resampling.NEAREST)
         tight_bbox = mask_image.getbbox() or (0, 0, mask_image.width, mask_image.height)
         object_tight = object_image.crop(tight_bbox)
         mask_tight = mask_image.crop(tight_bbox)
@@ -78,26 +109,23 @@ def build_placement_assets(
     mask_path: Path,
     raw_alpha_path: Path,
 ) -> PlacementAssets:
+    normalized_object, normalized_mask, tight_bbox = normalize_object_assets(
+        object_path=object_path,
+        mask_path=mask_path,
+    )
     inpaint_mode = str(getattr(context.inpaint_model, "inpaint_mode", ""))
     if inpaint_mode == "layerdiffuse_hidden_object_v1":
-        with Image.open(object_path).convert("RGBA") as object_image:
-            mask_image = object_image.getchannel("A")
-            tight_bbox = mask_image.getbbox() or (
-                0,
-                0,
-                mask_image.width,
-                mask_image.height,
-            )
         return PlacementAssets(
-            object_path=object_path,
-            mask_path=mask_path,
+            object_path=normalized_object,
+            mask_path=normalized_mask,
             raw_alpha_path=raw_alpha_path,
             width=max(1, tight_bbox[2] - tight_bbox[0]),
             height=max(1, tight_bbox[3] - tight_bbox[1]),
             tight_bbox=tight_bbox,
         )
     resized_object, resized_mask = resize_object_assets(
-        object_path=object_path,
+        object_path=normalized_object,
+        mask_path=normalized_mask,
         size=_PLACEMENT_OBJECT_SIZE,
     )
     return PlacementAssets(
