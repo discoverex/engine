@@ -719,6 +719,8 @@ dependencies = [
 
 [package.optional-dependencies]
 animate = [
+    { name = "flask" },
+    { name = "flask-cors" },
     { name = "google-genai" },
     { name = "rembg" },
     { name = "scipy" },
@@ -776,6 +778,8 @@ requires-dist = [
     { name = "boto3", marker = "extra == 'storage'", specifier = ">=1.42.59" },
     { name = "diffusers", marker = "extra == 'ml-cpu'", specifier = ">=0.35.2" },
     { name = "diffusers", marker = "extra == 'ml-gpu'", specifier = ">=0.35.2" },
+    { name = "flask", marker = "extra == 'animate'", specifier = ">=3.0.0" },
+    { name = "flask-cors", marker = "extra == 'animate'", specifier = ">=4.0.0" },
     { name = "google-genai", marker = "extra == 'animate'", specifier = ">=1.0.0" },
     { name = "hydra-core", specifier = ">=1.3.2" },
     { name = "mlflow", marker = "extra == 'tracking'", specifier = ">=3.10.0" },
