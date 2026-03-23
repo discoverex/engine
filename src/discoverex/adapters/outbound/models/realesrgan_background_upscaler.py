@@ -204,7 +204,7 @@ class RealEsrganBackgroundUpscalerModel:
         gpu_id = 0 if handle.device == "cuda" and torch.cuda.is_available() else None
         self._upsampler = RealESRGANer(
             scale=model_scale,
-            model_path=model_path,
+            model_path=str(model_path),
             model=rrdb,
             tile=max(0, int(self.tile)),
             tile_pad=max(0, int(self.tile_pad)),
