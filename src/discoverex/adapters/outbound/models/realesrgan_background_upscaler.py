@@ -298,7 +298,7 @@ def _extract_state_dict(checkpoint: Any) -> dict[str, Any] | None:
         if isinstance(value, dict) and value:
             return value
     if checkpoint and all(isinstance(key, str) for key in checkpoint):
-        return checkpoint
+        return _normalize_state_dict_keys(checkpoint)
     return None
 
 
@@ -306,3 +306,94 @@ def _stable_checkpoint_id(*, model_path: Path) -> str:
     stat = model_path.stat()
     raw = f"{model_path.resolve()}:{stat.st_size}:{int(stat.st_mtime)}"
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def _normalize_state_dict_keys(state_dict: dict[str, Any]) -> dict[str, Any]:
+    if "model.0.weight" in state_dict:
+        return _old_esrgan_to_rrdb_state_dict(state_dict)
+    return state_dict
+
+
+def _old_esrgan_to_rrdb_state_dict(state_dict: dict[str, Any]) -> dict[str, Any]:
+    converted: dict[str, Any] = {
+        "conv_first.weight": state_dict["model.0.weight"],
+        "conv_first.bias": state_dict["model.0.bias"],
+    }
+    block_indices: list[int] = []
+    for key, value in state_dict.items():
+        if not key.startswith("model.1.sub."):
+            continue
+        parts = key.split(".")
+        if len(parts) < 5:
+            continue
+        try:
+            block_idx = int(parts[3])
+        except ValueError:
+            continue
+        if len(parts) == 5 and parts[4] in {"weight", "bias"}:
+            block_indices.append(block_idx)
+            continue
+        if len(parts) < 8 or not parts[4].startswith("RDB"):
+            continue
+        rdb_idx = parts[4][3:]
+        conv_name = parts[5]
+        leaf = parts[7]
+        converted[
+            f"body.{block_idx}.rdb{rdb_idx.lower()}.{conv_name}.{leaf}"
+        ] = value
+        block_indices.append(block_idx)
+    if not block_indices:
+        return state_dict
+    nb = max(block_indices)
+    converted["conv_body.weight"] = state_dict[f"model.1.sub.{nb}.weight"]
+    converted["conv_body.bias"] = state_dict[f"model.1.sub.{nb}.bias"]
+    _copy_if_present(
+        converted,
+        state_dict,
+        src_prefix="model.3",
+        dst_prefix="conv_up1",
+    )
+    _copy_if_present(
+        converted,
+        state_dict,
+        src_prefix="model.6",
+        dst_prefix="conv_up2",
+    )
+    if "model.9.weight" in state_dict:
+        _copy_if_present(
+            converted,
+            state_dict,
+            src_prefix="model.9",
+            dst_prefix="conv_up3",
+        )
+        hr_idx = 11
+        last_idx = 13
+    else:
+        hr_idx = 8
+        last_idx = 10
+    _copy_if_present(
+        converted,
+        state_dict,
+        src_prefix=f"model.{hr_idx}",
+        dst_prefix="conv_hr",
+    )
+    _copy_if_present(
+        converted,
+        state_dict,
+        src_prefix=f"model.{last_idx}",
+        dst_prefix="conv_last",
+    )
+    return converted
+
+
+def _copy_if_present(
+    converted: dict[str, Any],
+    source: dict[str, Any],
+    *,
+    src_prefix: str,
+    dst_prefix: str,
+) -> None:
+    for suffix in ("weight", "bias"):
+        key = f"{src_prefix}.{suffix}"
+        if key in source:
+            converted[f"{dst_prefix}.{suffix}"] = source[key]
