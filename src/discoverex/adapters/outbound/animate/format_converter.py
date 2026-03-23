@@ -121,28 +121,39 @@ def _save_webm(
 def _save_lottie(
     frames: list[Path], out: Path, fps: int,
     max_size: int | None, png_optimize: bool,
+    canvas_padding: float = 1.5,
 ) -> Path | None:
+    """Lottie JSON 생성.
+
+    canvas_padding: 캔버스를 이미지 대비 몇 배로 할지 (1.0=동일, 1.5=1.5배).
+      투명 배경 여백을 추가하여 키프레임 애니메이션이 잘리지 않게 함.
+    """
     try:
         first = Image.open(frames[0])
         ow, oh = first.size
         if max_size and max(ow, oh) > max_size:
             ratio = max_size / max(ow, oh)
-            w, h = int(ow * ratio) // 2 * 2, int(oh * ratio) // 2 * 2
+            iw, ih = int(ow * ratio) // 2 * 2, int(oh * ratio) // 2 * 2
             resize = True
         else:
-            w, h = ow, oh
+            iw, ih = ow, oh
             resize = False
+
+        # 캔버스 = 이미지 × padding (투명 배경 여백)
+        cw = int(iw * canvas_padding) // 2 * 2
+        ch = int(ih * canvas_padding) // 2 * 2
+        cx, cy = cw / 2, ch / 2  # 캔버스 중심 = 이미지 배치 위치
 
         assets, layers = [], []
         for i, path in enumerate(frames):
             img = Image.open(path).convert("RGBA")
             if resize:
-                img = img.resize((w, h), Image.Resampling.LANCZOS)
+                img = img.resize((iw, ih), Image.Resampling.LANCZOS)
             buf = io.BytesIO()
             img.save(buf, format="PNG", optimize=png_optimize)
             b64 = base64.b64encode(buf.getvalue()).decode("ascii")
             assets.append({
-                "id": f"frame_{i}", "w": w, "h": h,
+                "id": f"frame_{i}", "w": iw, "h": ih,
                 "u": "", "p": f"data:image/png;base64,{b64}", "e": 1,
             })
             layers.append({
@@ -150,8 +161,8 @@ def _save_lottie(
                 "refId": f"frame_{i}", "sr": 1,
                 "ks": {
                     "o": {"a": 0, "k": 100}, "r": {"a": 0, "k": 0},
-                    "p": {"a": 0, "k": [w / 2, h / 2, 0]},
-                    "a": {"a": 0, "k": [w / 2, h / 2, 0]},
+                    "p": {"a": 0, "k": [cx, cy, 0]},
+                    "a": {"a": 0, "k": [iw / 2, ih / 2, 0]},
                     "s": {"a": 0, "k": [100, 100, 100]},
                 },
                 "ip": i, "op": i + 1, "st": 0, "bm": 0,
@@ -159,13 +170,13 @@ def _save_lottie(
 
         lottie = {
             "v": "5.7.0", "fr": fps, "ip": 0, "op": len(frames),
-            "w": w, "h": h, "nm": out.stem, "ddd": 0,
+            "w": cw, "h": ch, "nm": out.stem, "ddd": 0,
             "assets": assets, "layers": layers,
         }
         out.parent.mkdir(parents=True, exist_ok=True)
         with open(out, "w", encoding="utf-8") as f:
             json.dump(lottie, f, separators=(",", ":"))
-        logger.info(f"[Format] Lottie saved: {out}")
+        logger.info("[Format] Lottie saved: %s (img=%dx%d canvas=%dx%d)", out, iw, ih, cw, ch)
         return out
     except Exception as e:
         logger.warning(f"[Format] Lottie failed: {e}")
