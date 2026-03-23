@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import hashlib
 import sys
 from pathlib import Path
 from time import perf_counter
@@ -159,6 +160,10 @@ class RealEsrganBackgroundUpscalerModel:
                 self.weights_filename,
                 model_path,
             )
+            model_path = self._normalize_checkpoint_if_needed(
+                model_path=Path(model_path),
+                torch_module=torch,
+            )
         elif self.model_name in model_urls:
             from basicsr.utils.download_util import load_file_from_url  # type: ignore
 
@@ -218,6 +223,39 @@ class RealEsrganBackgroundUpscalerModel:
         clear_model_runtime(self._upsampler)
         self._upsampler = None
 
+    def _normalize_checkpoint_if_needed(
+        self, *, model_path: Path, torch_module: Any
+    ) -> Path:
+        try:
+            checkpoint = torch_module.load(str(model_path), map_location="cpu")
+        except Exception:
+            logger.warning(
+                "realesrgan checkpoint probe failed model=%s path=%s",
+                self.model_name,
+                model_path,
+                exc_info=True,
+            )
+            return model_path
+        state_dict = _extract_state_dict(checkpoint)
+        if state_dict is None:
+            return model_path
+        if isinstance(checkpoint, dict) and (
+            "params" in checkpoint or "params_ema" in checkpoint
+        ):
+            return model_path
+        normalized_path = model_path.with_name(
+            f"{model_path.stem}.{_stable_checkpoint_id(model_path=model_path)}.normalized.pth"
+        )
+        if not normalized_path.exists():
+            torch_module.save({"params_ema": state_dict}, str(normalized_path))
+            logger.info(
+                "realesrgan checkpoint normalized model=%s source=%s normalized=%s",
+                self.model_name,
+                model_path,
+                normalized_path,
+            )
+        return normalized_path
+
 
 def _resolve_shared_cache_dir(
     raw_path: str,
@@ -250,3 +288,21 @@ def _ensure_torchvision_compat() -> None:
     except Exception:
         return
     sys.modules["torchvision.transforms.functional_tensor"] = _functional_tensor
+
+
+def _extract_state_dict(checkpoint: Any) -> dict[str, Any] | None:
+    if not isinstance(checkpoint, dict):
+        return None
+    for key in ("params_ema", "params", "state_dict", "model_state_dict", "model"):
+        value = checkpoint.get(key)
+        if isinstance(value, dict) and value:
+            return value
+    if checkpoint and all(isinstance(key, str) for key in checkpoint):
+        return checkpoint
+    return None
+
+
+def _stable_checkpoint_id(*, model_path: Path) -> str:
+    stat = model_path.stat()
+    raw = f"{model_path.resolve()}:{stat.st_size}:{int(stat.st_mtime)}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
