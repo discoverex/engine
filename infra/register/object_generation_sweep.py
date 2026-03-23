@@ -41,6 +41,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default="batch",
     )
     parser.add_argument("--experiment", default=DEFAULT_EXPERIMENT)
+    parser.add_argument("--work-queue-name", default=None)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--output", default=None)
     parser.add_argument("--submitted-manifest", default=None)
@@ -84,6 +85,8 @@ def _load_scenario(spec: dict[str, Any]) -> dict[str, str]:
         "object_prompt",
         "object_base_negative_prompt",
         "object_negative_prompt",
+        "object_prompt_style",
+        "object_negative_profile",
         "object_count",
         "object_generation_size",
     ):
@@ -293,6 +296,7 @@ def submit_manifest(
     purpose: str,
     experiment: str,
     deployment: str | None,
+    work_queue_name: str | None,
     dry_run: bool,
     submitted_manifest: dict[str, Any] | None = None,
     artifacts_root: Path | None = None,
@@ -319,6 +323,7 @@ def submit_manifest(
                     "scenario_id": item["scenario_id"],
                     "submitted": False,
                     "deployment": resolved_deployment,
+                    "work_queue_name": work_queue_name,
                 }
             )
             continue
@@ -327,6 +332,7 @@ def submit_manifest(
             prefect_api_url=prefect_api_url,
             deployment=resolved_deployment,
             job_name=item["job_name"],
+            work_queue_name=work_queue_name,
         )
         results.append(
             {
@@ -337,6 +343,7 @@ def submit_manifest(
                 "submitted": True,
                 "flow_run_id": output.get("flow_run_id"),
                 "deployment": resolved_deployment,
+                "work_queue_name": work_queue_name,
                 "outputs_prefix": item["job_spec"].get("outputs_prefix"),
             }
         )
@@ -371,6 +378,7 @@ def main() -> int:
         purpose=args.purpose,
         experiment=args.experiment,
         deployment=args.deployment,
+        work_queue_name=args.work_queue_name,
         dry_run=bool(args.dry_run),
         submitted_manifest=submitted_manifest,
         artifacts_root=Path(args.artifacts_root).resolve(),

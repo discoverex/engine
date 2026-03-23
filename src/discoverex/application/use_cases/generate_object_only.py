@@ -49,6 +49,8 @@ def run(
     object_negative_prompt = str(args.get("object_negative_prompt", "") or "")
     object_base_prompt = str(args.get("object_base_prompt", "") or "")
     object_base_negative_prompt = str(args.get("object_base_negative_prompt", "") or "")
+    object_prompt_style = str(args.get("object_prompt_style", "") or "neutral_backdrop")
+    object_negative_profile = str(args.get("object_negative_profile", "") or "default")
     object_generation_size = max(64, int(args.get("object_generation_size") or 512))
     object_count = _resolve_object_count(args)
     regions = _build_placeholder_regions(object_count)
@@ -63,6 +65,8 @@ def run(
             object_negative_prompt=object_negative_prompt,
             object_base_prompt=object_base_prompt,
             object_base_negative_prompt=object_base_negative_prompt,
+            object_prompt_style=object_prompt_style,
+            object_negative_profile=object_negative_profile,
             object_generation_size=object_generation_size,
             max_vram_gb=_max_vram_gb(args),
         )
@@ -160,6 +164,8 @@ def run(
                     "object_negative_prompt": object_negative_prompt,
                     "object_base_prompt": object_base_prompt,
                     "object_base_negative_prompt": object_base_negative_prompt,
+                    "object_prompt_style": object_prompt_style,
+                    "object_negative_profile": object_negative_profile,
                     "object_generation_size": str(object_generation_size),
                     "object_count": str(len(generated_payload)),
                     "sweep_id": str(args.get("sweep_id", "")).strip(),
