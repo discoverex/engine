@@ -1,0 +1,44 @@
+{
+  "sweep_id": "prod-single-object-debug-realvisxl5-lightning-basevae-sampler-butterfly",
+  "search_stage": "debug",
+  "experiment_name": "prod-single-object-debug-realvisxl5-lightning-basevae-sampler-butterfly",
+  "combo_count": 4,
+  "scenario_count": 1,
+  "variant_count": 0,
+  "job_count": 4,
+  "deployment": "discoverex-generate-fix-obj-gen-batch",
+  "results": [
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-lightning-basevae-sampler-butterfly--debug--combo-001--butterfly-realvisxl5-lightning-basevae",
+      "combo_id": "combo-001",
+      "scenario_id": "butterfly-realvisxl5-lightning-basevae",
+      "submitted": true,
+      "flow_run_id": "fb3d78a4-0ce5-4cfe-823c-811076d8c898",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-lightning-basevae-sampler-butterfly--debug--combo-002--butterfly-realvisxl5-lightning-basevae",
+      "combo_id": "combo-002",
+      "scenario_id": "butterfly-realvisxl5-lightning-basevae",
+      "submitted": true,
+      "flow_run_id": "cf02e443-9c44-4557-a65a-caa6f93e5299",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-lightning-basevae-sampler-butterfly--debug--combo-003--butterfly-realvisxl5-lightning-basevae",
+      "combo_id": "combo-003",
+      "scenario_id": "butterfly-realvisxl5-lightning-basevae",
+      "submitted": true,
+      "flow_run_id": "32a20a37-442c-4322-bc57-d14cda7ca0b3",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-lightning-basevae-sampler-butterfly--debug--combo-004--butterfly-realvisxl5-lightning-basevae",
+      "combo_id": "combo-004",
+      "scenario_id": "butterfly-realvisxl5-lightning-basevae",
+      "submitted": true,
+      "flow_run_id": "06966146-966c-4cb1-9f00-949ba28d9668",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    }
+  ]
+}

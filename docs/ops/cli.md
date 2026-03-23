@@ -143,6 +143,25 @@ The shortest path for the current standard specs:
 ./bin/cli prefect run obj --deployment discoverex-generate-debug
 ```
 
+### Run object-quality sweeps
+
+Submit and collect object-generation sweeps from the dedicated sweep surface:
+
+```bash
+./bin/cli prefect sweep run
+./bin/cli prefect sweep run --deployment discoverex-generate-batch --work-queue-name gpu-fixed-batch-1
+./bin/cli prefect sweep collect
+./bin/cli prefect sweep collect --sweep-spec infra/ops/specs/sweep/object_generation/transparent_three_object.quality.v1.yaml
+```
+
+Rules for the supported sweep surface:
+
+- input is always `--sweep-spec <yaml>`
+- the current supported SSOT sweep family is object-quality
+- `sweep run` defaults the submitted manifest to `infra/ops/manifests/<sweep-id>.submitted.json`
+- `sweep collect` defaults to the same manifest path when `--submitted-manifest` is omitted
+- `--limit N` preserves manifest job order and selects the first `N` retry-eligible rows
+
 ### Register batch
 
 Fans out jobs from a CSV file.
@@ -151,11 +170,10 @@ Fans out jobs from a CSV file.
 ./bin/cli prefect register batch scenes.csv --purpose standard
 ```
 
-### Experiment deployment and sweep
+### Experiment deployment
 
 ```bash
 ./bin/cli prefect deploy experiment --experiment naturalness --purpose batch
-./bin/cli prefect register experiment-sweep --experiment naturalness --purpose batch
 ```
 
 ### Build or submit a raw spec
@@ -195,5 +213,5 @@ just init
 just run discoverex generate --background-asset-ref bg://dummy
 just test
 ./bin/cli prefect run gen
-./bin/cli prefect registercombined --purpose batch --job-spec-file infra/register/job_specs/generate_verify.standard.yaml
+./bin/cli prefect sweep run --sweep-spec infra/ops/specs/sweep/object_generation/transparent_three_object.quality.v1.yaml
 ```

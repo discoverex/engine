@@ -1,0 +1,2 @@
+scenario_id,background_prompt,object_prompt,final_prompt,scenario_overrides
+set-001,"stormy harbor at dusk, cinematic hidden object puzzle background, painterly realism, moody maritime lighting","butterfly | antique brass key | crystal wine glass","polished playable hidden object scene, keep inserted objects matched to the background painting style","runtime.model_runtime.seed=101"

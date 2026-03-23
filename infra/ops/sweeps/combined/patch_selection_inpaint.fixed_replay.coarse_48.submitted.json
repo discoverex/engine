@@ -1,0 +1,446 @@
+{
+  "sweep_id": "naturalness-fixed-replay-inpaint-coarse-48",
+  "search_stage": "replay",
+  "experiment_name": "discoverex-naturalness-fixed-replay-inpaint-coarse-48",
+  "execution_mode": "case_per_run",
+  "combo_count": 1,
+  "scenario_count": 1,
+  "variant_count": 48,
+  "policy_count": 48,
+  "job_count": 48,
+  "deployment": "discoverex-generate-fix-obj-gen-batch",
+  "results": [
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c01--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c01",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "57e79715-6275-4b65-a869-4868df947a5f",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c02--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c02",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "ca9ab08e-b4b4-46a1-abbd-5e715eb183d3",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c03--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c03",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "7def62a6-db0b-4b0a-b25c-6bcc4605f2ee",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c04--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c04",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "47cbd615-a9c3-444b-91c6-dedfd231c821",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c05--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c05",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "33597f0c-5788-4781-9483-104f6b809e16",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c06--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c06",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "893a0772-cf0d-449f-8efe-3391944a2332",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c07--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c07",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "8bc6abb9-a7c4-431a-9e16-8a8ba7ca8f4d",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c08--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c08",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "7e00fa94-76c7-4df1-8df5-a3f1bf49c252",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c09--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c09",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "c0d4f994-47c6-46cb-b73e-3b6f36cfa98f",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c10--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c10",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "ca00648f-464b-475d-95ee-4ea8d8ca3671",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c11--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c11",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "b08852e5-8aa4-4fca-b915-ec145dcb512e",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c12--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c12",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "8683a285-01ac-4da3-8e32-d380d92b615a",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c13--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c13",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "73c5fd00-1ec5-428d-81d2-03a61f8d8cbb",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c14--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c14",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "f142ed21-f886-412e-bc30-378e073a89c7",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c15--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c15",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "ef30bb3f-404a-4aa0-9021-9108006aa0d9",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c16--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c16",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "77bdee63-f725-403a-a9f6-4fab12e7734a",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c17--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c17",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "1c98c082-dc3d-4fa3-9887-040bfd3e3f71",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c18--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c18",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "1729c4c4-ae38-41f8-9320-03d3f8bb0bb1",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c19--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c19",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "e37fd596-6554-44c9-bffe-fa8d766c6825",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c20--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c20",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "fa3cf6a0-3045-485c-ba9d-21aa9649cf8c",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c21--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c21",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "b46ef214-469d-43f1-a195-2a66a458738f",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c22--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c22",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "de96d2ae-98dc-48d5-81df-3bd86b8b126d",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c23--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c23",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "4eeaf27f-968c-4ad7-bc60-e5553a9db146",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c24--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c24",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "4993d788-c9c9-4801-8efa-034e9a041ae0",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c25--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c25",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "e39a91f7-c64a-414e-8260-385115135777",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c26--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c26",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "d51c5a26-7155-4bc5-99de-8256d533faec",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c27--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c27",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "5ee168e1-092b-407d-bb8a-18012358e72b",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c28--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c28",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "bc3b3fb2-a193-4bf8-8cb2-c11044764bb6",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c29--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c29",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "44ee0350-f91f-4a13-9c63-1042bf1c274c",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c30--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c30",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "1fd97274-d9e2-40cb-88b6-46c384384010",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c31--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c31",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "c15acfec-b064-4afd-affc-bea34ef868f9",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c32--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c32",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "269d6a0e-d96b-44e5-b530-1fd68c629d90",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c33--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c33",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "9410011b-e2a5-4486-9ec8-4ccf33d440c0",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c34--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c34",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "1d8a4f9b-9e41-4414-8039-54f84b85258e",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c35--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c35",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "10848944-4173-4368-a738-243b3f7b32ce",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c36--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c36",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "0791636c-cf85-4219-acc8-eeb21885bac6",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c37--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c37",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "8ec4b7cc-b931-4f3f-a4e8-107d98d44fc5",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c38--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c38",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "1f1627a6-5f12-42ae-aaf2-94030fc99c5b",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c39--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c39",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "6b613fde-7d6b-4b4c-b04e-fe5bf33d9258",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c40--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c40",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "84ab4f5b-16c1-4115-bb09-dd651e1bbe1a",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c41--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c41",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "e11b1b45-6efd-488c-b114-08f924189b26",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c42--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c42",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "8f3388a9-4c4d-4997-88ac-0f4ab7862f74",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c43--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c43",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "335ce40f-f3ee-43b1-beca-55a20ca7b1ba",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c44--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c44",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "9f062cc1-8d22-4e5d-b352-28acc1ebcc3d",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c45--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c45",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "e6e14922-19b5-4a51-a68a-f843f0907fa5",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c46--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c46",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "04fb884b-8386-4372-a17d-80ec445b0322",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c47--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c47",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "5e5cfb8a-eaad-4207-9f1c-904814842212",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "naturalness-fixed-replay-inpaint-coarse-48--c48--fixed-replay-001",
+      "combo_id": "combo-001",
+      "policy_id": "c48",
+      "scenario_id": "fixed-replay-001",
+      "submitted": true,
+      "flow_run_id": "17c78b30-64eb-428c-9291-884e69e2e3a7",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    }
+  ]
+}

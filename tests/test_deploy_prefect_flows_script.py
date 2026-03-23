@@ -5,7 +5,7 @@ import os
 import sys
 from typing import Any, cast
 
-from infra.register import deploy_prefect_flows as _deploy_flows
+from infra.ops import deploy_prefect_flows as _deploy_flows
 
 deploy_flows = cast(Any, _deploy_flows)
 
@@ -167,6 +167,8 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
         work_pool_name="gpu-pool",
         work_queue_name="gpu-fixed",
         image="discoverex-worker:local",
+        repo_url="https://github.com/example/engine.git",
+        ref="main",
         deployment_version="20260312120000",
         deployment_name="discoverex-naturalness-experiment-feat-remote-source",
         deployment_suffix="naturalness",
@@ -326,6 +328,8 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
         "work_pool_name": "discoverex-fixed",
         "work_queue_name": "gpu-fixed-batch",
         "image": "discoverex-worker:local",
+        "repo_url": "https://github.com/example/engine.git",
+        "ref": "main",
         "deployment_version": out["deployment_version"],
         "deployment_name": "discoverex-naturalness-experiment-feat-remote-source",
         "deployment_suffix": "",
@@ -335,7 +339,7 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
     )
 
 
-def test_deploy_embedded_flow_omits_image_for_process_pool(monkeypatch: Any) -> None:
+def test_deploy_embedded_flow_uses_from_source_for_process_pool(monkeypatch: Any) -> None:
     captured: dict[str, Any] = {}
 
     class _FakeFlow:
@@ -343,7 +347,14 @@ def test_deploy_embedded_flow_omits_image_for_process_pool(monkeypatch: Any) -> 
             captured["deploy_kwargs"] = kwargs
             return "deployment-789"
 
-    monkeypatch.setattr(deploy_flows, "_load_flow", lambda _entrypoint: _FakeFlow())
+    monkeypatch.setattr(
+        deploy_flows.Flow,
+        "from_source",
+        lambda source, entrypoint: captured.update(
+            {"from_source": {"source": source, "entrypoint": entrypoint}}
+        )
+        or _FakeFlow(),
+    )
     monkeypatch.setattr(
         deploy_flows,
         "_update_process_deployment_pull_steps",
@@ -367,12 +378,18 @@ def test_deploy_embedded_flow_omits_image_for_process_pool(monkeypatch: Any) -> 
         work_pool_name="discoverex-fixed-process",
         work_queue_name="discoverex-fixed-process",
         image="discoverex-worker:local",
+        repo_url="https://github.com/example/engine.git",
+        ref="main",
         deployment_version="20260312120000",
         deployment_name="discoverex-generate-feat-process",
         deployment_suffix="",
     )
 
     assert deployment_id == "deployment-789"
+    from_source = captured["from_source"]
+    assert from_source["entrypoint"] == "prefect_flow.py:run_generate_job_flow"
+    assert from_source["source"]._url == "https://github.com/example/engine.git"
+    assert from_source["source"]._branch == "main"
     assert "image" not in captured["deploy_kwargs"]
     assert captured["deploy_kwargs"]["job_variables"] == {
         "env": {"PREFECT_API_URL": "https://prefect.example/api"},

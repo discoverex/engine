@@ -104,10 +104,10 @@ def test_engine_flow_entrypoint_lives_in_application_flows() -> None:
 
 
 def test_prefect_deploy_script_targets_single_engine_job_flow() -> None:
-    deploy_text = Path("infra/register/deploy_prefect_flows.py").read_text(
+    deploy_text = Path("infra/ops/deploy_prefect_flows.py").read_text(
         encoding="utf-8"
     )
-    settings_text = Path("infra/register/settings.py").read_text(encoding="utf-8")
+    settings_text = Path("infra/ops/settings.py").read_text(encoding="utf-8")
     assert "from_source" in deploy_text
     assert '"prefect_flow.py:run_combined_job_flow"' in settings_text
     assert '"discoverex"' in settings_text

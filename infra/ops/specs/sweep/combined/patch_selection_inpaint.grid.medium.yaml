@@ -1,0 +1,21 @@
+sweep_id: combined.patch-selection-inpaint.grid.medium
+search_stage: coarse
+experiment_name: combined.patch-selection-inpaint.grid.medium
+base_job_spec: ../job_specs/variants/naturalness/prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml
+fixed_overrides:
+  - adapters/tracker=mlflow_server
+scenarios:
+  - scenario_id: harbor-001
+    background_prompt: stormy harbor at dusk, cinematic hidden object puzzle background, painterly realism, moody maritime lighting
+    object_prompt: butterfly | antique brass key | crystal wine glass
+    final_prompt: polished playable hidden object scene, keep inserted objects matched to the background painting style
+  - scenario_id: attic-001
+    background_prompt: dusty attic interior, cinematic hidden object puzzle background, warm shafts of light, layered clutter
+    object_prompt: compass | folded letter | silver pocket watch
+    final_prompt: polished playable hidden object scene, keep inserted objects matched to the background painting style
+parameters:
+  models.inpaint.pre_match_scale_ratio: ["[0.07,0.11]", "[0.08,0.12]", "[0.09,0.13]"]
+  models.inpaint.pre_match_variant_count: ["9", "15"]
+  +models.inpaint.placement_grid_stride: ["12", "18", "24"]
+  models.inpaint.edge_blend_strength: ["0.12", "0.18", "0.24"]
+  models.inpaint.final_polish_strength: ["0.12", "0.18"]

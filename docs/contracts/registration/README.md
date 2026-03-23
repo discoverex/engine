@@ -4,7 +4,7 @@ This directory documents how this repository exposes Prefect flows for deploymen
 
 The source of truth for the implementation lives in:
 
-- [infra/register](/home/esillileu/discoverex/engine/infra/register)
+- [infra/ops](/home/esillileu/discoverex/engine/infra/ops)
 - [infra/prefect](/home/esillileu/discoverex/engine/infra/prefect)
 - [prefect_flow.py](/home/esillileu/discoverex/engine/prefect_flow.py)
 
@@ -36,9 +36,9 @@ The public callables live at the repository root:
 
 Registration and submission logic lives in:
 
-- [infra/register/deploy_prefect_flows.py](/home/esillileu/discoverex/engine/infra/register/deploy_prefect_flows.py)
-- [infra/register/register_prefect_job.py](/home/esillileu/discoverex/engine/infra/register/register_prefect_job.py)
-- [infra/register/register_orchestrator_job.py](/home/esillileu/discoverex/engine/infra/register/register_orchestrator_job.py)
+- [infra/ops/deploy_prefect_flows.py](/home/esillileu/discoverex/engine/infra/ops/deploy_prefect_flows.py)
+- [infra/ops/register_prefect_job.py](/home/esillileu/discoverex/engine/infra/ops/register_prefect_job.py)
+- [infra/ops/register_orchestrator_job.py](/home/esillileu/discoverex/engine/infra/ops/register_orchestrator_job.py)
 - [scripts/cli/prefect.py](/home/esillileu/discoverex/engine/scripts/cli/prefect.py)
 
 Operational wrapper commands:
@@ -47,13 +47,14 @@ Operational wrapper commands:
 - `./bin/cli prefect register flow <flow-kind> --purpose <purpose>`
 - `./bin/cli prefect register batch <csv> --purpose <purpose>`
 - `./bin/cli prefect deploy experiment --experiment <name> --purpose <purpose>`
-- `./bin/cli prefect register experiment-sweep --experiment <name> --purpose <purpose>`
 - `./bin/cli prefect run gen`
 - `./bin/cli prefect run obj`
+- `./bin/cli prefect sweep run --sweep-spec <path>`
+- `./bin/cli prefect sweep collect --sweep-spec <path>`
 
 ## 3. Deployment Naming
 
-Deployments are purpose-scoped and normalized through [infra/register/branch_deployments.py](/home/esillileu/discoverex/engine/infra/register/branch_deployments.py).
+Deployments are purpose-scoped and normalized through [infra/ops/branch_deployments.py](/home/esillileu/discoverex/engine/infra/ops/branch_deployments.py).
 
 Flow-level naming follows the repository flow kinds and deployment purposes:
 
@@ -100,7 +101,22 @@ After registration, execution proceeds as:
 5. worker-owned artifacts are written and uploaded
 6. engine-owned artifacts are optionally uploaded through the manifest contract
 
-## 6. Source and Import Requirements
+## 6. Sweep Contract
+
+Supported sweep input is always a YAML spec passed as `--sweep-spec <path>`.
+
+Current supported sweep SSOT:
+
+- object-quality sweep submission and collection
+
+Sweep state contract:
+
+- repo-managed submitted manifest defaults to `infra/ops/manifests/<sweep-id>.submitted.json`
+- `sweep run` merges by `sweep_id`, `policy_id`, `scenario_id`
+- collector classifies rows as `completed`, `pending`, `failed`, `cancelled`, `failed_to_collect`, or `not_submitted`
+- queue override remains allowed at submit time with `--work-queue-name`
+
+## 7. Source and Import Requirements
 
 The runtime assumes this repository is importable enough to load:
 
@@ -109,7 +125,7 @@ The runtime assumes this repository is importable enough to load:
 
 The embedded worker stack mounts the minimal live source paths documented in [infra/worker/README.md](/home/esillileu/discoverex/engine/infra/worker/README.md).
 
-## 7. Stable Contract Boundary
+## 8. Stable Contract Boundary
 
 The stable registration contract for consumers of this repository is:
 

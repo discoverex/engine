@@ -1,0 +1,22 @@
+sweep_id: object-generation.object-generator-model.steps-guidance.butterfly
+search_stage: debug
+experiment_name: object-generation.object-generator-model.steps-guidance.butterfly
+base_job_spec: ../job_specs/variants/object_generation/prod-genobjdebug-none-realvisxl5-lightning-none-8gb.yaml
+fixed_overrides:
+  - adapters/tracker=mlflow_server
+scenarios:
+  - scenario_id: butterfly-realvisxl5-lightning
+    background_prompt: unused-for-single-object-debug-flow
+    background_negative_prompt: ""
+    object_prompt: butterfly
+    object_negative_prompt: blurry, low quality, artifact
+    scenario_overrides: models/object_generator=layerdiffuse_realvisxl5_lightning||models.object_generator.model_id=SG161222/RealVisXL_V5.0_Lightning||models.object_generator.default_prompt='isolated single opaque object on a transparent background'||models.object_generator.default_negative_prompt='transparent object, translucent object, semi-transparent object, opaque background, solid background, busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact'
+  - scenario_id: butterfly-realvisxl5-regular
+    background_prompt: unused-for-single-object-debug-flow
+    background_negative_prompt: ""
+    object_prompt: butterfly
+    object_negative_prompt: blurry, low quality, artifact
+    scenario_overrides: models/object_generator=layerdiffuse||models.object_generator.model_id=SG161222/RealVisXL_V5.0||models.object_generator.default_prompt='isolated single object on a transparent background'||models.object_generator.default_negative_prompt='busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact'
+parameters:
+  models.object_generator.default_num_inference_steps: ["5", "10", "15", "20"]
+  models.object_generator.default_guidance_scale: ["2.0", "5.0"]

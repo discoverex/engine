@@ -1,0 +1,36 @@
+{
+  "sweep_id": "prod-single-object-debug-realvisxl5-lightning-steps5-cfg-butterfly",
+  "search_stage": "debug",
+  "experiment_name": "prod-single-object-debug-realvisxl5-lightning-steps5-cfg-butterfly",
+  "combo_count": 3,
+  "scenario_count": 1,
+  "variant_count": 0,
+  "job_count": 3,
+  "deployment": "discoverex-generate-fix-obj-gen-batch",
+  "results": [
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-lightning-steps5-cfg-butterfly--debug--combo-001--butterfly-opaque-transparent-bg",
+      "combo_id": "combo-001",
+      "scenario_id": "butterfly-opaque-transparent-bg",
+      "submitted": true,
+      "flow_run_id": "9af7bf1e-f928-4ae3-ab80-6e9f05b45ece",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-lightning-steps5-cfg-butterfly--debug--combo-002--butterfly-opaque-transparent-bg",
+      "combo_id": "combo-002",
+      "scenario_id": "butterfly-opaque-transparent-bg",
+      "submitted": true,
+      "flow_run_id": "454756bf-8362-4bc5-81ec-b5c10379217b",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    },
+    {
+      "job_name": "prod-single-object-debug-realvisxl5-lightning-steps5-cfg-butterfly--debug--combo-003--butterfly-opaque-transparent-bg",
+      "combo_id": "combo-003",
+      "scenario_id": "butterfly-opaque-transparent-bg",
+      "submitted": true,
+      "flow_run_id": "c010aea2-5036-4786-8975-3c7ff22313f6",
+      "deployment": "discoverex-generate-fix-obj-gen-batch"
+    }
+  ]
+}
