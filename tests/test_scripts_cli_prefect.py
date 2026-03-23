@@ -10,6 +10,7 @@ from scripts.cli.prefect import (
     DEFAULT_EXPERIMENT_NAME,
     DEFAULT_EXPERIMENT_QUEUE,
     DEFAULT_NATURALNESS_SWEEP_SPEC,
+    DEFAULT_OBJECT_REGISTER_JOB_SPEC,
     DEFAULT_REGISTER_JOB_SPEC,
     _build_job_spec_json_for_row,
     _build_prefect_log_filter,
@@ -131,6 +132,52 @@ def test_register_maps_command_to_flow_kind(monkeypatch) -> None:  # type: ignor
         "manual-run",
         "--job-spec-file",
         str(DEFAULT_REGISTER_JOB_SPEC),
+    ]
+
+
+def test_run_gen_uses_standard_generate_job_spec(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def _fake_run(script_name: str, args: list[str]) -> int:
+        captured["script_name"] = script_name
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
+
+    result = runner.invoke(app, ["run", "gen"])
+
+    assert result.exit_code == 0
+    assert captured["script_name"] == "infra.register.submit_job_spec"
+    assert captured["args"] == [
+        "--deployment",
+        "discoverex-generate-standard",
+        "--job-spec-file",
+        str(DEFAULT_REGISTER_JOB_SPEC),
+    ]
+
+
+def test_run_obj_uses_standard_object_job_spec(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def _fake_run(script_name: str, args: list[str]) -> int:
+        captured["script_name"] = script_name
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
+
+    result = runner.invoke(app, ["run", "obj", "--purpose", "batch"])
+
+    assert result.exit_code == 0
+    assert captured["script_name"] == "infra.register.submit_job_spec"
+    assert captured["args"] == [
+        "--deployment",
+        "discoverex-generate-batch",
+        "--job-spec-file",
+        str(DEFAULT_OBJECT_REGISTER_JOB_SPEC),
     ]
 
 

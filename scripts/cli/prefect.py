@@ -40,6 +40,7 @@ app = typer.Typer(
 )
 deploy_app = typer.Typer(no_args_is_help=True, add_completion=False)
 register_app = typer.Typer(no_args_is_help=True, add_completion=False)
+run_app = typer.Typer(no_args_is_help=True, add_completion=False)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INFRA_DIR = REPO_ROOT / "infra" / "register"
@@ -47,6 +48,11 @@ DEFAULT_REGISTER_JOB_SPEC = (
     INFRA_DIR
     / "job_specs"
     / "generate_verify.standard.yaml"
+)
+DEFAULT_OBJECT_REGISTER_JOB_SPEC = (
+    INFRA_DIR
+    / "job_specs"
+    / "object_generation.standard.yaml"
 )
 DEFAULT_NATURALNESS_SWEEP_SPEC = (
     INFRA_DIR / "sweeps" / "combined" / "patch_selection_inpaint.grid.medium.yaml"
@@ -531,6 +537,26 @@ def register(ctx: typer.Context) -> None:
     raise typer.Exit(exit_code)
 
 
+def _run_standard_job_spec(
+    *,
+    purpose: str,
+    job_spec_file: Path,
+    deployment: str | None = None,
+    flow_kind: str = "generate",
+    extra_args: list[str] | None = None,
+) -> None:
+    submit_args = [
+        "--deployment",
+        deployment or deployment_name_for_purpose(purpose, flow_kind=flow_kind),
+        "--job-spec-file",
+        str(job_spec_file),
+    ]
+    if extra_args:
+        submit_args.extend(extra_args)
+    exit_code = _run_infra_script("infra.register.submit_job_spec", submit_args)
+    raise typer.Exit(exit_code)
+
+
 @register_app.command(
     "raw",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
@@ -539,6 +565,40 @@ def register(ctx: typer.Context) -> None:
 def register_raw(ctx: typer.Context) -> None:
     exit_code = _run_infra_script("infra.register.register_orchestrator_job", ctx.args)
     raise typer.Exit(exit_code)
+
+
+@run_app.command("gen", help="Run the standard generate/verify job spec.")
+def run_gen(
+    purpose: str = typer.Option(
+        DEFAULT_DEPLOYMENT_PURPOSE,
+        "--purpose",
+        help=f"One of: {', '.join(SUPPORTED_DEPLOYMENT_PURPOSES)}.",
+    ),
+    deployment: str | None = typer.Option(None, "--deployment"),
+) -> None:
+    _run_standard_job_spec(
+        purpose=purpose,
+        deployment=deployment,
+        flow_kind="generate",
+        job_spec_file=DEFAULT_REGISTER_JOB_SPEC,
+    )
+
+
+@run_app.command("obj", help="Run the standard object-generation job spec.")
+def run_obj(
+    purpose: str = typer.Option(
+        DEFAULT_DEPLOYMENT_PURPOSE,
+        "--purpose",
+        help=f"One of: {', '.join(SUPPORTED_DEPLOYMENT_PURPOSES)}.",
+    ),
+    deployment: str | None = typer.Option(None, "--deployment"),
+) -> None:
+    _run_standard_job_spec(
+        purpose=purpose,
+        deployment=deployment,
+        flow_kind="generate",
+        job_spec_file=DEFAULT_OBJECT_REGISTER_JOB_SPEC,
+    )
 
 
 @app.command(
@@ -614,3 +674,4 @@ def inspect_run(
 
 app.add_typer(deploy_app, name="deploy")
 app.add_typer(register_app, name="register")
+app.add_typer(run_app, name="run")
