@@ -24,10 +24,10 @@ default_guidance_scale: 1.5
 hires_num_inference_steps: 4
 hires_guidance_scale: 1.5
 hires_strength: 0.4
-canvas_upscaler_model_name: 4x-UltraSharp
+canvas_upscaler_model_name: RealESRGAN_x4plus
 canvas_upscaler_scale: 4
-canvas_upscaler_repo_id: MidnightRunner/Misc
-canvas_upscaler_filename: 4x-UltraSharp.pth
+canvas_upscaler_repo_id: ""
+canvas_upscaler_filename: ""
 canvas_upscaler_weights_cache_dir: .cache/realesrgan
 model_cache_dir: ${oc.env:MODEL_CACHE_DIR,""}
 hf_home: ${oc.env:HF_HOME,""}

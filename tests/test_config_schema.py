@@ -159,7 +159,7 @@ def test_realvisxl_lightning_background_presets_load() -> None:
     )
     assert cfg.models.background_upscaler.model_dump(mode="python")[
         "canvas_upscaler_model_name"
-    ] == "4x-UltraSharp"
+    ] == "RealESRGAN_x4plus"
 
 
 def test_runtime_config_normalizes_legacy_background_hires_mode() -> None:

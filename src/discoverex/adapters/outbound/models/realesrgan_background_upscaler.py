@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import hashlib
 import sys
 from pathlib import Path
 from time import perf_counter
@@ -20,8 +19,8 @@ logger = get_logger("discoverex.models.realesrgan_upscaler")
 class RealEsrganBackgroundUpscalerModel:
     def __init__(
         self,
-        model_name: str = "RealESRGAN_x2plus",
-        scale: int = 2,
+        model_name: str = "RealESRGAN_x4plus",
+        scale: int = 4,
         weights_repo_id: str = "",
         weights_filename: str = "",
         device: str = "cuda",
@@ -160,10 +159,6 @@ class RealEsrganBackgroundUpscalerModel:
                 self.weights_filename,
                 model_path,
             )
-            model_path = self._normalize_checkpoint_if_needed(
-                model_path=Path(model_path),
-                torch_module=torch,
-            )
         elif self.model_name in model_urls:
             from basicsr.utils.download_util import load_file_from_url  # type: ignore
 
@@ -223,39 +218,6 @@ class RealEsrganBackgroundUpscalerModel:
         clear_model_runtime(self._upsampler)
         self._upsampler = None
 
-    def _normalize_checkpoint_if_needed(
-        self, *, model_path: Path, torch_module: Any
-    ) -> Path:
-        try:
-            checkpoint = torch_module.load(str(model_path), map_location="cpu")
-        except Exception:
-            logger.warning(
-                "realesrgan checkpoint probe failed model=%s path=%s",
-                self.model_name,
-                model_path,
-                exc_info=True,
-            )
-            return model_path
-        state_dict = _extract_state_dict(checkpoint)
-        if state_dict is None:
-            return model_path
-        if isinstance(checkpoint, dict) and (
-            "params" in checkpoint or "params_ema" in checkpoint
-        ):
-            return model_path
-        normalized_path = model_path.with_name(
-            f"{model_path.stem}.{_stable_checkpoint_id(model_path=model_path)}.normalized.pth"
-        )
-        if not normalized_path.exists():
-            torch_module.save({"params_ema": state_dict}, str(normalized_path))
-            logger.info(
-                "realesrgan checkpoint normalized model=%s source=%s normalized=%s",
-                self.model_name,
-                model_path,
-                normalized_path,
-            )
-        return normalized_path
-
 
 def _resolve_shared_cache_dir(
     raw_path: str,
@@ -288,112 +250,3 @@ def _ensure_torchvision_compat() -> None:
     except Exception:
         return
     sys.modules["torchvision.transforms.functional_tensor"] = _functional_tensor
-
-
-def _extract_state_dict(checkpoint: Any) -> dict[str, Any] | None:
-    if not isinstance(checkpoint, dict):
-        return None
-    for key in ("params_ema", "params", "state_dict", "model_state_dict", "model"):
-        value = checkpoint.get(key)
-        if isinstance(value, dict) and value:
-            return value
-    if checkpoint and all(isinstance(key, str) for key in checkpoint):
-        return _normalize_state_dict_keys(checkpoint)
-    return None
-
-
-def _stable_checkpoint_id(*, model_path: Path) -> str:
-    stat = model_path.stat()
-    raw = f"{model_path.resolve()}:{stat.st_size}:{int(stat.st_mtime)}"
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
-
-
-def _normalize_state_dict_keys(state_dict: dict[str, Any]) -> dict[str, Any]:
-    if "model.0.weight" in state_dict:
-        return _old_esrgan_to_rrdb_state_dict(state_dict)
-    return state_dict
-
-
-def _old_esrgan_to_rrdb_state_dict(state_dict: dict[str, Any]) -> dict[str, Any]:
-    converted: dict[str, Any] = {
-        "conv_first.weight": state_dict["model.0.weight"],
-        "conv_first.bias": state_dict["model.0.bias"],
-    }
-    block_indices: list[int] = []
-    for key, value in state_dict.items():
-        if not key.startswith("model.1.sub."):
-            continue
-        parts = key.split(".")
-        if len(parts) < 5:
-            continue
-        try:
-            block_idx = int(parts[3])
-        except ValueError:
-            continue
-        if len(parts) == 5 and parts[4] in {"weight", "bias"}:
-            block_indices.append(block_idx)
-            continue
-        if len(parts) < 8 or not parts[4].startswith("RDB"):
-            continue
-        rdb_idx = parts[4][3:]
-        conv_name = parts[5]
-        leaf = parts[7]
-        converted[
-            f"body.{block_idx}.rdb{rdb_idx.lower()}.{conv_name}.{leaf}"
-        ] = value
-        block_indices.append(block_idx)
-    if not block_indices:
-        return state_dict
-    nb = max(block_indices)
-    converted["conv_body.weight"] = state_dict[f"model.1.sub.{nb}.weight"]
-    converted["conv_body.bias"] = state_dict[f"model.1.sub.{nb}.bias"]
-    _copy_if_present(
-        converted,
-        state_dict,
-        src_prefix="model.3",
-        dst_prefix="conv_up1",
-    )
-    _copy_if_present(
-        converted,
-        state_dict,
-        src_prefix="model.6",
-        dst_prefix="conv_up2",
-    )
-    if "model.9.weight" in state_dict:
-        _copy_if_present(
-            converted,
-            state_dict,
-            src_prefix="model.9",
-            dst_prefix="conv_up3",
-        )
-        hr_idx = 11
-        last_idx = 13
-    else:
-        hr_idx = 8
-        last_idx = 10
-    _copy_if_present(
-        converted,
-        state_dict,
-        src_prefix=f"model.{hr_idx}",
-        dst_prefix="conv_hr",
-    )
-    _copy_if_present(
-        converted,
-        state_dict,
-        src_prefix=f"model.{last_idx}",
-        dst_prefix="conv_last",
-    )
-    return converted
-
-
-def _copy_if_present(
-    converted: dict[str, Any],
-    source: dict[str, Any],
-    *,
-    src_prefix: str,
-    dst_prefix: str,
-) -> None:
-    for suffix in ("weight", "bias"):
-        key = f"{src_prefix}.{suffix}"
-        if key in source:
-            converted[f"{dst_prefix}.{suffix}"] = source[key]

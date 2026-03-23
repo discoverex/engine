@@ -2,7 +2,7 @@
 defaults:
   - override /flows/generate: v2
   - override /models/background_generator: sdxl_gpu
-  - override /models/background_upscaler: ultrasharp
+  - override /models/background_upscaler: realesrgan
   - override /models/object_generator: layerdiffuse
   - override /models/hidden_region: hf
   - override /models/inpaint: sdxl_gpu_similarity_v2
