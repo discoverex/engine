@@ -32,7 +32,7 @@ def test_register_defaults_to_standard_job_spec(monkeypatch) -> None:  # type: i
     result = runner.invoke(app, ["registercombined"])
 
     assert result.exit_code == 0
-    assert captured["script_name"] == "infra.register.submit_job_spec"
+    assert captured["script_name"] == "infra.ops.submit_job_spec"
     assert captured["args"] == [
         "--deployment",
         "discoverex-combined-standard",
@@ -86,7 +86,7 @@ def test_register_forwards_submit_spec_args(monkeypatch) -> None:  # type: ignor
     )
 
     assert result.exit_code == 0
-    assert captured["script_name"] == "infra.register.submit_job_spec"
+    assert captured["script_name"] == "infra.ops.submit_job_spec"
     assert captured["args"] == [
         "--deployment",
         "discoverex-combined-debug",
@@ -122,7 +122,7 @@ def test_register_maps_command_to_flow_kind(monkeypatch) -> None:  # type: ignor
     )
 
     assert result.exit_code == 0
-    assert captured["script_name"] == "infra.register.submit_job_spec"
+    assert captured["script_name"] == "infra.ops.submit_job_spec"
     assert captured["args"] == [
         "--deployment",
         "discoverex-verify-backfill",
@@ -149,7 +149,7 @@ def test_run_gen_uses_standard_generate_job_spec(monkeypatch) -> None:  # type: 
     result = runner.invoke(app, ["run", "gen"])
 
     assert result.exit_code == 0
-    assert captured["script_name"] == "infra.register.submit_job_spec"
+    assert captured["script_name"] == "infra.ops.submit_job_spec"
     assert captured["args"] == [
         "--deployment",
         "discoverex-generate-standard",
@@ -172,12 +172,85 @@ def test_run_obj_uses_standard_object_job_spec(monkeypatch) -> None:  # type: ig
     result = runner.invoke(app, ["run", "obj", "--purpose", "batch"])
 
     assert result.exit_code == 0
-    assert captured["script_name"] == "infra.register.submit_job_spec"
+    assert captured["script_name"] == "infra.ops.submit_job_spec"
     assert captured["args"] == [
         "--deployment",
         "discoverex-generate-batch",
         "--job-spec-file",
         str(DEFAULT_OBJECT_REGISTER_JOB_SPEC),
+    ]
+
+
+def test_sweep_run_invokes_object_generation_sweep(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def _fake_run(script_name: str, args: list[str]) -> int:
+        captured["script_name"] = script_name
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
+
+    result = runner.invoke(app, ["sweep", "run"])
+
+    assert result.exit_code == 0
+    assert captured["script_name"] == "infra.ops.object_generation_sweep"
+    assert captured["args"] == [
+        str(
+            Path(__file__).resolve().parents[1]
+            / "infra"
+            / "ops"
+            / "specs"
+            / "sweep"
+            / "object_generation"
+            / "transparent_three_object.quality.v1.yaml"
+        ),
+        "--output",
+        str(
+            Path(__file__).resolve().parents[1]
+            / "infra"
+            / "ops"
+            / "manifests"
+            / "object-quality.realvisxl5-lightning.coarse.transparent-three-object.styles-negatives-steps-guidance-size.v1.submitted.json"
+        ),
+        "--deployment",
+        "discoverex-generate-batch-object-quality",
+        "--purpose",
+        "batch",
+        "--experiment",
+        "object-quality",
+    ]
+
+
+def test_sweep_collect_invokes_collector(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+    manifest = tmp_path / "submitted.json"
+    manifest.write_text("{}", encoding="utf-8")
+
+    def _fake_run(script_name: str, args: list[str]) -> int:
+        captured["script_name"] = script_name
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
+
+    sweep_spec = tmp_path / "object-quality.yaml"
+    sweep_spec.write_text("sweep_id: sweep-1\n", encoding="utf-8")
+    result = runner.invoke(app, ["sweep", "collect", "--sweep-spec", str(sweep_spec)])
+
+    assert result.exit_code == 0
+    assert captured["script_name"] == "infra.ops.collect_object_generation_sweep"
+    assert captured["args"] == [
+        "--submitted-manifest",
+        str(
+            Path(__file__).resolve().parents[1]
+            / "infra"
+            / "ops"
+            / "manifests"
+            / "sweep-1.submitted.json"
+        ),
     ]
 
 
@@ -195,7 +268,7 @@ def test_register_flow_targets_named_flow_kind(monkeypatch) -> None:  # type: ig
     result = runner.invoke(app, ["register", "flow", "generate"])
 
     assert result.exit_code == 0
-    assert captured["script_name"] == "infra.register.submit_job_spec"
+    assert captured["script_name"] == "infra.ops.submit_job_spec"
     assert captured["args"] == [
         "--deployment",
         "discoverex-generate-standard",
@@ -208,8 +281,9 @@ def test_default_register_job_spec_points_to_repo_standard_file() -> None:
     assert DEFAULT_REGISTER_JOB_SPEC == (
         Path(__file__).resolve().parents[1]
         / "infra"
-        / "register"
-        / "job_specs"
+        / "ops"
+        / "specs"
+        / "job"
         / "generate_verify.standard.yaml"
     )
 
@@ -268,7 +342,7 @@ def test_register_batch_submits_one_run_per_csv_row(monkeypatch, tmp_path) -> No
     )
 
     def _fake_run(script_name: str, args: list[str]) -> int:
-        assert script_name == "infra.register.submit_job_spec"
+        assert script_name == "infra.ops.submit_job_spec"
         captured.append(args)
         return 0
 
@@ -370,7 +444,7 @@ def test_register_experiment_sweep_invokes_script(monkeypatch) -> None:  # type:
     result = runner.invoke(app, ["register", "experiment-sweep"])
 
     assert result.exit_code == 0
-    assert captured["script_name"] == "infra.register.naturalness_sweep"
+    assert captured["script_name"] == "infra.ops.naturalness_sweep"
     assert captured["args"] == [
         str(DEFAULT_NATURALNESS_SWEEP_SPEC),
         "--deployment",
@@ -406,7 +480,7 @@ def test_register_experiment_sweep_uses_experiment_deployment(monkeypatch) -> No
     )
 
     assert result.exit_code == 0
-    assert captured["script_name"] == "infra.register.naturalness_sweep"
+    assert captured["script_name"] == "infra.ops.naturalness_sweep"
     assert captured["args"] == [
         str(DEFAULT_NATURALNESS_SWEEP_SPEC),
         "--deployment",
@@ -434,7 +508,7 @@ def test_deploy_experiment_uses_batch_queue(monkeypatch) -> None:  # type: ignor
     )
 
     assert result.exit_code == 0
-    assert captured["script_name"] == "infra.register.deploy_prefect_flows"
+    assert captured["script_name"] == "infra.ops.deploy_prefect_flows"
     assert captured["args"] == [
         "--flow-kind",
         "generate",

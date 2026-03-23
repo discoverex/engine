@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from infra.register.object_generation_sweep import build_sweep_manifest, submit_manifest
-from infra.register.collect_object_generation_sweep import (
+from infra.ops.object_generation_sweep import build_sweep_manifest, submit_manifest
+from infra.ops.collect_object_generation_sweep import (
     _aggregate,
     _load_env_file,
     _filename_from_object_uri,
@@ -75,7 +75,7 @@ def test_submit_manifest_records_flow_run_ids(monkeypatch) -> None:  # type: ign
         return {"flow_run_id": "run-123"}
 
     monkeypatch.setattr(
-        "infra.register.object_generation_sweep._load_submit_job_spec",
+        "infra.ops.object_generation_sweep._load_submit_job_spec",
         lambda: fake_submit_job_spec,
     )
 
@@ -139,7 +139,7 @@ def test_submit_manifest_retries_only_missing_or_unsubmitted(
     )
 
     monkeypatch.setattr(
-        "infra.register.object_generation_sweep._load_submit_job_spec",
+        "infra.ops.object_generation_sweep._load_submit_job_spec",
         lambda: fake_submit_job_spec,
     )
 
@@ -334,7 +334,7 @@ def test_recover_remote_cases_uses_presign_get(monkeypatch) -> None:  # type: ig
         }
 
     monkeypatch.setattr(
-        "infra.register.collect_object_generation_sweep._read_engine_summary",
+        "infra.ops.collect_object_generation_sweep._read_engine_summary",
         fake_read_engine_summary,
     )
 
@@ -369,15 +369,15 @@ def test_recover_remote_cases_uses_presign_get(monkeypatch) -> None:  # type: ig
         return None
 
     monkeypatch.setattr(
-        "infra.register.collect_object_generation_sweep._presign_get_url",
+        "infra.ops.collect_object_generation_sweep._presign_get_url",
         fake_presign_get_url,
     )
     monkeypatch.setattr(
-        "infra.register.collect_object_generation_sweep._fetch_json_url",
+        "infra.ops.collect_object_generation_sweep._fetch_json_url",
         fake_fetch_json_url,
     )
     monkeypatch.setattr(
-        "infra.register.collect_object_generation_sweep._fetch_json_uri",
+        "infra.ops.collect_object_generation_sweep._fetch_json_uri",
         lambda uri: None,
     )
 

@@ -4,7 +4,7 @@ import json
 import subprocess
 import sys
 
-MODULE = "infra.register.register_prefect_job"
+MODULE = "infra.ops.register_prefect_job"
 
 
 def test_prefect_wrapper_dry_run_defaults_to_remote_worker_profile() -> None:

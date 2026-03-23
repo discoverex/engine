@@ -5,8 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-MODULE = "infra.register.register_orchestrator_job"
-BUILD_MODULE = "infra.register.build_job_spec"
+MODULE = "infra.ops.register_orchestrator_job"
+BUILD_MODULE = "infra.ops.build_job_spec"
 
 
 def test_register_script_dry_run_builds_worker_job_spec() -> None:

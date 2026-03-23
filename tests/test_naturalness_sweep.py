@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from infra.register.naturalness_sweep import build_sweep_manifest, submit_manifest
+from infra.ops.naturalness_sweep import build_sweep_manifest, submit_manifest
 
 
 def test_build_sweep_manifest_expands_scenarios_and_combos(tmp_path: Path) -> None:
@@ -74,7 +74,7 @@ def test_submit_manifest_defaults_to_naturalness_deployment(monkeypatch) -> None
         return {"flow_run_id": "run-123"}
 
     monkeypatch.setattr(
-        "infra.register.naturalness_sweep._load_submit_job_spec",
+        "infra.ops.naturalness_sweep._load_submit_job_spec",
         lambda: _fake_submit_job_spec,
     )
 
@@ -342,7 +342,7 @@ variants:
 
 
 def test_collect_naturalness_sweep_aggregates_policy_results(tmp_path: Path) -> None:
-    from infra.register.collect_naturalness_sweep import main as collect_main
+    from infra.ops.collect_naturalness_sweep import main as collect_main
 
     artifacts_root = tmp_path / "artifacts"
     cases_dir = (

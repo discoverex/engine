@@ -8,8 +8,8 @@ from typing import Any, cast
 import pytest
 
 from discoverex.config_loader import load_pipeline_config
-from infra.register import register_orchestrator_job as _register_job
-from infra.register.job_types import JobSpec
+from infra.ops import register_orchestrator_job as _register_job
+from infra.ops.job_types import JobSpec
 
 register_job = cast(Any, _register_job)
 
