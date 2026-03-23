@@ -44,9 +44,14 @@ INFRA_DIR = REPO_ROOT / "infra" / "register"
 DEFAULT_REGISTER_JOB_SPEC = (
     INFRA_DIR
     / "job_specs"
-    / "prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml"
+    / "generate_verify.standard.yaml"
 )
-DEFAULT_NATURALNESS_SWEEP_SPEC = INFRA_DIR / "sweeps" / "naturalness_medium.yaml"
+DEFAULT_NATURALNESS_SWEEP_SPEC = (
+    INFRA_DIR / "sweeps" / "combined" / "patch_selection_inpaint.grid.medium.yaml"
+)
+DEFAULT_OBJECT_QUALITY_SWEEP_SPEC = (
+    INFRA_DIR / "sweeps" / "object_generation" / "transparent_three_object.quality.v1.yaml"
+)
 DEFAULT_EXPERIMENT_QUEUE = "gpu-fixed-batch"
 DEFAULT_EXPERIMENT_NAME = "naturalness"
 
@@ -407,6 +412,39 @@ def register_experiment_sweep(
     submit_args.extend(remaining)
     exit_code = _run_infra_script(
         "infra.register.naturalness_sweep",
+        submit_args,
+    )
+    raise typer.Exit(exit_code)
+
+
+@register_app.command(
+    "object-quality-sweep",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+    help="Submit an object-generation quality sweep using a YAML sweep spec.",
+)
+def register_object_quality_sweep(
+    ctx: typer.Context,
+    experiment: str = typer.Option("object-quality", "--experiment"),
+    sweep_spec: Path = typer.Option(
+        DEFAULT_OBJECT_QUALITY_SWEEP_SPEC,
+        "--sweep-spec",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+    ),
+) -> None:
+    branch, remaining = _extract_option(ctx.args, "--branch")
+    submit_args = [str(sweep_spec)]
+    if branch:
+        submit_args.extend(
+            ["--deployment", _experiment_deployment_name(branch, experiment)]
+        )
+        submit_args.extend(["--branch", branch])
+    submit_args.extend(["--experiment", experiment])
+    submit_args.extend(remaining)
+    exit_code = _run_infra_script(
+        "infra.register.object_generation_sweep",
         submit_args,
     )
     raise typer.Exit(exit_code)

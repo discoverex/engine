@@ -269,7 +269,6 @@ def _deploy_embedded_flow(
         "work_pool_name": work_pool_name,
         "work_queue_name": work_queue_name,
         "job_variables": _deployment_job_variables(work_pool_name=work_pool_name),
-        "image": image,
         "build": False,
         "push": False,
         "description": f"Execute the {flow_kind} flow for branch {branch!r}.",
@@ -278,6 +277,8 @@ def _deploy_embedded_flow(
         "print_next_steps": False,
     }
     process_pull_steps = _process_pull_steps(work_pool_name=work_pool_name)
+    if process_pull_steps is None:
+        deploy_kwargs["image"] = image
     deployment_id = str(embedded_flow.deploy(**deploy_kwargs))
     if process_pull_steps is not None:
         _update_process_deployment_pull_steps(
