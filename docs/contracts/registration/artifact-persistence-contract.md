@@ -1,133 +1,56 @@
 # Engine Artifact Persistence Contract
 
-This document defines what is persisted automatically today, what is not, and
-what an external engine repository must do to remain compatible.
+This document describes what is durable by default and how engine-owned artifacts become durable.
 
-## 1) Persisted automatically by the worker
+## 1. Worker-Owned Durable Artifacts
 
-The worker always persists these orchestration artifacts:
+The worker/runtime layer always persists:
 
 - `stdout.log`
 - `stderr.log`
 - `result.json`
 - `artifacts.json`
 
-Current object layout:
+These are produced around the execution path in [infra/prefect/flow.py](/home/esillileu/discoverex/engine/infra/prefect/flow.py) with upload helpers from the Prefect runtime modules.
+
+## 2. Typical Object Layout
+
+Worker-owned artifacts are organized by flow run and attempt:
 
 - `jobs/{flow_run_id}/attempt-{attempt}/stdout.log`
 - `jobs/{flow_run_id}/attempt-{attempt}/stderr.log`
 - `jobs/{flow_run_id}/attempt-{attempt}/result.json`
 - `jobs/{flow_run_id}/attempt-{attempt}/artifacts.json`
 
-Current implementation:
+## 3. What Is Not Durable Automatically
 
-- [src/flows/engine_run/task/uploads.py](/home/esillileu/discoverex/orchestrator/src/flows/engine_run/task/uploads.py)
+Arbitrary files written into a local workdir are not durable by default.
 
-## 2) What `result.json` is for
+Examples:
 
-`result.json` is the worker-owned machine-readable run result. At minimum it
-contains:
-
-- `exit_code`
-- `resolved_commit`
-- `run_mode`
-- `entrypoint`
-
-The engine may also emit structured JSON to `stdout`, but the canonical worker
-artifact remains `result.json`.
-
-## 3) What is not persisted automatically today
-
-The current worker contract does not automatically upload arbitrary engine
-output files such as:
-
-- model checkpoints
-- scene bundles
-- generated datasets
+- generated bundles
+- debug images
 - intermediate reports
-- binary result files
-- large final outputs beyond `result.json`
+- custom binary outputs
 
-If the engine writes such files into the local workdir, they are not currently
-durable unless an explicit engine-artifact upload path is added.
+If the engine needs them to persist, it must use the worker-managed artifact directory contract.
 
-## 4) Compatibility requirement today
+## 4. Official Durable Artifact Path
 
-A fully worker-compatible engine must assume only this durable baseline:
+For engine-owned durable files:
 
-- logs are durable through worker upload
-- `result.json` is durable through worker upload
-- MLflow metadata is durable through MLflow
-- uploaded engine artifact object URIs, when present, are worker-recorded metadata
+1. write files under `ORCH_ENGINE_ARTIFACT_DIR`
+2. write a manifest to `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`
+3. let the worker upload them after execution
 
-The engine must not assume that arbitrary local files become durable
-automatically.
+Reference: [worker-managed-output-directory-contract.md](/home/esillileu/discoverex/engine/docs/contracts/registration/worker-managed-output-directory-contract.md)
 
-## 5) Official contract for durable engine artifacts
+## 5. MLflow Linkage
 
-The official contract going forward is worker-managed artifact directory upload.
+The engine may emit `mlflow_run_id` in its result payload. The worker uses that run id for post-upload URI tagging.
 
-Normative spec:
+The engine should not:
 
-- [worker-managed-output-directory-contract.md](/home/esillileu/discoverex/orchestrator/docs/dev/engine-prefect-registration/worker-managed-output-directory-contract.md)
-
-Under that contract:
-
-1. engine writes durable output files under a worker-provided directory
-2. engine writes a manifest describing those files
-3. worker validates the manifest
-4. worker requests presigned URLs from storage-api
-5. worker uploads the files
-6. worker records resulting `object_uri` values
-7. worker mirrors selected URIs into MLflow tags
-
-## 6) Why direct engine presign support is not required
-
-Direct presign support in the engine is not required for baseline compatibility.
-
-It should remain optional because:
-
-- it pushes storage auth details into the engine runtime
-- it increases engine/orchestrator coupling
-- worker-managed upload keeps the trust boundary cleaner
-
-Direct presign support becomes necessary only if the engine must upload files
-during execution and the worker cannot perform a post-run upload step. That is
-not the primary contract for this system.
-
-## 7) Recommended MLflow linkage for stored artifacts
-
-When durable artifact uploads exist, these MLflow tag patterns are recommended:
-
-- `artifact_manifest_uri`
-- `artifact_stdout_uri`
-- `artifact_stderr_uri`
-- `artifact_result_uri`
-
-If engine-owned durable artifacts are added, extend this pattern with stable
-tag names such as:
-
-- `artifact_bundle_uri`
-- `artifact_checkpoint_uri`
-- `artifact_report_uri`
-
-Reference tagging example:
-
-- [scripts/e2e/shell_python_helpers.py](/home/esillileu/discoverex/orchestrator/scripts/e2e/shell_python_helpers.py)
-
-The engine should not guess or precompute these URI values. They are derived by
-the worker after upload.
-
-## 8) Decision point
-
-If the target integration requires only:
-
-- execution logs
-- final status
-- lightweight structured result metadata
-- MLflow params/metrics/tags
-
-then the current contract is sufficient.
-
-If the target integration also requires durable intermediate or final files in
-MinIO, the worker-managed output-directory contract above must be implemented.
+- guess uploaded object URIs
+- upload directly to object storage as part of the default contract
+- write worker-owned MLflow artifact-link tags itself

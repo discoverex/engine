@@ -1,70 +1,107 @@
-# Discoverex Runtime & Operations Guide
+# Discoverex Runtime Guide
 
-Discoverex 엔진의 로컬/워커 실행 모드와 실제 파이프라인 운영 절차를 설명합니다.
+This document describes how the engine runs locally and under Prefect-managed workers.
 
-## 1. 핵심 개념 (Unified Commands)
+## 1. Execution Modes
 
-모든 파이프라인은 동일한 엔진(`discoverex`) 명령어로 실행됩니다. 환경에 따른 차이는 Hydra 어댑터 선택과 환경변수 주입을 통해 해결합니다.
+### Local mode
 
-**표준 명령어 (v2):**
-- `generate`: 씬 생성 및 조립
-- `verify`: 기존 씬 검증
-- `animate`: (현재 stub) 애니메이션 생성
+Local mode is used for development and direct CLI execution.
 
-**레거시 명령어 (v1 Shim):**
-- `gen-verify` -> `generate`
-- `verify-only` -> `verify`
-- `replay-eval` -> `animate`
-*(실행 시 Deprecation 경고가 출력됩니다)*
+- entrypoint: `uv run discoverex ...`
+- runtime mode in inline job specs: `local`
+- typical storage: local files under `artifacts/`
+- typical tracking: local MLflow or explicitly configured tracking URI
 
-## 2. 현재 플로우 분류
+### Worker mode
 
-### 운영에서 직접 쓰는 Prefect 플로우
+Worker mode is used when the engine is launched from a Prefect flow.
+
+- entrypoint: Prefect callable in [prefect_flow.py](/home/esillileu/discoverex/engine/prefect_flow.py)
+- runtime env is prepared by [infra/prefect/flow.py](/home/esillileu/discoverex/engine/infra/prefect/flow.py)
+- worker-managed artifacts and MLflow linkage are applied after engine execution
+
+## 2. Public Engine Commands
+
+The engine runtime supports:
+
+- `generate`
+- `verify`
+- `animate`
+- `validate`
+
+Compatibility commands are still present for migration support:
+
+- `gen-verify`
+- `verify-only`
+- `replay-eval`
+
+Only `generate`, `verify`, and `animate` participate in the Prefect job-flow contract. `validate` is a direct CLI pipeline.
+
+## 3. Prefect Flow Surface
+
+External flow entrypoints:
+
 - `discoverex-engine-flow`
 - `discoverex-generate-flow`
 - `discoverex-verify-flow`
 - `discoverex-animate-flow`
 - `discoverex-combined-flow`
 
-### 엔진 내부 플로우
+Internal engine flows:
+
 - `discoverex-engine-entry-pipeline`
 - `discoverex-generate-pipeline`
 - `discoverex-verify-pipeline`
 - `discoverex-generate-inpaint-variant-pack`
 
-### 호환/내부 핸들러
-- `generate_v1_compat`, `generate_v2_compat`
-- `generate_verify_v2`, `generate_object_only`, `generate_inpaint_variant_pack`
-- `verify_v1_compat`
-- `animate_replay_eval`, `animate_stub`
+`discoverex-combined-flow` explicitly decomposes `gen-verify` into sequential `generate` then `verify`.
 
-## 3. 실행 모드 정의
+## 4. Worker-Provided Runtime Contract
 
-### 2.1 Local Mode (로컬 개발용)
-- **저장소**: 로컬 파일 시스템 (`adapters/artifact_store=local`)
-- **트래커**: 로컬 MLflow (`adapters/tracker=mlflow_local`)
-- **설정**: 별도 서버 없이 `sqlite:///mlflow.db`와 `artifacts/`를 로컬에 생성합니다.
+During Prefect execution, the worker/runtime layer provides environment values including:
 
-### 2.2 Worker Mode (운영/스케줄러용)
-- **트래커**: 워커가 주입한 `MLFLOW_TRACKING_URI`를 그대로 사용합니다.
-- **산출물**: 엔진은 `ORCH_ENGINE_ARTIFACT_DIR`와 `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`를 사용해 결과 파일과 manifest를 남깁니다.
-- **업로드 책임**: MinIO 업로드, presign 요청, MLflow artifact URI tag 기록은 워커가 담당합니다.
-- **인증**: 원격 MLflow가 보호되어 있으면 워커가 프록시를 띄우고 엔진에는 치환된 URI만 전달합니다.
+- `ORCH_JOB_INPUTS_JSON`
+- `ORCH_ENGINE_ARTIFACT_DIR`
+- `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`
+- `MLFLOW_TRACKING_URI`
 
-## 4. 실제 실행 예시
+The engine should:
 
-### 로컬 모드 기본 실행 (just 사용 권장)
+- use `MLFLOW_TRACKING_URI` as provided
+- write durable engine-owned files only under `ORCH_ENGINE_ARTIFACT_DIR`
+- write the manifest to `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH` when durable artifacts exist
+
+## 5. Local Execution Examples
+
+### Basic generate
+
 ```bash
-just sync
 just run discoverex generate --background-asset-ref bg://dummy
 ```
 
-### 로컬 모드 CPU 실행 (profile 사용)
+### CPU-oriented generate profile
+
 ```bash
-uv run discoverex generate --background-asset-ref bg://dummy -o profile=cpu_fast
+just run discoverex generate --background-asset-ref bg://dummy -o profile=cpu_fast
 ```
 
-### 워커 모드 수동 디버그 실행
+### Verify an existing scene
+
+```bash
+just run discoverex verify --scene-json artifacts/.../scene.json
+```
+
+### Validator run
+
+```bash
+just run discoverex validate composite.png --object-layer obj1.png --object-layer obj2.png
+```
+
+## 6. Worker Debug Example
+
+The contract can be simulated locally by injecting worker env values:
+
 ```bash
 MLFLOW_TRACKING_URI=http://127.0.0.1:5000 \
 ORCH_ENGINE_ARTIFACT_DIR="$PWD/.tmp/engine-artifacts" \
@@ -74,38 +111,36 @@ uv run discoverex generate \
   -o adapters/tracker=mlflow_server
 ```
 
-이 예시는 워커가 실제로 주입하는 계약을 로컬에서 흉내 내는 디버그 예시입니다.
+## 7. Embedded Fixed Worker
 
-## 5. 필수 환경변수 및 가드레일
+The repository includes an embedded worker stack documented in [infra/worker/README.md](/home/esillileu/discoverex/engine/infra/worker/README.md).
 
-워커 환경에서 실행 시 아래 환경변수가 필수적으로 관리되어야 합니다.
-- `MLFLOW_TRACKING_URI`: MLflow 서버 주소 또는 워커 프록시 주소
-- `ORCH_ENGINE_ARTIFACT_DIR`: 워커가 만든 엔진 산출물 디렉터리
-- `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`: 엔진 manifest 파일 경로
-
-**운영 원칙:**
-1. 엔진은 `MLFLOW_TRACKING_URI`를 그대로 사용하고, 워커가 후속 MLflow linkage를 담당합니다.
-2. durable output은 worker-managed artifact directory 계약으로만 보장됩니다.
-3. 실행 후 산출물 영속화는 worker upload 결과와 manifest를 기준으로 확인합니다.
-
-## 6. 트러블슈팅 (Quick Fix)
-
-- **Hydra Target 에러**: `conf/models/*` 또는 `conf/adapters/*`의 `_target_` 경로를 확인하십시오.
-- **Tracker 초기화 에러**: `uv sync --extra tracking`이 실행되었는지 확인하십시오.
-- **Worker artifact 업로드 에러**: `ORCH_ENGINE_ARTIFACT_DIR`와 `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`가 주입되었는지, manifest 경로와 상대경로가 계약에 맞는지 확인하십시오.
-
-## 7. 로컬 E2E 검증
-
-엔진 실행 계약을 한 번에 확인하려면 아래 하네스를 사용합니다.
+Common commands:
 
 ```bash
-UV_CACHE_DIR="$PWD/.cache/uv" uv run python infra/e2e/engine_runtime_e2e.py --scenario all
+./bin/cli worker init
+./bin/cli worker fixed up
+./bin/cli worker fixed logs --tail 120 -f
+./bin/cli worker fixed doctor --json
 ```
 
-이 스크립트는 두 경로를 검증합니다.
-- `tracking-artifact`: tiny runtime으로 실제 generate 실행, 엔진의 MLflow 기록 경계 확인
-- `worker-contract`: worker artifact 디렉토리/manifest/output upload 계약 확인
+## 8. Validation and Smoke Checks
 
-## 8. 참고 문서
-- CLI 상세 옵션: `docs/ops/cli.md`
-- 마이그레이션 이력: `docs/dev/prefect-migration.md`
+```bash
+just lint
+just typecheck
+just test
+uv run discoverex e2e --scenario all
+```
+
+The `e2e` harness covers:
+
+- `tracking-artifact`
+- `worker-contract`
+- `live-services`
+
+## 9. Current Operational Notes
+
+- `generate` and `verify` are the most complete paths.
+- `animate` is still wired through compatibility/stub-oriented handlers.
+- Worker registration and execution assume branch-scoped Prefect deployments managed from `infra/register`.
