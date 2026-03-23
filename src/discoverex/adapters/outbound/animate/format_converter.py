@@ -71,17 +71,24 @@ class MultiFormatConverter:
         return ConvertedAsset(apng_path=apng_path, webm_path=webm_path, lottie_path=lottie_path)
 
 
-def _detect_object_bbox(img: Image.Image, threshold: int = 10) -> tuple[int, int, int, int] | None:
-    """RGBA 이미지에서 alpha > threshold인 오브젝트 bbox를 반환."""
+def _detect_union_bbox(
+    frames: list[Path], threshold: int = 10,
+) -> tuple[int, int, int, int] | None:
+    """전체 프레임의 통합 bbox — 모션 범위 전체를 포함."""
     import numpy as np
-    alpha = np.array(img)[:, :, 3]
-    rows = np.any(alpha > threshold, axis=1)
-    cols = np.any(alpha > threshold, axis=0)
-    if not rows.any():
-        return None
-    r0, r1 = int(np.argmax(rows)), int(len(rows) - np.argmax(rows[::-1]))
-    c0, c1 = int(np.argmax(cols)), int(len(cols) - np.argmax(cols[::-1]))
-    return (c0, r0, c1, r1)
+    g = [99999, 99999, 0, 0]  # c0, r0, c1, r1
+    found = False
+    for path in frames:
+        a = np.array(Image.open(path).convert("RGBA"))[:, :, 3]
+        rs, cs = np.any(a > threshold, axis=1), np.any(a > threshold, axis=0)
+        if not rs.any():
+            continue
+        found = True
+        g[1] = min(g[1], int(np.argmax(rs)))
+        g[3] = max(g[3], int(len(rs) - np.argmax(rs[::-1])))
+        g[0] = min(g[0], int(np.argmax(cs)))
+        g[2] = max(g[2], int(len(cs) - np.argmax(cs[::-1])))
+    return tuple(g) if found else None  # type: ignore[return-value]
 
 
 def _select_frames(frames: list[Path], max_frames: int | None) -> list[Path]:
@@ -144,8 +151,8 @@ def _save_lottie(
     """
     try:
         first = Image.open(frames[0]).convert("RGBA")
-        # 오브젝트 bbox 감지 (alpha 기반) → 크롭 영역 결정
-        crop_box = _detect_object_bbox(first)
+        # 전체 프레임 통합 bbox — 모션 범위 전체 포함 (잘림 방지)
+        crop_box = _detect_union_bbox(frames)
         iw = crop_box[2] - crop_box[0] if crop_box else first.size[0]
         ih = crop_box[3] - crop_box[1] if crop_box else first.size[1]
 
