@@ -71,6 +71,19 @@ class MultiFormatConverter:
         return ConvertedAsset(apng_path=apng_path, webm_path=webm_path, lottie_path=lottie_path)
 
 
+def _detect_object_bbox(img: Image.Image, threshold: int = 10) -> tuple[int, int, int, int] | None:
+    """RGBA 이미지에서 alpha > threshold인 오브젝트 bbox를 반환."""
+    import numpy as np
+    alpha = np.array(img)[:, :, 3]
+    rows = np.any(alpha > threshold, axis=1)
+    cols = np.any(alpha > threshold, axis=0)
+    if not rows.any():
+        return None
+    r0, r1 = int(np.argmax(rows)), int(len(rows) - np.argmax(rows[::-1]))
+    c0, c1 = int(np.argmax(cols)), int(len(cols) - np.argmax(cols[::-1]))
+    return (c0, r0, c1, r1)
+
+
 def _select_frames(frames: list[Path], max_frames: int | None) -> list[Path]:
     if not max_frames or len(frames) <= max_frames:
         return frames
@@ -127,28 +140,31 @@ def _save_lottie(
 
     canvas_scale: 캔버스를 이미지 대비 몇 배로 할지 (원본 비율 유지).
       이미지 크기 유지, 캔버스 중앙 배치. 기준점(anchor)은 이미지 좌상단.
+      프레임이 캔버스보다 클 경우 오브젝트 bbox로 크롭 후 max_size로 리사이즈.
     """
     try:
-        first = Image.open(frames[0])
-        ow, oh = first.size
-        if max_size and max(ow, oh) > max_size:
-            ratio = max_size / max(ow, oh)
-            iw, ih = int(ow * ratio) // 2 * 2, int(oh * ratio) // 2 * 2
-            resize = True
-        else:
-            iw, ih = ow, oh
-            resize = False
+        first = Image.open(frames[0]).convert("RGBA")
+        # 오브젝트 bbox 감지 (alpha 기반) → 크롭 영역 결정
+        crop_box = _detect_object_bbox(first)
+        iw = crop_box[2] - crop_box[0] if crop_box else first.size[0]
+        ih = crop_box[3] - crop_box[1] if crop_box else first.size[1]
 
-        # 캔버스 = 이미지 × scale (원본 비율 유지)
-        cw = int(iw * canvas_scale) // 2 * 2
-        ch = int(ih * canvas_scale) // 2 * 2
+        # max_size로 리사이즈 (비율 유지)
+        if max_size and max(iw, ih) > max_size:
+            ratio = max_size / max(iw, ih)
+            iw, ih = max(1, int(iw * ratio)), max(1, int(ih * ratio))
+
+        cw = int(iw * canvas_scale) // 2 * 2 or 2
+        ch = int(ih * canvas_scale) // 2 * 2 or 2
         img_x = (cw - iw) / 2
         img_y = (ch - ih) / 2
 
         assets, layers = [], []
         for i, path in enumerate(frames):
             img = Image.open(path).convert("RGBA")
-            if resize:
+            if crop_box:
+                img = img.crop(crop_box)
+            if img.size != (iw, ih):
                 img = img.resize((iw, ih), Image.Resampling.LANCZOS)
             buf = io.BytesIO()
             img.save(buf, format="PNG", optimize=png_optimize)
