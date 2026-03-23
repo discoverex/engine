@@ -61,6 +61,7 @@ def _answer_assets(scene: Scene) -> list[AnswerAsset]:
             AnswerAsset(
                 lottie_id=f"lottie_{object_index:02d}",
                 name=f"object {object_index}",
+                title=f"object {object_index}",
                 src=Path(layer.image_ref).name,
                 bbox=RegionBBox(
                     x=layer.bbox.x,
@@ -121,6 +122,7 @@ def build_game_bundle(scene: Scene, source_scene_json: str) -> GameBundle:
     image_mime, image_sha256, image_bytes = _image_meta(image_ref)
     return GameBundle(
         scene_ref=SceneRef(
+            title=str(scene.background.metadata.get("name") or scene.meta.scene_id),
             scene_id=scene.meta.scene_id,
             version_id=scene.meta.version_id,
             source_scene_json=source_scene_json,

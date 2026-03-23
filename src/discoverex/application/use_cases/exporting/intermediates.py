@@ -29,6 +29,8 @@ def export_originals(
             "raw_alpha_mask_ref",
             "patch_image_ref",
             "selected_variant_ref",
+            "patch_selection_coarse_ref",
+            "patch_selection_fine_ref",
             "precomposited_image_ref",
             "blend_mask_ref",
             "edge_mask_ref",
@@ -75,6 +77,8 @@ def export_originals(
                 "alpha_nonzero_ratio",
                 "alpha_mean",
                 "selected_variant_ref",
+                "patch_selection_coarse_ref",
+                "patch_selection_fine_ref",
             )
             if candidate.get(key) is not None
         }

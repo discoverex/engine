@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import heapq
+import json
 import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
@@ -520,11 +521,21 @@ def _select_regions_patch_similarity(
                 "proposal_rank": index,
                 "selection_strategy": "patch_similarity_v2",
                 "selected_variant_id": best["variant_id"],
+                "selected_variant_config": best["variant_config"],
                 "feature_scores": best["feature_scores"],
                 "composite_similarity_score": best["score"],
             },
             version=1,
         )
+        selection_artifacts = _write_patch_selection_artifacts(
+            scene_dir=scene_dir,
+            region_id=asset.region_id,
+            best=best,
+            variant=next(
+                variant for variant in variants if variant["variant_id"] == best["variant_id"]
+            ),
+        )
+        region.attributes.update(selection_artifacts)
         regions.append(region)
         generated_objects[asset.region_id] = _apply_selected_variant_asset(
             scene_dir=scene_dir,
@@ -572,6 +583,14 @@ def _build_object_variants(
                                 f"rot{rotation:g}-scale{scale:.2f}"
                                 f"-{appearance['variant_id']}"
                             ),
+                            "variant_config": {
+                                "rotation_deg": float(rotation),
+                                "scale_factor": float(scale),
+                                "appearance_variant_id": str(appearance["variant_id"]),
+                                "saturation_mul": float(appearance["saturation_mul"]),
+                                "contrast_mul": float(appearance["contrast_mul"]),
+                                "sharpness_mul": float(appearance["sharpness_mul"]),
+                            },
                             "image": _pad_rgba(
                                 cropped,
                                 config.object_variants.canvas_padding,
@@ -975,10 +994,13 @@ def _find_best_patch_with_strategy(
                 score = sum(feature_scores.values())
                 if best is None or score > float(best["score"]):
                     best = {
+                        "coarse_bbox": candidate["bbox"],
                         "bbox": bbox,
                         "score": score,
                         "variant_id": variant_id,
+                        "variant_config": variant.get("variant_config", {}),
                         "feature_scores": feature_scores,
+                        "coarse_feature_scores": coarse_scores,
                         "selection_strategy": strategy_label,
                     }
     if best is not None:
@@ -986,6 +1008,59 @@ def _find_best_patch_with_strategy(
             f"{strategy_label}:selected_variant={best['variant_id']}:score={float(best['score']):.4f}"
         )
     return best, diagnostics
+
+
+def _write_patch_selection_artifacts(
+    *,
+    scene_dir: Path,
+    region_id: str,
+    best: dict[str, Any],
+    variant: dict[str, Any],
+) -> dict[str, str]:
+    artifact_dir = scene_dir / "assets" / "patch_selection" / region_id
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    paths: dict[str, str] = {}
+    for stage in ("coarse", "fine"):
+        image_path = artifact_dir / f"{stage}.selected.variant.png"
+        config_path = artifact_dir / f"{stage}.selected.variant.json"
+        artifact_path = artifact_dir / f"{stage}.selection.json"
+        variant["image"].convert("RGBA").save(image_path)
+        config_payload = {
+            "region_id": region_id,
+            "stage": stage,
+            "variant_id": str(best["variant_id"]),
+            "variant_config": dict(best.get("variant_config") or {}),
+            "variant_image_ref": str(image_path),
+        }
+        config_path.write_text(
+            json.dumps(config_payload, ensure_ascii=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        selected_bbox = best["coarse_bbox"] if stage == "coarse" else best["bbox"]
+        selection_payload = {
+            "region_id": region_id,
+            "stage": stage,
+            "selection_strategy": str(best.get("selection_strategy") or ""),
+            "selected_variant_id": str(best["variant_id"]),
+            "selected_bbox": {
+                "x": float(selected_bbox[0]),
+                "y": float(selected_bbox[1]),
+                "w": float(selected_bbox[2]),
+                "h": float(selected_bbox[3]),
+            },
+            "score": float(best["score"]),
+            "feature_scores": dict(
+                best["coarse_feature_scores"] if stage == "coarse" else best["feature_scores"]
+            ),
+            "variant_image_ref": str(image_path),
+            "variant_config_ref": str(config_path),
+        }
+        artifact_path.write_text(
+            json.dumps(selection_payload, ensure_ascii=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        paths[f"patch_selection_{stage}_ref"] = str(artifact_path)
+    return paths
 
 
 def _bucket_patch_size(

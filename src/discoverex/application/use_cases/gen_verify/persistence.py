@@ -78,7 +78,7 @@ def write_naturalness_report(saved_dir: Path, scene: Scene) -> Path | None:
         logger.info("naturalness report skipped reason=%s", exc)
         return None
     report_path = naturalness_json_path(
-        saved_dir.parent.parent,
+        saved_dir.parent.parent.parent,
         scene.meta.scene_id,
         scene.meta.version_id,
     )

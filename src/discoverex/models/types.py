@@ -102,6 +102,8 @@ class InpaintPrediction(TypedDict, total=False):
     variant_manifest_ref: str
     placement_variant_id: str
     selected_variant_ref: str
+    patch_selection_coarse_ref: str
+    patch_selection_fine_ref: str
     mask_source: str
     inpaint_mode: str
     placement_score: float

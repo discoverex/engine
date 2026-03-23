@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 
+from discoverex.adapters.outbound.io.json_files import write_json_file
 from discoverex.artifact_paths import outputs_dir
 from discoverex.domain.scene import Scene
 
@@ -11,7 +12,7 @@ from .layers import export_background, export_object_images
 from .lottie import write_object_lottie_bundles
 from .manifest import write_output_manifest
 from .shared import build_object_specs, candidate_by_region
-from .types import OutputExportResult
+from .types import ObjectRenderSpec, OutputExportResult
 
 
 def _copy_tree(*, source: Path, target: Path) -> list[Path]:
@@ -38,7 +39,7 @@ def _build_delivery_bundle(
     background_path: Path,
     object_png_paths: list[Path],
     object_lottie_paths: list[Path],
-    manifest_path: Path,
+    delivery_manifest_path: Path,
 ) -> list[Path]:
     scene_id = scene.meta.scene_id
     version_id = scene.meta.version_id
@@ -53,7 +54,7 @@ def _build_delivery_bundle(
     )
     for source, relative in (
         (background_path, Path("background") / background_path.name),
-        (manifest_path, manifest_path.name),
+        (delivery_manifest_path, delivery_manifest_path.name),
     ):
         target = _copy_file(source=source, target=delivery_root / relative)
         if target is not None:
@@ -67,6 +68,50 @@ def _build_delivery_bundle(
         if target is not None:
             copied.append(target)
     return copied
+
+
+def _write_delivery_manifest(
+    *,
+    artifacts_root: Path,
+    scene: Scene,
+    background_path: Path,
+    object_png_paths: list[Path],
+    object_specs: list[ObjectRenderSpec],
+) -> Path:
+    scene_id = scene.meta.scene_id
+    version_id = scene.meta.version_id
+    out_dir = outputs_dir(artifacts_root, scene_id, version_id)
+    delivery_dir = out_dir / "delivery"
+    png_by_object = {path.stem: path for path in object_png_paths}
+    payload = {
+        "scene_ref": {
+            "title": str(scene.background.metadata.get("name") or scene_id),
+            "scene_id": scene_id,
+            "version_id": version_id,
+        },
+        "background_img": {
+            "image_id": "background",
+            "src": (Path("background") / background_path.name).as_posix(),
+            "prompt": str(scene.background.metadata.get("prompt") or ""),
+            "width": int(scene.background.width),
+            "height": int(scene.background.height),
+        },
+        "answers": [
+            {
+                "lottie_id": spec.lottie_id,
+                "name": spec.name,
+                "title": spec.title,
+                "src": (Path("objects") / png_by_object[spec.object_id].name).as_posix(),
+                "bbox": spec.bbox,
+                "prompt": spec.prompt,
+                "order": spec.order,
+            }
+            for spec in object_specs
+            if spec.object_id in png_by_object
+        ],
+    }
+    manifest_path = delivery_dir / "manifest.json"
+    return write_json_file(manifest_path, payload)
 
 
 def export_output_bundle(*, artifacts_root: Path, scene: Scene) -> OutputExportResult:
@@ -106,16 +151,24 @@ def export_output_bundle(*, artifacts_root: Path, scene: Scene) -> OutputExportR
         original_entries=original_entries,
         object_specs=object_specs,
     )
+    delivery_manifest_path = _write_delivery_manifest(
+        artifacts_root=artifacts_root,
+        scene=scene,
+        background_path=background_path,
+        object_png_paths=object_png_paths,
+        object_specs=object_specs,
+    )
     delivery_paths = _build_delivery_bundle(
         artifacts_root=artifacts_root,
         scene=scene,
         background_path=background_path,
         object_png_paths=object_png_paths,
         object_lottie_paths=object_lottie_paths,
-        manifest_path=manifest_path,
+        delivery_manifest_path=delivery_manifest_path,
     )
     return OutputExportResult(
         manifest_path=manifest_path,
+        delivery_manifest_path=delivery_manifest_path,
         background_path=background_path,
         object_png_paths=object_png_paths,
         object_lottie_paths=object_lottie_paths,

@@ -34,6 +34,8 @@ class CandidateLayerPayload(TypedDict, total=False):
     final_polish_ref: str
     variant_manifest_ref: str
     selected_variant_ref: str
+    patch_selection_coarse_ref: str
+    patch_selection_fine_ref: str
     layer_image_ref: str
     bbox: BBoxPayload
     object_prompt_resolved: str
@@ -68,6 +70,7 @@ class BackgroundImagePayload(TypedDict):
 class AnswerAssetPayload(TypedDict):
     lottie_id: str
     name: str
+    title: str
     src: str
     bbox: BBoxPayload
     prompt: str
@@ -81,6 +84,7 @@ class ObjectRenderSpec:
     region_id: str
     layer_id: str
     name: str
+    title: str
     prompt: str
     order: int
     bbox: BBoxPayload
@@ -90,6 +94,7 @@ class ObjectRenderSpec:
 @dataclass(frozen=True)
 class OutputExportResult:
     manifest_path: Path
+    delivery_manifest_path: Path
     background_path: Path
     object_png_paths: list[Path]
     object_lottie_paths: list[Path]

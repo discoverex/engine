@@ -49,6 +49,8 @@ def test_export_output_bundle_writes_object_centric_outputs(tmp_path: Path) -> N
     processed_object_mask = scene_root / "assets" / "patches" / "object.layer-mask.png"
     precomposite_image = scene_root / "assets" / "patches" / "region.precomposite.png"
     variant_manifest = scene_root / "assets" / "patches" / "region.variants.json"
+    coarse_selection = scene_root / "assets" / "patch_selection" / "r1" / "coarse.selection.json"
+    fine_selection = scene_root / "assets" / "patch_selection" / "r1" / "fine.selection.json"
     composite_image = scene_root / "outputs" / "composite.png"
     for path, color in (
         (base_image, (255, 255, 255, 255)),
@@ -66,6 +68,9 @@ def test_export_output_bundle_writes_object_centric_outputs(tmp_path: Path) -> N
         size = (10, 12) if path in {processed_object_image, processed_object_mask} else (64, 64)
         Image.new(mode, size, color=color[0] if mode == "L" else color).save(path)
     variant_manifest.write_text("{}", encoding="utf-8")
+    coarse_selection.parent.mkdir(parents=True, exist_ok=True)
+    coarse_selection.write_text("{}", encoding="utf-8")
+    fine_selection.write_text("{}", encoding="utf-8")
 
     scene = Scene(
         meta=SceneMeta(
@@ -98,8 +103,12 @@ def test_export_output_bundle_writes_object_centric_outputs(tmp_path: Path) -> N
                         "patch_image_ref": str(object_image),
                         "precomposited_image_ref": str(precomposite_image),
                         "variant_manifest_ref": str(variant_manifest),
+                        "patch_selection_coarse_ref": str(scene_root / "assets" / "patch_selection" / "r1" / "coarse.selection.json"),
+                        "patch_selection_fine_ref": str(scene_root / "assets" / "patch_selection" / "r1" / "fine.selection.json"),
                         "layer_image_ref": str(processed_object_image),
                         "bbox": {"x": 1, "y": 2, "w": 10, "h": 12},
+                        "object_prompt_resolved": "hidden brass key",
+                        "object_negative_prompt_resolved": "blurry",
                     }
                 ]
             },
@@ -160,12 +169,14 @@ def test_export_output_bundle_writes_object_centric_outputs(tmp_path: Path) -> N
 
     assert exported.background_path.exists()
     assert exported.manifest_path.exists()
+    assert exported.delivery_manifest_path.exists()
     assert len(exported.object_png_paths) == 1
     assert len(exported.object_lottie_paths) == 1
-    assert len(exported.original_paths) == 13
+    assert len(exported.original_paths) == 15
     assert len(exported.delivery_paths) >= 5
     payload = json.loads(exported.manifest_path.read_text(encoding="utf-8"))
     assert payload["scene_ref"] == {
+        "title": "scene-1",
         "scene_id": "scene-1",
         "version_id": "v1",
     }
@@ -179,10 +190,11 @@ def test_export_output_bundle_writes_object_centric_outputs(tmp_path: Path) -> N
     assert payload["answers"] == [
         {
             "lottie_id": "lottie_01",
-            "name": "object 1",
+            "name": "hidden brass key | blurry",
+            "title": "hidden brass key | blurry",
             "src": "object_01.png",
             "bbox": {"x": 1.0, "y": 2.0, "w": 10.0, "h": 12.0},
-            "prompt": "",
+            "prompt": "hidden brass key",
             "order": 1,
         }
     ]
@@ -194,12 +206,19 @@ def test_export_output_bundle_writes_object_centric_outputs(tmp_path: Path) -> N
     assert {"region_id": "r1", "kind": "processed_object_mask_ref", "path": "original/r1/object.layer-mask.png"} in payload["original"]
     assert {"region_id": "r1", "kind": "precomposited_image_ref", "path": "original/r1/region.precomposite.png"} in payload["original"]
     assert {"region_id": "r1", "kind": "variant_manifest_ref", "path": "original/r1/region.variants.json"} in payload["original"]
+    assert {"region_id": "r1", "kind": "patch_selection_coarse_ref", "path": "original/r1/coarse.selection.json"} in payload["original"]
+    assert {"region_id": "r1", "kind": "patch_selection_fine_ref", "path": "original/r1/fine.selection.json"} in payload["original"]
     assert {"region_id": "r1", "kind": "diagnostics", "path": "original/r1/diagnostics.json"} in payload["original"]
     assert (scene_root / "outputs" / "original" / "r1" / "object.png").exists()
     assert (scene_root / "outputs" / "original" / "r1" / "diagnostics.json").exists()
+    delivery_manifest = json.loads(exported.delivery_manifest_path.read_text(encoding="utf-8"))
+    assert delivery_manifest["scene_ref"]["title"] == "scene-1"
+    assert delivery_manifest["background_img"]["src"] == "background/background.png"
+    assert delivery_manifest["answers"][0]["src"] == "objects/object_01.png"
     assert (scene_root / "outputs" / "delivery" / "metadata" / "scene.json").exists()
     assert (scene_root / "outputs" / "delivery" / "metadata" / "verification.json").exists()
     assert (scene_root / "outputs" / "delivery" / "background" / "background.png").exists()
+    assert (scene_root / "outputs" / "delivery" / "manifest.json").exists()
     assert (scene_root / "outputs" / "delivery" / "objects" / "object_01.png").exists()
     assert (scene_root / "outputs" / "delivery" / "objects" / "object_01.lottie").exists()
     with ZipFile(exported.object_lottie_paths[0]) as archive:
@@ -210,6 +229,6 @@ def test_export_output_bundle_writes_object_centric_outputs(tmp_path: Path) -> N
     assert "images/object_01.png" in names
     assert animation["metadata"]["scene_id"] == "scene-1"
     assert animation["metadata"]["bbox"] == {"x": 1.0, "y": 2.0, "w": 10.0, "h": 12.0}
-    assert animation["layers"][0]["nm"] == "object 1"
+    assert animation["layers"][0]["nm"] == "hidden brass key | blurry"
     assert len(animation["layers"]) == 1
     assert Image.open(scene_root / "outputs" / "objects" / "object_01.png").getpixel((0, 0)) == (0, 0, 255, 255)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -26,6 +27,7 @@ from discoverex.application.use_cases.generate_verify_v2 import (
     _mark_regions_as_answers,
     _validate_generated_object_assets,
     _validate_region_outputs,
+    _write_patch_selection_artifacts,
 )
 from discoverex.config_loader import load_pipeline_config
 from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
@@ -152,6 +154,53 @@ def test_find_best_patch_returns_bbox_for_synthetic_background(tmp_path: Path) -
     )
     assert result["score"] >= 0.0
     assert len(result["bbox"]) == 4
+    assert len(result["coarse_bbox"]) == 4
+    assert isinstance(result["variant_config"], dict)
+
+
+def test_write_patch_selection_artifacts_persists_stage_json_and_variant_assets(
+    tmp_path: Path,
+) -> None:
+    variant = {
+        "variant_id": "rot0-scale1.00-base",
+        "variant_config": {
+            "rotation_deg": 0.0,
+            "scale_factor": 1.0,
+            "appearance_variant_id": "base",
+            "saturation_mul": 1.0,
+            "contrast_mul": 1.0,
+            "sharpness_mul": 1.0,
+        },
+        "image": Image.new("RGBA", (16, 12), (240, 120, 80, 255)),
+    }
+    best = {
+        "variant_id": variant["variant_id"],
+        "variant_config": variant["variant_config"],
+        "selection_strategy": "primary",
+        "coarse_bbox": (10.0, 12.0, 16.0, 12.0),
+        "bbox": (11.0, 14.0, 16.0, 12.0),
+        "score": 0.88,
+        "coarse_feature_scores": {"lab": 0.5, "lbp": 0.2},
+        "feature_scores": {"lab": 0.5, "lbp": 0.2, "hog": 0.1, "gabor": 0.08},
+    }
+
+    paths = _write_patch_selection_artifacts(
+        scene_dir=tmp_path,
+        region_id="r-1",
+        best=best,
+        variant=variant,
+    )
+
+    coarse = json.loads(Path(paths["patch_selection_coarse_ref"]).read_text(encoding="utf-8"))
+    fine = json.loads(Path(paths["patch_selection_fine_ref"]).read_text(encoding="utf-8"))
+
+    assert coarse["stage"] == "coarse"
+    assert coarse["selected_bbox"] == {"x": 10.0, "y": 12.0, "w": 16.0, "h": 12.0}
+    assert Path(coarse["variant_image_ref"]).exists()
+    assert Path(coarse["variant_config_ref"]).exists()
+    assert fine["stage"] == "fine"
+    assert fine["selected_bbox"] == {"x": 11.0, "y": 14.0, "w": 16.0, "h": 12.0}
+    assert fine["feature_scores"]["hog"] == 0.1
 
 
 def test_build_object_variants_scales_before_tight_crop(tmp_path: Path) -> None:

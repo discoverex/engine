@@ -51,6 +51,12 @@ def output_manifest_path(
     return outputs_dir(artifacts_root, scene_id, version_id) / "manifest.json"
 
 
+def delivery_manifest_path(
+    artifacts_root: Path | str, scene_id: str, version_id: str
+) -> Path:
+    return outputs_dir(artifacts_root, scene_id, version_id) / "delivery" / "manifest.json"
+
+
 def composite_output_path(
     artifacts_root: Path | str, scene_id: str, version_id: str
 ) -> Path:

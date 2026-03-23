@@ -13,9 +13,17 @@ from ..composite_pipeline import resolve_composite_image_ref
 from ..runtime_metrics import track_stage_vram
 from ..scene_builder import build_background
 from ..types import PromptStageRecord
+from ...exporting.shared import compose_display_name
 
 _DEFAULT_BACKGROUND_NEGATIVE = "blurry, low quality, artifact"
 logger = get_logger("discoverex.generate.background")
+
+
+def _background_display_name(*, prompt: str, negative_prompt: str) -> str:
+    return compose_display_name(
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+    ) or "background"
 
 
 def build_background_from_inputs(
@@ -109,6 +117,12 @@ def _build_generated_background(
         format_seconds(started),
     )
     background = build_background(resolved.image_ref, context.runtime)
+    background.metadata["prompt"] = prompt
+    background.metadata["negative_prompt"] = negative_prompt or _DEFAULT_BACKGROUND_NEGATIVE
+    background.metadata["name"] = _background_display_name(
+        prompt=prompt,
+        negative_prompt=negative_prompt or _DEFAULT_BACKGROUND_NEGATIVE,
+    )
     return (
         background,
         PromptStageRecord(
@@ -138,6 +152,7 @@ def _build_selected_background(
     )
     logger.info("background selection mode=asset_ref source=%s", asset_ref)
     background = build_background(asset_ref, context.runtime)
+    background.metadata["name"] = Path(asset_ref).stem or "background"
     return (
         background,
         PromptStageRecord(

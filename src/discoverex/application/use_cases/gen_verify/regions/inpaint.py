@@ -216,6 +216,10 @@ def _generate_single_region(
         "object_guidance_scale": object_asset.object_guidance_scale,
         "object_seed": object_asset.object_seed,
     }
+    for key in ("patch_selection_coarse_ref", "patch_selection_fine_ref"):
+        value = updated.attributes.get(key)
+        if isinstance(value, str) and value:
+            details[key] = value
     if not details.get("selected_variant_ref"):
         raise RuntimeError(
             f"object inpaint missing selected variant region={region.region_id}"

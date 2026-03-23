@@ -25,6 +25,7 @@ def write_output_manifest(
     png_by_object = {path.stem: path for path in object_png_paths}
     payload = {
         "scene_ref": {
+            "title": str(scene.background.metadata.get("name") or scene.meta.scene_id),
             "scene_id": scene_id,
             "version_id": version_id,
         },
@@ -39,6 +40,7 @@ def write_output_manifest(
             {
                 "lottie_id": spec.lottie_id,
                 "name": spec.name,
+                "title": spec.title,
                 "src": file_name(png_by_object[spec.object_id]),
                 "bbox": spec.bbox,
                 "prompt": spec.prompt,

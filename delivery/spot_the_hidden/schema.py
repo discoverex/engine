@@ -30,6 +30,7 @@ class BackgroundImage(BaseModel):
 class AnswerAsset(BaseModel):
     lottie_id: str
     name: str
+    title: str = ""
     src: str
     bbox: RegionBBox
     prompt: str = ""
@@ -66,6 +67,7 @@ class AnswerKey(BaseModel):
 
 
 class SceneRef(BaseModel):
+    title: str = ""
     scene_id: str
     version_id: str
     source_scene_json: str

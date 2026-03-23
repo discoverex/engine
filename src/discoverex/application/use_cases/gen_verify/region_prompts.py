@@ -78,6 +78,8 @@ def record_layer_candidate(
             "final_polish_ref",
             "variant_manifest_ref",
             "selected_variant_ref",
+            "patch_selection_coarse_ref",
+            "patch_selection_fine_ref",
             "object_prompt_resolved",
             "object_negative_prompt_resolved",
             "generation_prompt_resolved",

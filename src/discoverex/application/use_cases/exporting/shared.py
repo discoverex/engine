@@ -7,6 +7,11 @@ from discoverex.domain.scene import Scene
 from .types import BBoxPayload, CandidateLayerPayload, ObjectRenderSpec
 
 
+def compose_display_name(*, prompt: str = "", negative_prompt: str = "") -> str:
+    parts = [part.strip() for part in (prompt, negative_prompt) if part and part.strip()]
+    return " | ".join(parts)
+
+
 def candidate_by_region(scene: Scene) -> dict[str, CandidateLayerPayload]:
     candidates = scene.background.metadata.get("inpaint_layer_candidates", [])
     if not isinstance(candidates, list):
@@ -40,6 +45,8 @@ def candidate_by_region(scene: Scene) -> dict[str, CandidateLayerPayload]:
             "final_polish_ref",
             "variant_manifest_ref",
             "selected_variant_ref",
+            "patch_selection_coarse_ref",
+            "patch_selection_fine_ref",
             "layer_image_ref",
             "object_prompt_resolved",
             "object_negative_prompt_resolved",
@@ -102,13 +109,19 @@ def build_object_specs(
         if source_ref is None:
             continue
         prompt = str(candidate.get("object_prompt_resolved") or "").strip()
+        negative_prompt = str(candidate.get("object_negative_prompt_resolved") or "").strip()
+        display_name = compose_display_name(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+        ) or f"object {object_index}"
         specs.append(
             ObjectRenderSpec(
                 object_id=f"object_{object_index:02d}",
                 lottie_id=f"lottie_{object_index:02d}",
                 region_id=region_id,
                 layer_id=layer.layer_id,
-                name=prompt or f"object {object_index}",
+                name=display_name,
+                title=display_name,
                 prompt=prompt,
                 order=int(layer.order),
                 bbox={

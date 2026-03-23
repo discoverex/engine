@@ -112,11 +112,13 @@ def test_build_game_bundle_maps_scene_to_delivery_schema(tmp_path: Path) -> None
     bundle = build_game_bundle(scene=scene, source_scene_json="scene.json")
 
     assert bundle.bundle_version == "spot_hidden_v3"
+    assert bundle.scene_ref.title == "scene-1"
     assert bundle.scene_ref.scene_id == "scene-1"
     assert bundle.playable.background_img.width == 100
     assert bundle.playable.background_img.src == "composite.png"
     assert len(bundle.playable.answers) == 1
     assert bundle.playable.answers[0].lottie_id == "lottie_01"
+    assert bundle.playable.answers[0].title == "object 1"
     assert bundle.playable.ui_flags.allow_multi_click is True
     assert bundle.answer_key.answer_region_ids == ["r-answer", "r-candidate"]
     assert len(bundle.answer_key.regions) == 2
