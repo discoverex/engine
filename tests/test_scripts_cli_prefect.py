@@ -156,7 +156,7 @@ def test_default_register_job_spec_points_to_repo_standard_file() -> None:
         / "infra"
         / "register"
         / "job_specs"
-        / "prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml"
+        / "generate_verify.standard.yaml"
     )
 
 
