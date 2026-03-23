@@ -94,6 +94,9 @@ def _canonicalize_artifact(
         "scene": ("scene_json", "artifact_scene_uri"),
         "verification": ("verification_json", "artifact_verification_uri"),
         "naturalness": ("naturalness_json", "artifact_naturalness_uri"),
+        "object_quality": ("object_quality_json", "artifact_object_quality_uri"),
+        "quality_case": ("quality_case_json", "artifact_case_json_uri"),
+        "quality_gallery": ("quality_gallery_image", "artifact_gallery_uri"),
         "prompt_bundle": ("prompt_bundle_json", "artifact_prompt_bundle_uri"),
         "lottie": ("lottie_bundle", "artifact_lottie_uri"),
         "background": ("background_image", "artifact_background_uri"),
@@ -105,6 +108,12 @@ def _canonicalize_artifact(
         ),
     }
     target = mapping.get(logical_name)
+    if target is None and logical_name.startswith("object_"):
+        suffix = logical_name.removeprefix("object_")
+        target = (f"object_{suffix}_image", f"artifact_object_{suffix}_uri")
+    if target is None and logical_name.startswith("mask_"):
+        suffix = logical_name.removeprefix("mask_")
+        target = (f"mask_{suffix}_image", f"artifact_mask_{suffix}_uri")
     if target is None:
         return {
             "logical_name": logical_name,

@@ -3,6 +3,32 @@ from __future__ import annotations
 import json
 
 _DEFAULT_OBJECT_GENERATION_PROMPT = "isolated hidden object"
+_DEFAULT_OBJECT_PROMPT_STYLE = "neutral_backdrop"
+_DEFAULT_OBJECT_NEGATIVE_PROFILE = "default"
+
+_PROMPT_STYLE_SUFFIXES = {
+    "neutral_backdrop": (
+        "isolated single object, centered composition, "
+        "plain neutral backdrop, no environment, no floor"
+    ),
+    "transparent_only": (
+        "isolated single object, centered composition, "
+        "transparent background, cutout asset, no environment, no floor"
+    ),
+    "studio_cutout": (
+        "isolated single object, centered composition, "
+        "studio product cutout, clean edges, no environment, no floor"
+    ),
+}
+
+_NEGATIVE_PROFILE_SUFFIXES = {
+    "default": "",
+    "anti_white": "white object, washed out, overexposed, pale colors, colorless",
+    "anti_white_glow": (
+        "white object, washed out, overexposed, pale colors, colorless, "
+        "glow, bloom, haze"
+    ),
+}
 
 
 def compose_prompt(*, base_prompt: str, prompt: str) -> str:
@@ -13,12 +39,39 @@ def compose_prompt(*, base_prompt: str, prompt: str) -> str:
     return prompt_text or base_text
 
 
-def object_generation_prompt(object_prompt: str) -> str:
+def object_generation_prompt(
+    object_prompt: str,
+    *,
+    style: str = _DEFAULT_OBJECT_PROMPT_STYLE,
+) -> str:
     prompt = object_prompt.strip() or _DEFAULT_OBJECT_GENERATION_PROMPT
-    return (
-        f"{prompt}, isolated single object, centered composition, "
-        "plain neutral backdrop, no environment, no floor"
-    )
+    suffix = _PROMPT_STYLE_SUFFIXES.get(style, _PROMPT_STYLE_SUFFIXES[_DEFAULT_OBJECT_PROMPT_STYLE])
+    return f"{prompt}, {suffix}"
+
+
+def resolve_object_prompt_style(style: str) -> str:
+    normalized = style.strip().lower()
+    return normalized if normalized in _PROMPT_STYLE_SUFFIXES else _DEFAULT_OBJECT_PROMPT_STYLE
+
+
+def compose_negative_prompt(
+    *,
+    base_negative_prompt: str,
+    negative_prompt: str,
+    profile: str = _DEFAULT_OBJECT_NEGATIVE_PROFILE,
+) -> str:
+    resolved_profile = resolve_object_negative_profile(profile)
+    parts = [
+        base_negative_prompt.strip(),
+        negative_prompt.strip(),
+        _NEGATIVE_PROFILE_SUFFIXES[resolved_profile],
+    ]
+    return ", ".join(part for part in parts if part)
+
+
+def resolve_object_negative_profile(profile: str) -> str:
+    normalized = profile.strip().lower()
+    return normalized if normalized in _NEGATIVE_PROFILE_SUFFIXES else _DEFAULT_OBJECT_NEGATIVE_PROFILE
 
 
 def resolve_object_prompts(object_prompt: str, *, total_regions: int) -> list[str]:

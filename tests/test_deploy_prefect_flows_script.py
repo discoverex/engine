@@ -161,6 +161,7 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
     deployment_id = deploy_flows._deploy_embedded_flow(
         engine="discoverex",
         flow_kind="generate",
+        purpose="batch",
         branch="feat/remote-source",
         flow_entrypoint="prefect_flow.py:run_generate_job_flow",
         work_pool_name="gpu-pool",
@@ -184,8 +185,8 @@ def test_deploy_embedded_flow_uses_local_flow_and_deploy(monkeypatch: Any) -> No
         },
         "build": False,
         "push": False,
-        "description": "Execute the generate flow for branch 'feat/remote-source'.",
-        "tags": ["discoverex", "generate", "feat/remote-source"],
+        "description": "Execute the generate flow for purpose 'batch'. source_branch='feat/remote-source'.",
+        "tags": ["discoverex", "generate", "purpose:batch", "branch:feat/remote-source"],
         "version": "20260312120000",
         "print_next_steps": False,
     }
@@ -225,8 +226,8 @@ def test_main_dry_run_prints_remote_deployment_metadata(
         "argv",
         [
             "deploy_prefect_flows.py",
-            "--branch",
-            "dev",
+            "--purpose",
+            "standard",
             "--flow-kind",
             "verify",
             "--prefect-api-url",
@@ -240,10 +241,11 @@ def test_main_dry_run_prints_remote_deployment_metadata(
 
     assert code == 0
     assert out == {
-        "deployment_name": "discoverex-verify-dev",
+        "deployment_name": "discoverex-verify-standard",
         "engine": "discoverex",
         "flow_kind": "verify",
-        "branch": "dev",
+        "purpose": "standard",
+        "branch": "",
         "repo_url": "https://github.com/discoverex/engine.git",
         "ref": "dev",
         "entrypoint": "prefect_flow.py:run_verify_job_flow",
@@ -293,6 +295,8 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
         "argv",
         [
             "deploy_prefect_flows.py",
+            "--purpose",
+            "batch",
             "--branch",
             "feat/remote-source",
             "--flow-kind",
@@ -316,10 +320,11 @@ def test_main_deploys_remote_flow(monkeypatch: Any, capsys: Any) -> None:
     assert captured["deploy_kwargs"] == {
         "engine": "discoverex",
         "flow_kind": "generate",
+        "purpose": "batch",
         "branch": "feat/remote-source",
         "flow_entrypoint": "prefect_flow.py:run_generate_job_flow",
         "work_pool_name": "discoverex-fixed",
-        "work_queue_name": "gpu-fixed",
+        "work_queue_name": "gpu-fixed-batch",
         "image": "discoverex-worker:local",
         "deployment_version": out["deployment_version"],
         "deployment_name": "discoverex-naturalness-experiment-feat-remote-source",
@@ -341,6 +346,11 @@ def test_deploy_embedded_flow_omits_image_for_process_pool(monkeypatch: Any) -> 
     monkeypatch.setattr(deploy_flows, "_load_flow", lambda _entrypoint: _FakeFlow())
     monkeypatch.setattr(
         deploy_flows,
+        "_update_process_deployment_pull_steps",
+        lambda deployment_id, work_pool_name: None,
+    )
+    monkeypatch.setattr(
+        deploy_flows,
         "_deployment_job_variables",
         lambda work_pool_name: {
             "env": {"PREFECT_API_URL": "https://prefect.example/api"},
@@ -351,6 +361,7 @@ def test_deploy_embedded_flow_omits_image_for_process_pool(monkeypatch: Any) -> 
     deployment_id = deploy_flows._deploy_embedded_flow(
         engine="discoverex",
         flow_kind="generate",
+        purpose="standard",
         branch="feat/process",
         flow_entrypoint="prefect_flow.py:run_generate_job_flow",
         work_pool_name="discoverex-fixed-process",
@@ -363,13 +374,6 @@ def test_deploy_embedded_flow_omits_image_for_process_pool(monkeypatch: Any) -> 
 
     assert deployment_id == "deployment-789"
     assert "image" not in captured["deploy_kwargs"]
-    assert captured["deploy_kwargs"]["pull_steps"] == [
-        {
-            "prefect.deployments.steps.set_working_directory": {
-                "directory": "/app"
-            }
-        }
-    ]
     assert captured["deploy_kwargs"]["job_variables"] == {
         "env": {"PREFECT_API_URL": "https://prefect.example/api"},
         "working_dir": "/app",
@@ -397,6 +401,7 @@ def test_build_parser_marks_script_as_remote_source_registrar() -> None:
     assert "embedded-source Prefect deployment" in parser.description
     parsed = parser.parse_args(["--branch", "dev"])
     assert parsed.branch == "dev"
+    assert parsed.purpose == "standard"
     assert parsed.flow_kind == "combined"
     assert parsed.flow_entrypoint is None
     assert parsed.repo_url == "https://github.com/discoverex/engine.git"

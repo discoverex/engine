@@ -22,7 +22,7 @@ else:
 
 from infra.register.branch_deployments import (
     DEFAULT_FLOW_KIND,
-    deployment_name_for_branch,
+    deployment_name_for_purpose,
     flow_entrypoint_for_kind,
 )
 from infra.register.settings import SETTINGS
@@ -134,11 +134,13 @@ def _create_flow_run(
     deployment_id: UUID,
     parameters: dict[str, Any],
     flow_run_name: str | None,
+    work_queue_name: str | None = None,
 ) -> Any:
     return client.create_flow_run_from_deployment(
         deployment_id,
         parameters=parameters,
         name=flow_run_name,
+        work_queue_name=work_queue_name,
     )
 
 
@@ -467,8 +469,8 @@ def _resolved_deployment_name(args: argparse.Namespace) -> str:
     explicit = str(args.deployment or "").strip()
     if explicit:
         return explicit
-    return deployment_name_for_branch(
-        SETTINGS.register_flow_ref or "dev",
+    return deployment_name_for_purpose(
+        SETTINGS.register_deployment_purpose or "standard",
         flow_kind=_flow_kind_for_command(args.command),
     )
 
@@ -496,9 +498,11 @@ def _resolved_deployment_name_from_job_spec(
     # Fallback to engine_run if inputs missing? JobSpec doesn't have engine_run anymore.
 
     if not command:
-        return deployment_name_for_branch(SETTINGS.register_flow_ref or "dev")
-    return deployment_name_for_branch(
-        SETTINGS.register_flow_ref or "dev",
+        return deployment_name_for_purpose(
+            SETTINGS.register_deployment_purpose or "standard"
+        )
+    return deployment_name_for_purpose(
+        SETTINGS.register_deployment_purpose or "standard",
         flow_kind=_flow_kind_for_command(command),
     )
 
@@ -544,6 +548,7 @@ def submit_job_spec(
     prefect_api_url: str,
     deployment: str | None = None,
     job_name: str | None = None,
+    work_queue_name: str | None = None,
     resume_key: str | None = None,
     checkpoint_dir: str | None = None,
 ) -> dict[str, Any]:
@@ -574,6 +579,7 @@ def submit_job_spec(
                     job_name
                     or str(enriched_job_spec.get("job_name", "")).strip()
                     or None,
+                    work_queue_name,
                 )
             except json.JSONDecodeError as exc:
                 _emit_prefect_diagnostics(api_url, deployment_name)
@@ -587,6 +593,7 @@ def submit_job_spec(
         "deployment_id": str(deployment_id),
         "flow_run_id": str(getattr(created, "id", "")),
         "flow_run_name": getattr(created, "name", None),
+        "work_queue_name": work_queue_name,
         "engine": job_spec.get("engine"),
         "run_mode": job_spec.get("run_mode"),
     }

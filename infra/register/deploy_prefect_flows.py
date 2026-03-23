@@ -18,7 +18,9 @@ from prefect.settings import PREFECT_API_URL, temporary_settings
 from infra.register.branch_deployments import (
     DEFAULT_FLOW_KIND,
     SUPPORTED_FLOW_KINDS,
-    deployment_name_for_branch,
+    SUPPORTED_DEPLOYMENT_PURPOSES,
+    default_queue_for_purpose,
+    deployment_name_for_purpose,
     flow_entrypoint_for_kind,
 )
 from infra.register.register_orchestrator_job import _extra_headers, _normalize_api_url
@@ -29,6 +31,7 @@ class DeploymentMetadata(TypedDict, total=False):
     deployment_id: str
     engine: str
     flow_kind: str
+    purpose: str
     branch: str
     repo_url: str
     ref: str
@@ -46,7 +49,12 @@ def _build_parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument("--engine", default=SETTINGS.engine_name)
-    parser.add_argument("--branch", required=True)
+    parser.add_argument(
+        "--purpose",
+        choices=SUPPORTED_DEPLOYMENT_PURPOSES,
+        default=SETTINGS.register_deployment_purpose,
+    )
+    parser.add_argument("--branch", default="")
     parser.add_argument(
         "--flow-kind", choices=SUPPORTED_FLOW_KINDS, default=DEFAULT_FLOW_KIND
     )
@@ -61,7 +69,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--deployment-version",
         default=default_deployment_version(),
     )
-    parser.add_argument("--work-queue-name", default=SETTINGS.prefect_work_queue)
+    parser.add_argument("--work-queue-name", default=None)
     parser.add_argument("--dry-run", action="store_true")
     return parser
 
@@ -77,6 +85,7 @@ def _deployment_metadata(
     *,
     engine: str,
     flow_kind: str,
+    purpose: str,
     branch: str,
     repo_url: str,
     ref: str,
@@ -87,8 +96,8 @@ def _deployment_metadata(
     deployment_name: str | None,
     deployment_suffix: str,
 ) -> DeploymentMetadata:
-    resolved_name = str(deployment_name or "").strip() or deployment_name_for_branch(
-        branch,
+    resolved_name = str(deployment_name or "").strip() or deployment_name_for_purpose(
+        purpose,
         flow_kind=flow_kind,
         engine=engine,
         suffix=deployment_suffix,
@@ -97,6 +106,7 @@ def _deployment_metadata(
         "deployment_name": resolved_name,
         "engine": engine,
         "flow_kind": flow_kind,
+        "purpose": purpose,
         "branch": branch,
         "repo_url": repo_url,
         "ref": ref,
@@ -112,7 +122,9 @@ def _resolved_ref(branch: str, ref: str | None) -> str:
     explicit = str(ref or "").strip()
     if explicit:
         return explicit
-    return branch
+    if str(branch).strip():
+        return branch
+    return SETTINGS.engine_repo_ref or "dev"
 
 
 @contextmanager
@@ -254,6 +266,7 @@ def _deploy_embedded_flow(
     *,
     engine: str,
     flow_kind: str,
+    purpose: str,
     branch: str,
     flow_entrypoint: str,
     work_pool_name: str,
@@ -269,15 +282,24 @@ def _deploy_embedded_flow(
         "work_pool_name": work_pool_name,
         "work_queue_name": work_queue_name,
         "job_variables": _deployment_job_variables(work_pool_name=work_pool_name),
-        "image": image,
         "build": False,
         "push": False,
-        "description": f"Execute the {flow_kind} flow for branch {branch!r}.",
-        "tags": [engine, flow_kind, branch],
+        "description": (
+            f"Execute the {flow_kind} flow for purpose {purpose!r}."
+            + (f" source_branch={branch!r}." if str(branch).strip() else "")
+        ),
+        "tags": [
+            engine,
+            flow_kind,
+            f"purpose:{purpose}",
+            *([f"branch:{branch}"] if str(branch).strip() else []),
+        ],
         "version": deployment_version,
         "print_next_steps": False,
     }
     process_pull_steps = _process_pull_steps(work_pool_name=work_pool_name)
+    if process_pull_steps is None:
+        deploy_kwargs["image"] = image
     deployment_id = str(embedded_flow.deploy(**deploy_kwargs))
     if process_pull_steps is not None:
         _update_process_deployment_pull_steps(
@@ -294,12 +316,20 @@ def main() -> int:
     deployment: DeploymentMetadata = _deployment_metadata(
         engine=args.engine,
         flow_kind=args.flow_kind,
+        purpose=args.purpose,
         branch=args.branch,
         repo_url=args.repo_url,
         ref=_resolved_ref(args.branch, args.ref),
         flow_entrypoint=_resolved_entrypoint(args.flow_kind, args.flow_entrypoint),
         work_pool_name=args.work_pool_name,
-        work_queue_name=args.work_queue_name,
+        work_queue_name=(
+            str(args.work_queue_name).strip()
+            if str(args.work_queue_name or "").strip()
+            else default_queue_for_purpose(
+                args.purpose,
+                default_queue=SETTINGS.prefect_work_queue,
+            )
+        ),
         deployment_version=args.deployment_version,
         deployment_name=args.deployment_name,
         deployment_suffix=args.deployment_suffix,
@@ -311,10 +341,11 @@ def main() -> int:
         deployment["deployment_id"] = _deploy_embedded_flow(
             engine=args.engine,
             flow_kind=args.flow_kind,
+            purpose=args.purpose,
             branch=args.branch,
             flow_entrypoint=deployment["entrypoint"],
             work_pool_name=args.work_pool_name,
-            work_queue_name=args.work_queue_name,
+            work_queue_name=deployment["work_queue_name"],
             image=SETTINGS.prefect_work_image,
             deployment_version=args.deployment_version,
             deployment_name=deployment["deployment_name"],

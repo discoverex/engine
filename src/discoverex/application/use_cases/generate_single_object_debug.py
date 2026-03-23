@@ -59,7 +59,10 @@ def run(
         default_prompt=default_prompt,
         object_prompt=base_object_prompt,
     )
-    effective_generation_prompt = object_generation_prompt(effective_object_prompt)
+    effective_generation_prompt = object_generation_prompt(
+        effective_object_prompt,
+        style="neutral_backdrop",
+    )
     handle = context.object_generator_model.load(context.model_versions.object_generator)
     try:
         generated = generate_region_objects(

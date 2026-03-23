@@ -24,6 +24,7 @@ class RegisterSettings(BaseSettings):
     )
     register_flow_entrypoint: str = "prefect_flow.py:run_combined_job_flow"
     register_flow_ref: str = "dev"
+    register_deployment_purpose: str = "standard"
     register_deployment_version: str = ""
 
     prefect_cf_access_client_id: str = ""

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from infra.register.branch_deployments import (
     DEFAULT_FLOW_KIND,
-    deployment_name_for_branch,
+    deployment_name_for_purpose,
 )
 from infra.register.settings import SETTINGS
 
@@ -131,8 +131,8 @@ def _append_option(argv: list[str], name: str, value: str | None) -> None:
 
 
 def _build_forward_argv(args: argparse.Namespace) -> list[str]:
-    deployment = str(args.deployment or "").strip() or deployment_name_for_branch(
-        SETTINGS.register_flow_ref or "dev",
+    deployment = str(args.deployment or "").strip() or deployment_name_for_purpose(
+        SETTINGS.register_deployment_purpose or "standard",
         flow_kind=_flow_kind_for_command(args.command),
     )
     argv = [

@@ -11,7 +11,14 @@ from discoverex.progress_events import emit_progress_event
 from discoverex.runtime_logging import format_seconds, get_logger
 
 from .assets import build_placement_assets, relocate_mask_assets
-from .prompts import compose_prompt, object_generation_prompt, resolve_object_prompts
+from .prompts import (
+    compose_negative_prompt,
+    compose_prompt,
+    object_generation_prompt,
+    resolve_object_negative_profile,
+    resolve_object_prompt_style,
+    resolve_object_prompts,
+)
 from .types import GeneratedObjectAsset
 
 logger = get_logger("discoverex.generate.objects")
@@ -62,6 +69,8 @@ def generate_region_objects(
     object_negative_prompt: str,
     object_base_prompt: str = "",
     object_base_negative_prompt: str = "",
+    object_prompt_style: str = "neutral_backdrop",
+    object_negative_profile: str = "default",
     object_generation_size: int = _OBJECT_GENERATION_SIZE,
     max_vram_gb: float | None = None,
 ) -> dict[str, GeneratedObjectAsset]:
@@ -76,9 +85,12 @@ def generate_region_objects(
         compose_prompt(base_prompt=object_base_prompt, prompt=prompt)
         for prompt in object_prompts
     ]
-    resolved_negative_prompt = compose_prompt(
-        base_prompt=object_base_negative_prompt,
-        prompt=object_negative_prompt or _DEFAULT_OBJECT_NEGATIVE,
+    resolved_prompt_style = resolve_object_prompt_style(object_prompt_style)
+    resolved_negative_profile = resolve_object_negative_profile(object_negative_profile)
+    resolved_negative_prompt = compose_negative_prompt(
+        base_negative_prompt=object_base_negative_prompt,
+        negative_prompt=object_negative_prompt or _DEFAULT_OBJECT_NEGATIVE,
+        profile=resolved_negative_profile,
     )
     object_generation_steps = _resolved_object_generation_steps(context)
     object_generation_guidance = _resolved_object_generation_guidance(context)
@@ -123,7 +135,10 @@ def generate_region_objects(
                             "preview_output_paths": [str(path) for path in preview_paths],
                             "alpha_output_paths": [str(path) for path in alpha_paths],
                             "visualization_output_paths": [str(path) for path in visualization_paths],
-                            "prompts": [object_generation_prompt(prompt) for prompt in batch_prompts],
+                            "prompts": [
+                                object_generation_prompt(prompt, style=resolved_prompt_style)
+                                for prompt in batch_prompts
+                            ],
                             "width": object_generation_size,
                             "height": object_generation_size,
                             "seed": context.runtime.model_runtime.seed,
@@ -169,7 +184,10 @@ def generate_region_objects(
                                 "width": object_generation_size,
                                 "height": object_generation_size,
                                 "seed": context.runtime.model_runtime.seed,
-                                "prompt": object_generation_prompt(region_prompt),
+                                "prompt": object_generation_prompt(
+                                    region_prompt,
+                                    style=resolved_prompt_style,
+                                ),
                                 "negative_prompt": resolved_negative_prompt,
                                 "num_inference_steps": object_generation_steps,
                                 "guidance_scale": object_generation_guidance,

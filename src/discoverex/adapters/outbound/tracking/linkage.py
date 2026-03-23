@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, TypedDict, cast
 from urllib import error, request
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from pydantic import BaseModel, ConfigDict
 
@@ -59,6 +59,7 @@ def link_uploaded_artifacts(
     tags = _build_tag_updates(
         uploaded_uris=uploaded_uris,
         engine_mlflow_tags=engine_mlflow_tags,
+        settings=settings,
     )
     if not tags:
         return MlflowTagLinkageResult(status="skipped_no_tags", linked_tags={})
@@ -89,6 +90,7 @@ def _build_tag_updates(
     *,
     uploaded_uris: UploadedArtifactUris,
     engine_mlflow_tags: dict[str, str],
+    settings: AppSettings | dict[str, Any] | None = None,
 ) -> dict[str, str]:
     tags: dict[str, str] = {}
     for payload_key, tag_key in (
@@ -106,6 +108,18 @@ def _build_tag_updates(
         tag_value = str(value).strip()
         if tag_key and tag_value:
             tags[tag_key] = tag_value
+    public_base = _public_artifact_base_url(settings)
+    if public_base:
+        tags["artifact_public_base_url"] = public_base
+    storage_api_base = _storage_api_base_url(settings)
+    if storage_api_base:
+        tags["storage_api_base_url"] = storage_api_base
+    for key, value in list(tags.items()):
+        if not key.endswith("_uri"):
+            continue
+        public_url = _public_artifact_url(value, settings)
+        if public_url:
+            tags[key.removesuffix("_uri") + "_http"] = public_url
     return tags
 
 
@@ -200,6 +214,33 @@ def _mlflow_headers(settings: AppSettings | None) -> dict[str, str]:
 def _tracking_uri_from_settings(settings: AppSettings | dict[str, Any] | None) -> str:
     loaded = _coerce_settings(settings)
     return loaded.tracking.uri.strip() if loaded is not None else ""
+
+
+def _public_artifact_base_url(settings: AppSettings | dict[str, Any] | None) -> str:
+    _ = settings
+    return "https://storage.discoverx.qzz.io/minio"
+
+
+def _storage_api_base_url(settings: AppSettings | dict[str, Any] | None) -> str:
+    loaded = _coerce_settings(settings)
+    if loaded is None:
+        return ""
+    return loaded.storage.storage_api_url.strip().rstrip("/")
+
+
+def _public_artifact_url(
+    object_uri: str,
+    settings: AppSettings | dict[str, Any] | None,
+) -> str:
+    raw = str(object_uri).strip()
+    if not raw.startswith("s3://"):
+        return ""
+    base = _public_artifact_base_url(settings).rstrip("/")
+    remainder = raw.removeprefix("s3://")
+    if "/" not in remainder:
+        return ""
+    bucket, key = remainder.split("/", 1)
+    return f"{base}/{quote(bucket, safe='')}/{quote(key, safe='/')}"
 
 
 def _coerce_settings(settings: AppSettings | dict[str, Any] | None) -> AppSettings | None:

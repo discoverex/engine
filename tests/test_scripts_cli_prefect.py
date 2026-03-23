@@ -28,31 +28,38 @@ def test_register_defaults_to_standard_job_spec(monkeypatch) -> None:  # type: i
 
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
-    result = runner.invoke(app, ["registercombined", "--branch", "dev"])
+    result = runner.invoke(app, ["registercombined"])
 
     assert result.exit_code == 0
     assert captured["script_name"] == "infra.register.submit_job_spec"
     assert captured["args"] == [
         "--deployment",
-        "discoverex-combined-dev",
+        "discoverex-combined-standard",
         "--job-spec-file",
         str(DEFAULT_REGISTER_JOB_SPEC),
     ]
 
 
-def test_register_requires_branch(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_register_accepts_explicit_deployment_without_purpose(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     runner = CliRunner()
+    captured: dict[str, object] = {}
 
     def _fake_run(script_name: str, args: list[str]) -> int:
-        _ = (script_name, args)
+        captured["script_name"] = script_name
+        captured["args"] = args
         return 0
 
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
-    result = runner.invoke(app, ["registercombined"])
+    result = runner.invoke(app, ["registercombined", "--deployment", "custom-dep"])
 
-    assert result.exit_code == 2
-    assert "--branch is required" in result.stdout
+    assert result.exit_code == 0
+    assert captured["args"] == [
+        "--deployment",
+        "custom-dep",
+        "--job-spec-file",
+        str(DEFAULT_REGISTER_JOB_SPEC),
+    ]
 
 
 def test_register_forwards_submit_spec_args(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -70,8 +77,8 @@ def test_register_forwards_submit_spec_args(monkeypatch) -> None:  # type: ignor
         app,
         [
             "registercombined",
-            "--branch",
-            "feature/foo",
+            "--purpose",
+            "debug",
             "--job-name",
             "manual-run",
         ],
@@ -81,7 +88,7 @@ def test_register_forwards_submit_spec_args(monkeypatch) -> None:  # type: ignor
     assert captured["script_name"] == "infra.register.submit_job_spec"
     assert captured["args"] == [
         "--deployment",
-        "discoverex-combined-feature-foo",
+        "discoverex-combined-debug",
         "--job-name",
         "manual-run",
         "--job-spec-file",
@@ -104,8 +111,8 @@ def test_register_maps_command_to_flow_kind(monkeypatch) -> None:  # type: ignor
         app,
         [
             "registercombined",
-            "--branch",
-            "feature/foo",
+            "--purpose",
+            "backfill",
             "--command",
             "verify",
             "--job-name",
@@ -117,7 +124,7 @@ def test_register_maps_command_to_flow_kind(monkeypatch) -> None:  # type: ignor
     assert captured["script_name"] == "infra.register.submit_job_spec"
     assert captured["args"] == [
         "--deployment",
-        "discoverex-verify-feature-foo",
+        "discoverex-verify-backfill",
         "--command",
         "verify",
         "--job-name",
@@ -138,13 +145,13 @@ def test_register_flow_targets_named_flow_kind(monkeypatch) -> None:  # type: ig
 
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
-    result = runner.invoke(app, ["register", "flow", "generate", "--branch", "dev"])
+    result = runner.invoke(app, ["register", "flow", "generate"])
 
     assert result.exit_code == 0
     assert captured["script_name"] == "infra.register.submit_job_spec"
     assert captured["args"] == [
         "--deployment",
-        "discoverex-generate-dev",
+        "discoverex-generate-standard",
         "--job-spec-file",
         str(DEFAULT_REGISTER_JOB_SPEC),
     ]
@@ -156,7 +163,7 @@ def test_default_register_job_spec_points_to_repo_standard_file() -> None:
         / "infra"
         / "register"
         / "job_specs"
-        / "prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml"
+        / "generate_verify.standard.yaml"
     )
 
 
@@ -222,13 +229,13 @@ def test_register_batch_submits_one_run_per_csv_row(monkeypatch, tmp_path) -> No
 
     result = runner.invoke(
         app,
-        ["register", "batch", str(csv_path), "--branch", "dev"],
+        ["register", "batch", str(csv_path)],
     )
 
     assert result.exit_code == 0
     assert len(captured) == 2
-    assert captured[0][0:2] == ["--deployment", "discoverex-generate-dev"]
-    assert captured[1][0:2] == ["--deployment", "discoverex-generate-dev"]
+    assert captured[0][0:2] == ["--deployment", "discoverex-generate-standard"]
+    assert captured[1][0:2] == ["--deployment", "discoverex-generate-standard"]
     assert '"job_name": "scene-1"' in captured[0][-1]
     assert '"background_prompt": "harbor"' in captured[0][-1]
     assert '"object_prompt": "banana"' in captured[0][-1]
@@ -319,6 +326,10 @@ def test_register_experiment_sweep_invokes_script(monkeypatch) -> None:  # type:
     assert captured["script_name"] == "infra.register.naturalness_sweep"
     assert captured["args"] == [
         str(DEFAULT_NATURALNESS_SWEEP_SPEC),
+        "--deployment",
+        "discoverex-generate-batch-naturalness",
+        "--purpose",
+        "batch",
         "--experiment",
         DEFAULT_EXPERIMENT_NAME,
     ]
@@ -342,8 +353,8 @@ def test_register_experiment_sweep_uses_experiment_deployment(monkeypatch) -> No
             "experiment-sweep",
             "--experiment",
             "naturalness",
-            "--branch",
-            "dev",
+            "--purpose",
+            "batch",
         ],
     )
 
@@ -352,9 +363,9 @@ def test_register_experiment_sweep_uses_experiment_deployment(monkeypatch) -> No
     assert captured["args"] == [
         str(DEFAULT_NATURALNESS_SWEEP_SPEC),
         "--deployment",
-        "discoverex-naturalness-experiment-dev",
-        "--branch",
-        "dev",
+        "discoverex-generate-batch-naturalness",
+        "--purpose",
+        "batch",
         "--experiment",
         "naturalness",
     ]
@@ -372,7 +383,7 @@ def test_deploy_experiment_uses_batch_queue(monkeypatch) -> None:  # type: ignor
     monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
 
     result = runner.invoke(
-        app, ["deploy", "experiment", "--experiment", "naturalness", "--branch", "dev"]
+        app, ["deploy", "experiment", "--experiment", "naturalness"]
     )
 
     assert result.exit_code == 0
@@ -380,10 +391,10 @@ def test_deploy_experiment_uses_batch_queue(monkeypatch) -> None:  # type: ignor
     assert captured["args"] == [
         "--flow-kind",
         "generate",
+        "--purpose",
+        "batch",
         "--work-queue-name",
-        DEFAULT_EXPERIMENT_QUEUE,
+        "gpu-fixed-batch",
         "--deployment-name",
-        "discoverex-naturalness-experiment-dev",
-        "--branch",
-        "dev",
+        "discoverex-generate-batch-naturalness",
     ]

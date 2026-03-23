@@ -1,8 +1,8 @@
-sweep_id: naturalness-fixed-replay-inpaint-coarse-48
+sweep_id: combined.patch-selection-inpaint.fixed-replay.coarse-48
 search_stage: replay
-experiment_name: discoverex-naturalness-fixed-replay-inpaint-coarse-48
+experiment_name: combined.patch-selection-inpaint.fixed-replay.coarse-48
 execution_mode: case_per_run
-base_job_spec: ../job_specs/prod-genver2-realvisxl5bg-realvisxl5obj-patchsimv2-ldho1-baseprompt-8gb.yaml
+base_job_spec: ../job_specs/variants/generate_verify/prod-genver2-realvisxl5bg-realvisxl5obj-patchsimv2-ldho1-baseprompt-8gb.yaml
 fixed_overrides:
   - adapters/tracker=mlflow_server
 scenarios:

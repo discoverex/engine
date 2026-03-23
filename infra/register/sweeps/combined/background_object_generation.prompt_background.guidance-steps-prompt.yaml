@@ -1,7 +1,7 @@
-sweep_id: exp-objectgen-randombg-guidance-steps-prompt
+sweep_id: combined.background-object-generation.prompt-background.guidance-steps-prompt
 search_stage: coarse
-experiment_name: exp-objectgen-randombg-guidance-steps-prompt
-base_job_spec: ../job_specs/prod-genver2-pixart-realvisxl5-patchsimv2-ldho1-8gb.yaml
+experiment_name: combined.background-object-generation.prompt-background.guidance-steps-prompt
+base_job_spec: ../job_specs/variants/generate_verify/prod-genver2-pixart-realvisxl5-patchsimv2-ldho1-8gb.yaml
 fixed_overrides:
   - adapters/tracker=mlflow_server
 scenarios:

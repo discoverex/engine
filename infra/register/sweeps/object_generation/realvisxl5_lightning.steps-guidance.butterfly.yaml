@@ -1,7 +1,7 @@
-sweep_id: prod-single-object-debug-realvisxl5-lightning-steps5-cfg-butterfly
+sweep_id: object-generation.realvisxl5-lightning.steps-guidance.butterfly
 search_stage: debug
-experiment_name: prod-single-object-debug-realvisxl5-lightning-steps5-cfg-butterfly
-base_job_spec: ../job_specs/prod-genobjdebug-none-realvisxl5-lightning-none-8gb.yaml
+experiment_name: object-generation.realvisxl5-lightning.steps-guidance.butterfly
+base_job_spec: ../job_specs/variants/object_generation/prod-genobjdebug-none-realvisxl5-lightning-none-8gb.yaml
 fixed_overrides:
   - adapters/tracker=mlflow_server
 scenarios:
