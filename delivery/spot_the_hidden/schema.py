@@ -19,14 +19,28 @@ class RegionBBox(BaseModel):
     h: float
 
 
-class DeliveryLayer(BaseModel):
-    layer_id: str
-    type: str
-    image_ref: str
-    bbox: RegionBBox | None = None
-    z_index: int = 0
-    order: int = 0
-    source_region_id: str | None = None
+class BackgroundImage(BaseModel):
+    image_id: str
+    src: str
+    prompt: str = ""
+    width: int
+    height: int
+
+
+class AnswerAsset(BaseModel):
+    lottie_id: str
+    name: str
+    src: str
+    bbox: RegionBBox
+    prompt: str = ""
+    order: int
+
+
+class FrameTableRef(BaseModel):
+    src: str
+    frame_count: int
+    fps: int
+    columns: list[str] = Field(default_factory=list)
 
 
 class HintItem(BaseModel):
@@ -40,10 +54,9 @@ class UiFlags(BaseModel):
 
 
 class PlayableScene(BaseModel):
-    image_ref: str
-    width: int
-    height: int
-    layers: list[DeliveryLayer]
+    background_img: BackgroundImage
+    answers: list[AnswerAsset] = Field(default_factory=list)
+    frame_table: FrameTableRef
     goal_text: str | None = None
     hints: list[HintItem] = Field(default_factory=list)
     ui_flags: UiFlags = Field(default_factory=UiFlags)
@@ -78,7 +91,7 @@ class DeliveryMeta(BaseModel):
 
 
 class GameBundle(BaseModel):
-    bundle_version: str = "spot_hidden_v2"
+    bundle_version: str = "spot_hidden_v3"
     scene_ref: SceneRef
     playable: PlayableScene
     answer_key: AnswerKey

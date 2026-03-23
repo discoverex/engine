@@ -7,17 +7,27 @@ from discoverex.artifact_paths import outputs_dir
 from discoverex.domain.scene import Scene
 
 from .intermediates import export_originals
-from .layers import export_layers
-from .render import write_lottie_bundle, write_output_manifest
-from .shared import candidate_by_region
+from .layers import export_background, export_object_images, write_frame_table
+from .lottie import write_object_lottie_bundles
+from .manifest import write_output_manifest
+from .shared import build_object_specs, candidate_by_region
 from .types import OutputExportResult
 
 
-def _copy_tree(*, source: Path, target: Path) -> Path | None:
+def _copy_tree(*, source: Path, target: Path) -> list[Path]:
     if not source.exists() or not source.is_dir():
-        return None
+        return []
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source, target, dirs_exist_ok=True)
+    return sorted(path for path in target.rglob("*") if path.is_file())
+
+
+def _copy_file(*, source: Path, target: Path) -> Path | None:
+    if not source.exists() or not source.is_file():
+        return None
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if source.resolve() != target.resolve():
+        shutil.copy2(source, target)
     return target
 
 
@@ -25,81 +35,99 @@ def _build_delivery_bundle(
     *,
     artifacts_root: Path,
     scene: Scene,
-    layers_root_dir: Path,
+    background_path: Path,
+    object_png_paths: list[Path],
+    object_lottie_paths: list[Path],
+    frame_table_path: Path,
+    manifest_path: Path,
 ) -> list[Path]:
     scene_id = scene.meta.scene_id
     version_id = scene.meta.version_id
     scene_root = outputs_dir(artifacts_root, scene_id, version_id).parent
     delivery_root = outputs_dir(artifacts_root, scene_id, version_id) / "delivery"
-    copied_roots: list[Path] = []
-    metadata_copy = _copy_tree(
-        source=scene_root / "metadata",
-        target=delivery_root / "metadata",
+    copied: list[Path] = []
+    copied.extend(
+        _copy_tree(
+            source=scene_root / "metadata",
+            target=delivery_root / "metadata",
+        )
     )
-    if metadata_copy is not None:
-        copied_roots.append(metadata_copy)
-    layers_copy = _copy_tree(
-        source=layers_root_dir,
-        target=delivery_root / "layers",
-    )
-    if layers_copy is not None:
-        copied_roots.append(layers_copy)
-    copied_files: list[Path] = []
-    for root in copied_roots:
-        copied_files.extend(sorted(path for path in root.rglob("*") if path.is_file()))
-    return copied_files
+    for source, relative in (
+        (background_path, Path("background") / background_path.name),
+        (frame_table_path, frame_table_path.name),
+        (manifest_path, manifest_path.name),
+    ):
+        target = _copy_file(source=source, target=delivery_root / relative)
+        if target is not None:
+            copied.append(target)
+    for path in object_png_paths:
+        target = _copy_file(source=path, target=delivery_root / "objects" / path.name)
+        if target is not None:
+            copied.append(target)
+    for path in object_lottie_paths:
+        target = _copy_file(source=path, target=delivery_root / "objects" / path.name)
+        if target is not None:
+            copied.append(target)
+    return copied
 
 
 def export_output_bundle(*, artifacts_root: Path, scene: Scene) -> OutputExportResult:
     scene_id = scene.meta.scene_id
     version_id = scene.meta.version_id
     out_dir = outputs_dir(artifacts_root, scene_id, version_id)
-    layers_root_dir = out_dir / "layers"
-    layers_dir = out_dir / "layers" / "objects"
-    source_layers_dir = out_dir / "layers" / "source-objects"
+    background_dir = out_dir / "background"
+    objects_dir = out_dir / "objects"
     originals_dir = out_dir / "original"
     out_dir.mkdir(parents=True, exist_ok=True)
-    layers_root_dir.mkdir(parents=True, exist_ok=True)
-    layers_dir.mkdir(parents=True, exist_ok=True)
-    source_layers_dir.mkdir(parents=True, exist_ok=True)
+    background_dir.mkdir(parents=True, exist_ok=True)
+    objects_dir.mkdir(parents=True, exist_ok=True)
     originals_dir.mkdir(parents=True, exist_ok=True)
 
     candidates = candidate_by_region(scene)
-    exported_layers, source_layer_paths = export_layers(
+    object_specs = build_object_specs(scene=scene, candidates=candidates)
+    background_path = export_background(
+        background_ref=scene.background.asset_ref,
+        background_dir=background_dir,
+    )
+    object_png_paths = export_object_images(specs=object_specs, objects_dir=objects_dir)
+    frame_table_path = write_frame_table(
+        specs=object_specs,
+        frame_table_path=out_dir / "frame_table.csv",
+    )
+    object_lottie_paths = write_object_lottie_bundles(
         scene=scene,
-        layers_dir=layers_dir,
-        source_layers_dir=source_layers_dir,
-        candidates=candidates,
+        specs=object_specs,
+        object_png_paths=object_png_paths,
+        lottie_dir=objects_dir,
     )
     original_paths, original_entries = export_originals(
         originals_dir=originals_dir,
         candidates=candidates,
     )
-    lottie_path = layers_root_dir / "animation.lottie"
-    write_lottie_bundle(
-        scene=scene,
-        lottie_path=lottie_path,
-        exported_layers=exported_layers,
-        artifacts_root=artifacts_root,
-    )
     manifest_path = write_output_manifest(
         scene=scene,
         artifacts_root=artifacts_root,
-        exported_layers=exported_layers,
-        source_layer_paths=source_layer_paths,
+        background_path=background_path,
+        object_png_paths=object_png_paths,
+        frame_table_path=frame_table_path,
         original_entries=original_entries,
-        lottie_path=lottie_path,
+        object_specs=object_specs,
     )
     delivery_paths = _build_delivery_bundle(
         artifacts_root=artifacts_root,
         scene=scene,
-        layers_root_dir=layers_root_dir,
+        background_path=background_path,
+        object_png_paths=object_png_paths,
+        object_lottie_paths=object_lottie_paths,
+        frame_table_path=frame_table_path,
+        manifest_path=manifest_path,
     )
     return OutputExportResult(
         manifest_path=manifest_path,
-        lottie_path=lottie_path,
-        layer_paths=exported_layers,
-        source_layer_paths=source_layer_paths,
+        background_path=background_path,
+        object_png_paths=object_png_paths,
+        object_lottie_paths=object_lottie_paths,
+        frame_table_path=frame_table_path,
         original_paths=original_paths,
         delivery_paths=delivery_paths,
     )

@@ -109,8 +109,13 @@ def execute_variant(
     )
     payload["variant_id"] = variant_id
     payload["saved_dir"] = str(saved_dir)
-    payload["lottie_path"] = str(
-        Path(variant_cfg.runtime.artifacts_root) / "scenes" / run_ids.scene_id / run_ids.version_id / "output" / "animation.lottie"
+    payload["frame_table_path"] = str(
+        Path(variant_cfg.runtime.artifacts_root)
+        / "scenes"
+        / run_ids.scene_id
+        / run_ids.version_id
+        / "outputs"
+        / "frame_table.csv"
     )
     return payload, {"variant_id": variant_id, "overrides": variant_overrides, **payload}
 

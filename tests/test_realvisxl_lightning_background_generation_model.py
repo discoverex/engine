@@ -162,8 +162,8 @@ def test_realvisxl_lightning_hires_fix_writes_output(
         handle,
         FxRequest(
             mode="detail_reconstruct",
+            image_ref=str(source_path),
             params={
-                "image_ref": str(source_path),
                 "output_path": str(output_path),
                 "width": 2048,
                 "height": 2048,

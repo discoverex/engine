@@ -43,13 +43,18 @@ def test_track_run_includes_source_layers_and_originals_in_worker_manifest(
         metadata_dir / "scene.json",
         metadata_dir / "verification.json",
         outputs_dir / "composite.png",
-        outputs_dir / "layers" / "animation.lottie",
-        outputs_dir / "output_manifest.json",
-        outputs_dir / "layers" / "objects" / "001-layer-object.png",
-        outputs_dir / "layers" / "source-objects" / "001-layer-object.png",
+        outputs_dir / "background" / "background.png",
+        outputs_dir / "frame_table.csv",
+        outputs_dir / "manifest.json",
+        outputs_dir / "objects" / "object_01.png",
+        outputs_dir / "objects" / "object_01.lottie",
         outputs_dir / "delivery" / "metadata" / "scene.json",
         outputs_dir / "delivery" / "metadata" / "verification.json",
-        outputs_dir / "delivery" / "layers" / "animation.lottie",
+        outputs_dir / "delivery" / "background" / "background.png",
+        outputs_dir / "delivery" / "frame_table.csv",
+        outputs_dir / "delivery" / "manifest.json",
+        outputs_dir / "delivery" / "objects" / "object_01.png",
+        outputs_dir / "delivery" / "objects" / "object_01.lottie",
         outputs_dir / "original" / "r1" / "object.png",
         outputs_dir / "original" / "r1" / "diagnostics.json",
     ):
@@ -96,12 +101,11 @@ def test_track_run_includes_source_layers_and_originals_in_worker_manifest(
     )
 
     exported = OutputExportResult(
-        manifest_path=outputs_dir / "output_manifest.json",
-        lottie_path=outputs_dir / "layers" / "animation.lottie",
-        layer_paths=[outputs_dir / "layers" / "objects" / "001-layer-object.png"],
-        source_layer_paths=[
-            outputs_dir / "layers" / "source-objects" / "001-layer-object.png"
-        ],
+        manifest_path=outputs_dir / "manifest.json",
+        background_path=outputs_dir / "background" / "background.png",
+        object_png_paths=[outputs_dir / "objects" / "object_01.png"],
+        object_lottie_paths=[outputs_dir / "objects" / "object_01.lottie"],
+        frame_table_path=outputs_dir / "frame_table.csv",
         original_paths=[
             outputs_dir / "original" / "r1" / "object.png",
             outputs_dir / "original" / "r1" / "diagnostics.json",
@@ -109,7 +113,11 @@ def test_track_run_includes_source_layers_and_originals_in_worker_manifest(
         delivery_paths=[
             outputs_dir / "delivery" / "metadata" / "scene.json",
             outputs_dir / "delivery" / "metadata" / "verification.json",
-            outputs_dir / "delivery" / "layers" / "animation.lottie",
+            outputs_dir / "delivery" / "background" / "background.png",
+            outputs_dir / "delivery" / "frame_table.csv",
+            outputs_dir / "delivery" / "manifest.json",
+            outputs_dir / "delivery" / "objects" / "object_01.png",
+            outputs_dir / "delivery" / "objects" / "object_01.lottie",
         ],
     )
 
@@ -159,13 +167,15 @@ def test_track_run_includes_source_layers_and_originals_in_worker_manifest(
 
     assert tracking_run_id == "tracking-run-1"
     logical_names = [name for name, _ in captured_artifacts]
-    assert "output_layer/001-layer-object.png" in logical_names
-    assert "output_source_layer/001-layer-object.png" in logical_names
+    assert "background" in logical_names
+    assert "frame_table" in logical_names
+    assert "output_object_png/object_01.png" in logical_names
+    assert "output_object_lottie/object_01.lottie" in logical_names
     assert "output_original/original/r1/object.png" in logical_names
     assert "output_original/original/r1/diagnostics.json" in logical_names
     assert "delivery/delivery/metadata/scene.json" in logical_names
     assert "delivery/delivery/metadata/verification.json" in logical_names
-    assert "delivery/delivery/layers/animation.lottie" in logical_names
+    assert "delivery/delivery/objects/object_01.lottie" in logical_names
 
 
 def test_track_run_writes_naturalness_sweep_case_result(
@@ -239,10 +249,11 @@ def test_track_run_writes_naturalness_sweep_case_result(
     monkeypatch.setattr(
         "discoverex.application.use_cases.gen_verify.persistence.export_output_bundle",
         lambda **kwargs: OutputExportResult(
-            manifest_path=outputs_dir / "output_manifest.json",
-            lottie_path=outputs_dir / "layers" / "animation.lottie",
-            layer_paths=[],
-            source_layer_paths=[],
+            manifest_path=outputs_dir / "manifest.json",
+            background_path=outputs_dir / "background" / "background.png",
+            object_png_paths=[],
+            object_lottie_paths=[],
+            frame_table_path=outputs_dir / "frame_table.csv",
             original_paths=[],
             delivery_paths=[],
         ),

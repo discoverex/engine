@@ -91,12 +91,17 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
             ("verification", metadata_dir(saved_dir) / "verification.json"),
             ("naturalness", naturalness_report),
             ("final_image", scene_artifact if scene_artifact.exists() else None),
-            ("lottie", output_exports.lottie_path),
+            ("background", output_exports.background_path),
+            ("frame_table", output_exports.frame_table_path),
             ("output_manifest", output_exports.manifest_path),
             ("execution_config", context.execution_snapshot_path),
             *[
-                (f"output_layer/{layer_path.name}", layer_path)
-                for layer_path in output_exports.layer_paths
+                (f"output_object_png/{path.name}", path)
+                for path in output_exports.object_png_paths
+            ],
+            *[
+                (f"output_object_lottie/{path.name}", path)
+                for path in output_exports.object_lottie_paths
             ],
         ],
     )

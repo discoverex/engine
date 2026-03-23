@@ -585,18 +585,7 @@ def _build_object_variants(
 
 
 def _load_object_image_for_patch_selection(asset: GeneratedObjectAsset) -> Image.Image:
-    object_image = Image.open(asset.object_ref).convert("RGBA")
-    mask_ref = asset.raw_alpha_mask_ref or asset.object_mask_ref
-    if not mask_ref:
-        return object_image
-    try:
-        with Image.open(mask_ref).convert("L") as mask_image:
-            if mask_image.size != object_image.size:
-                mask_image = mask_image.resize(object_image.size, Image.Resampling.NEAREST)
-            object_image.putalpha(mask_image)
-    except OSError:
-        return object_image
-    return object_image
+    return Image.open(asset.object_ref).convert("RGBA")
 
 
 def _apply_selected_variant_asset(
@@ -645,43 +634,25 @@ def _apply_object_background_scaling(
     output: dict[str, GeneratedObjectAsset] = {}
     for region_id, asset in generated_objects.items():
         object_path = Path(asset.object_ref)
-        mask_path = Path(asset.object_mask_ref)
-        raw_alpha_path = Path(asset.raw_alpha_mask_ref) if asset.raw_alpha_mask_ref else None
         with Image.open(object_path).convert("RGBA") as object_image:
             current_long_side = max(1, object_image.width, object_image.height)
             scale = target_long_side / float(current_long_side)
             scaled_object = _scale_rgba(object_image, scale)
-        with Image.open(mask_path).convert("L") as mask_image:
-            scaled_mask = mask_image.resize(
-                scaled_object.size,
-                Image.Resampling.NEAREST,
-            )
-        scaled_raw_alpha = None
-        if raw_alpha_path is not None:
-            with Image.open(raw_alpha_path).convert("L") as raw_alpha_image:
-                scaled_raw_alpha = raw_alpha_image.resize(
-                    scaled_object.size,
-                    Image.Resampling.NEAREST,
-                )
+        scaled_mask = scaled_object.getchannel("A")
         object_out = scene_dir / "assets" / "objects" / f"{region_id}.scaled.png"
         mask_out = scene_dir / "assets" / "masks" / f"{region_id}.scaled.mask.png"
-        raw_alpha_out = (
-            scene_dir / "assets" / "masks" / f"{region_id}.scaled.raw-alpha-mask.png"
-            if scaled_raw_alpha is not None
-            else None
-        )
+        raw_alpha_out = scene_dir / "assets" / "masks" / f"{region_id}.scaled.raw-alpha-mask.png"
         object_out.parent.mkdir(parents=True, exist_ok=True)
         mask_out.parent.mkdir(parents=True, exist_ok=True)
         scaled_object.save(object_out)
         scaled_mask.save(mask_out)
-        if scaled_raw_alpha is not None and raw_alpha_out is not None:
-            scaled_raw_alpha.save(raw_alpha_out)
+        scaled_mask.save(raw_alpha_out)
         tight_bbox = scaled_mask.getbbox()
         output[region_id] = replace(
             asset,
             object_ref=str(object_out),
             object_mask_ref=str(mask_out),
-            raw_alpha_mask_ref=str(raw_alpha_out) if raw_alpha_out is not None else asset.raw_alpha_mask_ref,
+            raw_alpha_mask_ref=str(raw_alpha_out),
             original_object_ref=asset.original_object_ref or asset.object_ref,
             original_object_mask_ref=asset.original_object_mask_ref or asset.object_mask_ref,
             original_raw_alpha_mask_ref=asset.original_raw_alpha_mask_ref or asset.raw_alpha_mask_ref,

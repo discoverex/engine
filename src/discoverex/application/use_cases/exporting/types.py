@@ -51,51 +51,55 @@ class CandidateLayerPayload(TypedDict, total=False):
     alpha_mean: float
 
 
-class ObjectEntry(TypedDict):
-    object_number: int
-    layer_id: str
-    region_id: str
-    center: list[float]
-    bbox: BBoxPayload
-
-
-class ObjectSourceEntry(TypedDict, total=False):
-    region_id: str
-    object_number: int
-    center: list[float]
-    candidate_image_ref: str
-    raw_generated_image_ref: str
-    sam_object_image_ref: str
-    sam_object_mask_ref: str
-    object_image_ref: str
-    processed_object_image_ref: str
-    processed_object_mask_ref: str
-    layer_image_ref: str
-    object_mask_ref: str
-    raw_alpha_mask_ref: str
-    patch_image_ref: str
-    precomposited_image_ref: str
-    blend_mask_ref: str
-    edge_mask_ref: str
-    core_mask_ref: str
-    shadow_ref: str
-    edge_blend_ref: str
-    core_blend_ref: str
-    final_polish_ref: str
-    variant_manifest_ref: str
-
-
 class OriginalAssetEntry(TypedDict):
     region_id: str
     kind: str
     path: str
 
 
+class BackgroundImagePayload(TypedDict):
+    image_id: str
+    src: str
+    prompt: str
+    width: int
+    height: int
+
+
+class AnswerAssetPayload(TypedDict):
+    lottie_id: str
+    name: str
+    src: str
+    bbox: BBoxPayload
+    prompt: str
+    order: int
+
+
+class FrameTablePayload(TypedDict):
+    src: str
+    frame_count: int
+    fps: int
+    columns: list[str]
+
+
+@dataclass(frozen=True)
+class ObjectRenderSpec:
+    object_id: str
+    lottie_id: str
+    region_id: str
+    layer_id: str
+    name: str
+    prompt: str
+    order: int
+    bbox: BBoxPayload
+    source_ref: str
+
+
 @dataclass(frozen=True)
 class OutputExportResult:
     manifest_path: Path
-    lottie_path: Path
-    layer_paths: list[Path]
-    source_layer_paths: list[Path]
+    background_path: Path
+    object_png_paths: list[Path]
+    object_lottie_paths: list[Path]
+    frame_table_path: Path
     original_paths: list[Path]
     delivery_paths: list[Path]

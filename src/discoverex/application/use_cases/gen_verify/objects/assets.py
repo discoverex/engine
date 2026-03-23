@@ -38,15 +38,12 @@ def move_if_needed(source: Path, target_dir: Path) -> Path:
 def resize_object_assets(
     *,
     object_path: Path,
-    mask_path: Path,
     size: int,
 ) -> tuple[Path, Path]:
     resized_object = object_path.with_suffix(".object.scaled.png")
-    resized_mask = mask_path.with_suffix(".mask.scaled.png")
-    with (
-        Image.open(object_path).convert("RGBA") as object_image,
-        Image.open(mask_path).convert("L") as mask_image,
-    ):
+    resized_mask = object_path.with_suffix(".mask.scaled.png")
+    with Image.open(object_path).convert("RGBA") as object_image:
+        mask_image = object_image.getchannel("A")
         tight_bbox = mask_image.getbbox() or (0, 0, mask_image.width, mask_image.height)
         object_tight = object_image.crop(tight_bbox)
         mask_tight = mask_image.crop(tight_bbox)
@@ -83,7 +80,8 @@ def build_placement_assets(
 ) -> PlacementAssets:
     inpaint_mode = str(getattr(context.inpaint_model, "inpaint_mode", ""))
     if inpaint_mode == "layerdiffuse_hidden_object_v1":
-        with Image.open(mask_path).convert("L") as mask_image:
+        with Image.open(object_path).convert("RGBA") as object_image:
+            mask_image = object_image.getchannel("A")
             tight_bbox = mask_image.getbbox() or (
                 0,
                 0,
@@ -100,7 +98,6 @@ def build_placement_assets(
         )
     resized_object, resized_mask = resize_object_assets(
         object_path=object_path,
-        mask_path=mask_path,
         size=_PLACEMENT_OBJECT_SIZE,
     )
     return PlacementAssets(

@@ -220,16 +220,17 @@ def track_run(
             ("naturalness", naturalness_artifact),
             ("composite", composite_artifact),
             ("prompt_bundle", prompt_bundle_artifact),
-            ("lottie", output_exports.lottie_path),
+            ("background", output_exports.background_path),
+            ("frame_table", output_exports.frame_table_path),
             ("output_manifest", output_exports.manifest_path),
             ("execution_config", execution_snapshot_path),
             *[
-                (f"output_layer/{layer_path.name}", layer_path)
-                for layer_path in output_exports.layer_paths
+                (f"output_object_png/{path.name}", path)
+                for path in output_exports.object_png_paths
             ],
             *[
-                (f"output_source_layer/{layer_path.name}", layer_path)
-                for layer_path in output_exports.source_layer_paths
+                (f"output_object_lottie/{path.name}", path)
+                for path in output_exports.object_lottie_paths
             ],
             *[
                 (f"output_original/{original_path.relative_to(output_exports.manifest_path.parent).as_posix()}", original_path)

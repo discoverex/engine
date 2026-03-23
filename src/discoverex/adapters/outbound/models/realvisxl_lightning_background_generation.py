@@ -245,11 +245,9 @@ class RealVisXLLightningBackgroundGenerationModel:
 
     def _predict_canvas_upscale(self, *, handle: ModelHandle, request: FxRequest) -> Path:
         output_path = self._output_path(request)
-        image_ref = request.image_ref or request.params.get("image_ref")
+        image_ref = request.image_ref
         if not isinstance(image_ref, (str, Path)) or not str(image_ref):
-            raise ValueError(
-                "FxRequest.image_ref or FxRequest.params.image_ref is required"
-            )
+            raise ValueError("FxRequest.image_ref is required")
         width = as_positive_int(request.params.get("width"), fallback=2048)
         height = as_positive_int(request.params.get("height"), fallback=2048)
         upscaler = self._load_canvas_upscaler(handle)
@@ -259,7 +257,6 @@ class RealVisXLLightningBackgroundGenerationModel:
                 mode="canvas_upscale",
                 image_ref=str(image_ref),
                 params={
-                    "image_ref": str(image_ref),
                     "output_path": str(output_path),
                     "width": width,
                     "height": height,
@@ -272,11 +269,9 @@ class RealVisXLLightningBackgroundGenerationModel:
         from PIL import Image  # type: ignore
 
         output_path = self._output_path(request)
-        image_ref = request.image_ref or request.params.get("image_ref")
+        image_ref = request.image_ref
         if not isinstance(image_ref, (str, Path)) or not str(image_ref):
-            raise ValueError(
-                "FxRequest.image_ref or FxRequest.params.image_ref is required"
-            )
+            raise ValueError("FxRequest.image_ref is required")
         source_path = Path(str(image_ref))
         width = as_positive_int(request.params.get("width"), fallback=1024)
         height = as_positive_int(request.params.get("height"), fallback=1024)

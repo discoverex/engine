@@ -40,6 +40,7 @@ edge_blend_steps: 8
 edge_blend_cfg: 3.2
 edge_blend_strength: 0.2
 edge_blend_ring_dilate_px: 6
+edge_blend_inner_feather_px: 5
 core_blend_steps: 8
 core_blend_cfg: 4.0
 core_blend_strength: 0.2

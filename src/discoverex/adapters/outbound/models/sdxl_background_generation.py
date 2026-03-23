@@ -178,9 +178,9 @@ class SdxlBackgroundGenerationModel:
     ) -> Path:
         from PIL import Image  # type: ignore
 
-        image_ref = request.params.get("image_ref")
+        image_ref = request.image_ref
         if not isinstance(image_ref, (str, Path)) or not str(image_ref):
-            raise ValueError("FxRequest.params.image_ref is required for hires_fix")
+            raise ValueError("FxRequest.image_ref is required for hires_fix")
         source_path = Path(str(image_ref))
         width = as_positive_int(request.params.get("width"), fallback=1024)
         height = as_positive_int(request.params.get("height"), fallback=768)

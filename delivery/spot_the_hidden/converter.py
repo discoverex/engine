@@ -7,10 +7,12 @@ from pathlib import Path
 from discoverex.domain.scene import Scene
 
 from .schema import (
+    AnswerAsset,
     AnswerKey,
     AnswerRegion,
-    DeliveryLayer,
+    BackgroundImage,
     DeliveryMeta,
+    FrameTableRef,
     GameBundle,
     HintItem,
     PlayableScene,
@@ -47,35 +49,64 @@ def _goal_text(scene: Scene) -> str | None:
     return scene.goal.goal_type.value
 
 
-def extract_playable(scene: Scene) -> PlayableScene:
-    hints = [HintItem(key="region_count", value=str(len(scene.regions)))]
-    ui_flags = UiFlags(allow_multi_click=len(scene.answer.answer_region_ids) > 1)
-    layers = [
-        DeliveryLayer(
-            layer_id=layer.layer_id,
-            type=layer.type.value,
-            image_ref=layer.image_ref,
-            bbox=(
-                RegionBBox(
+def _answer_assets(scene: Scene) -> list[AnswerAsset]:
+    answer_region_ids = set(scene.answer.answer_region_ids)
+    ordered: list[AnswerAsset] = []
+    object_index = 1
+    for layer in sorted(scene.layers.items, key=lambda item: item.order):
+        if layer.source_region_id is None or layer.source_region_id not in answer_region_ids:
+            continue
+        if layer.bbox is None:
+            continue
+        ordered.append(
+            AnswerAsset(
+                lottie_id=f"lottie_{object_index:02d}",
+                name=f"object {object_index}",
+                src=Path(layer.image_ref).name,
+                bbox=RegionBBox(
                     x=layer.bbox.x,
                     y=layer.bbox.y,
                     w=layer.bbox.w,
                     h=layer.bbox.h,
-                )
-                if layer.bbox is not None
-                else None
-            ),
-            z_index=layer.z_index,
-            order=layer.order,
-            source_region_id=layer.source_region_id,
+                ),
+                prompt="",
+                order=layer.order,
+            )
         )
-        for layer in sorted(scene.layers.items, key=lambda item: item.order)
-    ]
+        object_index += 1
+    return ordered
+
+
+def extract_playable(scene: Scene) -> PlayableScene:
+    hints = [HintItem(key="region_count", value=str(len(scene.regions)))]
+    ui_flags = UiFlags(allow_multi_click=len(scene.answer.answer_region_ids) > 1)
     return PlayableScene(
-        image_ref=scene.composite.final_image_ref,
-        width=scene.background.width,
-        height=scene.background.height,
-        layers=layers,
+        background_img=BackgroundImage(
+            image_id="background",
+            src=Path(scene.composite.final_image_ref).name,
+            prompt=str(scene.background.metadata.get("prompt") or ""),
+            width=scene.background.width,
+            height=scene.background.height,
+        ),
+        answers=_answer_assets(scene),
+        frame_table=FrameTableRef(
+            src="frame_table.csv",
+            frame_count=60,
+            fps=60,
+            columns=[
+                "frame",
+                "object_id",
+                "order",
+                "x",
+                "y",
+                "w",
+                "h",
+                "rotation",
+                "opacity",
+                "src",
+                "lottie_id",
+            ],
+        ),
         goal_text=_goal_text(scene),
         hints=hints,
         ui_flags=ui_flags,

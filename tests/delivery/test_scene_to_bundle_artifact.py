@@ -100,5 +100,6 @@ def test_convert_scene_json_to_bundle_writes_delivery_artifact(tmp_path: Path) -
     assert bundle_path.exists()
 
     bundle = GameBundle.model_validate_json(bundle_path.read_text(encoding="utf-8"))
+    assert bundle.bundle_version == "spot_hidden_v3"
     assert bundle.scene_ref.scene_id == "scene-2"
     assert bundle.answer_key.answer_region_ids == ["r1"]

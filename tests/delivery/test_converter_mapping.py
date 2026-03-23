@@ -11,6 +11,7 @@ from discoverex.domain.scene import (
     Background,
     Composite,
     Difficulty,
+    LayerBBox,
     LayerItem,
     LayerStack,
     LayerType,
@@ -71,11 +72,20 @@ def _sample_scene(tmp_path: Path) -> Scene:
                     order=0,
                 ),
                 LayerItem(
+                    layer_id="layer-object",
+                    type=LayerType.INPAINT_PATCH,
+                    image_ref=str(image),
+                    bbox=LayerBBox(x=10, y=20, w=30, h=40),
+                    z_index=10,
+                    order=1,
+                    source_region_id="r-answer",
+                ),
+                LayerItem(
                     layer_id="layer-fx",
                     type=LayerType.FX_OVERLAY,
                     image_ref=str(image),
                     z_index=100,
-                    order=1,
+                    order=2,
                 ),
             ]
         ),
@@ -101,11 +111,13 @@ def test_build_game_bundle_maps_scene_to_delivery_schema(tmp_path: Path) -> None
     scene = _sample_scene(tmp_path)
     bundle = build_game_bundle(scene=scene, source_scene_json="scene.json")
 
-    assert bundle.bundle_version == "spot_hidden_v2"
+    assert bundle.bundle_version == "spot_hidden_v3"
     assert bundle.scene_ref.scene_id == "scene-1"
-    assert bundle.playable.width == 100
-    assert bundle.playable.image_ref == scene.composite.final_image_ref
-    assert len(bundle.playable.layers) == 2
+    assert bundle.playable.background_img.width == 100
+    assert bundle.playable.background_img.src == "composite.png"
+    assert bundle.playable.frame_table.src == "frame_table.csv"
+    assert len(bundle.playable.answers) == 1
+    assert bundle.playable.answers[0].lottie_id == "lottie_01"
     assert bundle.playable.ui_flags.allow_multi_click is True
     assert bundle.answer_key.answer_region_ids == ["r-answer", "r-candidate"]
     assert len(bundle.answer_key.regions) == 2

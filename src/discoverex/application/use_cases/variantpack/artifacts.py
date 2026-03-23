@@ -53,7 +53,7 @@ def variant_artifact_entries(
             f"variant/{variant_id}/output_manifest",
             output_manifest_path(artifacts_root, scene_id, version_id),
         ),
-        (f"variant/{variant_id}/lottie", output_dir / "animation.lottie"),
+        (f"variant/{variant_id}/frame_table", output_dir / "frame_table.csv"),
     ]
 
 

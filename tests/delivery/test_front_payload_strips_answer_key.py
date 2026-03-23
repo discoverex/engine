@@ -4,10 +4,12 @@ from datetime import datetime, timezone
 
 from delivery.spot_the_hidden.converter import build_front_payload
 from delivery.spot_the_hidden.schema import (
+    AnswerAsset,
     AnswerKey,
     AnswerRegion,
-    DeliveryLayer,
+    BackgroundImage,
     DeliveryMeta,
+    FrameTableRef,
     GameBundle,
     PlayableScene,
     RegionBBox,
@@ -22,18 +24,27 @@ def test_build_front_payload_does_not_expose_answer_key() -> None:
             scene_id="s", version_id="v", source_scene_json="scene.json"
         ),
         playable=PlayableScene(
-            image_ref="img.png",
-            width=10,
-            height=10,
-            layers=[
-                DeliveryLayer(
-                    layer_id="layer-base",
-                    type="base",
-                    image_ref="img.png",
-                    z_index=0,
-                    order=0,
+            background_img=BackgroundImage(
+                image_id="background",
+                src="img.png",
+                width=10,
+                height=10,
+            ),
+            answers=[
+                AnswerAsset(
+                    lottie_id="lottie_01",
+                    name="object 1",
+                    src="object.png",
+                    bbox=RegionBBox(x=1, y=1, w=2, h=2),
+                    order=1,
                 )
             ],
+            frame_table=FrameTableRef(
+                src="frame_table.csv",
+                frame_count=60,
+                fps=60,
+                columns=["frame"],
+            ),
         ),
         answer_key=AnswerKey(
             answer_region_ids=["r1"],
@@ -62,5 +73,5 @@ def test_build_front_payload_does_not_expose_answer_key() -> None:
     assert isinstance(playable, dict)
     playable_dict = playable
     assert "answer_key" not in payload
-    assert playable_dict["image_ref"] == "img.png"
-    assert len(playable_dict["layers"]) == 1
+    assert playable_dict["background_img"]["src"] == "img.png"
+    assert len(playable_dict["answers"]) == 1

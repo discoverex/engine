@@ -91,13 +91,16 @@ def test_tight_crop_variant_for_patch_selection_uses_alpha_bbox() -> None:
     assert cropped.size == (24, 24)
 
 
-def test_load_object_image_for_patch_selection_prefers_mask_over_object_alpha(
+def test_load_object_image_for_patch_selection_uses_object_alpha(
     tmp_path: Path,
 ) -> None:
     object_path = tmp_path / "object.png"
     mask_path = tmp_path / "mask.png"
-
-    Image.new("RGBA", (128, 128), (240, 120, 80, 255)).save(object_path)
+    image = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
+    for x in range(32, 96):
+        for y in range(24, 104):
+            image.putpixel((x, y), (240, 120, 80, 255))
+    image.save(object_path)
     mask = Image.new("L", (128, 128), 0)
     for x in range(48, 80):
         for y in range(40, 72):
@@ -114,7 +117,7 @@ def test_load_object_image_for_patch_selection_prefers_mask_over_object_alpha(
     )
 
     with _load_object_image_for_patch_selection(asset) as image:
-        assert image.getchannel("A").getbbox() == (48, 40, 80, 72)
+        assert image.getchannel("A").getbbox() == (32, 24, 96, 104)
 
 
 def test_find_best_patch_returns_bbox_for_synthetic_background(tmp_path: Path) -> None:
@@ -156,9 +159,9 @@ def test_build_object_variants_scales_before_tight_crop(tmp_path: Path) -> None:
     object_path = tmp_path / "object.png"
     mask_path = tmp_path / "mask.png"
     Image.new("RGB", (512, 512), (10, 20, 30)).save(background_path)
-    image = Image.new("RGBA", (512, 512), (240, 120, 80, 255))
-    for x in range(0, 512):
-        for y in range(0, 512):
+    image = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
+    for x in range(200, 260):
+        for y in range(220, 280):
             image.putpixel((x, y), (240, 120, 80, 255))
     image.save(object_path)
     mask = Image.new("L", (512, 512), 0)

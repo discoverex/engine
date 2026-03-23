@@ -72,11 +72,9 @@ class RealEsrganBackgroundUpscalerModel:
         import numpy as np
         from PIL import Image  # type: ignore
 
-        image_ref = request.image_ref or request.params.get("image_ref")
+        image_ref = request.image_ref
         if not isinstance(image_ref, (str, Path)) or not str(image_ref):
-            raise ValueError(
-                "FxRequest.image_ref or FxRequest.params.image_ref is required"
-            )
+            raise ValueError("FxRequest.image_ref is required")
         output_path = request.params.get("output_path")
         if not isinstance(output_path, str) or not output_path:
             raise ValueError("FxRequest.params.output_path is required")

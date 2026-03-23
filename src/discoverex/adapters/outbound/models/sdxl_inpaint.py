@@ -101,6 +101,7 @@ class SdxlInpaintModel:
         edge_blend_cfg: float = 4.5,
         edge_blend_strength: float = 0.18,
         edge_blend_ring_dilate_px: int = 10,
+        edge_blend_inner_feather_px: int = 5,
         core_blend_steps: int = 24,
         core_blend_cfg: float = 5.0,
         core_blend_strength: float = 0.35,
@@ -174,6 +175,7 @@ class SdxlInpaintModel:
         self.edge_blend_cfg = edge_blend_cfg
         self.edge_blend_strength = edge_blend_strength
         self.edge_blend_ring_dilate_px = edge_blend_ring_dilate_px
+        self.edge_blend_inner_feather_px = edge_blend_inner_feather_px
         self.core_blend_steps = core_blend_steps
         self.core_blend_cfg = core_blend_cfg
         self.core_blend_strength = core_blend_strength
@@ -535,7 +537,7 @@ class SdxlInpaintModel:
         edge_mask = self._build_ring_mask(
             mask=placement_object_mask,
             dilation_px=self.edge_blend_ring_dilate_px,
-            inner_feather_px=1,
+            inner_feather_px=self.edge_blend_inner_feather_px,
         )
         edge_stage = self._run_object_blend_pass(
             handle=handle,
@@ -1406,12 +1408,12 @@ class SdxlInpaintModel:
     def _load_object_assets(self, *, request: InpaintRequest) -> tuple[Any, Any]:
         from PIL import Image  # type: ignore
 
-        if request.object_image_ref is None or request.object_mask_ref is None:
+        if request.object_image_ref is None:
             raise ValueError(
-                "generated object refs are required for similarity_overlay_v2"
+                "generated object image ref is required for similarity_overlay_v2"
             )
         object_image = Image.open(request.object_image_ref).convert("RGBA")
-        object_mask = Image.open(request.object_mask_ref).convert("L")
+        object_mask = object_image.getchannel("A").convert("L")
         return object_image, object_mask
 
     def _find_similarity_placement(

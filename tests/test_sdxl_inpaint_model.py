@@ -508,3 +508,32 @@ def test_layerdiffuse_hidden_object_mode_skips_final_polish_when_steps_zero(
     assert captured[0]["label"] == "edge"
     assert captured[1]["label"] == "core"
     assert "final_polish_ref" not in pred
+
+
+def test_load_object_assets_uses_object_alpha_instead_of_external_mask(
+    tmp_path: Path,
+) -> None:
+    model = SdxlInpaintModel()
+    object_path = tmp_path / "object-alpha.png"
+    mask_path = tmp_path / "object-mask.png"
+
+    object_image = Image.new("RGBA", (32, 32), color=(0, 0, 0, 0))
+    ImageDraw.Draw(object_image).rectangle((4, 6, 20, 26), fill=(20, 40, 220, 255))
+    object_image.save(object_path)
+
+    external_mask = Image.new("L", (32, 32), color=0)
+    ImageDraw.Draw(external_mask).rectangle((10, 10, 14, 14), fill=255)
+    external_mask.save(mask_path)
+
+    object_rgba, object_mask = model._load_object_assets(
+        request=InpaintRequest(
+            image_ref=str(tmp_path / "unused-source.png"),
+            region_id="r-alpha",
+            bbox=(0, 0, 16, 16),
+            object_image_ref=str(object_path),
+            object_mask_ref=str(mask_path),
+        )
+    )
+
+    assert object_rgba.getchannel("A").getbbox() == (4, 6, 21, 27)
+    assert object_mask.getbbox() == (4, 6, 21, 27)

@@ -3,10 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from delivery.spot_the_hidden.schema import (
+    AnswerAsset,
     AnswerKey,
     AnswerRegion,
-    DeliveryLayer,
+    BackgroundImage,
     DeliveryMeta,
+    FrameTableRef,
     GameBundle,
     PlayableScene,
     RegionBBox,
@@ -19,18 +21,27 @@ def test_game_bundle_pydantic_validation_roundtrip() -> None:
     bundle = GameBundle(
         scene_ref=SceneRef(scene_id="scene-1", version_id="v-1", source_scene_json="x"),
         playable=PlayableScene(
-            image_ref="a.png",
-            width=10,
-            height=20,
-            layers=[
-                DeliveryLayer(
-                    layer_id="layer-base",
-                    type="base",
-                    image_ref="a.png",
-                    z_index=0,
+            background_img=BackgroundImage(
+                image_id="background",
+                src="a.png",
+                width=10,
+                height=20,
+            ),
+            answers=[
+                AnswerAsset(
+                    lottie_id="lottie_01",
+                    name="object 1",
+                    src="object.png",
+                    bbox=RegionBBox(x=1, y=2, w=3, h=4),
                     order=0,
                 )
             ],
+            frame_table=FrameTableRef(
+                src="frame_table.csv",
+                frame_count=60,
+                fps=60,
+                columns=["frame"],
+            ),
         ),
         answer_key=AnswerKey(
             answer_region_ids=["r1"],
@@ -56,6 +67,6 @@ def test_game_bundle_pydantic_validation_roundtrip() -> None:
 
     dumped = bundle.model_dump(mode="json")
     loaded = GameBundle.model_validate(dumped)
-    assert loaded.bundle_version == "spot_hidden_v2"
+    assert loaded.bundle_version == "spot_hidden_v3"
     assert loaded.scene_ref.scene_id == "scene-1"
     assert loaded.answer_key.regions[0].bbox.w == 3

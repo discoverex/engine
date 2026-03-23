@@ -230,8 +230,8 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     output_manifest = json.loads(
         (scene_dir / "outputs" / "manifest.json").read_text(encoding="utf-8")
     )
-    lottie_path = scene_dir / "outputs" / "layers" / "animation.lottie"
-    output_layers_dir = scene_dir / "outputs" / "layers"
+    lottie_path = scene_dir / "outputs" / "objects" / "object_01.lottie"
+    output_objects_dir = scene_dir / "outputs" / "objects"
     tracker_call = _tracker_call_value(tracker)
     tracker_params = cast(dict[str, object], tracker_call["params"])
     tracker_artifacts = cast(list[Path], tracker_call["artifacts"])
@@ -241,32 +241,25 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     assert tracker_params["final_prompt_used"] == "polished playable scene"
     artifact_names = {path.name for path in tracker_artifacts}
     assert "prompt_bundle.json" in artifact_names
-    assert "animation.lottie" in artifact_names
+    assert "object_01.lottie" in artifact_names
     assert "manifest.json" in artifact_names
     assert lottie_path.exists()
-    assert output_layers_dir.exists()
-    assert output_manifest["lottie_path"] == "layers/animation.lottie"
-    assert output_manifest["layers"]
-    assert output_manifest["source_layers"]
+    assert output_objects_dir.exists()
+    assert output_manifest["background_img"]["src"] == "background.png"
+    assert output_manifest["answers"]
+    assert output_manifest["frame_table"]["src"] == "frame_table.csv"
     assert output_manifest["original"]
-    assert output_manifest["object_entries"]
-    assert output_manifest["object_sources"]
-    assert (
-        output_manifest["layers"][1]["description"]
-        == "aligned object render with alpha"
-    )
-    assert output_manifest["layers"][1]["object_number"] == 1
-    assert output_manifest["layers"][1]["center"] == [25.0, 40.0]
-    assert (scene_dir / "outputs" / "layers" / "source-objects").exists()
+    assert output_manifest["answers"][0]["lottie_id"] == "lottie_01"
+    assert output_manifest["answers"][0]["order"] == 1
     assert (scene_dir / "outputs" / "original").exists()
     with ZipFile(lottie_path) as archive:
         names = set(archive.namelist())
-        animation = json.loads(archive.read("animations/scene.json").decode("utf-8"))
+        animation = json.loads(archive.read("animations/object_01.json").decode("utf-8"))
     assert "manifest.json" in names
-    assert "animations/scene.json" in names
+    assert "animations/object_01.json" in names
     assert any(name.startswith("images/") for name in names)
-    assert animation["metadata"]["object_entries"][0]["center"] == [25.0, 40.0]
-    assert animation["layers"][1]["nm"] == "object 1 center=(25.0, 40.0)"
+    assert animation["metadata"]["bbox"] == {"x": 10.0, "y": 20.0, "w": 30.0, "h": 40.0}
+    assert animation["layers"][0]["nm"] == "object 1"
     fx_request = cast(SimpleNamespace, fx_model.requests[0])
     inpaint_request = cast(SimpleNamespace, inpaint_model.requests[0])
     assert fx_request.mode == "background"

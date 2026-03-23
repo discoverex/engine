@@ -69,18 +69,38 @@ class LocalArtifactStoreAdapter:
         ).write_text(
             json.dumps(
                 {
-                    "scene_id": scene.meta.scene_id,
-                    "version_id": scene.meta.version_id,
-                    "pipeline_run_id": scene.meta.pipeline_run_id,
-                    "status": scene.meta.status.value,
-                    "created_at": scene.meta.created_at.isoformat(),
-                    "updated_at": scene.meta.updated_at.isoformat(),
-                    "lottie_path": None,
-                    "preview_image_path": "composite.png"
-                    if scene.composite.final_image_ref
-                    else None,
-                    "scene_path": "../metadata/scene.json",
-                    "verification_path": "../metadata/verification.json",
+                    "scene_ref": {
+                        "scene_id": scene.meta.scene_id,
+                        "version_id": scene.meta.version_id,
+                    },
+                    "background_img": {
+                        "image_id": "background",
+                        "src": Path(scene.background.asset_ref).name
+                        if scene.background.asset_ref
+                        else "",
+                        "prompt": "",
+                        "width": int(scene.background.width),
+                        "height": int(scene.background.height),
+                    },
+                    "answers": [],
+                    "frame_table": {
+                        "src": "frame_table.csv",
+                        "frame_count": 60,
+                        "fps": 60,
+                        "columns": [
+                            "frame",
+                            "object_id",
+                            "order",
+                            "x",
+                            "y",
+                            "w",
+                            "h",
+                            "rotation",
+                            "opacity",
+                            "src",
+                            "lottie_id",
+                        ],
+                    },
                 },
                 ensure_ascii=False,
                 indent=2,

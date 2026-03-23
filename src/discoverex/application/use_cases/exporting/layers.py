@@ -1,108 +1,90 @@
 from __future__ import annotations
 
+import csv
 import shutil
 from pathlib import Path
 
-from PIL import Image
+from .types import ObjectRenderSpec
 
-from discoverex.domain.scene import LayerItem, Scene
+_FRAME_COUNT = 60
+_FPS = 60
+_FRAME_TABLE_COLUMNS = [
+    "frame",
+    "object_id",
+    "order",
+    "x",
+    "y",
+    "w",
+    "h",
+    "rotation",
+    "opacity",
+    "src",
+    "lottie_id",
+]
 
-from .types import CandidateLayerPayload
+
+def export_background(*, background_ref: str, background_dir: Path) -> Path:
+    source = Path(background_ref)
+    background_dir.mkdir(parents=True, exist_ok=True)
+    target = background_dir / "background.png"
+    if source.resolve() != target.resolve():
+        shutil.copy2(source, target)
+    return target
 
 
-def export_layers(
+def export_object_images(
     *,
-    scene: Scene,
-    layers_dir: Path,
-    source_layers_dir: Path,
-    candidates: dict[str, CandidateLayerPayload],
-) -> tuple[list[Path], list[Path]]:
+    specs: list[ObjectRenderSpec],
+    objects_dir: Path,
+) -> list[Path]:
+    objects_dir.mkdir(parents=True, exist_ok=True)
     exported: list[Path] = []
-    source_layers: list[Path] = []
-    for layer in sorted(scene.layers.items, key=lambda item: item.order):
-        if layer.source_region_id and layer.source_region_id in candidates:
-            candidate = candidates[layer.source_region_id]
-            full_canvas = render_full_canvas_object_layer(
-                scene=scene,
-                layer=layer,
-                candidate=candidate,
-                layers_dir=layers_dir,
-            )
-            if full_canvas is not None:
-                exported.append(full_canvas)
-            source_layer = export_source_object_layer(
-                layer=layer,
-                candidate=candidate,
-                source_layers_dir=source_layers_dir,
-            )
-            if source_layer is not None:
-                source_layers.append(source_layer)
-            continue
-
-        source = Path(layer.image_ref)
-        if not source.exists() or not source.is_file():
-            continue
+    for spec in specs:
+        source = Path(spec.source_ref)
         suffix = source.suffix or ".png"
-        target = layers_dir / f"{layer.order:03d}-{layer.layer_id}{suffix}"
+        target = objects_dir / f"{spec.object_id}{suffix}"
         if source.resolve() != target.resolve():
             shutil.copy2(source, target)
         exported.append(target)
-    return exported, source_layers
+    return exported
 
 
-def render_full_canvas_object_layer(
+def write_frame_table(
     *,
-    scene: Scene,
-    layer: LayerItem,
-    candidate: CandidateLayerPayload,
-    layers_dir: Path,
-) -> Path | None:
-    source_ref = candidate.get("layer_image_ref") or candidate.get("object_image_ref")
-    if not isinstance(source_ref, str):
-        return None
-    source_path = Path(source_ref)
-    if not source_path.exists() or not source_path.is_file() or layer.bbox is None:
-        return None
-    target = layers_dir / f"{layer.order:03d}-{layer.layer_id}.png"
-    with Image.open(source_path).convert("RGBA") as object_image:
-        canvas = Image.new(
-            "RGBA",
-            (int(scene.background.width), int(scene.background.height)),
-            color=(0, 0, 0, 0),
-        )
-        resized = object_image.resize(
-            (
-                max(1, int(round(layer.bbox.w))),
-                max(1, int(round(layer.bbox.h))),
-            ),
-            Image.Resampling.LANCZOS,
-        )
-        canvas.paste(
-            resized,
-            (int(round(layer.bbox.x)), int(round(layer.bbox.y))),
-            resized,
-        )
-        canvas.save(target)
-    return target
+    specs: list[ObjectRenderSpec],
+    frame_table_path: Path,
+) -> Path:
+    frame_table_path.parent.mkdir(parents=True, exist_ok=True)
+    with frame_table_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=_FRAME_TABLE_COLUMNS)
+        writer.writeheader()
+        for frame in range(_FRAME_COUNT):
+            for spec in specs:
+                writer.writerow(
+                    {
+                        "frame": frame,
+                        "object_id": spec.object_id,
+                        "order": spec.order,
+                        "x": spec.bbox["x"],
+                        "y": spec.bbox["y"],
+                        "w": spec.bbox["w"],
+                        "h": spec.bbox["h"],
+                        "rotation": 0,
+                        "opacity": 1,
+                        "src": f"{spec.object_id}.png",
+                        "lottie_id": spec.lottie_id,
+                    }
+                )
+    return frame_table_path
 
 
-def export_source_object_layer(
-    *,
-    layer: LayerItem,
-    candidate: CandidateLayerPayload,
-    source_layers_dir: Path,
-) -> Path | None:
-    source_ref = (
-        candidate.get("layer_image_ref")
-        or candidate.get("object_image_ref")
-        or candidate.get("candidate_image_ref")
-    )
-    if not isinstance(source_ref, str):
-        return None
-    source_path = Path(source_ref)
-    if not source_path.exists() or not source_path.is_file():
-        return None
-    target = source_layers_dir / f"{layer.order:03d}-{layer.layer_id}{source_path.suffix or '.png'}"
-    if source_path.resolve() != target.resolve():
-        shutil.copy2(source_path, target)
-    return target
+def frame_count() -> int:
+    return _FRAME_COUNT
+
+
+def frame_rate() -> int:
+    return _FPS
+
+
+def frame_table_columns() -> list[str]:
+    return list(_FRAME_TABLE_COLUMNS)
