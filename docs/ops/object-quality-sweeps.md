@@ -193,7 +193,10 @@ Submission may still override the queue for isolated runs.
 
 ## Operational Notes
 
+- `sweep run` defaults to `discoverex-generate-batch`
+- `sweep run` defaults to `gpu-fixed-batch`
 - `sweep run` can submit to any compatible generate deployment via `--deployment`
 - `sweep run` can override the queue at submit time with `--work-queue-name`
+- `sweep run` does not accept `--purpose`
 - `collect` derives the default manifest from the sweep spec when you use the CLI wrapper
 - a newly submitted sweep normally shows up as `pending` until a worker picks it up or the collector can recover finished artifacts
