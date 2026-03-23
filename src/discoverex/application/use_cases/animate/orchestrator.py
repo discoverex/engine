@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,7 @@ class AnimateResult:
     keyframe_config: KeyframeAnimation | None = None
     transparent: TransparentSequence | None = None
     converted: ConvertedAsset | None = None
+    original_size: tuple[int, int] | None = None
 
 
 @dataclass
@@ -58,17 +60,10 @@ class AnimateOrchestrator:
     max_retries: int = 7
 
     def run(self, image_path: Path) -> AnimateResult:
-        stem = image_path.stem
-        logger.info(f"[Animate] start: {stem}")
-
-        # Stage 1: Mode classification
+        logger.info("[Animate] start: %s", image_path.stem)
         mode = self.mode_classifier.classify(image_path)
-        logger.info(
-            "[Stage1] mode=%s facing=%s scene=%s deformable=%s action=%s",
-            mode.processing_mode.value, mode.facing_direction.value,
-            mode.is_scene, mode.has_deformable, mode.suggested_action)
-        if mode.subject_desc or mode.reason:
-            logger.info("  → 대상: %s | 근거: %s", mode.subject_desc, mode.reason[:80] if mode.reason else "")
+        logger.info("[Stage1] mode=%s facing=%s scene=%s deformable=%s",
+                    mode.processing_mode.value, mode.facing_direction.value, mode.is_scene, mode.has_deformable)
 
         if mode.processing_mode == ProcessingMode.KEYFRAME_ONLY:
             return self._handle_keyframe_only(mode)
@@ -88,19 +83,24 @@ class AnimateOrchestrator:
     def _handle_motion_needed(
         self, image_path: Path, mode: ModeClassification,
     ) -> AnimateResult:
+        from PIL import Image as _PILImage
+
         from .preprocessing import preprocess_image_simple
 
         out_dir = self.output_dir / "motion"
         out_dir.mkdir(parents=True, exist_ok=True)
 
+        with _PILImage.open(image_path) as _img:
+            original_size = _img.size
+
         # Step 0: Preprocess (소형 이미지는 업스케일 후 캔버스 배치)
         processed = out_dir / f"{image_path.stem}_processed.png"
         art_style = mode.art_style.value if hasattr(mode, "art_style") else "unknown"
-        preprocess_image_simple(
-            image_path, processed,
-            upscaler=self.image_upscaler,
-            art_style=art_style,
-        )
+        preprocess_image_simple(image_path, processed, upscaler=self.image_upscaler, art_style=art_style)
+        # 원본 이미지를 motion 폴더에 보존 (Lottie 크기 참조용)
+        orig_copy = out_dir / f"{image_path.stem}.png"
+        if not orig_copy.exists():
+            shutil.copy2(image_path, orig_copy)
 
         # Step 1: Vision analysis
         analysis = self.vision_analyzer.analyze(processed)
@@ -152,6 +152,7 @@ class AnimateOrchestrator:
             analysis=final_analysis, attempts=gen_result.attempts,
             seed=gen_result.seed, keyframe_config=kf_config,
             transparent=transparent, converted=converted,
+            original_size=original_size,
         )
 
     def _generate_mask(
@@ -189,11 +190,8 @@ class AnimateOrchestrator:
 
 
 def _log_analysis(a: VisionAnalysis) -> None:
-    logger.info("  → 액션: %s", a.action_desc)
-    logger.info("  → 오브젝트: %s", a.object_desc)
+    logger.info("  → 액션: %s | 오브젝트: %s", a.action_desc, a.object_desc)
     logger.info("  → 움직임: %s | 고정: %s", a.moving_parts, a.fixed_parts)
-    logger.info("  → fps=%d motion=%.2f~%.2f pingpong=%s", a.frame_rate, a.min_motion, a.max_motion, a.pingpong)
-    logger.info("  → positive: %s", a.positive[:80])
-    logger.info("  → negative: %s", a.negative[:80])
+    logger.info("  → fps=%d motion=%.2f~%.2f pingpong=%s pos=%s", a.frame_rate, a.min_motion, a.max_motion, a.pingpong, a.positive[:60])
     if a.reason:
         logger.info("  → 근거: %s", a.reason[:120])

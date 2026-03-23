@@ -1,10 +1,8 @@
-"""Extra API routes for engine dashboard — Stage 5, export, browse, stats.
-
-Registered onto the Flask app via register_extra_routes().
-"""
+"""Extra API routes for engine dashboard — Stage 5, export, browse, stats."""
 
 from __future__ import annotations
 
+import json as _json
 import logging
 import os
 from pathlib import Path
@@ -26,6 +24,18 @@ from .engine_server_helpers import (
 logger = logging.getLogger(__name__)
 
 
+def _detect_original_size(video_path: Path) -> tuple[int, int]:
+    """비디오 파일명에서 원본 이미지를 찾아 크기 반환."""
+    from PIL import Image
+    orig_stem = video_path.stem.rsplit("_a", 1)[0].replace("_processed", "")
+    for ext in (".png", ".jpg", ".jpeg", ".webp"):
+        p = video_path.parent / f"{orig_stem}{ext}"
+        if p.exists():
+            with Image.open(p) as img:
+                return img.size
+    return (480, 480)
+
+
 def register_extra_routes(
     app: Flask, orchestrator: Any, output_dir: Path,
 ) -> None:
@@ -45,24 +55,28 @@ def register_extra_routes(
         vid = Path(video_path)
         if not vid.exists():
             return jsonify({"error": "video_path not found"}), 400
+
+        orig_w, orig_h = _detect_original_size(vid)
         transparent = orchestrator.bg_remover.remove(vid, fps=fps)
         if not transparent or not transparent.frames:
             return jsonify({"error": "bg removal failed"}), 500
-        if target_size:
-            converted = orchestrator.format_converter.convert_with_opts(
-                transparent.frames, fps=fps, max_size=int(target_size))
-        else:
-            converted = orchestrator.format_converter.convert(transparent.frames, preset, fps)
+        effective_size = int(target_size) if target_size else max(orig_w, orig_h)
+        converted = orchestrator.format_converter.convert_with_opts(
+            transparent.frames, fps=fps, max_size=effective_size)
         lottie_info = None
         if converted.lottie_path and Path(str(converted.lottie_path)).exists():
             lp = Path(str(converted.lottie_path))
+            with open(lp, encoding="utf-8") as _f:
+                _lj = _json.load(_f)
             lottie_info = {
                 "fps": fps,
                 "frame_count": len(transparent.frames),
                 "duration_ms": round(len(transparent.frames) / fps * 1000),
-                "width": int(target_size) if target_size else 0,
-                "height": int(target_size) if target_size else 0,
+                "width": _lj.get("w", 0),
+                "height": _lj.get("h", 0),
                 "file_size_mb": round(lp.stat().st_size / (1024 * 1024), 1),
+                "original_width": orig_w,
+                "original_height": orig_h,
             }
         return jsonify({
             "transparent_dir": str(transparent.frames[0].parent),
