@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from infra.register.naturalness_sweep import build_sweep_manifest, submit_manifest
@@ -278,3 +279,163 @@ variants:
     assert job["inputs"]["args"]["object_mask_ref"].endswith("object.mask.png")
     assert job["inputs"]["args"]["raw_alpha_mask_ref"].endswith("object.raw-alpha.png")
     assert job["inputs"]["args"]["bbox"] == {"x": 10, "y": 20, "w": 30, "h": 40}
+
+
+def test_build_sweep_manifest_case_per_run_expands_policy_jobs(tmp_path: Path) -> None:
+    base_job_spec = tmp_path / "base.yaml"
+    base_job_spec.write_text(
+        """
+run_mode: repo
+engine: discoverex
+job_name: base
+inputs:
+  contract_version: v2
+  command: generate
+  config_name: generate
+  config_dir: conf
+  args:
+    background_prompt: old
+    object_prompt: old
+  overrides:
+    - profile=generator_pixart_gpu_v2_hidden_object
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    sweep_spec = tmp_path / "sweep.yaml"
+    sweep_spec.write_text(
+        f"""
+sweep_id: generic-search
+execution_mode: case_per_run
+base_job_spec: {base_job_spec.name}
+experiment_name: discoverex-naturalness-generic
+scenarios:
+  - scenario_id: s1
+    background_prompt: harbor
+    object_prompt: key
+  - scenario_id: s2
+    background_prompt: attic
+    object_prompt: compass
+variants:
+  - variant_id: p01
+    overrides:
+      - models.inpaint.overlay_alpha=0.35
+  - variant_id: p02
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = build_sweep_manifest(sweep_spec)
+
+    assert manifest["execution_mode"] == "case_per_run"
+    assert manifest["policy_count"] == 2
+    assert manifest["job_count"] == 4
+    first = manifest["jobs"][0]["job_spec"]
+    assert first["inputs"]["args"]["policy_id"] in {"p01", "p02"}
+    assert "flows/generate=inpaint_variant_pack" not in first["inputs"]["overrides"]
+    assert "models.inpaint.overlay_alpha=0.35" in first["inputs"]["overrides"] or (
+        "models.inpaint.overlay_alpha=0.45" in first["inputs"]["overrides"]
+    )
+
+
+def test_collect_naturalness_sweep_aggregates_policy_results(tmp_path: Path) -> None:
+    from infra.register.collect_naturalness_sweep import main as collect_main
+
+    artifacts_root = tmp_path / "artifacts"
+    cases_dir = (
+        artifacts_root
+        / "experiments"
+        / "naturalness_sweeps"
+        / "generic-search"
+        / "cases"
+    )
+    cases_dir.mkdir(parents=True)
+    payloads = [
+        {
+            "sweep_id": "generic-search",
+            "policy_id": "p01",
+            "scenario_id": "s1",
+            "status": "completed",
+            "naturalness_metrics": {
+                "naturalness.overall_score": 0.8,
+                "naturalness.avg_placement_fit": 0.7,
+                "naturalness.avg_seam_visibility": 0.2,
+                "naturalness.avg_saliency_lift": 0.3,
+            },
+        },
+        {
+            "sweep_id": "generic-search",
+            "policy_id": "p01",
+            "scenario_id": "s2",
+            "status": "completed",
+            "naturalness_metrics": {
+                "naturalness.overall_score": 0.6,
+                "naturalness.avg_placement_fit": 0.5,
+                "naturalness.avg_seam_visibility": 0.4,
+                "naturalness.avg_saliency_lift": 0.2,
+            },
+        },
+        {
+            "sweep_id": "generic-search",
+            "policy_id": "p02",
+            "scenario_id": "s1",
+            "status": "completed",
+            "naturalness_metrics": {
+                "naturalness.overall_score": 0.7,
+                "naturalness.avg_placement_fit": 0.6,
+                "naturalness.avg_seam_visibility": 0.3,
+                "naturalness.avg_saliency_lift": 0.25,
+            },
+        },
+    ]
+    for index, payload in enumerate(payloads, start=1):
+        (cases_dir / f"case-{index:02d}.json").write_text(
+            json.dumps(payload),
+            encoding="utf-8",
+        )
+    submitted = tmp_path / "submitted.json"
+    submitted.write_text(
+        json.dumps(
+            {
+                "sweep_id": "generic-search",
+                "results": [
+                    {"policy_id": "p01", "scenario_id": "s1"},
+                    {"policy_id": "p01", "scenario_id": "s2"},
+                    {"policy_id": "p02", "scenario_id": "s1"},
+                    {"policy_id": "p02", "scenario_id": "s2"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output_json = tmp_path / "collected.json"
+    output_csv = tmp_path / "collected.csv"
+
+    import sys
+
+    argv = sys.argv
+    sys.argv = [
+        "collect_naturalness_sweep.py",
+        "--submitted-manifest",
+        str(submitted),
+        "--artifacts-root",
+        str(artifacts_root),
+        "--output-json",
+        str(output_json),
+        "--output-csv",
+        str(output_csv),
+    ]
+    try:
+        assert collect_main() == 0
+    finally:
+        sys.argv = argv
+
+    collected = json.loads(output_json.read_text(encoding="utf-8"))
+    assert collected["missing_case_count"] == 1
+    assert collected["policy_count"] == 2
+    assert collected["policies"][0]["policy_id"] == "p02"
+    assert collected["policies"][1]["policy_id"] == "p01"
+    assert collected["policies"][1]["mean_overall_score"] == 0.7

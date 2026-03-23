@@ -33,6 +33,7 @@ DEFAULT_SPEC = (
     / "prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml"
 )
 DEFAULT_EXPERIMENT = "naturalness"
+DEFAULT_EXECUTION_MODE = "variant_pack"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -188,16 +189,73 @@ def _variant_specs(spec: dict[str, Any]) -> list[dict[str, Any]]:
     return variants
 
 
+def _execution_mode(spec: dict[str, Any], *, variant_specs: list[dict[str, Any]]) -> str:
+    raw = str(spec.get("execution_mode", "")).strip()
+    if raw:
+        if raw not in {"variant_pack", "case_per_run"}:
+            raise SystemExit("execution_mode must be variant_pack or case_per_run")
+        return raw
+    if variant_specs:
+        return DEFAULT_EXECUTION_MODE
+    return "case_per_run"
+
+
+def _policy_records(
+    *,
+    combos: list[dict[str, str]],
+    variant_specs: list[dict[str, Any]],
+    execution_mode: str,
+) -> list[dict[str, Any]]:
+    if execution_mode == "variant_pack":
+        return [
+            {
+                "policy_id": combo["combo_id"],
+                "combo": combo,
+                "variant_specs": variant_specs,
+                "variant_override_list": [],
+            }
+            for combo in combos
+        ]
+    if variant_specs:
+        records: list[dict[str, Any]] = []
+        for combo in combos:
+            for variant in variant_specs:
+                policy_id = str(variant["variant_id"]).strip() or combo["combo_id"]
+                if combo["combo_id"] != "combo-001":
+                    policy_id = f"{combo['combo_id']}--{policy_id}"
+                records.append(
+                    {
+                        "policy_id": policy_id,
+                        "combo": combo,
+                        "variant_specs": [],
+                        "variant_override_list": list(variant["overrides"]),
+                    }
+                )
+        return records
+    return [
+        {
+            "policy_id": combo["combo_id"],
+            "combo": combo,
+            "variant_specs": [],
+            "variant_override_list": [],
+        }
+        for combo in combos
+    ]
+
+
 def _job_spec_for_case(
     *,
     base_job_spec: dict[str, Any],
     scenario: dict[str, str],
     combo: dict[str, str],
+    policy_id: str,
     sweep_id: str,
     search_stage: str,
     experiment_name: str,
     fixed_overrides: list[str],
     variant_specs: list[dict[str, Any]],
+    variant_override_list: list[str],
+    execution_mode: str,
 ) -> dict[str, Any]:
     job_spec = deepcopy(base_job_spec)
     inputs = job_spec.setdefault("inputs", {})
@@ -215,21 +273,23 @@ def _job_spec_for_case(
     overrides.extend(
         f"{key}={value}" for key, value in combo.items() if key != "combo_id"
     )
+    overrides.extend(variant_override_list)
     overrides.append(f"adapters.tracker.experiment_name={experiment_name}")
     args.update(scenario)
     args["sweep_id"] = sweep_id
     args["combo_id"] = combo["combo_id"]
+    args["policy_id"] = policy_id
     args["scenario_id"] = scenario["scenario_id"]
     args["search_stage"] = search_stage
-    if variant_specs:
+    if execution_mode == "variant_pack" and variant_specs:
         args["variant_specs_json"] = json.dumps(variant_specs, ensure_ascii=True)
         args["variant_count"] = len(variant_specs)
     inputs["args"] = args
-    if variant_specs:
+    if execution_mode == "variant_pack" and variant_specs:
         overrides.append("flows/generate=inpaint_variant_pack")
     inputs["overrides"] = _dedupe(overrides)
     job_spec["job_name"] = (
-        f"{sweep_id}--{search_stage}--{combo['combo_id']}--{scenario['scenario_id']}"
+        f"{sweep_id}--{policy_id}--{scenario['scenario_id']}"
     )
     safe_experiment = experiment_name.replace("/", "-").strip() or "experiment"
     job_spec["outputs_prefix"] = (
@@ -266,25 +326,35 @@ def build_sweep_manifest(spec_path: Path) -> dict[str, Any]:
     combos = _combination_records(_parameter_grid(spec))
     fixed_overrides = _fixed_overrides(spec)
     variant_specs = _variant_specs(spec)
+    execution_mode = _execution_mode(spec, variant_specs=variant_specs)
+    policies = _policy_records(
+        combos=combos,
+        variant_specs=variant_specs,
+        execution_mode=execution_mode,
+    )
     jobs: list[dict[str, Any]] = []
-    for combo in combos:
+    for policy in policies:
         for scenario in scenarios:
             job_spec = _job_spec_for_case(
                 base_job_spec=base_job_spec,
                 scenario=scenario,
-                combo=combo,
+                combo=policy["combo"],
+                policy_id=policy["policy_id"],
                 sweep_id=sweep_id,
                 search_stage=search_stage,
                 experiment_name=experiment_name,
                 fixed_overrides=fixed_overrides,
-                variant_specs=variant_specs,
+                variant_specs=policy["variant_specs"],
+                variant_override_list=policy["variant_override_list"],
+                execution_mode=execution_mode,
             )
             jobs.append(
                 {
                     "job_name": job_spec["job_name"],
-                    "combo_id": combo["combo_id"],
+                    "combo_id": policy["combo"]["combo_id"],
+                    "policy_id": policy["policy_id"],
                     "scenario_id": scenario["scenario_id"],
-                    "variant_count": len(variant_specs),
+                    "variant_count": len(policy["variant_specs"]),
                     "overrides": job_spec["inputs"]["overrides"],
                     "job_spec": job_spec,
                 }
@@ -293,9 +363,11 @@ def build_sweep_manifest(spec_path: Path) -> dict[str, Any]:
         "sweep_id": sweep_id,
         "search_stage": search_stage,
         "experiment_name": experiment_name,
+        "execution_mode": execution_mode,
         "combo_count": len(combos),
         "scenario_count": len(scenarios),
         "variant_count": len(variant_specs),
+        "policy_count": len(policies),
         "job_count": len(jobs),
         "jobs": jobs,
     }
@@ -323,6 +395,7 @@ def submit_manifest(
                 {
                     "job_name": item["job_name"],
                     "combo_id": item["combo_id"],
+                    "policy_id": item.get("policy_id", ""),
                     "scenario_id": item["scenario_id"],
                     "submitted": False,
                     "deployment": resolved_deployment,
@@ -339,6 +412,7 @@ def submit_manifest(
             {
                 "job_name": item["job_name"],
                 "combo_id": item["combo_id"],
+                "policy_id": item.get("policy_id", ""),
                 "scenario_id": item["scenario_id"],
                 "submitted": True,
                 "flow_run_id": output.get("flow_run_id"),
@@ -349,9 +423,11 @@ def submit_manifest(
         "sweep_id": manifest["sweep_id"],
         "search_stage": manifest["search_stage"],
         "experiment_name": manifest["experiment_name"],
+        "execution_mode": manifest.get("execution_mode", DEFAULT_EXECUTION_MODE),
         "combo_count": manifest["combo_count"],
         "scenario_count": manifest["scenario_count"],
         "variant_count": manifest.get("variant_count", 0),
+        "policy_count": manifest.get("policy_count", 0),
         "job_count": manifest["job_count"],
         "deployment": resolved_deployment,
         "results": results,

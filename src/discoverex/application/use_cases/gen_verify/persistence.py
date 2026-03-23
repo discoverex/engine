@@ -27,6 +27,16 @@ from ..worker_artifacts import collect_worker_artifacts
 logger = get_logger("discoverex.generate.persistence")
 
 
+def _to_plain_data(value: object) -> object:
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="python")  # type: ignore[no-any-return,attr-defined]
+    if hasattr(value, "__dataclass_fields__"):
+        from dataclasses import asdict
+
+        return asdict(value)  # type: ignore[arg-type]
+    return value
+
+
 def metadata_dir(saved_dir: Path) -> Path:
     return saved_dir / "metadata"
 
@@ -116,6 +126,74 @@ def _naturalness_metrics(report_path: Path | None) -> dict[str, float]:
     return metrics
 
 
+def _sweep_case_results_dir(*, artifacts_root: str | Path, sweep_id: str) -> Path:
+    path = (
+        Path(artifacts_root)
+        / "experiments"
+        / "naturalness_sweeps"
+        / sweep_id
+        / "cases"
+    )
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _write_sweep_case_result(
+    *,
+    context: AppContextLike,
+    scene: Scene,
+    naturalness_artifact: Path | None,
+) -> Path | None:
+    execution_snapshot = getattr(context, "execution_snapshot", None)
+    if not isinstance(execution_snapshot, dict):
+        return None
+    args = execution_snapshot.get("args", {})
+    if not isinstance(args, dict):
+        return None
+    sweep_id = str(args.get("sweep_id", "")).strip()
+    scenario_id = str(args.get("scenario_id", "")).strip()
+    policy_id = (
+        str(args.get("policy_id", "")).strip()
+        or str(args.get("variant_id", "")).strip()
+        or str(args.get("combo_id", "")).strip()
+    )
+    if not sweep_id or not scenario_id or not policy_id:
+        return None
+    metrics = _naturalness_metrics(naturalness_artifact)
+    payload = {
+        "sweep_id": sweep_id,
+        "policy_id": policy_id,
+        "scenario_id": scenario_id,
+        "combo_id": str(args.get("combo_id", "")).strip(),
+        "variant_id": str(args.get("variant_id", "")).strip(),
+        "search_stage": str(args.get("search_stage", "")).strip(),
+        "flow_run_id": str(context.settings.execution.flow_run_id or "").strip(),
+        "scene_id": scene.meta.scene_id,
+        "version_id": scene.meta.version_id,
+        "status": scene.meta.status.value,
+        "failure_reason": scene.verification.final.failure_reason,
+        "naturalness_metrics": metrics,
+        "naturalness_artifact": str(naturalness_artifact) if naturalness_artifact else "",
+        "scene_tags": list(scene.meta.tags),
+        "model_versions": dict(scene.meta.model_versions),
+        "verification": _to_plain_data(scene.verification),
+    }
+    target = _sweep_case_results_dir(
+        artifacts_root=context.artifacts_root,
+        sweep_id=sweep_id,
+    ) / (
+        f"{policy_id}--{scenario_id}--{scene.meta.scene_id}--{scene.meta.version_id}.json"
+    )
+    write_json_file(target, payload)
+    logger.info(
+        "naturalness sweep case result written path=%s policy_id=%s scenario_id=%s",
+        target,
+        policy_id,
+        scenario_id,
+    )
+    return target
+
+
 def track_run(
     *,
     context: AppContextLike,
@@ -202,5 +280,10 @@ def track_run(
     write_worker_artifact_manifest(
         artifacts_root=context.artifacts_root,
         artifacts=artifact_entries,
+    )
+    _write_sweep_case_result(
+        context=context,
+        scene=scene,
+        naturalness_artifact=naturalness_artifact,
     )
     return tracking_run_id

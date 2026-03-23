@@ -94,7 +94,14 @@ def build_tracking_params(snapshot: dict[str, Any] | None) -> dict[str, str]:
     }
     args = snapshot.get("args", {})
     if isinstance(args, dict):
-        for key in ("sweep_id", "combo_id", "scenario_id", "search_stage"):
+        for key in (
+            "sweep_id",
+            "combo_id",
+            "policy_id",
+            "variant_id",
+            "scenario_id",
+            "search_stage",
+        ):
             value = str(args.get(key, "")).strip()
             if value:
                 params[f"args.{key}"] = value
