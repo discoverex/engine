@@ -142,7 +142,9 @@ def _save_lottie(
         # 캔버스 = 이미지 × padding (투명 배경 여백)
         cw = int(iw * canvas_padding) // 2 * 2
         ch = int(ih * canvas_padding) // 2 * 2
-        cx, cy = cw / 2, ch / 2  # 캔버스 중심 = 이미지 배치 위치
+        # 이미지 좌상단 위치 (캔버스 중앙 배치 기준)
+        img_x = (cw - iw) / 2
+        img_y = (ch - ih) / 2
 
         assets, layers = [], []
         for i, path in enumerate(frames):
@@ -161,8 +163,8 @@ def _save_lottie(
                 "refId": f"frame_{i}", "sr": 1,
                 "ks": {
                     "o": {"a": 0, "k": 100}, "r": {"a": 0, "k": 0},
-                    "p": {"a": 0, "k": [cx, cy, 0]},
-                    "a": {"a": 0, "k": [iw / 2, ih / 2, 0]},
+                    "p": {"a": 0, "k": [img_x, img_y, 0]},
+                    "a": {"a": 0, "k": [0, 0, 0]},
                     "s": {"a": 0, "k": [100, 100, 100]},
                 },
                 "ip": i, "op": i + 1, "st": 0, "bm": 0,
