@@ -1,7 +1,7 @@
-sweep_id: exp-objectgen-fixedbg-guidance-steps-prompt
-search_stage: coarse
-experiment_name: exp-objectgen-fixedbg-guidance-steps-prompt
-base_job_spec: ../job_specs/prod-genver2-pixart-realvisxl5-patchsimv2-ldho1-8gb.yaml
+sweep_id: combined.background-object-generation.fixed-background.guidance-steps-prompt.smoke
+search_stage: smoke
+experiment_name: combined.background-object-generation.fixed-background.guidance-steps-prompt.smoke
+base_job_spec: ../job_specs/variants/generate_verify/prod-genver2-pixart-realvisxl5-patchsimv2-ldho1-8gb.yaml
 fixed_overrides:
   - adapters/tracker=mlflow_server
 scenarios:
@@ -14,11 +14,9 @@ scenarios:
     final_prompt: polished playable hidden object scene, keep inserted objects matched to the background painting style, lighting direction, palette, texture, and scene atmosphere
     final_negative_prompt: blurry, low quality, artifact
 parameters:
-  models.object_generator.default_guidance_scale: ["2.0", "3.0", "4.0", "5.0"]
-  models.object_generator.default_num_inference_steps: ["15", "20", "25"]
+  models.object_generator.default_guidance_scale: ["2.0", "4.0"]
+  models.object_generator.default_num_inference_steps: ["20"]
   models.object_generator.default_prompt:
-    - "'isolated single object on a transparent background'"
     - "'isolated single opaque object on a transparent background'"
   models.object_generator.default_negative_prompt:
-    - "'busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact'"
     - "'transparent object, translucent object, semi-transparent object, opaque background, solid background, busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact'"

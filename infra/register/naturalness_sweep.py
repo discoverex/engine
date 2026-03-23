@@ -30,6 +30,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_SPEC = (
     SCRIPT_DIR
     / "job_specs"
+    / "variants"
+    / "naturalness"
     / "prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml"
 )
 DEFAULT_EXPERIMENT = "naturalness"

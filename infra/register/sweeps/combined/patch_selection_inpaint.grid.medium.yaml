@@ -1,7 +1,7 @@
-sweep_id: naturalness-medium
+sweep_id: combined.patch-selection-inpaint.grid.medium
 search_stage: coarse
-experiment_name: discoverex-naturalness-search
-base_job_spec: ../job_specs/prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml
+experiment_name: combined.patch-selection-inpaint.grid.medium
+base_job_spec: ../job_specs/variants/naturalness/prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml
 fixed_overrides:
   - adapters/tracker=mlflow_server
 scenarios:

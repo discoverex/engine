@@ -1,8 +1,8 @@
-sweep_id: naturalness-fivepack-inpaint-variants
+sweep_id: combined.patch-selection-inpaint.variant-pack.fivepack
 search_stage: replay
-experiment_name: discoverex-naturalness-fivepack-variants
-base_job_spec: ../job_specs/prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml
-scenarios_csv: naturalness_fivepack_scenarios.csv
+experiment_name: combined.patch-selection-inpaint.variant-pack.fivepack
+base_job_spec: ../job_specs/variants/naturalness/prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml
+scenarios_csv: patch_selection_inpaint.fivepack_scenarios.csv
 fixed_overrides:
   - adapters/tracker=mlflow_server
 variants:

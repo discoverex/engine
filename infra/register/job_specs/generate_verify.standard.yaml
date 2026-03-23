@@ -3,7 +3,7 @@ engine: discoverex
 entrypoint:
   - prefect_flow.py:run_generate_job_flow
 config: null
-job_name: prod-genver2-pixartbg-realvisxl5obj-realesrgan-patchsimv2-ldho1-baseprompt-8gb
+job_name: generate_verify.standard
 inputs:
   contract_version: v2
   command: generate
@@ -38,7 +38,7 @@ inputs:
     - models.object_generator.model_id=SG161222/RealVisXL_V5.0_Lightning
     - models.object_generator.sampler=dpmpp_sde_karras
     - models.object_generator.default_num_inference_steps=5
-    - models.object_generator.default_guidance_scale=1.5
+    - models.object_generator.default_guidance_scale=1
     - models.object_generator.dtype=float16
     - models.object_generator.precision=fp16
     - models/hidden_region=dummy
