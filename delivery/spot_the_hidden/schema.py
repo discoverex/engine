@@ -36,13 +36,6 @@ class AnswerAsset(BaseModel):
     order: int
 
 
-class FrameTableRef(BaseModel):
-    src: str
-    frame_count: int
-    fps: int
-    columns: list[str] = Field(default_factory=list)
-
-
 class HintItem(BaseModel):
     key: str
     value: str
@@ -56,7 +49,6 @@ class UiFlags(BaseModel):
 class PlayableScene(BaseModel):
     background_img: BackgroundImage
     answers: list[AnswerAsset] = Field(default_factory=list)
-    frame_table: FrameTableRef
     goal_text: str | None = None
     hints: list[HintItem] = Field(default_factory=list)
     ui_flags: UiFlags = Field(default_factory=UiFlags)

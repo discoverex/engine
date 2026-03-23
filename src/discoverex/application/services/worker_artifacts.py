@@ -97,7 +97,6 @@ def _canonicalize_artifact(
         "prompt_bundle": ("prompt_bundle_json", "artifact_prompt_bundle_uri"),
         "lottie": ("lottie_bundle", "artifact_lottie_uri"),
         "background": ("background_image", "artifact_background_uri"),
-        "frame_table": ("frame_table_csv", "artifact_frame_table_uri"),
         "composite": ("composite_image", "artifact_composite_uri"),
         "final_image": ("composite_image", "artifact_composite_uri"),
         "output_manifest": (

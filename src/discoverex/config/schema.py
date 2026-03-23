@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class HydraComponentConfig(BaseModel):
@@ -113,13 +113,32 @@ class RuntimeConfig(BaseModel):
     width: int = 1024
     height: int = 768
     background_upscale_factor: int = 1
-    background_hires_mode: Literal[
-        "detail_reconstruct", "canvas_only", "canvas_then_detail", "none"
-    ] = "detail_reconstruct"
+    background_upscale_mode: Literal["hires", "realesrgan", "none"] = "none"
     config_version: str = "config-v1"
     artifacts_root: str = "artifacts"
     model_runtime: RuntimeModelConfig = Field(default_factory=RuntimeModelConfig)
     env: RuntimeEnvConfig = Field(default_factory=RuntimeEnvConfig)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_background_upscale_mode(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        if "background_upscale_mode" in value:
+            return value
+        legacy = value.get("background_hires_mode")
+        mapping = {
+            "detail_reconstruct": "hires",
+            "canvas_then_detail": "hires",
+            "canvas_only": "realesrgan",
+            "none": "none",
+        }
+        if isinstance(legacy, str) and legacy.strip():
+            value = dict(value)
+            value["background_upscale_mode"] = mapping.get(
+                legacy.strip(), legacy.strip()
+            )
+        return value
 
     @field_validator("width", "height", "background_upscale_factor")
     @classmethod

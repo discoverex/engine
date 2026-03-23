@@ -16,6 +16,22 @@ from .io import read_background_image_size
 logger = get_logger("discoverex.generate.background")
 
 
+def resolve_background_upscale_mode(context: AppContextLike) -> str:
+    mode = getattr(context.runtime, "background_upscale_mode", None)
+    if isinstance(mode, str) and mode.strip():
+        return mode.strip()
+    if mode is not None:
+        return mode
+    legacy = str(getattr(context.runtime, "background_hires_mode", "none")).strip()
+    mapping = {
+        "detail_reconstruct": "hires",
+        "canvas_then_detail": "hires",
+        "canvas_only": "realesrgan",
+        "none": "none",
+    }
+    return mapping.get(legacy, "none")
+
+
 def apply_background_canvas_upscale_if_needed(
     *,
     background: Background,

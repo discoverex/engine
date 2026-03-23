@@ -8,7 +8,6 @@ from delivery.spot_the_hidden.schema import (
     AnswerRegion,
     BackgroundImage,
     DeliveryMeta,
-    FrameTableRef,
     GameBundle,
     PlayableScene,
     RegionBBox,
@@ -36,12 +35,6 @@ def test_game_bundle_pydantic_validation_roundtrip() -> None:
                     order=0,
                 )
             ],
-            frame_table=FrameTableRef(
-                src="frame_table.csv",
-                frame_count=60,
-                fps=60,
-                columns=["frame"],
-            ),
         ),
         answer_key=AnswerKey(
             answer_region_ids=["r1"],

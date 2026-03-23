@@ -85,6 +85,7 @@ def test_generator_sdxl_gpu_v2_8gb_profile_loads_v2_stack() -> None:
     assert cfg.runtime.width == 256
     assert cfg.runtime.height == 256
     assert cfg.runtime.background_upscale_factor == 4
+    assert cfg.runtime.background_upscale_mode == "hires"
     assert cfg.runtime.model_runtime.offload_mode == "sequential"
 
 
@@ -105,6 +106,7 @@ def test_generator_pixart_gpu_v2_8gb_profile_loads_pixart_stack() -> None:
     assert cfg.runtime.width == 1024
     assert cfg.runtime.height == 1024
     assert cfg.runtime.background_upscale_factor == 2
+    assert cfg.runtime.background_upscale_mode == "hires"
     assert cfg.runtime.model_runtime.offload_mode == "sequential"
     assert cfg.runtime.model_runtime.enable_xformers_memory_efficient_attention is True
 
@@ -133,6 +135,7 @@ def test_generator_pixart_gpu_v2_hidden_object_profile_loads_object_pipeline() -
     assert inpaint_cfg["relight_method"] == "basic"
     assert cfg.runtime.width == 1024
     assert cfg.runtime.height == 1024
+    assert cfg.runtime.background_upscale_mode == "hires"
 
 
 def test_realvisxl_lightning_background_presets_load() -> None:
@@ -156,7 +159,18 @@ def test_realvisxl_lightning_background_presets_load() -> None:
     )
     assert cfg.models.background_upscaler.model_dump(mode="python")[
         "canvas_upscaler_model_name"
-    ] == "RealESRGAN_x4plus"
+    ] == "4x-UltraSharp"
+
+
+def test_runtime_config_normalizes_legacy_background_hires_mode() -> None:
+    cfg = load_pipeline_config(
+        config_name="generate",
+        config_dir="conf",
+        overrides=[
+            "+runtime.background_hires_mode=canvas_only",
+        ],
+    )
+    assert cfg.runtime.background_upscale_mode == "realesrgan"
 
 
 def test_generate_flow_naturalness_override_loads_generate_entrypoint() -> None:

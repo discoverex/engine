@@ -15,6 +15,7 @@ from .background_pipeline import (
     apply_background_canvas_upscale_if_needed,
     apply_background_detail_reconstruction_if_needed,
     build_background_from_inputs,
+    resolve_background_upscale_mode,
 )
 from .composite_pipeline import compose_scene
 from .model_lifecycle import unload_model
@@ -71,10 +72,8 @@ def run(
             background_negative_prompt=background_negative_prompt,
         )
         if (background_prompt or "").strip():
-            hires_mode = str(
-                getattr(context.runtime, "background_hires_mode", "detail_reconstruct")
-            ).strip() or "detail_reconstruct"
-            if hires_mode in {"canvas_only", "canvas_then_detail"}:
+            upscale_mode = resolve_background_upscale_mode(context)
+            if upscale_mode in {"hires", "realesrgan"}:
                 upscaler_handle = background_handle
                 if context.background_upscaler_model is not context.background_generator_model:
                     upscaler_handle = context.background_upscaler_model.load(
@@ -89,22 +88,22 @@ def run(
                         prompt=(background_prompt or "").strip(),
                         negative_prompt=(background_negative_prompt or "").strip(),
                     )
+                    if upscale_mode == "hires":
+                        background = apply_background_detail_reconstruction_if_needed(
+                            background=background,
+                            context=context,
+                            scene_dir=scene_dir,
+                            upscaler_handle=background_handle,
+                            prompt=(background_prompt or "").strip(),
+                            negative_prompt=(background_negative_prompt or "").strip(),
+                            predictor_model=context.background_generator_model,
+                        )
                 finally:
                     if (
                         context.background_upscaler_model
                         is not context.background_generator_model
                     ):
                         unload_model(context.background_upscaler_model)
-            if hires_mode in {"detail_reconstruct", "canvas_then_detail"}:
-                background = apply_background_detail_reconstruction_if_needed(
-                    background=background,
-                    context=context,
-                    scene_dir=scene_dir,
-                    upscaler_handle=background_handle,
-                    prompt=(background_prompt or "").strip(),
-                    negative_prompt=(background_negative_prompt or "").strip(),
-                    predictor_model=context.background_generator_model,
-                )
     finally:
         unload_model(context.background_generator_model)
     _materialize_background_asset(background=background, scene_dir=scene_dir)

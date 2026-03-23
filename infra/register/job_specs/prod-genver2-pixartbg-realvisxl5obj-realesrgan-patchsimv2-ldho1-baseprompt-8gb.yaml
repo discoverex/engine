@@ -28,11 +28,11 @@ inputs:
     - runtime.width=512
     - runtime.height=512
     - runtime.background_upscale_factor=2
-    - +runtime.background_hires_mode=canvas_only
+    - runtime.background_upscale_mode=realesrgan
     - models/background_generator=pixart_sigma_8gb
     - models.background_generator.default_num_inference_steps=10
     - models.background_generator.default_guidance_scale=5.0
-    - models/background_upscaler=realesrgan
+    - models/background_upscaler=realesrgan_x2
     - runtime.model_runtime.batch_size=1
     - models/object_generator=layerdiffuse_realvisxl5_lightning
     - models.object_generator.model_id=SG161222/RealVisXL_V5.0_Lightning

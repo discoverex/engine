@@ -92,7 +92,6 @@ def run_verify_only(scene: Scene, context: AppContextLike) -> Scene:
             ("naturalness", naturalness_report),
             ("final_image", scene_artifact if scene_artifact.exists() else None),
             ("background", output_exports.background_path),
-            ("frame_table", output_exports.frame_table_path),
             ("output_manifest", output_exports.manifest_path),
             ("execution_config", context.execution_snapshot_path),
             *[

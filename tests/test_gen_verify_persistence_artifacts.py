@@ -44,14 +44,12 @@ def test_track_run_includes_source_layers_and_originals_in_worker_manifest(
         metadata_dir / "verification.json",
         outputs_dir / "composite.png",
         outputs_dir / "background" / "background.png",
-        outputs_dir / "frame_table.csv",
         outputs_dir / "manifest.json",
         outputs_dir / "objects" / "object_01.png",
         outputs_dir / "objects" / "object_01.lottie",
         outputs_dir / "delivery" / "metadata" / "scene.json",
         outputs_dir / "delivery" / "metadata" / "verification.json",
         outputs_dir / "delivery" / "background" / "background.png",
-        outputs_dir / "delivery" / "frame_table.csv",
         outputs_dir / "delivery" / "manifest.json",
         outputs_dir / "delivery" / "objects" / "object_01.png",
         outputs_dir / "delivery" / "objects" / "object_01.lottie",
@@ -105,7 +103,6 @@ def test_track_run_includes_source_layers_and_originals_in_worker_manifest(
         background_path=outputs_dir / "background" / "background.png",
         object_png_paths=[outputs_dir / "objects" / "object_01.png"],
         object_lottie_paths=[outputs_dir / "objects" / "object_01.lottie"],
-        frame_table_path=outputs_dir / "frame_table.csv",
         original_paths=[
             outputs_dir / "original" / "r1" / "object.png",
             outputs_dir / "original" / "r1" / "diagnostics.json",
@@ -114,7 +111,6 @@ def test_track_run_includes_source_layers_and_originals_in_worker_manifest(
             outputs_dir / "delivery" / "metadata" / "scene.json",
             outputs_dir / "delivery" / "metadata" / "verification.json",
             outputs_dir / "delivery" / "background" / "background.png",
-            outputs_dir / "delivery" / "frame_table.csv",
             outputs_dir / "delivery" / "manifest.json",
             outputs_dir / "delivery" / "objects" / "object_01.png",
             outputs_dir / "delivery" / "objects" / "object_01.lottie",
@@ -168,7 +164,6 @@ def test_track_run_includes_source_layers_and_originals_in_worker_manifest(
     assert tracking_run_id == "tracking-run-1"
     logical_names = [name for name, _ in captured_artifacts]
     assert "background" in logical_names
-    assert "frame_table" in logical_names
     assert "output_object_png/object_01.png" in logical_names
     assert "output_object_lottie/object_01.lottie" in logical_names
     assert "output_original/original/r1/object.png" in logical_names
@@ -253,7 +248,6 @@ def test_track_run_writes_naturalness_sweep_case_result(
             background_path=outputs_dir / "background" / "background.png",
             object_png_paths=[],
             object_lottie_paths=[],
-            frame_table_path=outputs_dir / "frame_table.csv",
             original_paths=[],
             delivery_paths=[],
         ),

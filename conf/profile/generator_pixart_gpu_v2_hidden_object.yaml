@@ -2,7 +2,7 @@
 defaults:
   - override /flows/generate: v2
   - override /models/background_generator: pixart_sigma_8gb
-  - override /models/background_upscaler: realesrgan
+  - override /models/background_upscaler: ultrasharp
   - override /models/object_generator: layerdiffuse
   - override /models/hidden_region: hf
   - override /models/inpaint: sdxl_gpu_layerdiffuse_hidden_object_v1
@@ -14,6 +14,7 @@ runtime:
   width: 1024
   height: 1024
   background_upscale_factor: 2
+  background_upscale_mode: hires
   model_runtime:
     offload_mode: sequential
     enable_xformers_memory_efficient_attention: true

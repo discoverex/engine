@@ -19,8 +19,8 @@ logger = get_logger("discoverex.models.realesrgan_upscaler")
 class RealEsrganBackgroundUpscalerModel:
     def __init__(
         self,
-        model_name: str = "RealESRGAN_x4plus",
-        scale: int = 4,
+        model_name: str = "RealESRGAN_x2plus",
+        scale: int = 2,
         weights_repo_id: str = "",
         weights_filename: str = "",
         device: str = "cuda",

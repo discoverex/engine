@@ -9,7 +9,6 @@ from delivery.spot_the_hidden.schema import (
     AnswerRegion,
     BackgroundImage,
     DeliveryMeta,
-    FrameTableRef,
     GameBundle,
     PlayableScene,
     RegionBBox,
@@ -39,12 +38,6 @@ def test_build_front_payload_does_not_expose_answer_key() -> None:
                     order=1,
                 )
             ],
-            frame_table=FrameTableRef(
-                src="frame_table.csv",
-                frame_count=60,
-                fps=60,
-                columns=["frame"],
-            ),
         ),
         answer_key=AnswerKey(
             answer_region_ids=["r1"],

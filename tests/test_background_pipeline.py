@@ -8,6 +8,7 @@ from PIL import Image
 from discoverex.application.use_cases.gen_verify.background_pipeline import (
     _read_background_image_size,
     apply_background_hires_fix_if_needed,
+    resolve_background_upscale_mode,
 )
 from discoverex.domain.scene import Background
 from discoverex.models.types import ModelHandle
@@ -67,3 +68,11 @@ def test_apply_background_hires_fix_updates_background_dimensions(
     assert updated.metadata["canvas_background_ref"] == str(source)
     assert context.runtime.width == 256
     assert context.runtime.height == 192
+
+
+def test_resolve_background_upscale_mode_maps_legacy_canvas_only() -> None:
+    context = SimpleNamespace(
+        runtime=SimpleNamespace(background_hires_mode="canvas_only"),
+    )
+
+    assert resolve_background_upscale_mode(context) == "realesrgan"

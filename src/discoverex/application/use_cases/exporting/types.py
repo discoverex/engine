@@ -74,13 +74,6 @@ class AnswerAssetPayload(TypedDict):
     order: int
 
 
-class FrameTablePayload(TypedDict):
-    src: str
-    frame_count: int
-    fps: int
-    columns: list[str]
-
-
 @dataclass(frozen=True)
 class ObjectRenderSpec:
     object_id: str
@@ -100,6 +93,5 @@ class OutputExportResult:
     background_path: Path
     object_png_paths: list[Path]
     object_lottie_paths: list[Path]
-    frame_table_path: Path
     original_paths: list[Path]
     delivery_paths: list[Path]

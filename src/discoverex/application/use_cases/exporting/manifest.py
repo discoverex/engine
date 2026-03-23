@@ -6,7 +6,6 @@ from discoverex.adapters.outbound.io.json_files import write_json_file
 from discoverex.artifact_paths import output_manifest_path
 from discoverex.domain.scene import Scene
 
-from .layers import frame_count, frame_rate, frame_table_columns
 from .shared import file_name
 from .types import ObjectRenderSpec, OriginalAssetEntry
 
@@ -17,7 +16,6 @@ def write_output_manifest(
     artifacts_root: Path,
     background_path: Path,
     object_png_paths: list[Path],
-    frame_table_path: Path,
     original_entries: list[OriginalAssetEntry],
     object_specs: list[ObjectRenderSpec],
 ) -> Path:
@@ -49,12 +47,6 @@ def write_output_manifest(
             for spec in object_specs
             if spec.object_id in png_by_object
         ],
-        "frame_table": {
-            "src": file_name(frame_table_path),
-            "frame_count": frame_count(),
-            "fps": frame_rate(),
-            "columns": frame_table_columns(),
-        },
         "original": original_entries,
     }
     return write_json_file(manifest_path, payload)

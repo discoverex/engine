@@ -1,13 +1,13 @@
 # @package models.background_upscaler
 _target_: discoverex.adapters.outbound.models.realesrgan_background_upscaler.RealEsrganBackgroundUpscalerModel
 model_name: RealESRGAN_x2plus
+scale: 2
 device: ${runtime.model_runtime.device}
 dtype: ${runtime.model_runtime.dtype}
 tile: 512
 tile_pad: 16
 pre_pad: 0
 strict_runtime: true
-scale: 2
 weights_cache_dir: .cache/realesrgan
 model_cache_dir: ${oc.env:MODEL_CACHE_DIR,""}
 hf_home: ${oc.env:HF_HOME,""}

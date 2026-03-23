@@ -221,7 +221,6 @@ def track_run(
             ("composite", composite_artifact),
             ("prompt_bundle", prompt_bundle_artifact),
             ("background", output_exports.background_path),
-            ("frame_table", output_exports.frame_table_path),
             ("output_manifest", output_exports.manifest_path),
             ("execution_config", execution_snapshot_path),
             *[

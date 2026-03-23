@@ -4,7 +4,6 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from zipfile import ZipFile
-import csv
 
 from PIL import Image
 
@@ -160,7 +159,6 @@ def test_export_output_bundle_writes_object_centric_outputs(tmp_path: Path) -> N
     exported = export_output_bundle(artifacts_root=tmp_path, scene=scene)
 
     assert exported.background_path.exists()
-    assert exported.frame_table_path.exists()
     assert exported.manifest_path.exists()
     assert len(exported.object_png_paths) == 1
     assert len(exported.object_lottie_paths) == 1
@@ -188,9 +186,6 @@ def test_export_output_bundle_writes_object_centric_outputs(tmp_path: Path) -> N
             "order": 1,
         }
     ]
-    assert payload["frame_table"]["src"] == "frame_table.csv"
-    assert payload["frame_table"]["frame_count"] == 60
-    assert payload["frame_table"]["fps"] == 60
     assert {"region_id": "r1", "kind": "candidate_image_ref", "path": "original/r1/object.png"} in payload["original"]
     assert {"region_id": "r1", "kind": "raw_generated_image_ref", "path": "original/r1/object.candidate.png"} in payload["original"]
     assert {"region_id": "r1", "kind": "sam_object_image_ref", "path": "original/r1/object.sam.png"} in payload["original"]
@@ -207,13 +202,6 @@ def test_export_output_bundle_writes_object_centric_outputs(tmp_path: Path) -> N
     assert (scene_root / "outputs" / "delivery" / "background" / "background.png").exists()
     assert (scene_root / "outputs" / "delivery" / "objects" / "object_01.png").exists()
     assert (scene_root / "outputs" / "delivery" / "objects" / "object_01.lottie").exists()
-    assert (scene_root / "outputs" / "delivery" / "frame_table.csv").exists()
-    with exported.frame_table_path.open(encoding="utf-8", newline="") as handle:
-        rows = list(csv.DictReader(handle))
-    assert len(rows) == 60
-    assert rows[0]["object_id"] == "object_01"
-    assert rows[0]["x"] == "1.0"
-    assert rows[0]["src"] == "object_01.png"
     with ZipFile(exported.object_lottie_paths[0]) as archive:
         names = set(archive.namelist())
         animation = json.loads(archive.read("animations/object_01.json").decode("utf-8"))

@@ -247,7 +247,6 @@ def test_run_gen_verify_writes_prompt_bundle_and_tracks_prompt_params(
     assert output_objects_dir.exists()
     assert output_manifest["background_img"]["src"] == "background.png"
     assert output_manifest["answers"]
-    assert output_manifest["frame_table"]["src"] == "frame_table.csv"
     assert output_manifest["original"]
     assert output_manifest["answers"][0]["lottie_id"] == "lottie_01"
     assert output_manifest["answers"][0]["order"] == 1
