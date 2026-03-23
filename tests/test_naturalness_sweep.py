@@ -101,15 +101,15 @@ def test_submit_manifest_defaults_to_naturalness_deployment(monkeypatch) -> None
     result = submit_manifest(
         manifest,
         prefect_api_url="https://prefect.example/api",
-        branch="dev",
+        purpose="batch",
         experiment="naturalness",
         deployment=None,
         dry_run=False,
     )
 
-    assert captured["deployment"] == "discoverex-naturalness-experiment-dev"
-    assert result["deployment"] == "discoverex-naturalness-experiment-dev"
-    assert result["results"][0]["deployment"] == "discoverex-naturalness-experiment-dev"
+    assert captured["deployment"] == "discoverex-generate-batch-naturalness"
+    assert result["deployment"] == "discoverex-generate-batch-naturalness"
+    assert result["results"][0]["deployment"] == "discoverex-generate-batch-naturalness"
 
 
 def test_build_sweep_manifest_supports_baseline_without_parameters(

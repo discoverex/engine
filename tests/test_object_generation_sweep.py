@@ -93,13 +93,13 @@ def test_submit_manifest_records_flow_run_ids(monkeypatch) -> None:  # type: ign
             ],
         },
         prefect_api_url="https://prefect.example/api",
-        branch="dev",
+        purpose="batch",
         experiment="object-quality",
         deployment=None,
         dry_run=False,
     )
 
-    assert captured["deployment"] == "discoverex-object-quality-experiment-dev"
+    assert captured["deployment"] == "discoverex-generate-batch-object-quality"
     assert result["results"][0]["flow_run_id"] == "run-123"
 
 
@@ -190,7 +190,7 @@ def test_submit_manifest_retries_only_missing_or_unsubmitted(
     result = submit_manifest(
         manifest,
         prefect_api_url="https://prefect.example/api",
-        branch="dev",
+        purpose="batch",
         experiment="object-quality",
         deployment=None,
         dry_run=False,

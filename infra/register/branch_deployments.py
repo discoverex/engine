@@ -9,12 +9,19 @@ except ModuleNotFoundError:
     from settings import SETTINGS  # type: ignore[import-not-found,no-redef]
 
 FlowKind = Literal["generate", "verify", "animate", "combined"]
+DeploymentPurpose = Literal["standard", "batch", "debug", "backfill"]
 DEFAULT_FLOW_KIND: FlowKind = "combined"
 SUPPORTED_FLOW_KINDS: tuple[FlowKind, ...] = (
     "generate",
     "verify",
     "animate",
     "combined",
+)
+SUPPORTED_DEPLOYMENT_PURPOSES: tuple[DeploymentPurpose, ...] = (
+    "standard",
+    "batch",
+    "debug",
+    "backfill",
 )
 FLOW_ENTRYPOINTS: dict[FlowKind, str] = {
     "generate": "prefect_flow.py:run_generate_job_flow",
@@ -29,6 +36,16 @@ def branch_slug(branch: str) -> str:
     cleaned = cleaned.strip("-").lower()
     if not cleaned:
         raise ValueError("branch must not be empty")
+    return cleaned
+
+
+def purpose_slug(purpose: str) -> str:
+    cleaned = branch_slug(purpose)
+    if cleaned not in SUPPORTED_DEPLOYMENT_PURPOSES:
+        supported = ", ".join(SUPPORTED_DEPLOYMENT_PURPOSES)
+        raise ValueError(
+            f"unsupported purpose={purpose!r}; expected one of: {supported}"
+        )
     return cleaned
 
 
@@ -57,6 +74,21 @@ def deployment_name(
     return "-".join(parts)
 
 
+def deployment_name_for_purpose(
+    purpose: str,
+    *,
+    flow_kind: str = DEFAULT_FLOW_KIND,
+    engine: str = SETTINGS.engine_name,
+    suffix: str = "",
+) -> str:
+    normalized_flow_kind = normalize_flow_kind(flow_kind)
+    parts = [engine.strip(), normalized_flow_kind, purpose_slug(purpose)]
+    suffix_value = branch_slug(suffix) if str(suffix).strip() else ""
+    if suffix_value:
+        parts.append(suffix_value)
+    return "-".join(parts)
+
+
 def deployment_name_for_branch(
     branch: str,
     *,
@@ -73,7 +105,7 @@ def deployment_name_for_branch(
 
 
 def experiment_deployment_name(
-    branch: str,
+    purpose: str,
     *,
     experiment: str,
     engine: str = SETTINGS.engine_name,
@@ -81,11 +113,22 @@ def experiment_deployment_name(
     return "-".join(
         [
             engine.strip(),
+            "generate",
+            purpose_slug(purpose),
             branch_slug(experiment),
-            "experiment",
-            branch_slug(branch),
         ]
     )
+
+
+def default_queue_for_purpose(purpose: str, *, default_queue: str = "gpu-fixed") -> str:
+    normalized = purpose_slug(purpose)
+    if normalized == "standard":
+        return default_queue
+    if normalized == "batch":
+        return f"{default_queue}-batch"
+    if normalized == "debug":
+        return f"{default_queue}-debug"
+    return f"{default_queue}-backfill"
 
 
 def flow_entrypoint_for_kind(flow_kind: str) -> str:

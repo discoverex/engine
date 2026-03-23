@@ -18,7 +18,9 @@ import yaml
 from infra.register.branch_deployments import (
     DEFAULT_FLOW_KIND,
     SUPPORTED_FLOW_KINDS,
-    deployment_name_for_branch,
+    SUPPORTED_DEPLOYMENT_PURPOSES,
+    default_queue_for_purpose,
+    deployment_name_for_purpose,
     experiment_deployment_name,
 )
 
@@ -54,6 +56,8 @@ DEFAULT_OBJECT_QUALITY_SWEEP_SPEC = (
 )
 DEFAULT_EXPERIMENT_QUEUE = "gpu-fixed-batch"
 DEFAULT_EXPERIMENT_NAME = "naturalness"
+DEFAULT_DEPLOYMENT_PURPOSE = "standard"
+DEFAULT_EXPERIMENT_PURPOSE = "batch"
 
 
 def _flow_kind_for_command(command: str) -> str:
@@ -67,8 +71,13 @@ def _flow_kind_for_command(command: str) -> str:
     }[command]
 
 
-def _experiment_deployment_name(branch: str, experiment: str) -> str:
-    return experiment_deployment_name(branch, experiment=experiment)
+def _experiment_deployment_name(purpose: str, experiment: str) -> str:
+    return experiment_deployment_name(purpose, experiment=experiment)
+
+
+def _resolve_purpose(args: list[str], *, default: str) -> tuple[str, list[str]]:
+    purpose, remaining = _extract_option(args, "--purpose")
+    return (purpose or default), remaining
 
 
 def _run_infra_script(module_name: str, args: list[str]) -> int:
@@ -319,13 +328,11 @@ def register_flow(
         raise typer.BadParameter(
             f"flow_kind must be one of: {', '.join(SUPPORTED_FLOW_KINDS)}"
         )
-    branch, remaining = _extract_option(ctx.args, "--branch")
-    if not branch:
-        typer.secho("Error: --branch is required.", fg=typer.colors.RED)
-        raise typer.Exit(2)
+    deployment, remaining = _extract_option(ctx.args, "--deployment")
+    purpose, remaining = _resolve_purpose(remaining, default=DEFAULT_DEPLOYMENT_PURPOSE)
     submit_args = [
         "--deployment",
-        deployment_name_for_branch(branch, flow_kind=flow_kind),
+        deployment or deployment_name_for_purpose(purpose, flow_kind=flow_kind),
         *remaining,
     ]
     if not _contains_any(remaining, ("--job-spec-file", "--job-spec-json")):
@@ -358,15 +365,15 @@ def register_batch(
         raise typer.BadParameter(
             f"flow_kind must be one of: {', '.join(SUPPORTED_FLOW_KINDS)}"
         )
-    branch, remaining = _extract_option(ctx.args, "--branch")
-    if not branch:
-        typer.secho("Error: --branch is required.", fg=typer.colors.RED)
-        raise typer.Exit(2)
+    deployment, remaining = _extract_option(ctx.args, "--deployment")
+    purpose, remaining = _resolve_purpose(remaining, default=DEFAULT_DEPLOYMENT_PURPOSE)
     if _contains_any(remaining, ("--job-spec-file", "--job-spec-json")):
         raise typer.BadParameter("register batch manages job spec payloads internally")
 
     template = _load_job_spec_template(job_spec_file)
-    deployment = deployment_name_for_branch(branch, flow_kind=flow_kind)
+    resolved_deployment = deployment or deployment_name_for_purpose(
+        purpose, flow_kind=flow_kind
+    )
     rows = list(csv.DictReader(csv_path.read_text(encoding="utf-8").splitlines()))
     if not rows:
         raise typer.BadParameter(f"csv file {csv_path} has no data rows")
@@ -374,7 +381,7 @@ def register_batch(
     for row_index, row in enumerate(rows, start=1):
         submit_args = [
             "--deployment",
-            deployment,
+            resolved_deployment,
             *remaining,
             "--job-spec-json",
             _build_job_spec_json_for_row(template, row, row_index=row_index),
@@ -401,13 +408,13 @@ def register_experiment_sweep(
         resolve_path=True,
     ),
 ) -> None:
-    branch, remaining = _extract_option(ctx.args, "--branch")
+    deployment, remaining = _extract_option(ctx.args, "--deployment")
+    purpose, remaining = _resolve_purpose(remaining, default=DEFAULT_EXPERIMENT_PURPOSE)
     submit_args = [str(sweep_spec)]
-    if branch:
-        submit_args.extend(
-            ["--deployment", _experiment_deployment_name(branch, experiment)]
-        )
-        submit_args.extend(["--branch", branch])
+    submit_args.extend(
+        ["--deployment", deployment or _experiment_deployment_name(purpose, experiment)]
+    )
+    submit_args.extend(["--purpose", purpose])
     submit_args.extend(["--experiment", experiment])
     submit_args.extend(remaining)
     exit_code = _run_infra_script(
@@ -434,13 +441,13 @@ def register_object_quality_sweep(
         resolve_path=True,
     ),
 ) -> None:
-    branch, remaining = _extract_option(ctx.args, "--branch")
+    deployment, remaining = _extract_option(ctx.args, "--deployment")
+    purpose, remaining = _resolve_purpose(remaining, default=DEFAULT_EXPERIMENT_PURPOSE)
     submit_args = [str(sweep_spec)]
-    if branch:
-        submit_args.extend(
-            ["--deployment", _experiment_deployment_name(branch, experiment)]
-        )
-        submit_args.extend(["--branch", branch])
+    submit_args.extend(
+        ["--deployment", deployment or _experiment_deployment_name(purpose, experiment)]
+    )
+    submit_args.extend(["--purpose", purpose])
     submit_args.extend(["--experiment", experiment])
     submit_args.extend(remaining)
     exit_code = _run_infra_script(
@@ -458,19 +465,27 @@ def register_object_quality_sweep(
 def deploy_experiment(
     ctx: typer.Context,
     experiment: str = typer.Option(DEFAULT_EXPERIMENT_NAME, "--experiment"),
+    purpose: str = typer.Option(
+        DEFAULT_EXPERIMENT_PURPOSE,
+        "--purpose",
+        help=f"One of: {', '.join(SUPPORTED_DEPLOYMENT_PURPOSES)}.",
+    ),
 ) -> None:
-    branch, remaining = _extract_option(ctx.args, "--branch")
+    deployment_name, remaining = _extract_option(ctx.args, "--deployment-name")
     deploy_args = [
         "--flow-kind",
         "generate",
+        "--purpose",
+        purpose,
         "--work-queue-name",
-        DEFAULT_EXPERIMENT_QUEUE,
+        default_queue_for_purpose(purpose, default_queue="gpu-fixed"),
     ]
-    if branch:
-        deploy_args.extend(
-            ["--deployment-name", _experiment_deployment_name(branch, experiment)]
-        )
-        deploy_args.extend(["--branch", branch])
+    deploy_args.extend(
+        [
+            "--deployment-name",
+            deployment_name or _experiment_deployment_name(purpose, experiment),
+        ]
+    )
     deploy_args.extend(remaining)
     exit_code = _run_infra_script(
         "infra.register.deploy_prefect_flows",
@@ -498,10 +513,8 @@ def deploy(ctx: typer.Context) -> None:
     help="Compatibility alias for combined-flow registration.",
 )
 def register(ctx: typer.Context) -> None:
-    branch, remaining = _extract_option(ctx.args, "--branch")
-    if not branch:
-        typer.secho("Error: --branch is required.", fg=typer.colors.RED)
-        raise typer.Exit(2)
+    deployment, remaining = _extract_option(ctx.args, "--deployment")
+    purpose, remaining = _resolve_purpose(remaining, default=DEFAULT_DEPLOYMENT_PURPOSE)
     command, remaining = _extract_option(remaining, "--command")
     flow_kind: str = DEFAULT_FLOW_KIND
     if command:
@@ -509,7 +522,7 @@ def register(ctx: typer.Context) -> None:
         remaining = ["--command", command, *remaining]
     submit_args = [
         "--deployment",
-        deployment_name_for_branch(branch, flow_kind=flow_kind),
+        deployment or deployment_name_for_purpose(purpose, flow_kind=flow_kind),
         *remaining,
     ]
     if not _contains_any(remaining, ("--job-spec-file", "--job-spec-json")):

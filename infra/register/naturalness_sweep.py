@@ -24,6 +24,7 @@ except ImportError:  # pragma: no cover - direct script execution path
     _settings = importlib.import_module("settings")
 
 experiment_deployment_name = _branch_deployments.experiment_deployment_name
+SUPPORTED_DEPLOYMENT_PURPOSES = _branch_deployments.SUPPORTED_DEPLOYMENT_PURPOSES
 SETTINGS = _settings.SETTINGS
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -47,7 +48,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--prefect-api-url", default=SETTINGS.prefect_api_url)
     parser.add_argument("--deployment", default=None)
-    parser.add_argument("--branch", default=SETTINGS.register_flow_ref or "dev")
+    parser.add_argument(
+        "--purpose",
+        choices=SUPPORTED_DEPLOYMENT_PURPOSES,
+        default="batch",
+    )
     parser.add_argument("--experiment", default=DEFAULT_EXPERIMENT)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--output", default=None, help="Optional manifest output path")
@@ -379,14 +384,14 @@ def submit_manifest(
     manifest: dict[str, Any],
     *,
     prefect_api_url: str,
-    branch: str,
+    purpose: str,
     experiment: str,
     deployment: str | None,
     dry_run: bool,
 ) -> dict[str, Any]:
     submit_job_spec = _load_submit_job_spec()
     resolved_deployment = deployment or experiment_deployment_name(
-        branch,
+        purpose,
         experiment=experiment,
     )
     results: list[dict[str, Any]] = []
@@ -453,7 +458,7 @@ def main() -> int:
     output = submit_manifest(
         manifest,
         prefect_api_url=args.prefect_api_url,
-        branch=args.branch,
+        purpose=args.purpose,
         experiment=args.experiment,
         deployment=args.deployment,
         dry_run=bool(args.dry_run),

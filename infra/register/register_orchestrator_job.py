@@ -22,7 +22,7 @@ else:
 
 from infra.register.branch_deployments import (
     DEFAULT_FLOW_KIND,
-    deployment_name_for_branch,
+    deployment_name_for_purpose,
     flow_entrypoint_for_kind,
 )
 from infra.register.settings import SETTINGS
@@ -467,8 +467,8 @@ def _resolved_deployment_name(args: argparse.Namespace) -> str:
     explicit = str(args.deployment or "").strip()
     if explicit:
         return explicit
-    return deployment_name_for_branch(
-        SETTINGS.register_flow_ref or "dev",
+    return deployment_name_for_purpose(
+        SETTINGS.register_deployment_purpose or "standard",
         flow_kind=_flow_kind_for_command(args.command),
     )
 
@@ -496,9 +496,11 @@ def _resolved_deployment_name_from_job_spec(
     # Fallback to engine_run if inputs missing? JobSpec doesn't have engine_run anymore.
 
     if not command:
-        return deployment_name_for_branch(SETTINGS.register_flow_ref or "dev")
-    return deployment_name_for_branch(
-        SETTINGS.register_flow_ref or "dev",
+        return deployment_name_for_purpose(
+            SETTINGS.register_deployment_purpose or "standard"
+        )
+    return deployment_name_for_purpose(
+        SETTINGS.register_deployment_purpose or "standard",
         flow_kind=_flow_kind_for_command(command),
     )
 
