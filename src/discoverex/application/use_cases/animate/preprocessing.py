@@ -8,10 +8,14 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from PIL import Image, ImageFilter
 
 logger = logging.getLogger(__name__)
+
+# 이 임계값 이하의 이미지는 업스케일 대상
+UPSCALE_THRESHOLD = 200
 
 
 def white_anchor(image: Image.Image, tolerance: int = 30) -> Image.Image:
@@ -63,6 +67,13 @@ def white_anchor(image: Image.Image, tolerance: int = 30) -> Image.Image:
     return Image.fromarray(s_arr)
 
 
+def _compute_scale_factor(ow: int, oh: int, canvas_size: int, target_ratio: float = 0.65) -> float:
+    """Calculate upscale factor so the image fills ~target_ratio of canvas."""
+    target_px = int(canvas_size * target_ratio)
+    factor = target_px / max(ow, oh)
+    return min(factor, 8.0)
+
+
 def preprocess_image_simple(
     image_path: str | Path,
     output_path: str | Path,
@@ -71,10 +82,20 @@ def preprocess_image_simple(
     scale: float = 0.65,
     headroom_top: float = 0.18,
     headroom_bottom: float = 0.15,
+    upscaler: Any = None,
+    art_style: str = "unknown",
 ) -> Path:
     """Preprocess image with white background for WAN I2V input."""
     src = Image.open(image_path).convert("RGBA")
     ow, oh = src.size
+
+    # 소형 이미지 업스케일: max 변이 임계값 미만이면 업스케일
+    if upscaler and max(ow, oh) < UPSCALE_THRESHOLD:
+        factor = _compute_scale_factor(ow, oh, width)
+        upscaled_path = upscaler.upscale(Path(image_path), factor, art_style)
+        src = Image.open(upscaled_path).convert("RGBA")
+        logger.info("[Preprocess] 업스케일 %dx%d -> %dx%d (x%.1f)", ow, oh, *src.size, factor)
+        ow, oh = src.size
 
     if ow <= width and oh <= height:
         target_w, target_h = ow, oh

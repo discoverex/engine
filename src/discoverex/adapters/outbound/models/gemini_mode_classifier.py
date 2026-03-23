@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from discoverex.domain.animate import (
+    ArtStyle,
     FacingDirection,
     ModeClassification,
     ProcessingMode,
@@ -137,6 +138,11 @@ def _parse_mode_response(raw: str) -> ModeClassification:
         else:
             suggested_action = "nudge_horizontal"
 
+    try:
+        art_style = ArtStyle(data.get("art_style", "unknown"))
+    except ValueError:
+        art_style = ArtStyle.UNKNOWN
+
     return ModeClassification(
         processing_mode=mode,
         facing_direction=facing,
@@ -145,4 +151,5 @@ def _parse_mode_response(raw: str) -> ModeClassification:
         subject_desc=data.get("subject_desc", ""),
         reason=data.get("reason", ""),
         suggested_action=suggested_action,
+        art_style=art_style,
     )

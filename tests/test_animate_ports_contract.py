@@ -9,6 +9,7 @@ from discoverex.adapters.outbound.animate.dummy_animate import (
     DummyAnimationValidator,
     DummyBgRemover,
     DummyFormatConverter,
+    DummyImageUpscaler,
     DummyKeyframeGenerator,
     DummyMaskGenerator,
 )
@@ -161,3 +162,11 @@ class TestMaskGeneratorContract:
         result = adapter.generate(_IMAGE, [0.1, 0.2, 0.9, 0.8])
         assert isinstance(result, Path)
         assert result.exists()
+
+
+class TestImageUpscalerContract:
+    def test_upscale(self) -> None:
+        adapter = DummyImageUpscaler()
+        result = adapter.upscale(_IMAGE, 4.0, "illustration")
+        assert isinstance(result, Path)
+        assert result == _IMAGE

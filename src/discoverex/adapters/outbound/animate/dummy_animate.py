@@ -87,3 +87,12 @@ class DummyMaskGenerator:
         out = Path(tempfile.mkdtemp()) / "dummy_mask.png"
         out.write_bytes(b"dummy_mask")
         return out
+
+
+class DummyImageUpscaler:
+    """ImageUpscalerPort dummy — returns input unchanged."""
+
+    def upscale(
+        self, image: Path, scale_factor: float, art_style: str = "illustration",
+    ) -> Path:
+        return image

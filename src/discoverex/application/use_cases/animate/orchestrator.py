@@ -53,6 +53,7 @@ class AnimateOrchestrator:
     mask_generator: Any
     keyframe_generator: Any
     format_converter: Any
+    image_upscaler: Any = None
     output_dir: Path = field(default_factory=lambda: Path("artifacts/animate"))
     max_retries: int = 7
 
@@ -92,9 +93,14 @@ class AnimateOrchestrator:
         out_dir = self.output_dir / "motion"
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Step 0: Preprocess
+        # Step 0: Preprocess (소형 이미지는 업스케일 후 캔버스 배치)
         processed = out_dir / f"{image_path.stem}_processed.png"
-        preprocess_image_simple(image_path, processed)
+        art_style = mode.art_style.value if hasattr(mode, "art_style") else "unknown"
+        preprocess_image_simple(
+            image_path, processed,
+            upscaler=self.image_upscaler,
+            art_style=art_style,
+        )
 
         # Step 1: Vision analysis
         analysis = self.vision_analyzer.analyze(processed)

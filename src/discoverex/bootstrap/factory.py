@@ -179,22 +179,20 @@ def build_animate_context(
         if hasattr(adapter, "load"):
             adapter.load(handle)
 
-    bg_remover = instantiate(cfg.animate_adapters.bg_remover.as_kwargs())
-    numerical_validator = instantiate(cfg.animate_adapters.numerical_validator.as_kwargs())
-    mask_generator = instantiate(cfg.animate_adapters.mask_generator.as_kwargs())
-    keyframe_generator = instantiate(cfg.animate_adapters.keyframe_generator.as_kwargs())
-    format_converter = instantiate(cfg.animate_adapters.format_converter.as_kwargs())
+    _inst = lambda c: instantiate(c.as_kwargs())  # noqa: E731
+    aa = cfg.animate_adapters
 
     return AnimateOrchestrator(
         mode_classifier=mode_classifier,
         vision_analyzer=vision_analyzer,
         animation_generator=animation_generator,
-        numerical_validator=numerical_validator,
+        numerical_validator=_inst(aa.numerical_validator),
         ai_validator=ai_validator,
         post_motion_classifier=post_motion,
-        bg_remover=bg_remover,
-        mask_generator=mask_generator,
-        keyframe_generator=keyframe_generator,
-        format_converter=format_converter,
+        bg_remover=_inst(aa.bg_remover),
+        mask_generator=_inst(aa.mask_generator),
+        keyframe_generator=_inst(aa.keyframe_generator),
+        format_converter=_inst(aa.format_converter),
+        image_upscaler=_inst(aa.image_upscaler),
         max_retries=cfg.max_retries,
     )

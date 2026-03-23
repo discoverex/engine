@@ -150,3 +150,9 @@ class MaskGenerationPort(Protocol):
     def generate(
         self, image_path: Path, moving_zone: list[float], output_dir: Path | None = None
     ) -> Path: ...
+
+
+class ImageUpscalerPort(Protocol):
+    """Upscale small images before WAN canvas placement."""
+
+    def upscale(self, image: Path, scale_factor: float, art_style: str = "illustration") -> Path: ...

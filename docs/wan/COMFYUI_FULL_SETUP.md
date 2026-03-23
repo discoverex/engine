@@ -20,7 +20,9 @@
     ↓
 [6] WAN 모델 4종 다운로드 + 경로 정리
     ↓
-[7] 실행 확인
+[7] Real-ESRGAN 업스케일 모델 설치
+    ↓
+[8] 실행 확인
 ```
 
 ---
@@ -232,7 +234,7 @@ cd ComfyUI-VideoHelperSuite && pip install -r requirements.txt && cd ..
 
 ## 6. WAN 모델 다운로드 + 경로 정리
 
-4개 모델 파일을 ComfyUI의 models 디렉토리에 다운로드합니다.
+5개 모델 파일을 ComfyUI의 models 디렉토리에 다운로드합니다 (WAN 4종 + 업스케일 1종).
 ComfyUI venv가 활성화된 상태에서 진행합니다.
 
 ```bash
@@ -303,10 +305,75 @@ ls -lh vae/wan_2.1_vae.safetensors
 | CLIP Vision | ~1.2GB | `models/clip_vision/clip_vision_h.safetensors` |
 | CLIP Text | ~6.3GB | `models/clip/umt5_xxl_fp8_e4m3fn_scaled.safetensors` |
 | VAE | ~243MB | `models/vae/wan_2.1_vae.safetensors` |
+| Real-ESRGAN x4 | ~64MB | `models/upscale_models/RealESRGAN_x4plus.pth` |
 
 ---
 
-## 7. 실행 확인
+## 7. Real-ESRGAN 업스케일 모델 설치
+
+### 7-1. 왜 필요한가?
+
+WAN I2V 모델은 **480×480** 해상도로 학습되었습니다. 입력 이미지가 이 크기보다 작으면 480×480 캔버스에 배치하는데, **원본이 매우 작은 경우(예: 60×83px)** 스프라이트가 캔버스의 2~3%만 차지하여 다음 문제가 발생합니다:
+
+- WAN이 모션을 제대로 생성하지 못함 (대상이 너무 작음)
+- Ghosting 아티팩트 발생
+- 모션 검증(수치 검증) 실패율 증가
+
+**해결 방식**: 소형 이미지를 WAN에 전달하기 전에 **Real-ESRGAN 4x** AI 초해상도 모델로 업스케일하여 적절한 크기로 만든 후 캔버스에 배치합니다.
+
+### 7-2. VRAM 영향
+
+Real-ESRGAN은 **WAN 모션 생성 이전 단계**에서 실행되며, ComfyUI가 자동으로 VRAM을 관리합니다:
+
+```
+[Real-ESRGAN 로드]  ██░░░░░░░░░░  (~64MB, GPU)
+[업스케일 실행]     ████░░░░░░░░  (타일 512×512 단위)
+[ESRGAN 해제]       ░░░░░░░░░░░░  (finally 블록에서 즉시 CPU로 이동)
+[VRAM 캐시 정리]    ░░░░░░░░░░░░  (torch.cuda.empty_cache)
+[WAN I2V 로드]      ░░░░████████  (~8GB, ESRGAN과 겹치지 않음)
+```
+
+- `nodes_upscale_model.py`의 `finally` 블록에서 **실행 즉시 GPU → CPU 이동**
+- WAN 로드 시 `load_models_gpu()`가 `free_memory()` 호출하여 **이중 안전장치**
+- 소형 이미지는 타일 1개로 처리 → 작업 VRAM 극소
+- **WAN 생성에 VRAM 영향 없음**
+
+### 7-3. 모델 다운로드
+
+```bash
+cd ~/ComfyUI/models/upscale_models
+
+# Real-ESRGAN x4 모델 다운로드 (~64MB, 수초)
+wget -O RealESRGAN_x4plus.pth \
+  "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth"
+```
+
+### 7-4. 설치 확인
+
+```bash
+ls -lh ~/ComfyUI/models/upscale_models/RealESRGAN_x4plus.pth
+# -rw-r--r-- 64M RealESRGAN_x4plus.pth 가 출력되면 정상
+```
+
+### 7-5. 모델 정보
+
+| 항목 | 값 |
+|------|-----|
+| 모델 | RealESRGAN_x4plus |
+| 파일 크기 | ~64MB |
+| 업스케일 배율 | 4x (고정) |
+| 처리 방식 | 타일(512×512) 단위, OOM 시 타일 자동 축소 |
+| VRAM 사용 | ~200MB (소형 이미지 기준, 타일 1개) |
+| 용도 | 소형 스프라이트(~200px 이하) → WAN 입력 전 품질 보존 업스케일 |
+| 적합 대상 | 일러스트, 사진, 벡터 이미지 |
+| 부적합 대상 | 픽셀아트 (nearest-neighbor 방식이 더 적합) |
+
+> **참고**: 이 모델은 ComfyUI의 `ImageUpscaleWithModel` 노드에서 사용됩니다.
+> Spandrel 라이브러리가 모델을 자동으로 인식하므로 별도 설정은 필요 없습니다.
+
+---
+
+## 8. 실행 확인
 
 ### ComfyUI 서버 시작
 

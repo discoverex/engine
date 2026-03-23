@@ -42,6 +42,14 @@ class TravelDirection(str, Enum):
     NONE = "none"
 
 
+class ArtStyle(str, Enum):
+    ILLUSTRATION = "illustration"
+    PHOTO = "photo"
+    PIXEL_ART = "pixel_art"
+    VECTOR = "vector"
+    UNKNOWN = "unknown"
+
+
 # ---------------------------------------------------------------------------
 # Classification / analysis entities
 # ---------------------------------------------------------------------------
@@ -55,6 +63,7 @@ class ModeClassification(BaseModel):
     facing_direction: FacingDirection = FacingDirection.NONE
     suggested_action: str = ""
     reason: str = ""
+    art_style: ArtStyle = ArtStyle.UNKNOWN
 
 
 class VisionAnalysis(BaseModel):

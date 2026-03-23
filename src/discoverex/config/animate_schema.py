@@ -21,6 +21,11 @@ class AnimateAdaptersConfig(BaseModel):
     mask_generator: HydraComponentConfig
     keyframe_generator: HydraComponentConfig
     format_converter: HydraComponentConfig
+    image_upscaler: HydraComponentConfig = Field(
+        default_factory=lambda: HydraComponentConfig(
+            target="discoverex.adapters.outbound.animate.pil_upscaler.PilImageUpscaler"
+        )
+    )
 
 
 class AnimateThresholdsConfig(BaseModel):

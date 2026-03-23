@@ -184,7 +184,15 @@ CRITICAL: Put decision fields FIRST. Keep subject_desc under 15 words.
   "processing_mode": "<keyframe_only | motion_needed>",
   "facing_direction": "<left | right | up | down | none>",
   "suggested_action": "<nudge_horizontal | nudge_vertical | wobble | spin | bounce | pop | launch | float | parabolic | hop | (empty string)>",
+  "art_style": "<illustration | photo | pixel_art | vector | unknown>",
   "deformable_reasoning": "<1 sentence: what structural feature you observed>",
   "subject_desc": "<under 15 words: brief visual description>",
   "reason": "<1 sentence: summary referencing structural observations>"
-}"""
+}
+
+ART STYLE guide:
+  "pixel_art"    : blocky, low-resolution, visible individual pixels, retro game style
+  "illustration" : hand-drawn or digitally painted artwork, anime/cartoon style
+  "photo"        : photographic or photorealistic image
+  "vector"       : clean geometric shapes, sharp edges, flat colors (SVG-like)
+  "unknown"      : cannot determine"""
