@@ -1,0 +1,19 @@
+{
+  "region_id": "r-fe5494814b",
+  "stage": "coarse",
+  "selection_strategy": "primary",
+  "selected_variant_id": "rot0-scale0.90-base",
+  "selected_bbox": {
+    "x": 60.0,
+    "y": 780.0,
+    "w": 120.0,
+    "h": 120.0
+  },
+  "score": 0.7548270300030708,
+  "feature_scores": {
+    "lab": 0.3406736850738525,
+    "lbp": 0.23309145867824554
+  },
+  "variant_image_ref": "/var/lib/discoverex/engine-runs/71e3cbae-5c95-4c5a-ab05-19ca2d94b783/attempt-1/scenes/scene-1d583414be6d/v-20260323104849/assets/patch_selection/r-fe5494814b/coarse.selected.variant.png",
+  "variant_config_ref": "/var/lib/discoverex/engine-runs/71e3cbae-5c95-4c5a-ab05-19ca2d94b783/attempt-1/scenes/scene-1d583414be6d/v-20260323104849/assets/patch_selection/r-fe5494814b/coarse.selected.variant.json"
+}

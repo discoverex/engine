@@ -1,0 +1,14 @@
+{
+  "region_id": "r-72a29e0efe",
+  "stage": "coarse",
+  "variant_id": "rot0-scale1.00-base",
+  "variant_config": {
+    "rotation_deg": 25.0,
+    "scale_factor": 1.0,
+    "appearance_variant_id": "base",
+    "saturation_mul": 1.0,
+    "contrast_mul": 1.0,
+    "sharpness_mul": 1.0
+  },
+  "variant_image_ref": "/var/lib/discoverex/engine-runs/71e3cbae-5c95-4c5a-ab05-19ca2d94b783/attempt-1/scenes/scene-1d583414be6d/v-20260323104849/assets/patch_selection/r-72a29e0efe/coarse.selected.variant.png"
+}
