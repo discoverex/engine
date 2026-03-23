@@ -121,12 +121,12 @@ def _save_webm(
 def _save_lottie(
     frames: list[Path], out: Path, fps: int,
     max_size: int | None, png_optimize: bool,
-    canvas_padding: float = 1.5,
+    canvas_size: int = 480,
 ) -> Path | None:
     """Lottie JSON 생성.
 
-    canvas_padding: 캔버스를 이미지 대비 몇 배로 할지 (1.0=동일, 1.5=1.5배).
-      투명 배경 여백을 추가하여 키프레임 애니메이션이 잘리지 않게 함.
+    canvas_size: 캔버스 크기 (정사각형). 이미지는 원본 크기 유지, 캔버스 중앙 배치.
+      기준점(anchor)은 이미지 좌상단(left-top).
     """
     try:
         first = Image.open(frames[0])
@@ -139,10 +139,8 @@ def _save_lottie(
             iw, ih = ow, oh
             resize = False
 
-        # 캔버스 = 이미지 × padding (투명 배경 여백)
-        cw = int(iw * canvas_padding) // 2 * 2
-        ch = int(ih * canvas_padding) // 2 * 2
-        # 이미지 좌상단 위치 (캔버스 중앙 배치 기준)
+        cw, ch = canvas_size, canvas_size
+        # 이미지 좌상단 위치 (캔버스 중앙 배치)
         img_x = (cw - iw) / 2
         img_y = (ch - ih) / 2
 
