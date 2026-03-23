@@ -17,9 +17,15 @@ from discoverex.application.use_cases.variantpack.execute import (
     worker_artifact_entries,
 )
 from discoverex.application.use_cases.variantpack.parse import parse_variant_specs
+from discoverex.application.use_cases.variantpack.fine_replay import (
+    refine_replay_regions,
+)
 from discoverex.application.use_cases.variantpack.replay import (
+    build_replay_fixture_inputs,
     build_fixed_replay_inputs,
+    has_replay_fixture_inputs,
     has_fixed_replay_inputs,
+    replay_background_asset_ref,
 )
 from discoverex.application.use_cases.variantpack.runtime import (
     variant_prepare_dir,
@@ -64,7 +70,11 @@ def _prepare_shared_inputs(
     background, background_prompt_record = _build_background_stage.submit(
         context=base_context,
         scene_dir=prepare_dir,
-        background_asset_ref=str(args.get("background_asset_ref", "") or "") or None,
+        background_asset_ref=(
+            str(args.get("background_asset_ref", "") or "").strip()
+            or replay_background_asset_ref(args)
+            or None
+        ),
         background_prompt=str(args.get("background_prompt", "") or "") or None,
         background_negative_prompt=str(args.get("background_negative_prompt", "") or "") or None,
     ).result()
@@ -79,7 +89,26 @@ def _prepare_shared_inputs(
     background = _materialize_background_asset.submit(background, prepare_dir).result()
     object_prompt = str(args.get("object_prompt", "") or "")
     object_negative_prompt = str(args.get("object_negative_prompt", "") or "")
-    if has_fixed_replay_inputs(args):
+    if has_replay_fixture_inputs(args):
+        candidate_regions, generated_objects, fixture = build_replay_fixture_inputs(
+            args=args,
+            scene_dir=prepare_dir,
+            object_prompt=object_prompt,
+            object_negative_prompt=object_negative_prompt,
+            object_model_id=str(getattr(base_context.object_generator_model, "model_id", "") or ""),
+            object_sampler=str(getattr(base_context.object_generator_model, "sampler", "") or ""),
+            object_steps=int(getattr(base_context.object_generator_model, "default_num_inference_steps", 0) or 0),
+            object_guidance_scale=float(getattr(base_context.object_generator_model, "default_guidance_scale", 0.0) or 0.0),
+            object_seed=getattr(base_context.object_generator_model, "seed", None),
+        )
+        candidate_regions = refine_replay_regions(
+            config=config,
+            scene_dir=prepare_dir,
+            background=background,
+            regions=candidate_regions,
+        )
+        background.metadata["replay_fixture_ref"] = str(fixture["fixture_path"])
+    elif has_fixed_replay_inputs(args):
         candidate_regions, generated_objects = build_fixed_replay_inputs(
             args=args,
             object_prompt=object_prompt,

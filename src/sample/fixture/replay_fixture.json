@@ -1,0 +1,56 @@
+{
+  "background_asset_ref": "background/generated-background.canvas.png",
+  "regions": [
+    {
+      "region_id": "r-f29f2c82cc",
+      "proposal_rank": 1,
+      "object_label": "butterfly",
+      "object_prompt": "butterfly",
+      "object_negative_prompt": "(worst quality, low quality, illustration, 3d, 2d, painting, cartoons, sketch), open mouth",
+      "selected_variant_id": "rot0-scale1.00-base",
+      "coarse_selected_bbox": {
+        "x": 600.0,
+        "y": 720.0,
+        "w": 120.0,
+        "h": 120.0
+      },
+      "coarse_selection_ref": "regions/r-f29f2c82cc/coarse.selection.json",
+      "coarse_variant_image_ref": "regions/r-f29f2c82cc/coarse.selected.variant.png",
+      "coarse_variant_config_ref": "regions/r-f29f2c82cc/coarse.selected.variant.json"
+    },
+    {
+      "region_id": "r-742725976a",
+      "proposal_rank": 2,
+      "object_label": "antique brass key",
+      "object_prompt": "antique brass key",
+      "object_negative_prompt": "(worst quality, low quality, illustration, 3d, 2d, painting, cartoons, sketch), open mouth",
+      "selected_variant_id": "rot0-scale1.00-base",
+      "coarse_selected_bbox": {
+        "x": 420.0,
+        "y": 600.0,
+        "w": 120.0,
+        "h": 120.0
+      },
+      "coarse_selection_ref": "regions/r-742725976a/coarse.selection.json",
+      "coarse_variant_image_ref": "regions/r-742725976a/coarse.selected.variant.png",
+      "coarse_variant_config_ref": "regions/r-742725976a/coarse.selected.variant.json"
+    },
+    {
+      "region_id": "r-e25af2f215",
+      "proposal_rank": 3,
+      "object_label": "green dinosaur",
+      "object_prompt": "green dinosaur",
+      "object_negative_prompt": "(worst quality, low quality, illustration, 3d, 2d, painting, cartoons, sketch), open mouth",
+      "selected_variant_id": "rot0-scale1.10-base",
+      "coarse_selected_bbox": {
+        "x": 288.0,
+        "y": 792.0,
+        "w": 144.0,
+        "h": 144.0
+      },
+      "coarse_selection_ref": "regions/r-e25af2f215/coarse.selection.json",
+      "coarse_variant_image_ref": "regions/r-e25af2f215/coarse.selected.variant.png",
+      "coarse_variant_config_ref": "regions/r-e25af2f215/coarse.selected.variant.json"
+    }
+  ]
+}

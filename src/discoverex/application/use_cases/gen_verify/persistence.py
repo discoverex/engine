@@ -16,6 +16,11 @@ from discoverex.application.services.worker_artifacts import (
 from discoverex.application.use_cases.naturalness_evaluation import (
     evaluate_scene_naturalness,
 )
+from discoverex.application.use_cases.object_quality import (
+    evaluate_generated_objects,
+    write_contact_sheet,
+)
+from discoverex.application.use_cases.gen_verify.objects.types import GeneratedObjectAsset
 from discoverex.application.use_cases.output_exports import export_output_bundle
 from discoverex.artifact_paths import naturalness_json_path
 from discoverex.domain.scene import Scene
@@ -126,11 +131,186 @@ def _naturalness_metrics(report_path: Path | None) -> dict[str, float]:
     return metrics
 
 
-def _sweep_case_results_dir(*, artifacts_root: str | Path, sweep_id: str) -> Path:
+def _load_naturalness_payload(report_path: Path | None) -> dict[str, Any]:
+    if report_path is None or not report_path.exists():
+        return {}
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _weighted_mean_min(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    return round(0.7 * (sum(values) / len(values)) + 0.3 * min(values), 4)
+
+
+def _object_label(*, region_attrs: dict[str, Any], region_id: str) -> str:
+    for key in ("object_label", "object_prompt_resolved", "object_prompt"):
+        value = str(region_attrs.get(key, "") or "").strip()
+        if value:
+            return value
+    return region_id
+
+
+def _scene_object_assets(scene: Scene) -> list[GeneratedObjectAsset]:
+    assets: list[GeneratedObjectAsset] = []
+    for region in scene.regions:
+        attrs = region.attributes
+        object_ref = str(attrs.get("object_image_ref", "") or "").strip()
+        mask_ref = str(attrs.get("object_mask_ref", "") or "").strip()
+        if not object_ref or not mask_ref:
+            continue
+        bbox = region.geometry.bbox
+        assets.append(
+            GeneratedObjectAsset(
+                region_id=region.region_id,
+                candidate_ref=str(attrs.get("candidate_image_ref", "") or object_ref),
+                object_ref=object_ref,
+                object_mask_ref=mask_ref,
+                raw_alpha_mask_ref=str(attrs.get("raw_alpha_mask_ref", "") or mask_ref),
+                original_object_ref=object_ref,
+                original_object_mask_ref=mask_ref,
+                original_raw_alpha_mask_ref=str(attrs.get("raw_alpha_mask_ref", "") or mask_ref),
+                raw_generated_ref=str(attrs.get("raw_generated_image_ref", "") or object_ref),
+                sam_object_ref=str(attrs.get("sam_object_image_ref", "") or object_ref),
+                sam_mask_ref=str(attrs.get("sam_object_mask_ref", "") or mask_ref),
+                mask_source=str(attrs.get("mask_source", "") or "scene_region"),
+                width=max(1, int(round(float(bbox.w)))),
+                height=max(1, int(round(float(bbox.h)))),
+                object_prompt=str(attrs.get("object_prompt_resolved", "") or ""),
+                object_negative_prompt=str(
+                    attrs.get("object_negative_prompt_resolved", "") or ""
+                ),
+                object_model_id=str(attrs.get("object_model_id", "") or ""),
+                object_sampler=str(attrs.get("object_sampler", "") or ""),
+                object_steps=int(attrs.get("object_steps", 0) or 0),
+                object_guidance_scale=float(
+                    attrs.get("object_guidance_scale", 0.0) or 0.0
+                ),
+                object_seed=attrs.get("object_seed"),
+            )
+        )
+    return assets
+
+
+def _evaluate_scene_object_quality(saved_dir: Path, scene: Scene) -> tuple[dict[str, Any], str]:
+    assets = _scene_object_assets(scene)
+    prompt = " | ".join(
+        _object_label(region_attrs=region.attributes, region_id=region.region_id)
+        for region in scene.regions
+    )
+    evaluation = evaluate_generated_objects(
+        output_dir=saved_dir,
+        object_prompt=prompt,
+        generated_objects=assets,
+    )
+    gallery_ref = ""
+    if evaluation.scores:
+        seed = None
+        for asset in assets:
+            if asset.object_seed is not None:
+                seed = int(asset.object_seed)
+                break
+        gallery_ref = str(
+            write_contact_sheet(
+                output_dir=saved_dir,
+                evaluation=evaluation,
+                combo_label=scene.meta.scene_id,
+                seed=seed,
+            )
+        )
+    return evaluation.to_dict(), gallery_ref
+
+
+def _object_score_payloads(
+    *,
+    scene: Scene,
+    naturalness_payload: dict[str, Any],
+    object_quality: dict[str, Any],
+) -> list[dict[str, Any]]:
+    naturalness_regions = {}
+    naturalness = naturalness_payload.get("naturalness", {})
+    if isinstance(naturalness, dict):
+        items = naturalness.get("regions", [])
+        if isinstance(items, list):
+            for item in items:
+                if isinstance(item, dict):
+                    naturalness_regions[str(item.get("region_id", "")).strip()] = item
+    object_regions = {}
+    scores = object_quality.get("scores", [])
+    if isinstance(scores, list):
+        for item in scores:
+            if isinstance(item, dict):
+                object_regions[str(item.get("object_ref", "")).strip()] = item
+    payloads: list[dict[str, Any]] = []
+    for region in scene.regions:
+        attrs = region.attributes
+        object_ref = str(attrs.get("object_image_ref", "") or "").strip()
+        quality = object_regions.get(object_ref, {})
+        natural = naturalness_regions.get(region.region_id, {})
+        payloads.append(
+            {
+                "region_id": region.region_id,
+                "object_label": _object_label(
+                    region_attrs=attrs,
+                    region_id=region.region_id,
+                ),
+                "verify_score": float(attrs.get("verify_score", 0.0) or 0.0),
+                "verify_pass": bool(attrs.get("verify_pass", False)),
+                "naturalness_score": float(
+                    natural.get("natural_hidden_score", 0.0) or 0.0
+                ),
+                "placement_fit": float(natural.get("placement_fit", 0.0) or 0.0),
+                "seam_visibility": float(natural.get("seam_visibility", 0.0) or 0.0),
+                "saliency_lift": float(natural.get("saliency_lift", 0.0) or 0.0),
+                "object_quality_score": float(quality.get("overall_score", 0.0) or 0.0),
+                "object_quality_subscores": dict(quality.get("subscores", {}) or {}),
+            }
+        )
+    return payloads
+
+
+def _representative_scores(
+    *,
+    scene: Scene,
+    naturalness_payload: dict[str, Any],
+    object_quality: dict[str, Any],
+) -> dict[str, float]:
+    object_scores = _object_score_payloads(
+        scene=scene,
+        naturalness_payload=naturalness_payload,
+        object_quality=object_quality,
+    )
+    verify_values = [float(item["verify_score"]) for item in object_scores]
+    naturalness_values = [float(item["naturalness_score"]) for item in object_scores]
+    object_values = [float(item["object_quality_score"]) for item in object_scores]
+    verify_repr = _weighted_mean_min(verify_values)
+    naturalness_repr = _weighted_mean_min(naturalness_values)
+    object_repr = _weighted_mean_min(object_values)
+    return {
+        "verify_repr": verify_repr,
+        "naturalness_repr": naturalness_repr,
+        "object_repr": object_repr,
+        "composite_repr": round(
+            0.5 * verify_repr + 0.3 * naturalness_repr + 0.2 * object_repr,
+            4,
+        ),
+    }
+
+
+def _sweep_case_results_dir(
+    *,
+    artifacts_root: str | Path,
+    sweep_id: str,
+    artifact_namespace: str,
+) -> Path:
     path = (
         Path(artifacts_root)
         / "experiments"
-        / "naturalness_sweeps"
+        / artifact_namespace
         / sweep_id
         / "cases"
     )
@@ -143,6 +323,9 @@ def _write_sweep_case_result(
     context: AppContextLike,
     scene: Scene,
     naturalness_artifact: Path | None,
+    naturalness_payload: dict[str, Any],
+    object_quality: dict[str, Any],
+    gallery_ref: str,
 ) -> Path | None:
     execution_snapshot = getattr(context, "execution_snapshot", None)
     if not isinstance(execution_snapshot, dict):
@@ -152,6 +335,16 @@ def _write_sweep_case_result(
         return None
     sweep_id = str(args.get("sweep_id", "")).strip()
     scenario_id = str(args.get("scenario_id", "")).strip()
+    artifact_namespace = (
+        str(args.get("sweep_artifact_namespace", "")).strip()
+        or "naturalness_sweeps"
+    )
+    collector_adapter = (
+        str(args.get("sweep_collector_adapter", "")).strip()
+        or "combined"
+    )
+    runner_type = str(args.get("sweep_runner_type", "")).strip() or "combined"
+    execution_mode = str(args.get("sweep_execution_mode", "")).strip()
     policy_id = (
         str(args.get("policy_id", "")).strip()
         or str(args.get("variant_id", "")).strip()
@@ -160,6 +353,16 @@ def _write_sweep_case_result(
     if not sweep_id or not scenario_id or not policy_id:
         return None
     metrics = _naturalness_metrics(naturalness_artifact)
+    object_scores = _object_score_payloads(
+        scene=scene,
+        naturalness_payload=naturalness_payload,
+        object_quality=object_quality,
+    )
+    representative_scores = _representative_scores(
+        scene=scene,
+        naturalness_payload=naturalness_payload,
+        object_quality=object_quality,
+    )
     payload = {
         "sweep_id": sweep_id,
         "policy_id": policy_id,
@@ -167,6 +370,10 @@ def _write_sweep_case_result(
         "combo_id": str(args.get("combo_id", "")).strip(),
         "variant_id": str(args.get("variant_id", "")).strip(),
         "search_stage": str(args.get("search_stage", "")).strip(),
+        "sweep_runner_type": runner_type,
+        "sweep_collector_adapter": collector_adapter,
+        "sweep_artifact_namespace": artifact_namespace,
+        "sweep_execution_mode": execution_mode,
         "flow_run_id": str(context.settings.execution.flow_run_id or "").strip(),
         "scene_id": scene.meta.scene_id,
         "version_id": scene.meta.version_id,
@@ -174,6 +381,10 @@ def _write_sweep_case_result(
         "failure_reason": scene.verification.final.failure_reason,
         "naturalness_metrics": metrics,
         "naturalness_artifact": str(naturalness_artifact) if naturalness_artifact else "",
+        "object_quality": object_quality,
+        "quality_gallery_ref": gallery_ref,
+        "object_scores": object_scores,
+        "representative_scores": representative_scores,
         "scene_tags": list(scene.meta.tags),
         "model_versions": dict(scene.meta.model_versions),
         "verification": _to_plain_data(scene.verification),
@@ -181,6 +392,7 @@ def _write_sweep_case_result(
     target = _sweep_case_results_dir(
         artifacts_root=context.artifacts_root,
         sweep_id=sweep_id,
+        artifact_namespace=artifact_namespace,
     ) / (
         f"{policy_id}--{scenario_id}--{scene.meta.scene_id}--{scene.meta.version_id}.json"
     )
@@ -245,6 +457,13 @@ def track_run(
         ],
     )
 
+    naturalness_payload = _load_naturalness_payload(naturalness_artifact)
+    object_quality, gallery_ref = _evaluate_scene_object_quality(saved_dir, scene)
+    representative_scores = _representative_scores(
+        scene=scene,
+        naturalness_payload=naturalness_payload,
+        object_quality=object_quality,
+    )
     tracking_run_id = context.tracker.log_pipeline_run(
         run_name=tracking_run_name(context.settings, "gen_verify"),
         params=apply_tracking_identity(
@@ -267,6 +486,7 @@ def track_run(
             "perception_score": scene.verification.perception.score,
             "total_score": scene.verification.final.total_score,
             "pass": 1.0 if scene.verification.final.pass_ else 0.0,
+            **representative_scores,
             **_naturalness_metrics(naturalness_artifact),
         },
         artifacts=[artifact_path for _, artifact_path in artifact_entries],
@@ -277,6 +497,13 @@ def track_run(
         format_seconds(started),
     )
     context.tracking_run_id = tracking_run_id
+    _track_object_runs(
+        context=context,
+        scene=scene,
+        naturalness_payload=naturalness_payload,
+        object_quality=object_quality,
+        parent_run_id=tracking_run_id,
+    )
     write_worker_artifact_manifest(
         artifacts_root=context.artifacts_root,
         artifacts=artifact_entries,
@@ -285,5 +512,62 @@ def track_run(
         context=context,
         scene=scene,
         naturalness_artifact=naturalness_artifact,
+        naturalness_payload=naturalness_payload,
+        object_quality=object_quality,
+        gallery_ref=gallery_ref,
     )
     return tracking_run_id
+
+
+def _track_object_runs(
+    *,
+    context: AppContextLike,
+    scene: Scene,
+    naturalness_payload: dict[str, Any],
+    object_quality: dict[str, Any],
+    parent_run_id: str | None,
+) -> None:
+    object_scores = _object_score_payloads(
+        scene=scene,
+        naturalness_payload=naturalness_payload,
+        object_quality=object_quality,
+    )
+    if not object_scores:
+        return
+    for item in object_scores:
+        region_id = str(item["region_id"])
+        object_label = str(item["object_label"])
+        params = apply_tracking_identity(
+            {
+                "scene_id": scene.meta.scene_id,
+                "version_id": scene.meta.version_id,
+                "policy.object_label": object_label,
+                "policy.region_id": region_id,
+            },
+            context.settings,
+        )
+        metrics = {
+            "verify.object_score": float(item["verify_score"]),
+            "naturalness.object_score": float(item["naturalness_score"]),
+            "naturalness.placement_fit": float(item["placement_fit"]),
+            "naturalness.seam_visibility": float(item["seam_visibility"]),
+            "naturalness.saliency_lift": float(item["saliency_lift"]),
+            "object_quality.object_score": float(item["object_quality_score"]),
+        }
+        for key, value in dict(item["object_quality_subscores"]).items():
+            if isinstance(value, (int, float)):
+                metrics[f"object_quality.{key}"] = float(value)
+        tags = {
+            "run.kind": "object",
+            "region_id": region_id,
+            "object_label": object_label,
+        }
+        if parent_run_id:
+            tags["mlflow.parentRunId"] = parent_run_id
+        context.tracker.log_pipeline_run(
+            run_name=f"{scene.meta.scene_id}:{region_id}",
+            params=params,
+            metrics=metrics,
+            artifacts=[],
+            tags=tags,
+        )

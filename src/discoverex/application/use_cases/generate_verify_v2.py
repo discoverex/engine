@@ -62,6 +62,7 @@ from discoverex.application.use_cases.gen_verify.types import (
 )
 from discoverex.application.use_cases.gen_verify.verification_pipeline import (
     run_perception_verification,
+    verify_scene_regions,
     verify_scene,
 )
 from discoverex.config import PipelineConfig
@@ -1424,36 +1425,12 @@ def _verify_regions(*, context: AppContextLike, scene: Scene, scene_dir: Path) -
     _stdout_debug("generate_verify_v2 verify_regions_start")
     handle = context.perception_model.load(context.model_versions.perception)
     try:
-        image = Image.open(scene.composite.final_image_ref).convert("RGB")
-        for region in scene.regions:
-            bbox = region.geometry.bbox
-            crop = image.crop(
-                (
-                    int(round(bbox.x)),
-                    int(round(bbox.y)),
-                    int(round(bbox.x + bbox.w)),
-                    int(round(bbox.y + bbox.h)),
-                )
-            )
-            crop_path = scene_dir / "assets" / "verification" / f"{region.region_id}.png"
-            crop_path.parent.mkdir(parents=True, exist_ok=True)
-            crop.save(crop_path)
-            pred = context.perception_model.predict(
-                handle,
-                PerceptionRequest(
-                    image_ref=str(crop_path),
-                    region_count=1,
-                    regions=[{"region_id": region.region_id, "role": region.role.value}],
-                    question_context=scene.goal.goal_type.value,
-                ),
-            )
-            result = run_perception_verification(
-                scene=scene,
-                confidence=float(pred["confidence"]),
-                pass_threshold=float(context.thresholds.perception_pass),
-            )
-            region.attributes["verify_score"] = result.score
-            region.attributes["verify_pass"] = result.pass_
+        verify_scene_regions(
+            scene=scene,
+            context=context,
+            perception_handle=handle,
+            scene_dir=scene_dir,
+        )
     finally:
         unload_model(context.perception_model)
     _stdout_debug("generate_verify_v2 verify_regions_end")

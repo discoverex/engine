@@ -14,6 +14,7 @@ class NoOpTrackerAdapter:
         params: dict[str, Any],
         metrics: dict[str, float],
         artifacts: list[Path],
+        tags: dict[str, str] | None = None,
     ) -> str | None:
-        _ = (run_name, params, metrics, artifacts)
+        _ = (run_name, params, metrics, artifacts, tags)
         return None

@@ -11,4 +11,5 @@ class TrackerPort(Protocol):
         params: dict[str, Any],
         metrics: dict[str, float],
         artifacts: list[Path],
+        tags: dict[str, str] | None = None,
     ) -> str | None: ...

@@ -1,0 +1,31 @@
+schema_version: v1
+sweep_id: combined.patch-selection-inpaint.replay-fixture.v1
+search_stage: replay-fixture
+experiment_name: combined.patch-selection-inpaint.replay-fixture.v1
+base_job_spec: ../../job/variants/generate_verify/prod-genver2-pixart-realvisxl5-patchsimv2-ldho1-baseprompt-8gb.yaml
+fixed_overrides:
+  - adapters/tracker=mlflow_server
+scenarios:
+  - scenario_id: fixture-001
+    replay_fixture_ref: /app/src/sample/fixture/replay_fixture.json
+variants:
+  - variant_id: baseline
+    overrides:
+      - models.inpaint.pre_match_variant_count=7
+      - models.inpaint.final_context_size=384
+      - models.inpaint.overlay_alpha=0.45
+      - models.inpaint.composite_feather_px=2
+      - models.inpaint.edge_blend_steps=8
+      - models.inpaint.edge_blend_strength=0.18
+      - models.inpaint.edge_blend_cfg=3.2
+      - models.inpaint.core_blend_steps=8
+      - models.inpaint.core_blend_strength=0.18
+      - models.inpaint.core_blend_cfg=4.0
+      - models.inpaint.final_polish_steps=4
+      - models.inpaint.final_polish_strength=0.10
+      - models.inpaint.final_polish_cfg=3.0
+execution:
+  mode: case_per_run
+  runner_type: combined
+  collector_adapter: combined
+  artifact_namespace: naturalness_sweeps

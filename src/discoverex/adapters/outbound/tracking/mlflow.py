@@ -46,6 +46,7 @@ class MLflowTrackerAdapter:
         params: dict[str, object],
         metrics: dict[str, float],
         artifacts: list[Path],
+        tags: dict[str, str] | None = None,
     ) -> str | None:
         if self._uses_remote_tracking():
             _ = artifacts
@@ -53,12 +54,15 @@ class MLflowTrackerAdapter:
                 run_name=run_name,
                 params=params,
                 metrics=metrics,
+                tags=tags,
             )
 
         assert self._mlflow is not None
         with self._mlflow.start_run(run_name=run_name) as run:
             self._mlflow.log_params(params)
             self._mlflow.log_metrics(metrics)
+            if tags:
+                self._mlflow.set_tags(tags)
             for artifact in artifacts:
                 if artifact.exists():
                     self._log_artifact(artifact)
@@ -80,6 +84,7 @@ class MLflowTrackerAdapter:
         run_name: str,
         params: dict[str, object],
         metrics: dict[str, float],
+        tags: dict[str, str] | None = None,
     ) -> str | None:
         experiment_id = self._ensure_remote_experiment()
         prefect_flow_run_id = _string_value(params.get("prefect.flow_run_id", "")).strip()
@@ -103,6 +108,11 @@ class MLflowTrackerAdapter:
                         if prefect_flow_run_name
                         else []
                     ),
+                    *[
+                        {"key": str(key), "value": str(value)}
+                        for key, value in (tags or {}).items()
+                        if str(key).strip() and str(value).strip()
+                    ],
                 ],
             },
         )

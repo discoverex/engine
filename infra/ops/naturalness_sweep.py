@@ -91,15 +91,19 @@ def _normalized_scenario(row: dict[str, Any], index: int) -> dict[str, str]:
     scenario_id = str(row.get("scenario_id", "")).strip() or f"scenario-{index:03d}"
     background_prompt = str(row.get("background_prompt", "")).strip()
     background_asset_ref = str(row.get("background_asset_ref", "")).strip()
+    replay_fixture_ref = str(row.get("replay_fixture_ref", "")).strip()
     object_prompt = str(row.get("object_prompt", "")).strip()
     object_image_ref = str(row.get("object_image_ref", "")).strip()
     object_mask_ref = str(row.get("object_mask_ref", "")).strip()
     raw_alpha_mask_ref = str(row.get("raw_alpha_mask_ref", "")).strip()
     bbox = row.get("bbox")
     has_fixed_object = bool(object_image_ref and object_mask_ref and isinstance(bbox, dict))
-    if (not background_prompt and not background_asset_ref) or (not object_prompt and not has_fixed_object):
+    has_replay_fixture = bool(replay_fixture_ref)
+    if (not background_prompt and not background_asset_ref and not has_replay_fixture) or (
+        not object_prompt and not has_fixed_object and not has_replay_fixture
+    ):
         raise SystemExit(
-            f"scenario {scenario_id} requires background_prompt or background_asset_ref, and object_prompt unless fixed object assets are provided"
+            f"scenario {scenario_id} requires replay_fixture_ref, or background_prompt/background_asset_ref plus object_prompt unless fixed object assets are provided"
         )
     output = {
         "scenario_id": scenario_id,
@@ -110,6 +114,8 @@ def _normalized_scenario(row: dict[str, Any], index: int) -> dict[str, str]:
         output["background_prompt"] = background_prompt
     if background_asset_ref:
         output["background_asset_ref"] = background_asset_ref
+    if replay_fixture_ref:
+        output["replay_fixture_ref"] = replay_fixture_ref
     if object_image_ref:
         output["object_image_ref"] = object_image_ref
     if object_mask_ref:

@@ -10,10 +10,10 @@ inputs:
   config_name: generate
   config_dir: conf
   args:
-    background_prompt: stormy harbor at dusk, cinematic, ultra realistic, highly detailed, natural lighting, dramatic clouds, wet surfaces, volumetric lighting, sharp focus, depth, clean composition, no characters, hidden object puzzle background
-    background_negative_prompt: (worst quality, low quality, blurry, noise, grain), illustration, painting, 3d, 2d, cartoon, sketch, anime, unrealistic, distorted, deformed, bad anatomy, bad perspective, oversaturated, washed out, jpeg artifacts, text, watermark, logo, open mouth
+    background_prompt: a busy modern office interior, dense open workspace, many desks and office chairs arranged irregularly, multiple monitors, keyboards, messy cables, stacked papers, books, shelves filled with objects, indoor plants, high object density, visually complex composition, overlapping objects and partial occlusion, varied shapes and silhouettes, natural daylight, neutral tones, wide angle, photorealistic, no people, no animals
+    background_negative_prompt: low quality, blurry, simple scene, minimalism, empty room, clean desk, symmetric layout, cartoon, illustration, 3d render, unrealistic lighting, overexposed, single object focus
     object_base_prompt: isolated single object on a transparent background
-    object_prompt: butterfly | antique brass key | crystal wine glass
+    object_prompt: butterfly | antique brass key | green dinosaur
     object_base_negative_prompt: opaque background, solid background, busy scene, environment, multiple objects, floor, wall, clutter
     object_negative_prompt: (worst quality, low quality, illustration, 3d, 2d, painting, cartoons, sketch), open mouth
     object_generation_size: 512
@@ -38,7 +38,7 @@ inputs:
     - models.object_generator.model_id=SG161222/RealVisXL_V5.0_Lightning
     - models.object_generator.sampler=dpmpp_sde_karras
     - models.object_generator.default_num_inference_steps=5
-    - models.object_generator.default_guidance_scale=1
+    - models.object_generator.default_guidance_scale=2
     - models.object_generator.dtype=float16
     - models.object_generator.precision=fp16
     - models/hidden_region=dummy
