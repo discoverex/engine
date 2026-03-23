@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -1136,13 +1137,17 @@ class SdxlInpaintModel:
             object_mask=localized_mask,
         )
         backend = self._get_object_blend_backend(backend_kind)
+        safe_steps = self._safe_inpaint_step_count(
+            num_inference_steps=num_inference_steps,
+            strength=strength,
+        )
         generated_patch = backend.generate(
             image=original_patch,
             mask=blend_mask,
             prompt=prompt,
             negative_prompt=negative_prompt,
             strength=float(strength),
-            num_inference_steps=int(num_inference_steps),
+            num_inference_steps=safe_steps,
             guidance_scale=float(guidance_scale),
         )
         generated_patch = normalize_generated_patch(
@@ -1158,6 +1163,15 @@ class SdxlInpaintModel:
             "composited": composited,
             "blend_mask": blend_mask,
         }
+
+    @staticmethod
+    def _safe_inpaint_step_count(*, num_inference_steps: int, strength: float) -> int:
+        steps = max(1, int(num_inference_steps))
+        effective_strength = float(max(0.0, min(1.0, strength)))
+        if effective_strength <= 0.0:
+            return steps
+        minimum_steps = max(1, int(math.ceil(1.0 / effective_strength)))
+        return max(steps, minimum_steps)
 
     def _apply_direct_shadow(
         self,
