@@ -46,6 +46,8 @@ animate_adapters:
   format_converter:
     _target_: discoverex.adapters.outbound.animate.format_converter.MultiFormatConverter
   image_upscaler:
-    _target_: discoverex.adapters.outbound.animate.pil_upscaler.PilImageUpscaler
+    _target_: discoverex.adapters.outbound.animate.spandrel_upscaler.SpandrelUpscaler
+    model_path: ${oc.env:ESRGAN_MODEL_PATH,ComfyUI/models/upscale_models/RealESRGAN_x4plus.pth}
+    device: cuda
 
 max_retries: 7

@@ -23,7 +23,7 @@ class AnimateAdaptersConfig(BaseModel):
     format_converter: HydraComponentConfig
     image_upscaler: HydraComponentConfig = Field(
         default_factory=lambda: HydraComponentConfig(
-            target="discoverex.adapters.outbound.animate.pil_upscaler.PilImageUpscaler"
+            target="discoverex.adapters.outbound.animate.spandrel_upscaler.SpandrelUpscaler"
         )
     )
 
