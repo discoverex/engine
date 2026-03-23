@@ -278,6 +278,31 @@ async def _read_engine_summary(flow_run_id: str) -> dict[str, Any] | None:
     return None
 
 
+def _normalize_prefect_api_url() -> str:
+    api_url = str(SETTINGS.prefect_api_url or os.environ.get("PREFECT_API_URL", "")).strip()
+    if not api_url:
+        api_url = "https://prefect-api.discoverex.qzz.io/api"
+    return api_url if api_url.rstrip("/").endswith("/api") else f"{api_url.rstrip('/')}/api"
+
+
+async def _read_flow_run_state(flow_run_id: str) -> dict[str, str]:
+    flow_run_uuid = __import__("uuid").UUID(flow_run_id)
+    updates = {
+        PREFECT_API_URL: _normalize_prefect_api_url(),
+        PREFECT_CLIENT_CUSTOM_HEADERS: _extra_headers(),
+    }
+    with temporary_settings(updates=updates):
+        async with get_client() as client:
+            flow_run = await client.read_flow_run(flow_run_uuid)
+    state = getattr(flow_run, "state", None)
+    return {
+        "flow_run_name": str(getattr(flow_run, "name", "") or "").strip(),
+        "prefect_state": str(getattr(state, "name", "") or "").strip(),
+        "prefect_state_type": str(getattr(state, "type", "") or "").strip(),
+        "prefect_state_message": str(getattr(state, "message", "") or "").strip(),
+    }
+
+
 def _recover_remote_cases(expected_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     recovered: list[dict[str, Any]] = []
     for item in expected_results:
@@ -379,10 +404,57 @@ def _job_key(*, policy_id: str, scenario_id: str) -> str:
     return f"{policy_id}::{scenario_id}"
 
 
+def _classify_missing_case(item: dict[str, Any], state: dict[str, str] | None) -> dict[str, Any]:
+    record = {
+        "job_name": str(item.get("job_name", "")).strip(),
+        "policy_id": str(item.get("policy_id", "")).strip(),
+        "scenario_id": str(item.get("scenario_id", "")).strip(),
+        "flow_run_id": str(item.get("flow_run_id", "")).strip(),
+        "deployment": str(item.get("deployment", "")).strip(),
+        "flow_run_name": str((state or {}).get("flow_run_name", "")).strip(),
+        "prefect_state": str((state or {}).get("prefect_state", "")).strip(),
+        "prefect_state_type": str((state or {}).get("prefect_state_type", "")).strip(),
+        "prefect_state_message": str((state or {}).get("prefect_state_message", "")).strip(),
+    }
+    if not bool(item.get("submitted")) or not record["flow_run_id"]:
+        record["status"] = "not_submitted"
+        return record
+    state_name = record["prefect_state"].lower()
+    state_type = record["prefect_state_type"].upper()
+    if state_type == "COMPLETED" or state_name == "completed":
+        record["status"] = "failed_to_collect"
+        return record
+    if state_type in {"FAILED", "CRASHED"} or state_name in {"failed", "crashed", "timedout"}:
+        record["status"] = "failed"
+        return record
+    if state_type == "CANCELLED" or state_name in {"cancelled", "cancelling"}:
+        record["status"] = "cancelled"
+        return record
+    if state_name in {"scheduled", "pending", "running", "late", "retrying"}:
+        record["status"] = "pending"
+        return record
+    record["status"] = "failed_to_collect"
+    return record
+
+
+def _flow_run_states(expected_results: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
+    states: dict[str, dict[str, str]] = {}
+    for item in expected_results:
+        flow_run_id = str(item.get("flow_run_id", "")).strip()
+        if not flow_run_id or flow_run_id in states:
+            continue
+        try:
+            states[flow_run_id] = asyncio.run(_read_flow_run_state(flow_run_id))
+        except Exception:
+            states[flow_run_id] = {}
+    return states
+
+
 def _aggregate(
     cases: list[dict[str, Any]],
     *,
     submitted_manifest: dict[str, Any] | None = None,
+    flow_run_states: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     expected_results = list((submitted_manifest or {}).get("results", []))
     expected_by_key: dict[str, dict[str, Any]] = {}
@@ -447,27 +519,37 @@ def _aggregate(
     )
     missing_cases: list[dict[str, Any]] = []
     unsubmitted_cases: list[dict[str, Any]] = []
+    failed_runs: list[dict[str, Any]] = []
+    cancelled_runs: list[dict[str, Any]] = []
+    pending_runs: list[dict[str, Any]] = []
     for key, item in sorted(expected_by_key.items()):
         if key in observed_keys:
             continue
-        record = {
-            "job_name": str(item.get("job_name", "")).strip(),
-            "policy_id": str(item.get("policy_id", "")).strip(),
-            "scenario_id": str(item.get("scenario_id", "")).strip(),
-            "flow_run_id": str(item.get("flow_run_id", "")).strip(),
-            "deployment": str(item.get("deployment", "")).strip(),
-        }
-        if bool(item.get("submitted")) and record["flow_run_id"]:
-            record["status"] = "failed_to_collect"
-            missing_cases.append(record)
-        else:
-            record["status"] = "not_submitted"
+        flow_run_id = str(item.get("flow_run_id", "")).strip()
+        state = (flow_run_states or {}).get(flow_run_id) if flow_run_id else None
+        record = _classify_missing_case(item, state)
+        status = str(record.get("status", "")).strip()
+        if status == "not_submitted":
             unsubmitted_cases.append(record)
+        elif status == "pending":
+            pending_runs.append(record)
+        elif status == "failed":
+            failed_runs.append(record)
+        elif status == "cancelled":
+            cancelled_runs.append(record)
+        else:
+            missing_cases.append(record)
     return {
         "policy_count": len(policies),
         "policies": policies,
         "missing_case_count": len(missing_cases),
         "missing_cases": missing_cases,
+        "failed_run_count": len(failed_runs),
+        "failed_runs": failed_runs,
+        "cancelled_run_count": len(cancelled_runs),
+        "cancelled_runs": cancelled_runs,
+        "pending_run_count": len(pending_runs),
+        "pending_runs": pending_runs,
         "not_submitted_count": len(unsubmitted_cases),
         "not_submitted_cases": unsubmitted_cases,
     }
@@ -542,7 +624,12 @@ def main() -> int:
             if policy_id and scenario_id:
                 deduped[_job_key(policy_id=policy_id, scenario_id=scenario_id)] = case
         cases = list(deduped.values())
-    aggregate = _aggregate(cases, submitted_manifest=submitted_manifest)
+    flow_run_states = _flow_run_states(list((submitted_manifest or {}).get("results", [])))
+    aggregate = _aggregate(
+        cases,
+        submitted_manifest=submitted_manifest,
+        flow_run_states=flow_run_states,
+    )
     output = {
         "sweep_id": sweep_id,
         "artifacts_root": str(artifacts_root),
