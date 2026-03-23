@@ -290,6 +290,10 @@ def test_track_run_writes_naturalness_sweep_case_result(
                 "scenario_id": "scene-a",
                 "combo_id": "combo-001",
                 "search_stage": "coarse",
+                "sweep_runner_type": "combined",
+                "sweep_collector_adapter": "combined",
+                "sweep_artifact_namespace": "naturalness_sweeps",
+                "sweep_execution_mode": "case_per_run",
             }
         },
         execution_snapshot_path=None,
@@ -317,6 +321,9 @@ def test_track_run_writes_naturalness_sweep_case_result(
     assert payload["policy_id"] == "p01"
     assert payload["scenario_id"] == "scene-a"
     assert payload["flow_run_id"] == "flow-1"
+    assert payload["sweep_runner_type"] == "combined"
+    assert payload["sweep_collector_adapter"] == "combined"
+    assert payload["sweep_artifact_namespace"] == "naturalness_sweeps"
     assert payload["naturalness_metrics"]["naturalness.overall_score"] == 0.81
 
 
