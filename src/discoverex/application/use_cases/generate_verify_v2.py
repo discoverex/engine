@@ -13,6 +13,7 @@ from uuid import uuid4
 import cv2
 import numpy as np
 from PIL import Image, ImageEnhance
+from prefect import task
 from scipy.spatial.distance import cosine
 from skimage import color
 from skimage.feature import hog, local_binary_pattern
@@ -33,7 +34,6 @@ from discoverex.application.use_cases.gen_verify.model_lifecycle import (
 from discoverex.application.use_cases.gen_verify.object_pipeline import (
     GeneratedObjectAsset,
     generate_region_objects,
-    resolve_object_prompts,
 )
 from discoverex.application.use_cases.gen_verify.persistence import (
     save_scene,
@@ -61,14 +61,13 @@ from discoverex.application.use_cases.gen_verify.types import (
     RegionPromptRecord,
 )
 from discoverex.application.use_cases.gen_verify.verification_pipeline import (
-    run_perception_verification,
-    verify_scene_regions,
     verify_scene,
+    verify_scene_regions,
 )
 from discoverex.config import PipelineConfig
 from discoverex.domain.region import BBox, Geometry, Region, RegionRole, RegionSource
 from discoverex.domain.scene import Background, LayerBBox, LayerItem, LayerType, Scene
-from discoverex.models.types import HiddenRegionRequest, PerceptionRequest
+from discoverex.models.types import HiddenRegionRequest
 from discoverex.runtime_logging import format_seconds, get_logger
 
 logger = get_logger("discoverex.generate.v2")
@@ -76,6 +75,207 @@ logger = get_logger("discoverex.generate.v2")
 
 def _stdout_debug(message: str) -> None:
     print(f"[discoverex-debug] {message}", flush=True)
+
+
+@task(name="discoverex-generate-v2-background", persist_result=False)
+def _build_background_task(
+    *,
+    context: AppContextLike,
+    scene_dir: Path,
+    background_asset_ref: str | None,
+    background_prompt: str | None,
+    background_negative_prompt: str | None,
+) -> tuple[Background, PromptStageRecord]:
+    return _build_background(
+        context=context,
+        scene_dir=scene_dir,
+        background_asset_ref=background_asset_ref,
+        background_prompt=background_prompt,
+        background_negative_prompt=background_negative_prompt,
+    )
+
+
+@task(name="discoverex-generate-v2-gpu-barrier", persist_result=False)
+def _stage_gpu_barrier_task(label: str) -> None:
+    stage_gpu_barrier(label)
+
+
+@task(name="discoverex-generate-v2-detect-regions", persist_result=False)
+def _detect_regions_legacy_task(
+    *,
+    context: AppContextLike,
+    background: Background,
+    limit: int,
+) -> list[Region]:
+    return _mark_regions_as_answers(
+        _detect_regions_legacy(context=context, background=background)[:limit]
+    )
+
+
+@task(name="discoverex-generate-v2-generate-objects", persist_result=False)
+def _generate_objects_task(
+    *,
+    context: AppContextLike,
+    scene_dir: Path,
+    regions: list[Region],
+    object_prompt: str,
+    object_negative_prompt: str,
+    object_base_prompt: str,
+    object_base_negative_prompt: str,
+    object_generation_size: int,
+) -> dict[str, GeneratedObjectAsset]:
+    return _generate_objects(
+        context=context,
+        scene_dir=scene_dir,
+        regions=regions,
+        object_prompt=object_prompt,
+        object_negative_prompt=object_negative_prompt,
+        object_base_prompt=object_base_prompt,
+        object_base_negative_prompt=object_base_negative_prompt,
+        object_generation_size=object_generation_size,
+    )
+
+
+@task(name="discoverex-generate-v2-scale-object-background", persist_result=False)
+def _apply_object_background_scaling_task(
+    *,
+    config: PipelineConfig,
+    scene_dir: Path,
+    background: Background,
+    generated_objects: dict[str, GeneratedObjectAsset],
+) -> dict[str, GeneratedObjectAsset]:
+    return _apply_object_background_scaling(
+        config=config,
+        scene_dir=scene_dir,
+        background=background,
+        generated_objects=generated_objects,
+    )
+
+
+@task(name="discoverex-generate-v2-select-regions", persist_result=False)
+def _select_regions_patch_similarity_task(
+    *,
+    config: PipelineConfig,
+    context: AppContextLike,
+    scene_dir: Path,
+    background: Background,
+    generated_objects: dict[str, GeneratedObjectAsset],
+) -> tuple[list[Region], dict[str, GeneratedObjectAsset]]:
+    candidate_regions = _select_regions_patch_similarity(
+        config=config,
+        context=context,
+        scene_dir=scene_dir,
+        background=background,
+        generated_objects=generated_objects,
+    )
+    candidate_regions = _mark_regions_as_answers(candidate_regions)
+    _validate_generated_object_assets(
+        expected_regions=candidate_regions,
+        generated_objects=generated_objects,
+        stage="patch_selection",
+    )
+    selected_objects = {
+        region.region_id: generated_objects[region.region_id] for region in candidate_regions
+    }
+    return candidate_regions, selected_objects
+
+
+@task(name="discoverex-generate-v2-harmonize-objects", persist_result=False)
+def _harmonize_objects_task(
+    *,
+    config: PipelineConfig,
+    scene_dir: Path,
+    background: Background,
+    regions: list[Region],
+    generated_objects: dict[str, GeneratedObjectAsset],
+) -> dict[str, GeneratedObjectAsset]:
+    return _harmonize_objects(
+        config=config,
+        scene_dir=scene_dir,
+        background=background,
+        regions=regions,
+        generated_objects=generated_objects,
+    )
+
+
+@task(name="discoverex-generate-v2-inpaint-regions", persist_result=False)
+def _generate_regions_task(
+    *,
+    context: AppContextLike,
+    background: Background,
+    scene_dir: Path,
+    regions: list[Region],
+    generated_objects: dict[str, GeneratedObjectAsset],
+    object_prompt: str,
+    object_negative_prompt: str,
+) -> tuple[list[Region], list[RegionPromptRecord]]:
+    return _generate_regions(
+        context=context,
+        background=background,
+        scene_dir=scene_dir,
+        regions=regions,
+        generated_objects=generated_objects,
+        object_prompt=object_prompt,
+        object_negative_prompt=object_negative_prompt,
+    )
+
+
+@task(name="discoverex-generate-v2-compose", persist_result=False)
+def _compose_scene_task(
+    *,
+    context: AppContextLike,
+    scene_dir: Path,
+    background_asset_ref: str,
+    final_prompt: str,
+    final_negative_prompt: str,
+) -> CompositeResolution:
+    return _compose_scene(
+        context=context,
+        scene_dir=scene_dir,
+        background_asset_ref=background_asset_ref,
+        final_prompt=final_prompt,
+        final_negative_prompt=final_negative_prompt,
+    )
+
+
+@task(name="discoverex-generate-v2-verify-scene", persist_result=False)
+def _verify_scene_task(*, context: AppContextLike, scene: Scene) -> None:
+    _verify_scene(context=context, scene=scene)
+
+
+@task(name="discoverex-generate-v2-verify-regions", persist_result=False)
+def _verify_regions_task(*, context: AppContextLike, scene: Scene, scene_dir: Path) -> None:
+    _verify_regions(context=context, scene=scene, scene_dir=scene_dir)
+
+
+@task(name="discoverex-generate-v2-persist", persist_result=False)
+def _persist_outputs_task(
+    *,
+    context: AppContextLike,
+    scene: Scene,
+    scene_dir: Path,
+    background_prompt_record: PromptStageRecord,
+    region_prompt_records: list[RegionPromptRecord],
+    object_prompt: str,
+    object_negative_prompt: str,
+    final_prompt: str,
+    final_negative_prompt: str,
+    fx_input_ref: str,
+    composite_artifact: Path | None,
+) -> None:
+    _persist_outputs(
+        context=context,
+        scene=scene,
+        scene_dir=scene_dir,
+        background_prompt_record=background_prompt_record,
+        region_prompt_records=region_prompt_records,
+        object_prompt=object_prompt,
+        object_negative_prompt=object_negative_prompt,
+        final_prompt=final_prompt,
+        final_negative_prompt=final_negative_prompt,
+        fx_input_ref=fx_input_ref,
+        composite_artifact=composite_artifact,
+    )
 
 
 def run(
@@ -101,22 +301,24 @@ def run(
     scene_dir = (
         Path(context.artifacts_root) / "scenes" / run_ids.scene_id / run_ids.version_id
     )
-    background, background_prompt_record = _build_background(
+    background, background_prompt_record = _build_background_task.submit(
         context=context,
         scene_dir=scene_dir,
         background_asset_ref=background_asset_ref or None,
         background_prompt=background_prompt or None,
         background_negative_prompt=background_negative_prompt or None,
-    )
+    ).result()
     _stdout_debug("generate_verify_v2 background_complete")
-    stage_gpu_barrier("after_background_pipeline")
+    _stage_gpu_barrier_task.submit("after_background_pipeline").result()
 
     if config.region_selection.strategy == "legacy_detr":
-        candidate_regions = _detect_regions_legacy(context=context, background=background)
-        candidate_regions = candidate_regions[: config.object_variants.default_count]
-        candidate_regions = _mark_regions_as_answers(candidate_regions)
-        stage_gpu_barrier("after_hidden_region_detection")
-        generated_objects = _generate_objects(
+        candidate_regions = _detect_regions_legacy_task.submit(
+            context=context,
+            background=background,
+            limit=config.object_variants.default_count,
+        ).result()
+        _stage_gpu_barrier_task.submit("after_hidden_region_detection").result()
+        generated_objects = _generate_objects_task.submit(
             context=context,
             scene_dir=scene_dir,
             regions=candidate_regions,
@@ -125,14 +327,14 @@ def run(
             object_base_prompt=object_base_prompt,
             object_base_negative_prompt=object_base_negative_prompt,
             object_generation_size=object_generation_size,
-        )
+        ).result()
     else:
         object_count = max(
             1,
             int(args.get("object_count") or config.object_variants.default_count),
         )
         placeholder_regions = _build_placeholder_regions(object_count)
-        generated_objects = _generate_objects(
+        generated_objects = _generate_objects_task.submit(
             context=context,
             scene_dir=scene_dir,
             regions=placeholder_regions,
@@ -141,55 +343,46 @@ def run(
             object_base_prompt=object_base_prompt,
             object_base_negative_prompt=object_base_negative_prompt,
             object_generation_size=object_generation_size,
-        )
+        ).result()
         _stdout_debug("generate_verify_v2 object_generation_complete")
         _stdout_debug("generate_verify_v2 object_bg_scaling_start")
-        generated_objects = _apply_object_background_scaling(
+        generated_objects = _apply_object_background_scaling_task.submit(
             config=config,
             scene_dir=scene_dir,
             background=background,
             generated_objects=generated_objects,
-        )
+        ).result()
         _stdout_debug("generate_verify_v2 object_bg_scaling_complete")
-        stage_gpu_barrier("after_object_generation")
-        candidate_regions = _select_regions_patch_similarity(
+        _stage_gpu_barrier_task.submit("after_object_generation").result()
+        candidate_regions, generated_objects = _select_regions_patch_similarity_task.submit(
             config=config,
             context=context,
             scene_dir=scene_dir,
             background=background,
             generated_objects=generated_objects,
-        )
-        candidate_regions = _mark_regions_as_answers(candidate_regions)
+        ).result()
         _stdout_debug(
             f"generate_verify_v2 patch_selection_complete selected={len(candidate_regions)}"
         )
-        _validate_generated_object_assets(
-            expected_regions=candidate_regions,
-            generated_objects=generated_objects,
-            stage="patch_selection",
-        )
-        generated_objects = {
-            region.region_id: generated_objects[region.region_id] for region in candidate_regions
-        }
         if config.color_harmonization.enabled:
             _stdout_debug("generate_verify_v2 harmonization_start")
-            generated_objects = _harmonize_objects(
+            generated_objects = _harmonize_objects_task.submit(
                 config=config,
                 scene_dir=scene_dir,
                 background=background,
                 regions=candidate_regions,
                 generated_objects=generated_objects,
-            )
+            ).result()
             _stdout_debug("generate_verify_v2 harmonization_complete")
     if config.region_selection.strategy == "legacy_detr":
-        stage_gpu_barrier("after_object_generation")
+        _stage_gpu_barrier_task.submit("after_object_generation").result()
     _validate_generated_object_assets(
         expected_regions=candidate_regions,
         generated_objects=generated_objects,
         stage="pre_inpaint",
     )
 
-    regions, region_prompt_records = _generate_regions(
+    regions, region_prompt_records = _generate_regions_task.submit(
         context=context,
         background=background,
         scene_dir=scene_dir,
@@ -197,14 +390,14 @@ def run(
         generated_objects=generated_objects,
         object_prompt=object_prompt,
         object_negative_prompt=object_negative_prompt,
-    )
+    ).result()
     _validate_region_outputs(
         background=background,
         regions=regions,
         region_prompt_records=region_prompt_records,
     )
     _stdout_debug("generate_verify_v2 inpaint_complete")
-    stage_gpu_barrier("after_inpaint_region_generation")
+    _stage_gpu_barrier_task.submit("after_inpaint_region_generation").result()
     scene = build_scene(
         background=background,
         regions=regions,
@@ -218,24 +411,24 @@ def run(
     if isinstance(inpaint_ref, str) and inpaint_ref:
         fx_input_ref = inpaint_ref
 
-    composite = _compose_scene(
+    composite = _compose_scene_task.submit(
         context=context,
         scene_dir=scene_dir,
         background_asset_ref=fx_input_ref,
         final_prompt=final_prompt,
         final_negative_prompt=final_negative_prompt,
-    )
+    ).result()
     _stdout_debug("generate_verify_v2 composite_complete")
-    stage_gpu_barrier("after_fx_composite")
+    _stage_gpu_barrier_task.submit("after_fx_composite").result()
     scene.composite.final_image_ref = composite.image_ref
     _finalize_layers(scene=scene, background=background, fx_input_ref=fx_input_ref)
-    _verify_scene(context=context, scene=scene)
+    _verify_scene_task.submit(context=context, scene=scene).result()
     _stdout_debug("generate_verify_v2 scene_verification_complete")
-    stage_gpu_barrier("after_scene_verification")
-    _verify_regions(context=context, scene=scene, scene_dir=scene_dir)
+    _stage_gpu_barrier_task.submit("after_scene_verification").result()
+    _verify_regions_task.submit(context=context, scene=scene, scene_dir=scene_dir).result()
     _stdout_debug("generate_verify_v2 region_verification_complete")
-    stage_gpu_barrier("after_region_verification")
-    _persist_outputs(
+    _stage_gpu_barrier_task.submit("after_region_verification").result()
+    _persist_outputs_task.submit(
         context=context,
         scene=scene,
         scene_dir=scene_dir,
@@ -247,7 +440,7 @@ def run(
         final_negative_prompt=final_negative_prompt,
         fx_input_ref=fx_input_ref,
         composite_artifact=composite.artifact_path,
-    )
+    ).result()
     _stdout_debug("generate_verify_v2 persist_complete")
     logger.info(
         "generate_verify_v2 completed scene_id=%s version_id=%s duration=%s strategy=%s",
