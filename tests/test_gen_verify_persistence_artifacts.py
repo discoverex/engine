@@ -435,7 +435,10 @@ def test_track_run_logs_full_parent_and_object_metrics(
                     "object_image_ref": "obj://1",
                     "verify_score": 0.42,
                     "verify_pass": True,
-                    "object_prompt": "red mug",
+                    "fixture_region_id": "fixture-r-1",
+                    "object_label": "red mug",
+                    "generation_prompt_resolved": "red mug",
+                    "object_prompt_resolved": "isolated single object on a transparent background, red mug",
                     "mask_source": "fixture",
                 },
                 version=1,
@@ -600,3 +603,11 @@ def test_track_run_logs_full_parent_and_object_metrics(
     assert child_metrics["verify.difficulty_signals.gamma"] == 0.7
     assert child_metrics["naturalness.diagnosis_signals.delta"] == 0.33
     assert child_metrics["object_quality.raw.laplacian_variance"] == 12.0
+    child_params = calls[1]["params"]
+    child_tags = calls[1]["tags"]
+    assert child_params["policy.object_label"] == "red mug"
+    assert child_params["policy.object_prompt"] == "red mug"
+    assert child_params["policy.fixture_region_id"] == "fixture-r-1"
+    assert child_tags["object_name"] == "red mug"
+    assert child_tags["fixture_region_id"] == "fixture-r-1"
+    assert calls[1]["run_name"] == "scene-1:red mug:r-1"

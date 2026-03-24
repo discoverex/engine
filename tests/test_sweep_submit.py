@@ -163,6 +163,60 @@ execution:
     assert len(standard_spec["parameters"]) == 1
 
 
+def test_build_sweep_manifest_adds_variant_pack_override_for_combined_variant_pack(
+    tmp_path: Path,
+) -> None:
+    base_job_spec = tmp_path / "base.yaml"
+    base_job_spec.write_text(
+        """
+run_mode: repo
+engine: discoverex
+job_name: base
+inputs:
+  contract_version: v2
+  command: generate
+  config_name: generate
+  config_dir: conf
+  args:
+    background_prompt: old
+    object_prompt: old
+  overrides:
+    - flows/generate=generate_verify_v2
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    sweep_spec = tmp_path / "combined.yaml"
+    sweep_spec.write_text(
+        f"""
+schema_version: v1
+sweep_id: combined.variant-pack
+base_job_spec: {base_job_spec.name}
+experiment_name: combined.variant-pack
+scenarios:
+  - scenario_id: scene-001
+    replay_fixture_ref: /tmp/replay.json
+variants:
+  - variant_id: baseline
+    overrides:
+      - models.inpaint.edge_blend_strength=0.18
+execution:
+  mode: variant_pack
+  runner_type: combined
+  collector_adapter: combined
+  artifact_namespace: naturalness_sweeps
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = build_sweep_manifest(sweep_spec)
+
+    job = manifest["jobs"][0]
+    overrides = job["job_spec"]["inputs"]["overrides"]
+    assert "flows/generate=inpaint_variant_pack" in overrides
+
+
 def test_submit_manifest_supports_queue_override_for_combined(
     monkeypatch,
 ) -> None:  # type: ignore[no-untyped-def]
