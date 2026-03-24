@@ -114,6 +114,14 @@ Flow-kind deployments follow this naming pattern:
 
 Run submission can still override the queue at submit time when a specific experiment needs isolation.
 
+Worker queue priority defaults:
+
+- primary queue `gpu-fixed`: `1`
+- batch queue `gpu-fixed-batch`: `100`
+
+These values are controlled by `PREFECT_PRIMARY_QUEUE_PRIORITY` and
+`PREFECT_BATCH_QUEUE_PRIORITY`.
+
 ### Deploy flow
 
 Registers a purpose-scoped Prefect deployment.
