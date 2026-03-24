@@ -30,20 +30,17 @@
 
 ---
 
-## 1부: WAN 도입 이전 (기존 MD 내용 기반)
+## 1부: WAN 도입 이전
 
-### 슬라이드 1 — 프로젝트 배경
+### 슬라이드 1 — 프로젝트 배경 & SD 계열 시도
 
 - 비주얼 추론 기반 퍼즐 생성 플랫폼 (숨은그림찾기 + 벤치마크)
 - 오브젝트별 자동 애니메이션이 핵심 요구사항
-
-### 슬라이드 2 — Phase 1: SD 계열 시도와 실패
-
 - SDXL img2img → 포즈별 이미지 생성 시 매번 캐릭터 외형이 달라짐 (정체성 유지 실패)
 - FLUX Kontext Pro → 컨셉만 유지, 디테일(무늬·색상·체형 비율) 변형
 - FLUX LoRA 학습 → 이미 변형된 이미지(위 방법으로 생성된)를 학습 데이터로 사용하여 특정 대상의 고유 디테일이 아닌 "일반적인 대상"의 패턴만 학습. 생성할 때마다 대상의 특징이 미묘하게 달라져 같은 대상으로 인식 불가
 
-### 슬라이드 3 — 패러다임 전환 결정
+### 슬라이드 2 — 패러다임 전환 결정
 
 - "포즈별 이미지를 각각 생성"하는 접근의 근본적 한계 확인
 - 원본 1장 → 비디오 생성 → 프레임 추출로 방향 전환
@@ -53,14 +50,14 @@
 
 ## 2부: WAN 도입 이후 — 자동화 파이프라인 구축
 
-### 슬라이드 4 — WAN 파이프라인 전체 아키텍처
+### 슬라이드 3 — WAN 파이프라인 전체 아키텍처
 
 - Stage 1: 처리 모드 분류 (KEYFRAME_ONLY / MOTION_NEEDED)
 - Stage 2: 마스크 생성 + WAN 생성 + 검증 루프
 - Stage 3: 후처리 (배경 제거, Lottie 변환)
 - 핵심 모듈 11개의 역할과 관계
 
-### 슬라이드 5 — Stage 1: 사전 분류 (wan_mode_classifier)
+### 슬라이드 4 — Stage 1: 사전 분류 (wan_mode_classifier)
 
 - Gemini Vision으로 입력 이미지 분석
 - 변형 가능한 부위 존재 여부로 2분류
@@ -68,14 +65,14 @@
 - MOTION_NEEDED → WAN I2V 생성으로 진행
 - 판단 오류 시 MOTION_NEEDED fallback (안전한 방향)
 
-### 슬라이드 6 — Vision 분석 (wan_vision_analyzer)
+### 슬라이드 5 — Vision 분석 (wan_vision_analyzer)
 
 - Gemini 2.5 Flash로 이미지 완전 자유 분석
 - 출력: 액션 설명, 움직이는/고정 부위, moving_zone 좌표, fps, 프레임 수, 모션 범위, 프롬프트(중국어), pingpong 여부, 배경 타입
 - 프리셋/분류 체계 없이 AI가 모든 수치를 직접 결정
 - 실패 시 최대 3회 재시도
 
-### 슬라이드 7 — 이미지 전처리 & 마스크 생성
+### 슬라이드 6 — 이미지 전처리 & 마스크 생성
 
 - 소형 이미지(<200px) 자동 업스케일: **Real-ESRGAN (spandrel)** 4x AI 초해상도 적용 (타일링 처리, ~200MB VRAM, 즉시 해제). pixel_art일 경우 nearest-neighbor fallback
 - 480×480 캔버스에 패딩 배치 (원본 < 캔버스면 축소 없이 유지)
@@ -83,41 +80,35 @@
 - 흰색(255) = fixed zone, 검정(0) = moving zone
 - 경계에 Gaussian blur 적용으로 자연스러운 전환
 
-### 슬라이드 8 — ComfyUI 워크플로우 & WAN 생성
+### 슬라이드 7 — ComfyUI 워크플로우 & WAN 생성
 
 - ComfyUI API 호출 방식 (워크플로우 JSON 파일 로드 + 파라미터 주입)
 - WAN 2.1 I2V-14B GGUF — Q3_K_S(7.4GB/6.5GB VRAM), Q4_K_S(9.8GB/8.75GB), Q4_K_M(11GB/9.65GB) 3종 지원. 대시보드에서 설치된 모델만 선택 가능
 - 노드 구성: CLIPLoader → VAELoader → CLIPVisionLoader → WanImageToVideo → KSampler → VAEDecode → VHS_VideoCombine
 - 프로그레스 바 + 스피너로 실시간 진행 상태 표시
 
-### 슬라이드 9 — 이중 검증 시스템
+### 슬라이드 8 — 이중 검증 & 재시도 루프 (최대 7회)
 
 - 수치 검증 (WanValidator): no_motion, too_slow, too_fast, repeated_motion, frame_escape, no_return_to_origin, center_drift, ghosting, background_color_change
 - AI 검증 (WanAIValidator): Gemini Vision이 원본+5개 프레임(0/25/50/75/100%) 비교하여 자유 판단
 - 수치 통과 → AI 검증 순서 (비용 절감)
 - soft issue (배경 색상 변화 등)는 수치 검증 통과 시 PASS 처리
-
-### 슬라이드 10 — 자동 보정 & 재시도 루프 (최대 7회)
-
 - 수치 실패 → 파라미터 자동 조정 (fps 단계적 증감, scale 감소)
 - AI 실패 → Gemini가 fps/scale/프롬프트 수정안 직접 결정
 - 연속 품질 실패 3회 → Vision 재분석으로 액션 전환 (exclude_action)
 - 연속 no_motion → seed 교체 후 재시도, 3회 초과 시 액션 전환
 - 검증 실패 통계 추적 (이미지별·누적)
 
-### 슬라이드 11 — 후처리 파이프라인
+### 슬라이드 9 — 후처리 & Stage 2 키프레임 판단
 
 - 배경 제거 (RembgBgRemover): rembg U2Net 딥러닝 기반 시맨틱 세그멘테이션 — 흰 배경 위 흰 오브젝트도 정확 분리. 투명 PNG 시퀀스 출력
 - 포맷 변환 (MultiFormatConverter): 투명 PNG 시퀀스 → APNG + WebM + Lottie JSON 통합 변환. 48fps 업샘플링, 캔버스 4x 확장(잘림 방지), 전체 프레임 union bbox 크롭, 원본 이미지 크기 자동 적용
-
-### 슬라이드 12 — Stage 2: 모션 후 키프레임 판단 (wan_post_motion_classifier)
-
-- WAN 생성 완료 후 실제 영상을 Gemini Vision으로 분석
-- 7가지 분류: no_travel, travel_lateral, travel_vertical, travel_diagonal, amplify_hop, amplify_sway, amplify_float
+- WAN 생성 완료 후 실제 영상을 Gemini Vision으로 분석 (Stage 2)
+- 7가지 분류: no_travel(이동 없음), travel_lateral(좌우 이동), travel_vertical(상하 이동), travel_diagonal(대각선 이동), amplify_hop(점프 강조), amplify_sway(좌우 흔들림 강조), amplify_float(부유 강조)
 - Stage 1 예측과 WAN 실제 결과가 다를 수 있으므로 필요
 - CSS 키프레임 보강 여부 + 방향 결정
 
-### 슬라이드 13 — 대시보드 & REST API (wan_dashboard + wan_server)
+### 슬라이드 10 — 대시보드 & REST API (wan_dashboard + wan_server)
 
 - Flask 기반 REST API: classify → generate → status 폴링 → select_video → classify_motion
 - 웹 대시보드: 이미지 업로드 → 분류 → 모션 생성 → 영상 선택 → 배경 제거/Lottie 변환까지 전 과정 GUI
@@ -126,17 +117,68 @@
 
 ---
 
-## 3부: 성과 & 교훈
+## 기술 스택
 
-### 슬라이드 14 — 기존 방식 vs WAN 방식 비교
+### 언어 & 런타임
+- **Python 3.11+**, Pydantic v2 (strict mypy)
+
+### AI/ML 모델
+| 모델 | 용도 | 비고 |
+|------|------|------|
+| Gemini 2.5 Flash | 모드 분류, Vision 분석, AI 검증, 후모션 분류 (4개 포트) | google-genai SDK |
+| WAN 2.1 I2V-14B GGUF | 디퓨전 UNet — 영상 생성 (ComfyUI API) | Q3_K_S / Q4_K_S / Q4_K_M 3종 |
+| UMT5-XXL FP8 | 텍스트 인코더 — 프롬프트 → 임베딩 변환 | 6.3GB |
+| CLIP Vision H | 이미지 시각 특징 추출 — 캐릭터 정체성 보존 핵심 | clip_vision_h.safetensors |
+| WAN 2.1 VAE | latent space ↔ 픽셀 공간 변환 (인코딩/디코딩) | wan_2.1_vae.safetensors (243MB, 16ch) |
+| Real-ESRGAN 4x | 소형 이미지 AI 업스케일 | spandrel 라이브러리 |
+| U2Net | 배경 제거 (시맨틱 세그멘테이션) | rembg + onnxruntime |
+
+### 프레임워크 & 라이브러리
+| 분류 | 기술 |
+|------|------|
+| 웹 서버 | Flask 3.0+, Flask-CORS |
+| 설정 관리 | Hydra 1.3+ |
+| 워크플로우 | Prefect 3.6+ |
+| CLI | Typer |
+| 이미지 처리 | Pillow (PIL), numpy, opencv-python-headless, scipy |
+| 영상 처리 | ffmpeg (subprocess) — 프레임 추출, WebM 인코딩 |
+| ML 런타임 | PyTorch 2.10+, onnxruntime |
+| 실험 추적 | MLflow 3.10+ |
+
+### 인프라 & 도구
+| 도구 | 역할 |
+|------|------|
+| ComfyUI | WAN 모델 서빙 (HTTP API, 워크플로우 JSON 주입) |
+| ComfyUI-GGUF | GGUF 양자화 모델 로드 커스텀 노드 |
+| VHS (VideoHelperSuite) | H.264 MP4 결합 커스텀 노드 |
+| ruff | 린터 & 포매터 (line-length 88, E/F/I/B/UP) |
+| mypy | strict 모드 타입 체크 |
+| pytest | 테스트 프레임워크 (234+ passed) |
+
+### 프론트엔드
+| 기술 | 용도 |
+|------|------|
+| HTML5 / CSS3 / Vanilla JS | 대시보드 SPA (프레임워크 없음) |
+| Lottie-Web (bodymovin.js) 5.12 | Lottie JSON 애니메이션 재생 |
+| Chart.js 4.4 | 검증 통계 시각화 |
+
+### 환경 변수
+| 변수 | 기본값 |
+|------|--------|
+| GEMINI_API_KEY | (필수) |
+| COMFYUI_URL | http://127.0.0.1:8188 |
+| ESRGAN_MODEL_PATH | ComfyUI/models/upscale_models/RealESRGAN_x4plus.pth |
+
+---
+
+## 3부: 성과·교훈·향후 과제
+
+### 슬라이드 11 — 기존 방식 vs WAN 방식 비교 & 핵심 교훈
 
 - 기존: 포즈별 이미지 각각 생성 → 캐릭터 정체성 유지 실패
 - WAN: 원본 1장 → 비디오 → 프레임 추출 → 캐릭터 정체성 100% 유지
 - 기존: 수동 검증 → WAN: 이중 자동 검증(수치+AI) + 자동 보정
 - 기존: 고정 프리셋 → WAN: AI가 모든 파라미터 자유 결정
-
-### 슬라이드 15 — 핵심 교훈 & 향후 과제
-
 - 교훈: Diffusion img2img의 "캐릭터 정체성 유지" 한계는 구조적
 - 교훈: I2V 접근이 일관성 문제를 근본적으로 해결
 - 교훈: Gemini Vision의 영상 직접 분석이 검증 자동화의 핵심
