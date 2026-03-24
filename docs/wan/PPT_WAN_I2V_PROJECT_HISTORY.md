@@ -9,11 +9,11 @@
 
 ### Discoverex Engine — Animate Pipeline
 
-**최종 목표**: 입력 이미지 1장으로부터 자연스러운 루프 애니메이션을 **완전 자동** 생성하여 웹(Lottie)으로 배포
+**최종 목표**: 입력 이미지 1장으로부터 자연스러운 애니메이션을 생성하여 웹(Lottie)으로 배포
 
-**배경**: 비주얼 추론 기반 퍼즐 생성 플랫폼(숨은그림찾기)에서 오브젝트별 자동 애니메이션이 핵심 요구사항
+**배경**: 오브젝트별 자동 애니메이션 생성이 핵심 요구사항
 
-**핵심 설계 원칙**: "LLM(Gemini Vision)이 모든 수치를 직접 결정" — 프리셋/분류 테이블 없이 AI가 액션·프롬프트·프레임수·검증 임계값을 자유롭게 결정하는 자율 루프
+**핵심 설계 원칙**: "LLM(Gemini Vision)이 모든 수치를 직접 판단" — AI가 액션·프롬프트·프레임수·검증 임계값을 자유롭게 결정하여 생성
 
 ### 파이프라인 5단계
 
@@ -36,13 +36,12 @@
 
 - 비주얼 추론 기반 퍼즐 생성 플랫폼 (숨은그림찾기 + 벤치마크)
 - 오브젝트별 자동 애니메이션이 핵심 요구사항
-- 테스트 캐릭터: 360×357px 카툰 스타일 개구리 (큰 머리/작은 몸)
 
 ### 슬라이드 2 — Phase 1: SD 계열 시도와 실패
 
-- SDXL img2img → 캐릭터 정체성 유지 실패
-- FLUX Kontext Pro → 컨셉만 유지, 디테일 변형
-- FLUX LoRA 학습 → 이미 변형된 이미지로 학습하여 "일반적 개구리"만 학습
+- SDXL img2img → 포즈별 이미지 생성 시 매번 캐릭터 외형이 달라짐 (정체성 유지 실패)
+- FLUX Kontext Pro → 컨셉만 유지, 디테일(무늬·색상·체형 비율) 변형
+- FLUX LoRA 학습 → 이미 변형된 이미지(위 방법으로 생성된)를 학습 데이터로 사용하여 특정 대상의 고유 디테일이 아닌 "일반적인 대상"의 패턴만 학습. 생성할 때마다 대상의 특징이 미묘하게 달라져 같은 대상으로 인식 불가
 
 ### 슬라이드 3 — 패러다임 전환 결정
 
@@ -56,16 +55,16 @@
 
 ### 슬라이드 4 — WAN 파이프라인 전체 아키텍처
 
-- Stage 1: 처리 모드 분류 (KEYFRAME_ONLY vs MOTION_NEEDED)
-- Stage 2: WAN 생성 + 검증 루프
-- Stage 3: 후처리 (마스크 합성, 배경 제거, Lottie 변환)
-- 핵심 모듈 10개의 역할과 관계
+- Stage 1: 처리 모드 분류 (KEYFRAME_ONLY / MOTION_NEEDED)
+- Stage 2: 마스크 생성 + WAN 생성 + 검증 루프
+- Stage 3: 후처리 (배경 제거, Lottie 변환)
+- 핵심 모듈 11개의 역할과 관계
 
 ### 슬라이드 5 — Stage 1: 사전 분류 (wan_mode_classifier)
 
 - Gemini Vision으로 입력 이미지 분석
 - 변형 가능한 부위 존재 여부로 2분류
-- KEYFRAME_ONLY → 기존 키프레임 엔진(CPU, 빠름)으로 처리
+- KEYFRAME_ONLY → Gemini Vision이 이미지에 가장 어울리는 액션을 미리 지정한 키프레임 10종 중 선정(suggested_action) → CSS 키프레임 엔진(CPU, GPU 불필요)이 해당 액션의 물리 수식 기반 애니메이션(nudge_horizontal, nudge_vertical, wobble, spin, bounce, pop, launch, float, parabolic, hop)을 translateX/Y·rotate·scale 키프레임으로 생성하여 Lottie JSON으로 변환
 - MOTION_NEEDED → WAN I2V 생성으로 진행
 - 판단 오류 시 MOTION_NEEDED fallback (안전한 방향)
 
@@ -80,7 +79,7 @@
 
 - 소형 이미지(<200px) 자동 업스케일: **Real-ESRGAN (spandrel)** 4x AI 초해상도 적용 (타일링 처리, ~200MB VRAM, 즉시 해제). pixel_art일 경우 nearest-neighbor fallback
 - 480×480 캔버스에 패딩 배치 (원본 < 캔버스면 축소 없이 유지)
-- WanMaskGenerator: moving_zone → 흑백 마스크 PNG 생성
+- PilMaskGenerator: moving_zone → 흑백 마스크 PNG 생성
 - 흰색(255) = fixed zone, 검정(0) = moving zone
 - 경계에 Gaussian blur 적용으로 자연스러운 전환
 
@@ -108,9 +107,8 @@
 
 ### 슬라이드 11 — 후처리 파이프라인
 
-- 마스크 기반 픽셀 합성: SetLatentNoiseMask가 WAN video latent(5D)와 비호환 → 프레임별 후처리로 대체
-- 배경 제거 (WanBgRemover): 투명 APNG + WebM 출력
-- Lottie 변환 (WanLottieConverter): 웹 배포 가능한 JSON 애니메이션
+- 배경 제거 (RembgBgRemover): rembg U2Net 딥러닝 기반 시맨틱 세그멘테이션 — 흰 배경 위 흰 오브젝트도 정확 분리. 투명 PNG 시퀀스 출력
+- 포맷 변환 (MultiFormatConverter): 투명 PNG 시퀀스 → APNG + WebM + Lottie JSON 통합 변환. 48fps 업샘플링, 캔버스 4x 확장(잘림 방지), 전체 프레임 union bbox 크롭, 원본 이미지 크기 자동 적용
 
 ### 슬라이드 12 — Stage 2: 모션 후 키프레임 판단 (wan_post_motion_classifier)
 
@@ -123,7 +121,7 @@
 
 - Flask 기반 REST API: classify → generate → status 폴링 → select_video → classify_motion
 - 웹 대시보드: 이미지 업로드 → 분류 → 모션 생성 → 영상 선택 → 배경 제거/Lottie 변환까지 전 과정 GUI
-- 모델 선택 (WAN 2.1/2.2, 다양한 GGUF 양자화), 생성 횟수 설정
+- 모델 선택 (WAN 2.1 GGUF 양자화 3종: Q3_K_S/Q4_K_S/Q4_K_M), 생성 횟수 설정
 - VRAM 관리: 생성 후 free_memory (ComfyUI /free + gc.collect + torch.cuda.empty_cache)
 
 ---
@@ -150,6 +148,38 @@
 
 ## 부록 (선택)
 
-- 모듈 의존 관계도: wan_backend를 중심으로 10개 모듈의 호출 관계 다이어그램
+- 모듈 의존 관계도: sprite_gen은 wan_backend가 10개 모듈을 직접 import하는 중심 구조, engine은 orchestrator가 포트 인터페이스(DI)를 통해 11개 어댑터를 호출하는 헥사고널 구조
 - 검증 항목 상세표: 수치 검증 9개 항목의 기준값과 판단 로직 + AI 검증 Gemini Vision 자유 판단 구조
-- ComfyUI 워크플로우 노드 맵: 16개 노드의 연결 구조 시각화
+- ComfyUI 워크플로우 흐름 (12개 노드):
+  ```
+  [CLIPLoader] ──→ [CLIPTextEncode positive] ──┐
+                └→ [CLIPTextEncode negative] ──┤
+  [CLIPVisionLoader] → [CLIPVisionEncode] ─────┤
+  [VAELoader] ─────────────────────────────────┤
+  [LoadImage] ─────────────────────────────────┤
+                                               ▼
+                                    [WanImageToVideo]
+                                        │ positive/negative/latent
+  [UnetLoaderGGUF] ────────────────────→│
+                                        ▼
+                                    [KSampler]
+                                        │
+                                        ▼
+                          [VAEDecode] ← VAELoader
+                                        │
+                                        ▼
+                                [VHS_VideoCombine] → MP4 출력
+  ```
+  | 노드 | 기능 |
+  |------|------|
+  | CLIPLoader | 텍스트 인코더(UMT5-XXL) 로드 — 프롬프트를 모델이 이해하는 임베딩으로 변환 |
+  | CLIPTextEncode ×2 | positive(생성할 모션 설명)/negative(금지할 모션) 프롬프트를 임베딩으로 인코딩 |
+  | CLIPVisionLoader | CLIP Vision 모델 로드 — 입력 이미지의 시각적 특징 추출용 |
+  | CLIPVisionEncode | 입력 이미지를 CLIP Vision 임베딩으로 변환 — 캐릭터 정체성 보존의 핵심 |
+  | VAELoader | VAE 디코더 로드 — latent space ↔ 픽셀 공간 변환 |
+  | LoadImage | 입력 이미지(전처리된 480×480 PNG) 로드 |
+  | UnetLoaderGGUF | WAN 2.1 I2V-14B GGUF 모델 로드 — 실제 영상 생성을 수행하는 디퓨전 모델 |
+  | WanImageToVideo | 이미지 조건 설정 — CLIPVision 임베딩 + VAE concat으로 입력 이미지 기반 16ch latent 생성 |
+  | KSampler | 디퓨전 샘플링 — 노이즈에서 시작하여 steps만큼 반복하며 영상 latent 생성 (seed·fps·scale 주입) |
+  | VAEDecode | 생성된 latent를 픽셀 프레임으로 디코딩 |
+  | VHS_VideoCombine | 디코딩된 프레임들을 H.264 MP4로 결합 (fps·pingpong 설정 적용) |
