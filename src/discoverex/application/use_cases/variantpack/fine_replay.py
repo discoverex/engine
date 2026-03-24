@@ -73,7 +73,11 @@ def refine_replay_regions(
             top = int(bbox[1])
             patch_w = int(bbox[2])
             patch_h = int(bbox[3])
+            if patch_w <= 0 or patch_h <= 0:
+                continue
             patch = background_image[top : top + patch_h, left : left + patch_w]
+            if patch.size == 0:
+                continue
             patch_features = _extract_feature_bundle(
                 patch,
                 config=config,

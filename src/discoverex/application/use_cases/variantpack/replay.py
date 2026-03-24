@@ -155,9 +155,14 @@ def build_replay_fixture_inputs(
             attributes={
                 "proposal_rank": int(item["proposal_rank"]),
                 "selection_strategy": "replay_fixture_coarse",
+                "fixture_region_id": region_id,
                 "selected_variant_id": str(item["selected_variant_id"]),
                 "selected_variant_config": dict(item["selected_variant_config"]),
                 "object_label": str(item.get("object_label", "") or region_id),
+                "object_prompt": str(item.get("object_prompt", "") or object_prompt),
+                "object_negative_prompt": str(
+                    item.get("object_negative_prompt", "") or object_negative_prompt
+                ),
                 "patch_selection_coarse_ref": str(item["coarse_selection_ref"]),
                 "coarse_variant_image_ref": str(item["coarse_variant_image_ref"]),
                 "coarse_variant_config_ref": str(item["coarse_variant_config_ref"]),

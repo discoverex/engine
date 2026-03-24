@@ -25,7 +25,7 @@ variants:
       - models.inpaint.final_polish_strength=0.10
       - models.inpaint.final_polish_cfg=3.0
 execution:
-  mode: case_per_run
+  mode: variant_pack
   runner_type: combined
   collector_adapter: combined
   artifact_namespace: naturalness_sweeps

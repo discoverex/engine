@@ -80,6 +80,8 @@ def record_layer_candidate(
             "selected_variant_ref",
             "patch_selection_coarse_ref",
             "patch_selection_fine_ref",
+            "fixture_region_id",
+            "object_label",
             "object_prompt_resolved",
             "object_negative_prompt_resolved",
             "generation_prompt_resolved",

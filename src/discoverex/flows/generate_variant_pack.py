@@ -32,6 +32,7 @@ from discoverex.application.use_cases.variantpack.runtime import (
     variant_run_ids,
 )
 from discoverex.config import PipelineConfig
+from discoverex.application.services.runtime import require_resolved_settings
 from discoverex.application.services.worker_artifacts import (
     write_worker_artifact_manifest,
 )
@@ -60,7 +61,15 @@ logger = get_logger("discoverex.generate.variant_pack")
 def _prepare_shared_inputs(
     *, args: dict[str, Any], config: PipelineConfig, execution_snapshot: dict[str, Any] | None, execution_snapshot_path: Path | None
 ) -> tuple[Any, Any, Any, Any, list[Any], Any, Any]:
-    base_context = _build_context.submit(config, execution_snapshot, execution_snapshot_path).result()
+    settings = require_resolved_settings(
+        execution_snapshot,
+        consumer="generate_inpaint_variant_pack",
+    )
+    base_context = _build_context.submit(
+        settings,
+        execution_snapshot,
+        execution_snapshot_path,
+    ).result()
     prepare_ids = variant_run_ids(scene_id=f"scene-{uuid4().hex[:12]}", variant_id="prepare")
     prepare_dir = variant_prepare_dir(
         artifacts_root=Path(base_context.artifacts_root),

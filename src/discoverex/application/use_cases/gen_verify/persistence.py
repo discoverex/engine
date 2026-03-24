@@ -148,11 +148,35 @@ def _weighted_mean_min(values: list[float]) -> float:
 
 
 def _object_label(*, region_attrs: dict[str, Any], region_id: str) -> str:
-    for key in ("object_label", "object_prompt_resolved", "object_prompt"):
+    for key in (
+        "object_label",
+        "generation_prompt_resolved",
+        "object_prompt",
+        "object_prompt_resolved",
+    ):
         value = str(region_attrs.get(key, "") or "").strip()
         if value:
             return value
     return region_id
+
+
+def _object_prompt(*, region_attrs: dict[str, Any]) -> str:
+    for key in (
+        "object_prompt",
+        "generation_prompt_resolved",
+        "object_prompt_resolved",
+    ):
+        value = str(region_attrs.get(key, "") or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _object_run_name(*, scene_id: str, object_label: str, region_id: str) -> str:
+    label = object_label.strip() or region_id
+    if label == region_id:
+        return f"{scene_id}:{region_id}"
+    return f"{scene_id}:{label}:{region_id}"
 
 
 def _scene_object_assets(scene: Scene) -> list[GeneratedObjectAsset]:
@@ -270,7 +294,10 @@ def _object_score_payloads(
                     region_attrs=attrs,
                     region_id=region.region_id,
                 ),
-                "object_prompt": str(attrs.get("object_prompt", "") or "").strip(),
+                "fixture_region_id": str(
+                    attrs.get("fixture_region_id", "") or region.region_id
+                ).strip(),
+                "object_prompt": _object_prompt(region_attrs=attrs),
                 "mask_source": str(
                     attrs.get("mask_source")
                     or quality.get("mask_source")
@@ -601,6 +628,7 @@ def _track_object_runs(
         return
     for item in object_scores:
         region_id = str(item["region_id"])
+        fixture_region_id = str(item.get("fixture_region_id", "") or region_id)
         object_label = str(item["object_label"])
         params = apply_tracking_identity(
             {
@@ -613,6 +641,7 @@ def _track_object_runs(
                 "search_stage": str(args.get("search_stage", "") or ""),
                 "policy.object_label": object_label,
                 "policy.region_id": region_id,
+                "policy.fixture_region_id": fixture_region_id,
                 "policy.object_prompt": str(item.get("object_prompt", "") or ""),
                 "policy.mask_source": str(item.get("mask_source", "") or ""),
             },
@@ -645,12 +674,18 @@ def _track_object_runs(
         tags = {
             "run.kind": "object",
             "region_id": region_id,
+            "fixture_region_id": fixture_region_id,
             "object_label": object_label,
+            "object_name": object_label,
         }
         if parent_run_id:
             tags["mlflow.parentRunId"] = parent_run_id
         context.tracker.log_pipeline_run(
-            run_name=f"{scene.meta.scene_id}:{region_id}",
+            run_name=_object_run_name(
+                scene_id=scene.meta.scene_id,
+                object_label=object_label,
+                region_id=region_id,
+            ),
             params=params,
             metrics=metrics,
             artifacts=[],
