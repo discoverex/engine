@@ -245,12 +245,24 @@ def _object_score_payloads(
         for item in scores:
             if isinstance(item, dict):
                 object_regions[str(item.get("object_ref", "")).strip()] = item
+    verify_regions: dict[str, dict[str, Any]] = {}
+    for item in getattr(scene.verification, "hidden_objects", []):
+        obj_id = str(getattr(item, "obj_id", "") or "").strip()
+        if not obj_id:
+            continue
+        verify_regions[obj_id] = {
+            "human_field": float(getattr(item, "human_field", 0.0) or 0.0),
+            "ai_field": float(getattr(item, "ai_field", 0.0) or 0.0),
+            "D_obj": float(getattr(item, "D_obj", 0.0) or 0.0),
+            "difficulty_signals": dict(getattr(item, "difficulty_signals", {}) or {}),
+        }
     payloads: list[dict[str, Any]] = []
     for region in scene.regions:
         attrs = region.attributes
         object_ref = str(attrs.get("object_image_ref", "") or "").strip()
         quality = object_regions.get(object_ref, {})
         natural = naturalness_regions.get(region.region_id, {})
+        verify = verify_regions.get(region.region_id, {})
         payloads.append(
             {
                 "region_id": region.region_id,
@@ -258,19 +270,70 @@ def _object_score_payloads(
                     region_attrs=attrs,
                     region_id=region.region_id,
                 ),
+                "object_prompt": str(attrs.get("object_prompt", "") or "").strip(),
+                "mask_source": str(
+                    attrs.get("mask_source")
+                    or quality.get("mask_source")
+                    or ""
+                ).strip(),
                 "verify_score": float(attrs.get("verify_score", 0.0) or 0.0),
                 "verify_pass": bool(attrs.get("verify_pass", False)),
+                "verify_human_field": float(verify.get("human_field", 0.0) or 0.0),
+                "verify_ai_field": float(verify.get("ai_field", 0.0) or 0.0),
+                "verify_D_obj": float(verify.get("D_obj", 0.0) or 0.0),
+                "verify_difficulty_signals": dict(verify.get("difficulty_signals", {}) or {}),
                 "naturalness_score": float(
                     natural.get("natural_hidden_score", 0.0) or 0.0
                 ),
                 "placement_fit": float(natural.get("placement_fit", 0.0) or 0.0),
                 "seam_visibility": float(natural.get("seam_visibility", 0.0) or 0.0),
                 "saliency_lift": float(natural.get("saliency_lift", 0.0) or 0.0),
+                "naturalness_diagnosis_signals": dict(
+                    natural.get("diagnosis_signals", {}) or {}
+                ),
                 "object_quality_score": float(quality.get("overall_score", 0.0) or 0.0),
                 "object_quality_subscores": dict(quality.get("subscores", {}) or {}),
+                "object_quality_raw_metrics": dict(quality.get("metrics", {}) or {}),
             }
         )
     return payloads
+
+
+def _float_metrics(prefix: str, payload: dict[str, Any]) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for key, value in payload.items():
+        if isinstance(value, bool):
+            metrics[f"{prefix}.{key}"] = 1.0 if value else 0.0
+            continue
+        if isinstance(value, (int, float)):
+            metrics[f"{prefix}.{key}"] = float(value)
+    return metrics
+
+
+def _verification_metrics(scene: Scene) -> dict[str, float]:
+    metrics = {
+        "verify.logical_score": float(scene.verification.logical.score),
+        "verify.perception_score": float(scene.verification.perception.score),
+        "verify.total_score": float(scene.verification.final.total_score),
+        "verify.pass": 1.0 if scene.verification.final.pass_ else 0.0,
+        "verify.scene_difficulty": float(scene.verification.scene_difficulty),
+        "verify.hidden_object_count": float(len(scene.verification.hidden_objects)),
+    }
+    metrics.update(_float_metrics("verify.logical.signals", scene.verification.logical.signals))
+    metrics.update(
+        _float_metrics(
+            "verify.perception.signals",
+            scene.verification.perception.signals,
+        )
+    )
+    return metrics
+
+
+def _object_quality_summary_metrics(object_quality: dict[str, Any]) -> dict[str, float]:
+    summary = object_quality.get("summary", {})
+    if not isinstance(summary, dict):
+        return {}
+    return _float_metrics("object_quality", summary)
 
 
 def _representative_scores(
@@ -482,11 +545,9 @@ def track_run(
             context.settings,
         ),
         metrics={
-            "logical_score": scene.verification.logical.score,
-            "perception_score": scene.verification.perception.score,
-            "total_score": scene.verification.final.total_score,
-            "pass": 1.0 if scene.verification.final.pass_ else 0.0,
+            **_verification_metrics(scene),
             **representative_scores,
+            **_object_quality_summary_metrics(object_quality),
             **_naturalness_metrics(naturalness_artifact),
         },
         artifacts=[artifact_path for _, artifact_path in artifact_entries],
@@ -527,6 +588,10 @@ def _track_object_runs(
     object_quality: dict[str, Any],
     parent_run_id: str | None,
 ) -> None:
+    execution_snapshot = getattr(context, "execution_snapshot", None)
+    args = execution_snapshot.get("args", {}) if isinstance(execution_snapshot, dict) else {}
+    if not isinstance(args, dict):
+        args = {}
     object_scores = _object_score_payloads(
         scene=scene,
         naturalness_payload=naturalness_payload,
@@ -541,22 +606,42 @@ def _track_object_runs(
             {
                 "scene_id": scene.meta.scene_id,
                 "version_id": scene.meta.version_id,
+                "sweep_id": str(args.get("sweep_id", "") or ""),
+                "policy_id": str(args.get("policy_id", "") or ""),
+                "scenario_id": str(args.get("scenario_id", "") or ""),
+                "variant_id": str(args.get("variant_id", "") or ""),
+                "search_stage": str(args.get("search_stage", "") or ""),
                 "policy.object_label": object_label,
                 "policy.region_id": region_id,
+                "policy.object_prompt": str(item.get("object_prompt", "") or ""),
+                "policy.mask_source": str(item.get("mask_source", "") or ""),
             },
             context.settings,
         )
         metrics = {
             "verify.object_score": float(item["verify_score"]),
+            "verify.object_pass": 1.0 if bool(item["verify_pass"]) else 0.0,
+            "verify.human_field": float(item["verify_human_field"]),
+            "verify.ai_field": float(item["verify_ai_field"]),
+            "verify.D_obj": float(item["verify_D_obj"]),
             "naturalness.object_score": float(item["naturalness_score"]),
             "naturalness.placement_fit": float(item["placement_fit"]),
             "naturalness.seam_visibility": float(item["seam_visibility"]),
             "naturalness.saliency_lift": float(item["saliency_lift"]),
             "object_quality.object_score": float(item["object_quality_score"]),
         }
+        for key, value in dict(item["verify_difficulty_signals"]).items():
+            if isinstance(value, (int, float)):
+                metrics[f"verify.difficulty_signals.{key}"] = float(value)
+        for key, value in dict(item["naturalness_diagnosis_signals"]).items():
+            if isinstance(value, (int, float)):
+                metrics[f"naturalness.diagnosis_signals.{key}"] = float(value)
         for key, value in dict(item["object_quality_subscores"]).items():
             if isinstance(value, (int, float)):
                 metrics[f"object_quality.{key}"] = float(value)
+        for key, value in dict(item["object_quality_raw_metrics"]).items():
+            if isinstance(value, (int, float)):
+                metrics[f"object_quality.raw.{key}"] = float(value)
         tags = {
             "run.kind": "object",
             "region_id": region_id,
