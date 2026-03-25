@@ -59,6 +59,16 @@ validator = [
     "pillow>=12.1.1",
     "ultralytics>=8.4.19",
 ]
+animate = [
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
+    "google-genai>=1.0.0",
+    "scipy>=1.11.0",
+    "onnxruntime>=1.17.0",
+    "rembg>=2.0.50",
+    "spandrel>=0.4.0",
+    "torch>=2.10.0",
+]
 dev = [
     "mypy>=1.19.1",
     "pytest>=9.0.2",
@@ -142,6 +152,14 @@ module = [
     "ultralytics",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "google",
+    "google.*",
+]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [dependency-groups]
 dev = [

@@ -7,6 +7,18 @@ from discoverex.models.types import (
     PerceptionRequest,
 )
 
+from .animate import (
+    AIValidationPort,
+    AnimationGenerationPort,
+    AnimationValidationPort,
+    BackgroundRemovalPort,
+    FormatConversionPort,
+    KeyframeGenerationPort,
+    MaskGenerationPort,
+    ModeClassificationPort,
+    PostMotionClassificationPort,
+    VisionAnalysisPort,
+)
 from .io import SceneIOPort
 from .models import FxPort, HiddenRegionPort, InpaintPort, PerceptionPort
 from .reporting import ReportWriterPort
@@ -14,7 +26,12 @@ from .storage import ArtifactStorePort, MetadataStorePort
 from .tracking import TrackerPort
 
 __all__ = [
+    "AIValidationPort",
+    "AnimationGenerationPort",
+    "AnimationValidationPort",
     "ArtifactStorePort",
+    "BackgroundRemovalPort",
+    "FormatConversionPort",
     "FxPort",
     "FxPrediction",
     "FxRequest",
@@ -23,10 +40,15 @@ __all__ = [
     "InpaintPort",
     "InpaintPrediction",
     "InpaintRequest",
+    "KeyframeGenerationPort",
+    "MaskGenerationPort",
     "MetadataStorePort",
+    "ModeClassificationPort",
     "PerceptionPort",
-    "ReportWriterPort",
     "PerceptionRequest",
+    "PostMotionClassificationPort",
+    "ReportWriterPort",
     "SceneIOPort",
     "TrackerPort",
+    "VisionAnalysisPort",
 ]

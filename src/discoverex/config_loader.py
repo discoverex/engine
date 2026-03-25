@@ -44,6 +44,24 @@ def resolve_pipeline_config(
     )
 
 
+def load_raw_animate_config(
+    config_name: str,
+    config_dir: str | Path = "conf",
+    overrides: list[str] | None = None,
+) -> dict:
+    """Load raw Hydra config dict for animate pipeline (no Pydantic validation)."""
+    from hydra import compose, initialize_config_dir
+    from omegaconf import OmegaConf
+
+    cfg_dir = Path(config_dir).resolve()
+    with initialize_config_dir(config_dir=str(cfg_dir), version_base=None):
+        cfg = compose(config_name=config_name, overrides=overrides or [])
+    data = OmegaConf.to_container(cfg, resolve=True)
+    if not isinstance(data, dict):
+        raise ValueError("Hydra config must resolve to dict")
+    return data
+
+
 def load_validator_config(
     config_name: str = "validator",
     config_dir: str | Path = "conf",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -151,4 +152,54 @@ def build_validator_context(
         hidden_obj_min=cfg.thresholds.hidden_obj_min,
         scoring_weights=scoring_weights,
         bundle_store=bundle_store,
+    )
+
+
+def build_animate_context(
+    config: dict[str, Any],
+) -> Any:
+    """Build AnimateOrchestrator from Hydra-resolved config dict."""
+    from discoverex.application.use_cases.animate.orchestrator import (
+        AnimateOrchestrator,
+    )
+    from discoverex.config.animate_schema import AnimatePipelineConfig
+
+    cfg = AnimatePipelineConfig.model_validate(config)
+
+    mode_classifier = instantiate(cfg.models.mode_classifier.as_kwargs())
+    vision_analyzer = instantiate(cfg.models.vision_analyzer.as_kwargs())
+    animation_generator = instantiate(cfg.models.animation_generation.as_kwargs())
+    ai_validator = instantiate(cfg.models.ai_validator.as_kwargs())
+    post_motion = instantiate(cfg.models.post_motion_classifier.as_kwargs())
+
+    # load() lifecycle — Gemini needs api_key, ComfyUI/Dummy accept None.
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    handle: ModelHandle | None = (
+        ModelHandle(name="gemini", version="v0", runtime="api", extra={"api_key": api_key})
+        if api_key
+        else None
+    )
+    for adapter in (
+        mode_classifier, vision_analyzer, animation_generator,
+        ai_validator, post_motion,
+    ):
+        if hasattr(adapter, "load"):
+            adapter.load(handle)
+
+    _inst = lambda c: instantiate(c.as_kwargs())  # noqa: E731
+    aa = cfg.animate_adapters
+
+    return AnimateOrchestrator(
+        mode_classifier=mode_classifier,
+        vision_analyzer=vision_analyzer,
+        animation_generator=animation_generator,
+        numerical_validator=_inst(aa.numerical_validator),
+        ai_validator=ai_validator,
+        post_motion_classifier=post_motion,
+        bg_remover=_inst(aa.bg_remover),
+        mask_generator=_inst(aa.mask_generator),
+        keyframe_generator=_inst(aa.keyframe_generator),
+        format_converter=_inst(aa.format_converter),
+        image_upscaler=_inst(aa.image_upscaler),
+        max_retries=cfg.max_retries,
     )

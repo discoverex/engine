@@ -203,3 +203,55 @@ def animate_stub(
             else {}
         ),
     }
+
+
+def animate_pipeline(
+    *,
+    args: dict[str, Any],
+    config: PipelineConfig,
+    execution_snapshot: dict[str, Any] | None = None,
+    execution_snapshot_path: Path | None = None,
+) -> dict[str, Any]:
+    """Animate pipeline flow — orchestrates sprite animation generation."""
+    from discoverex.bootstrap.factory import build_animate_context
+
+    image_path = args.get("image_path", "")
+    if not image_path:
+        return {
+            "status": "failed",
+            "failure_reason": "image_path is required",
+            **(
+                {"execution_config": str(execution_snapshot_path)}
+                if execution_snapshot_path is not None
+                else {}
+            ),
+        }
+
+    # PipelineConfig strips animate-specific keys (extra="ignore").
+    # Re-compose raw Hydra config to preserve animate models/adapters.
+    if execution_snapshot and execution_snapshot.get("config_name"):
+        from discoverex.config_loader import load_raw_animate_config
+
+        raw_config = load_raw_animate_config(
+            config_name=execution_snapshot["config_name"],
+            config_dir=execution_snapshot.get("config_dir", "conf"),
+            overrides=execution_snapshot.get("overrides", []),
+        )
+    else:
+        raw_config = config.model_dump()
+    orchestrator = build_animate_context(raw_config)
+    result = orchestrator.run(Path(image_path))
+
+    payload: dict[str, Any] = {
+        "status": "success" if result.success else "failed",
+    }
+    if result.video_path:
+        payload["video_path"] = str(result.video_path)
+    if result.analysis:
+        payload["action"] = result.analysis.action_desc
+    if result.mode:
+        payload["mode"] = result.mode.processing_mode.value
+    payload["attempts"] = result.attempts
+    if execution_snapshot_path is not None:
+        payload["execution_config"] = str(execution_snapshot_path)
+    return payload
