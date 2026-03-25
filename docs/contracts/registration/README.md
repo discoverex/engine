@@ -1,30 +1,29 @@
-# Registration Contract
+# 등록과 배포 계약
 
-This directory documents how this repository exposes Prefect flows for deployment and how workers execute the engine after registration.
+이 디렉터리는 이 저장소가 Prefect flow를 어떻게 공개하고, 등록된 실행이 어떤 파라미터와 런타임 경계를 갖는지 설명한다. 운영 절차는 [CLI 운영 가이드](/home/esillileu/discoverex/engine/docs/ops/cli.md) 와 [Sweep 운영 가이드](/home/esillileu/discoverex/engine/docs/ops/sweeps.md)를 본다.
 
-The source of truth for the implementation lives in:
+구현 source of truth:
 
 - [infra/ops](/home/esillileu/discoverex/engine/infra/ops)
 - [infra/prefect](/home/esillileu/discoverex/engine/infra/prefect)
 - [prefect_flow.py](/home/esillileu/discoverex/engine/prefect_flow.py)
 
-Companion documents:
+관련 계약 문서:
 
 - [runtime-auth-and-env.md](/home/esillileu/discoverex/engine/docs/contracts/registration/runtime-auth-and-env.md)
 - [artifact-persistence-contract.md](/home/esillileu/discoverex/engine/docs/contracts/registration/artifact-persistence-contract.md)
 - [worker-managed-output-directory-contract.md](/home/esillileu/discoverex/engine/docs/contracts/registration/worker-managed-output-directory-contract.md)
-- [implementation-checklist.md](/home/esillileu/discoverex/engine/docs/contracts/registration/implementation-checklist.md)
 
-## 1. What Gets Registered
+## 1. 등록되는 flow kind
 
-This repository registers purpose-scoped Prefect deployments for these flow kinds:
+이 저장소는 목적 기반 Prefect deployment를 다음 flow kind로 등록한다.
 
 - `combined`
 - `generate`
 - `verify`
 - `animate`
 
-The public callables live at the repository root:
+공개 callable:
 
 - `prefect_flow.py:run_job_flow`
 - `prefect_flow.py:run_generate_job_flow`
@@ -32,105 +31,79 @@ The public callables live at the repository root:
 - `prefect_flow.py:run_animate_job_flow`
 - `prefect_flow.py:run_combined_job_flow`
 
-## 2. Registration Implementation
+## 2. deployment naming 계약
 
-Registration and submission logic lives in:
+deployment 이름은 [infra/ops/branch_deployments.py](/home/esillileu/discoverex/engine/infra/ops/branch_deployments.py) 에서 정규화한다.
 
-- [infra/ops/deploy_prefect_flows.py](/home/esillileu/discoverex/engine/infra/ops/deploy_prefect_flows.py)
-- [infra/ops/register_prefect_job.py](/home/esillileu/discoverex/engine/infra/ops/register_prefect_job.py)
-- [infra/ops/register_orchestrator_job.py](/home/esillileu/discoverex/engine/infra/ops/register_orchestrator_job.py)
-- [scripts/cli/prefect.py](/home/esillileu/discoverex/engine/scripts/cli/prefect.py)
-
-Operational wrapper commands:
-
-- `./bin/cli prefect deploy flow <flow-kind> --purpose <purpose>`
-- `./bin/cli prefect register flow <flow-kind> --purpose <purpose>`
-- `./bin/cli prefect register batch <csv> --purpose <purpose>`
-- `./bin/cli prefect deploy experiment --experiment <name> --purpose <purpose>`
-- `./bin/cli prefect run gen`
-- `./bin/cli prefect run obj`
-- `./bin/cli prefect sweep run --sweep-spec <path>`
-- `./bin/cli prefect sweep collect --sweep-spec <path>`
-
-## 3. Deployment Naming
-
-Deployments are purpose-scoped and normalized through [infra/ops/branch_deployments.py](/home/esillileu/discoverex/engine/infra/ops/branch_deployments.py).
-
-Flow-level naming follows the repository flow kinds and deployment purposes:
+기본 naming:
 
 - `discoverex-generate-<purpose>`
 - `discoverex-verify-<purpose>`
 - `discoverex-animate-<purpose>`
 - `discoverex-combined-<purpose>`
 
-Supported purposes:
+지원 purpose:
 
 - `standard`
 - `batch`
 - `debug`
 - `backfill`
 
-Default queue mapping:
+기본 queue mapping:
 
 - `standard` -> `gpu-fixed`
 - `batch` -> `gpu-fixed-batch`
 - `debug` -> `gpu-fixed-debug`
 - `backfill` -> `gpu-fixed-backfill`
 
-Experiment deployments may use a separate naming path when they need explicit experiment IDs, but the base operational surface uses the purpose-scoped names above.
+## 3. 등록된 flow 파라미터
 
-## 4. Expected Flow Parameters
-
-Registered flows accept:
+등록 flow는 다음 파라미터를 받는다.
 
 - `job_spec_json`
 - optional `resume_key`
 - optional `checkpoint_dir`
 
-These match the call signatures implemented in [infra/prefect/flow.py](/home/esillileu/discoverex/engine/infra/prefect/flow.py).
+실제 시그니처는 [infra/prefect/flow.py](/home/esillileu/discoverex/engine/infra/prefect/flow.py)에 정의되어 있다.
 
-## 5. Runtime Model
+## 4. 실행 모델 계약
 
-After registration, execution proceeds as:
+등록 이후 실행 모델은 다음 경계를 갖는다.
 
-1. a submitter sends `job_spec_json` to a deployment
-2. Prefect schedules the flow run onto a worker pool and queue
-   default queue selection is purpose-based, but run submission may override the queue for isolated experiments
-3. the worker/runtime layer resolves env and runtime settings
-4. the engine is executed with the extracted inputs payload
-5. worker-owned artifacts are written and uploaded
-6. engine-owned artifacts are optionally uploaded through the manifest contract
+1. submitter가 `job_spec_json` 을 deployment에 전달한다.
+2. Prefect가 worker pool 과 queue에 flow run을 배치한다.
+3. worker/runtime 레이어가 env 와 runtime settings를 준비한다.
+4. 엔진이 extracted inputs payload로 실행된다.
+5. worker-owned artifact가 기록된다.
+6. engine-owned artifact는 manifest 계약을 통해 후처리될 수 있다.
 
-## 6. Sweep Contract
+세부 env 와 artifact 책임은 하위 계약 문서를 따른다.
 
-Supported sweep input is always a YAML spec passed as `--sweep-spec <path>`.
+## 5. sweep 계약 경계
 
-Current supported sweep SSOT:
+이 문서는 sweep 운영 절차를 설명하지 않는다. 다만 등록/실행 경계상 다음 사실은 안정 계약으로 본다.
 
-- object-quality sweep submission and collection
+- sweep 입력은 `--sweep-spec <yaml>` 기반이다
+- repo-managed submitted manifest 기본 위치는 `infra/ops/manifests/<sweep-id>.submitted.json` 이다
+- sweep spec 은 `infra/ops/specs/sweep/` 아래에 존재한다
 
-Sweep state contract:
+운영 규칙과 상태 분류는 [docs/ops/sweeps.md](/home/esillileu/discoverex/engine/docs/ops/sweeps.md)를 본다.
 
-- repo-managed submitted manifest defaults to `infra/ops/manifests/<sweep-id>.submitted.json`
-- `sweep run` merges by `sweep_id`, `policy_id`, `scenario_id`
-- collector classifies rows as `completed`, `pending`, `failed`, `cancelled`, `failed_to_collect`, or `not_submitted`
-- queue override remains allowed at submit time with `--work-queue-name`
+## 6. source/import 요구사항
 
-## 7. Source and Import Requirements
-
-The runtime assumes this repository is importable enough to load:
+runtime은 최소한 다음 모듈을 import 가능해야 한다.
 
 - [prefect_flow.py](/home/esillileu/discoverex/engine/prefect_flow.py)
 - [infra/prefect/flow.py](/home/esillileu/discoverex/engine/infra/prefect/flow.py)
 
-The embedded worker stack mounts the minimal live source paths documented in [infra/worker/README.md](/home/esillileu/discoverex/engine/infra/worker/README.md).
+embedded worker stack의 mount 전제는 [infra/worker/README.md](/home/esillileu/discoverex/engine/infra/worker/README.md)에 둔다.
 
-## 8. Stable Contract Boundary
+## 7. stable boundary
 
-The stable registration contract for consumers of this repository is:
+외부 소비자 기준 안정 경계는 다음이다.
 
-- use one of the public Prefect callables in `prefect_flow.py`
-- provide a valid `job_spec_json`
-- rely on worker-managed runtime env and artifact handling
+- `prefect_flow.py` 의 공개 callable 사용
+- 유효한 `job_spec_json` 제공
+- worker-managed runtime env 와 artifact handling 신뢰
 
-Internal implementation details such as compatibility handler names, lazy imports, or specific stage task layout are intentionally outside the stable registration boundary.
+내부 handler 이름, lazy import, stage task 분해 방식은 안정 계약에 포함하지 않는다.

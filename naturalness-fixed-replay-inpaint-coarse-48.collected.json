@@ -1,9 +1,0 @@
-{
-  "sweep_id": "naturalness-fixed-replay-inpaint-coarse-48",
-  "artifacts_root": "/var/lib/discoverex/engine-runs",
-  "expected_case_count": 48,
-  "observed_case_count": 0,
-  "missing_case_count": 48,
-  "policy_count": 0,
-  "policies": []
-}

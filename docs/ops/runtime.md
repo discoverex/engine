@@ -1,47 +1,55 @@
-# Discoverex Runtime Guide
+# Discoverex 런타임 가이드
 
-This document describes how the engine runs locally and under Prefect-managed workers.
+이 문서는 엔진이 local, worker, Prefect 환경에서 어떻게 실행되는지 설명한다. CLI 사용법은 [CLI 운영 가이드](/home/esillileu/discoverex/engine/docs/ops/cli.md), worker/env 계약은 [등록/배포 계약](/home/esillileu/discoverex/engine/docs/contracts/registration/README.md)을 본다.
 
-## 1. Execution Modes
+## 1. 실행 모드
 
 ### Local mode
 
-Local mode is used for development and direct CLI execution.
+개발과 직접 CLI 실행에 사용한다.
 
-- entrypoint: `uv run discoverex ...`
-- runtime mode in inline job specs: `local`
-- typical storage: local files under `artifacts/`
-- typical tracking: local MLflow or explicitly configured tracking URI
+- 엔트리포인트: `uv run discoverex ...`
+- inline job spec runtime mode: `local`
+- 일반적인 저장 위치: `artifacts/`
+- 일반적인 tracking: local MLflow 또는 명시적으로 지정한 tracking URI
 
 ### Worker mode
 
-Worker mode is used when the engine is launched from a Prefect flow.
+Prefect flow가 엔진을 실행할 때 사용한다.
 
-- entrypoint: Prefect callable in [prefect_flow.py](/home/esillileu/discoverex/engine/prefect_flow.py)
-- runtime env is prepared by [infra/prefect/flow.py](/home/esillileu/discoverex/engine/infra/prefect/flow.py)
-- worker-managed artifacts and MLflow linkage are applied after engine execution
-- control-plane submission and deployment live under [infra/ops](/home/esillileu/discoverex/engine/infra/ops)
+- 엔트리포인트: [prefect_flow.py](/home/esillileu/discoverex/engine/prefect_flow.py) 공개 callable
+- 실제 runtime 준비: [infra/prefect/flow.py](/home/esillileu/discoverex/engine/infra/prefect/flow.py)
+- worker-managed artifact 와 MLflow linkage 적용
+- control plane submission/deployment 는 [infra/ops](/home/esillileu/discoverex/engine/infra/ops) 에 존재
 
-## 2. Public Engine Commands
+## 2. 공개 실행 명령과 역할
 
-The engine runtime supports:
+엔진 런타임에서 공개된 명령:
 
 - `generate`
 - `verify`
 - `animate`
 - `validate`
+- `serve`
+- `e2e`
 
-Compatibility commands are still present for migration support:
+운영 계약상 핵심 실행 경로:
 
-- `gen-verify`
-- `verify-only`
-- `replay-eval`
+- `generate`
+- `verify`
+- `animate`
+- `combined` Prefect flow
 
-Only `generate`, `verify`, and `animate` participate in the Prefect job-flow contract. `validate` is a direct CLI pipeline.
+실행 성격:
 
-## 3. Prefect Flow Surface
+- `validate` 는 direct CLI-only validator 파이프라인이다.
+- `serve` 는 animate dashboard 서버 실행용이다.
+- `e2e` 는 계약 smoke harness다.
+- `discoverex-combined-flow` 는 composite execution path이며 `gen-verify`를 explicit sequence로 분해할 수 있다.
 
-External flow entrypoints:
+## 3. Prefect flow 표면
+
+외부 공개 flow 이름:
 
 - `discoverex-engine-flow`
 - `discoverex-generate-flow`
@@ -49,59 +57,34 @@ External flow entrypoints:
 - `discoverex-animate-flow`
 - `discoverex-combined-flow`
 
-Internal engine flows:
+내부 엔진 flow 이름:
 
 - `discoverex-engine-entry-pipeline`
 - `discoverex-generate-pipeline`
 - `discoverex-verify-pipeline`
 - `discoverex-generate-inpaint-variant-pack`
 
-`discoverex-combined-flow` explicitly decomposes `gen-verify` into sequential `generate` then `verify`.
+## 4. worker가 제공하는 런타임 경계
 
-## 4. Worker-Provided Runtime Contract
-
-During Prefect execution, the worker/runtime layer provides environment values including:
+Prefect 실행 시 worker/runtime 레이어는 다음 환경값을 제공할 수 있다.
 
 - `ORCH_JOB_INPUTS_JSON`
 - `ORCH_ENGINE_ARTIFACT_DIR`
 - `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH`
 - `MLFLOW_TRACKING_URI`
 
-The engine should:
+이 값들의 의미와 책임은 [docs/contracts/registration/runtime-auth-and-env.md](/home/esillileu/discoverex/engine/docs/contracts/registration/runtime-auth-and-env.md) 와 [docs/contracts/registration/artifact-persistence-contract.md](/home/esillileu/discoverex/engine/docs/contracts/registration/artifact-persistence-contract.md)에 정의한다.
 
-- use `MLFLOW_TRACKING_URI` as provided
-- write durable engine-owned files only under `ORCH_ENGINE_ARTIFACT_DIR`
-- write the manifest to `ORCH_ENGINE_ARTIFACT_MANIFEST_PATH` when durable artifacts exist
-
-## 5. Local Execution Examples
-
-### Basic generate
+## 5. 로컬 실행 예시
 
 ```bash
 just run discoverex generate --background-asset-ref bg://dummy
-```
-
-### CPU-oriented generate profile
-
-```bash
-just run discoverex generate --background-asset-ref bg://dummy -o profile=cpu_fast
-```
-
-### Verify an existing scene
-
-```bash
 just run discoverex verify --scene-json artifacts/.../scene.json
-```
-
-### Validator run
-
-```bash
 just run discoverex validate composite.png --object-layer obj1.png --object-layer obj2.png
+uv run discoverex serve --port 5001
 ```
 
-## 6. Worker Debug Example
-
-The contract can be simulated locally by injecting worker env values:
+## 6. worker 디버그 예시
 
 ```bash
 MLFLOW_TRACKING_URI=http://127.0.0.1:5000 \
@@ -112,11 +95,11 @@ uv run discoverex generate \
   -o adapters/tracker=mlflow_server
 ```
 
-## 7. Embedded Fixed Worker
+## 7. embedded fixed worker
 
-The repository includes an embedded worker stack documented in [infra/worker/README.md](/home/esillileu/discoverex/engine/infra/worker/README.md).
+내장 worker 스택은 [infra/worker/README.md](/home/esillileu/discoverex/engine/infra/worker/README.md)에 문서화되어 있다.
 
-Common commands:
+대표 명령:
 
 ```bash
 ./bin/cli worker init
@@ -125,39 +108,19 @@ Common commands:
 ./bin/cli worker fixed doctor --json
 ```
 
-## 8. Validation and Smoke Checks
+## 8. sweep 런타임 위치
 
-```bash
-just lint
-just typecheck
-just test
-uv run discoverex e2e --scenario all
-```
+sweep 제출과 수집은 운영 표면상 `./bin/cli prefect sweep run|collect` 로 노출된다.
 
-The `e2e` harness covers:
+현재 지원 범위:
 
-- `tracking-artifact`
-- `worker-contract`
-- `live-services`
+- object-generation sweep
+- combined replay fixture sweep
+- naturalness/patch-selection/inpaint 계열 combined sweep
 
-## 9. Prefect Ops Surface
+세부 운영 규칙은 [docs/ops/sweeps.md](/home/esillileu/discoverex/engine/docs/ops/sweeps.md)를 본다.
 
-Supported day-to-day Prefect commands:
+## 9. 현재 caveat
 
-- `./bin/cli prefect run gen`
-- `./bin/cli prefect run obj`
-- `./bin/cli prefect sweep run --sweep-spec <path>`
-- `./bin/cli prefect sweep collect --sweep-spec <path>`
-
-Sweep behavior:
-
-- input is always a sweep spec YAML via `--sweep-spec`
-- the repo-managed submitted manifest defaults to `infra/ops/manifests/<sweep-id>.submitted.json`
-- the current SSOT sweep path is object-quality
-- `collect` classifies submitted runs as `completed`, `pending`, `failed`, `cancelled`, `failed_to_collect`, or `not_submitted`
-
-## 10. Current Operational Notes
-
-- `generate` and `verify` are the most complete paths.
-- `animate` is still wired through compatibility/stub-oriented handlers.
-- Worker registration and execution assume purpose-scoped Prefect deployments managed from `infra/ops`.
+- `generate` 와 `verify` 가 가장 완성도가 높다.
+- `animate` 는 public/runtime 표면에는 포함되지만 내부 구현은 아직 보수적으로 다뤄야 한다.

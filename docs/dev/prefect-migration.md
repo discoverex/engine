@@ -1,23 +1,20 @@
-# Prefect Migration Status
+# Prefect 현재 상태
 
-This document tracks the current Prefect-based execution model in this repository.
+이 문서는 이 저장소가 이미 Prefect-first 실행 모델로 전환된 상태임을 짧게 정리한다. 운영 방법은 `docs/ops`, 계약 경계는 `docs/contracts`를 기준으로 본다.
 
-## 1. Current Baseline
+## 1. 현재 baseline
 
-The repository is already operating on a Prefect-first execution model.
+이미 구현된 기준선:
 
-Implemented baseline:
+- `prefect_flow.py` 공개 callable
+- `infra/ops` 아래 deployment, registration, submission, sweep 운영 코드
+- `infra/prefect` 아래 worker/runtime 실행 경로
+- `discoverex-combined-flow` 를 포함한 composite execution path
+- worker-managed artifact persistence
 
-- public Prefect callables exposed from `prefect_flow.py`
-- active deployment and registration scripts under `infra/ops`
-- worker/runtime execution path under `infra/prefect`
-- explicit `discoverex-combined-flow` handling for composite execution
-- worker-managed artifact persistence and upload hooks
-- `prefect sweep run|collect` as the supported object-quality sweep surface
+## 2. 현재 안정 표면
 
-## 2. Stable Public Surface
-
-Prefect flow names:
+flow 이름:
 
 - `discoverex-engine-flow`
 - `discoverex-generate-flow`
@@ -25,39 +22,30 @@ Prefect flow names:
 - `discoverex-animate-flow`
 - `discoverex-combined-flow`
 
-Public commands used by the flow contract:
-
-- `generate`
-- `verify`
-- `animate`
-
-Public operations wrapper commands:
+운영 wrapper 표면:
 
 - `./bin/cli prefect run gen`
 - `./bin/cli prefect run obj`
 - `./bin/cli prefect sweep run --sweep-spec <path>`
 - `./bin/cli prefect sweep collect --sweep-spec <path>`
 
-Compatibility aliases remain present for migration support.
+## 3. 현재 범위
 
-## 3. What Is Complete
+현재 코드와 spec 기준으로 다음이 존재한다.
 
-- `generate` and `verify` paths are integrated into the current Prefect runtime.
-- Registration and submission tooling exist in-repo.
-- Process-pool deployment creation is verified with `Flow.from_source(...)` against the live Prefect server.
-- Object-quality sweep submit and collect flows are smoke-tested against the live Prefect server.
-- Local and worker contract E2E harnesses exist.
-- Runtime artifact and MLflow linkage boundaries are documented in `docs/contracts`.
+- 목적 기반 deployment naming
+- object-generation sweep
+- combined replay fixture sweep
+- naturalness/patch-selection/inpaint 계열 combined sweep
 
-## 4. Remaining Gaps
+## 4. 남은 caveat
 
-- `animate` is still not a fully realized production pipeline.
-- Sweep support is SSOT only for the object-quality path in this pass.
-- Compatibility aliases still exist and need an eventual removal policy.
+- `animate` 는 아직 완전한 production animation pipeline으로 간주하지 않는다.
+- 호환 alias는 남아 있지만 주 표면은 아니다.
 
-## 5. Related Files
+## 5. 관련 파일
 
 - [prefect_flow.py](/home/esillileu/discoverex/engine/prefect_flow.py)
 - [infra/prefect/flow.py](/home/esillileu/discoverex/engine/infra/prefect/flow.py)
-- [infra/ops/deploy_prefect_flows.py](/home/esillileu/discoverex/engine/infra/ops/deploy_prefect_flows.py)
-- [docs/contracts/orchestrator.md](/home/esillileu/discoverex/engine/docs/contracts/orchestrator.md)
+- [scripts/cli/prefect.py](/home/esillileu/discoverex/engine/scripts/cli/prefect.py)
+- [docs/ops/sweeps.md](/home/esillileu/discoverex/engine/docs/ops/sweeps.md)
