@@ -71,6 +71,26 @@ class MultiFormatConverter:
         return ConvertedAsset(apng_path=apng_path, webm_path=webm_path, lottie_path=lottie_path)
 
 
+def _detect_union_bbox(
+    frames: list[Path], threshold: int = 10,
+) -> tuple[int, int, int, int] | None:
+    """전체 프레임의 통합 bbox — 모션 범위 전체를 포함."""
+    import numpy as np
+    g = [99999, 99999, 0, 0]  # c0, r0, c1, r1
+    found = False
+    for path in frames:
+        a = np.array(Image.open(path).convert("RGBA"))[:, :, 3]
+        rs, cs = np.any(a > threshold, axis=1), np.any(a > threshold, axis=0)
+        if not rs.any():
+            continue
+        found = True
+        g[1] = min(g[1], int(np.argmax(rs)))
+        g[3] = max(g[3], int(len(rs) - np.argmax(rs[::-1])))
+        g[0] = min(g[0], int(np.argmax(cs)))
+        g[2] = max(g[2], int(len(cs) - np.argmax(cs[::-1])))
+    return tuple(g) if found else None  # type: ignore[return-value]
+
+
 def _select_frames(frames: list[Path], max_frames: int | None) -> list[Path]:
     if not max_frames or len(frames) <= max_frames:
         return frames
@@ -121,28 +141,43 @@ def _save_webm(
 def _save_lottie(
     frames: list[Path], out: Path, fps: int,
     max_size: int | None, png_optimize: bool,
+    canvas_scale: float = 4.0,
 ) -> Path | None:
+    """Lottie JSON 생성.
+
+    canvas_scale: 캔버스를 이미지 대비 몇 배로 할지 (원본 비율 유지).
+      이미지 크기 유지, 캔버스 중앙 배치. 기준점(anchor)은 이미지 좌상단.
+      프레임이 캔버스보다 클 경우 오브젝트 bbox로 크롭 후 max_size로 리사이즈.
+    """
     try:
-        first = Image.open(frames[0])
-        ow, oh = first.size
-        if max_size and max(ow, oh) > max_size:
-            ratio = max_size / max(ow, oh)
-            w, h = int(ow * ratio) // 2 * 2, int(oh * ratio) // 2 * 2
-            resize = True
-        else:
-            w, h = ow, oh
-            resize = False
+        first = Image.open(frames[0]).convert("RGBA")
+        # 전체 프레임 통합 bbox — 모션 범위 전체 포함 (잘림 방지)
+        crop_box = _detect_union_bbox(frames)
+        iw = crop_box[2] - crop_box[0] if crop_box else first.size[0]
+        ih = crop_box[3] - crop_box[1] if crop_box else first.size[1]
+
+        # max_size로 리사이즈 (비율 유지)
+        if max_size and max(iw, ih) > max_size:
+            ratio = max_size / max(iw, ih)
+            iw, ih = max(1, int(iw * ratio)), max(1, int(ih * ratio))
+
+        cw = int(iw * canvas_scale) // 2 * 2 or 2
+        ch = int(ih * canvas_scale) // 2 * 2 or 2
+        img_x = (cw - iw) / 2
+        img_y = (ch - ih) / 2
 
         assets, layers = [], []
         for i, path in enumerate(frames):
             img = Image.open(path).convert("RGBA")
-            if resize:
-                img = img.resize((w, h), Image.Resampling.LANCZOS)
+            if crop_box:
+                img = img.crop(crop_box)
+            if img.size != (iw, ih):
+                img = img.resize((iw, ih), Image.Resampling.LANCZOS)
             buf = io.BytesIO()
             img.save(buf, format="PNG", optimize=png_optimize)
             b64 = base64.b64encode(buf.getvalue()).decode("ascii")
             assets.append({
-                "id": f"frame_{i}", "w": w, "h": h,
+                "id": f"frame_{i}", "w": iw, "h": ih,
                 "u": "", "p": f"data:image/png;base64,{b64}", "e": 1,
             })
             layers.append({
@@ -150,8 +185,8 @@ def _save_lottie(
                 "refId": f"frame_{i}", "sr": 1,
                 "ks": {
                     "o": {"a": 0, "k": 100}, "r": {"a": 0, "k": 0},
-                    "p": {"a": 0, "k": [w / 2, h / 2, 0]},
-                    "a": {"a": 0, "k": [w / 2, h / 2, 0]},
+                    "p": {"a": 0, "k": [img_x, img_y, 0]},
+                    "a": {"a": 0, "k": [0, 0, 0]},
                     "s": {"a": 0, "k": [100, 100, 100]},
                 },
                 "ip": i, "op": i + 1, "st": 0, "bm": 0,
@@ -159,13 +194,13 @@ def _save_lottie(
 
         lottie = {
             "v": "5.7.0", "fr": fps, "ip": 0, "op": len(frames),
-            "w": w, "h": h, "nm": out.stem, "ddd": 0,
+            "w": cw, "h": ch, "nm": out.stem, "ddd": 0,
             "assets": assets, "layers": layers,
         }
         out.parent.mkdir(parents=True, exist_ok=True)
         with open(out, "w", encoding="utf-8") as f:
             json.dump(lottie, f, separators=(",", ":"))
-        logger.info(f"[Format] Lottie saved: {out}")
+        logger.info("[Format] Lottie saved: %s (img=%dx%d canvas=%dx%d)", out, iw, ih, cw, ch)
         return out
     except Exception as e:
         logger.warning(f"[Format] Lottie failed: {e}")

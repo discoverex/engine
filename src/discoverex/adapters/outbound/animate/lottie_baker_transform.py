@@ -67,7 +67,16 @@ def apply_keyframes_to_lottie(
     if not keyframes:
         return result
 
-    cx, cy = w / 2.0, h / 2.0
+    # 기준점: 캔버스 내 이미지 좌상단 (left-top)
+    # 이미지 레이어가 anchor=[0,0], position=[img_x, img_y]로 설정됨
+    # null 레이어의 anchor/position도 이미지 좌상단 기준
+    layers = result.get("layers", [])
+    img_layer = next((ly for ly in layers if ly.get("ty") == 2), None)
+    if img_layer:
+        lp = img_layer["ks"]["p"]["k"]
+        cx, cy = float(lp[0]), float(lp[1])
+    else:
+        cx, cy = w / 2.0, h / 2.0
     result_fr = result.get("fr", 16)
 
     # Keyframe duration in frames — matches CSS animate() duration_ms,

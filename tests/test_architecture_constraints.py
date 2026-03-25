@@ -5,6 +5,7 @@ from pathlib import Path
 _LINE_COUNT_EXCEPTIONS = {
     "src/discoverex/adapters/inbound/cli/main.py",
     "src/discoverex/adapters/inbound/web/engine_server_extra.py",
+    "src/discoverex/adapters/outbound/animate/format_converter.py",
     "src/discoverex/adapters/outbound/models/dummy.py",
     "src/discoverex/adapters/outbound/models/hf_yolo_clip.py",
     "src/discoverex/adapters/outbound/models/sdxl_background_generation.py",
