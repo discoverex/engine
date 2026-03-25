@@ -40,7 +40,7 @@ app = typer.Typer(
 )
 deploy_app = typer.Typer(no_args_is_help=True, add_completion=False)
 register_app = typer.Typer(no_args_is_help=True, add_completion=False)
-run_app = typer.Typer(no_args_is_help=True, add_completion=False)
+run_app = typer.Typer(no_args_is_help=False, add_completion=False, invoke_without_command=True)
 sweep_app = typer.Typer(no_args_is_help=True, add_completion=False)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -136,6 +136,11 @@ def _contains_any(args: list[str], options: tuple[str, ...]) -> bool:
         if any(item.startswith(f"{option}=") for option in options):
             return True
     return False
+
+
+def _reject_option(args: list[str], option: str) -> None:
+    if _contains_any(args, (option,)):
+        raise typer.BadParameter(f"{option} is not supported on this command")
 
 
 def _load_job_spec_template(path: Path) -> dict[str, Any]:
@@ -408,72 +413,6 @@ def register_batch(
             raise typer.Exit(exit_code)
 
 
-@register_app.command(
-    "experiment-sweep",
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Submit an experiment sweep using a YAML sweep spec.",
-)
-def register_experiment_sweep(
-    ctx: typer.Context,
-    experiment: str = typer.Option(DEFAULT_EXPERIMENT_NAME, "--experiment"),
-    sweep_spec: Path = typer.Option(
-        DEFAULT_NATURALNESS_SWEEP_SPEC,
-        "--sweep-spec",
-        exists=True,
-        dir_okay=False,
-        readable=True,
-        resolve_path=True,
-    ),
-) -> None:
-    deployment, remaining = _extract_option(ctx.args, "--deployment")
-    purpose, remaining = _resolve_purpose(remaining, default=DEFAULT_EXPERIMENT_PURPOSE)
-    submit_args = [str(sweep_spec)]
-    submit_args.extend(
-        ["--deployment", deployment or _experiment_deployment_name(purpose, experiment)]
-    )
-    submit_args.extend(["--purpose", purpose])
-    submit_args.extend(["--experiment", experiment])
-    submit_args.extend(remaining)
-    exit_code = _run_infra_script(
-        "infra.ops.naturalness_sweep",
-        submit_args,
-    )
-    raise typer.Exit(exit_code)
-
-
-@register_app.command(
-    "object-quality-sweep",
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-    help="Submit an object-generation quality sweep using a YAML sweep spec.",
-)
-def register_object_quality_sweep(
-    ctx: typer.Context,
-    experiment: str = typer.Option("object-quality", "--experiment"),
-    sweep_spec: Path = typer.Option(
-        DEFAULT_OBJECT_QUALITY_SWEEP_SPEC,
-        "--sweep-spec",
-        exists=True,
-        dir_okay=False,
-        readable=True,
-        resolve_path=True,
-    ),
-) -> None:
-    deployment, remaining = _extract_option(ctx.args, "--deployment")
-    purpose, remaining = _resolve_purpose(remaining, default=DEFAULT_EXPERIMENT_PURPOSE)
-    submit_args = [str(sweep_spec)]
-    submit_args.extend(
-        ["--deployment", deployment or _experiment_deployment_name(purpose, experiment)]
-    )
-    submit_args.extend(["--purpose", purpose])
-    submit_args.extend(["--experiment", experiment])
-    submit_args.extend(remaining)
-    exit_code = _run_infra_script(
-        "infra.ops.object_generation_sweep",
-        submit_args,
-    )
-    raise typer.Exit(exit_code)
-
-
 @deploy_app.command(
     "experiment",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
@@ -553,6 +492,7 @@ def _run_standard_job_spec(
     purpose: str,
     job_spec_file: Path,
     deployment: str | None = None,
+    work_queue_name: str | None = None,
     flow_kind: str = "generate",
     extra_args: list[str] | None = None,
 ) -> None:
@@ -562,10 +502,44 @@ def _run_standard_job_spec(
         "--job-spec-file",
         str(job_spec_file),
     ]
+    if work_queue_name:
+        submit_args.extend(["--work-queue-name", work_queue_name])
     if extra_args:
         submit_args.extend(extra_args)
     exit_code = _run_infra_script("infra.ops.submit_job_spec", submit_args)
     raise typer.Exit(exit_code)
+
+
+@run_app.callback()
+def run_callback(
+    ctx: typer.Context,
+    purpose: str = typer.Option(
+        DEFAULT_DEPLOYMENT_PURPOSE,
+        "--purpose",
+        help=f"One of: {', '.join(SUPPORTED_DEPLOYMENT_PURPOSES)}.",
+    ),
+    deployment: str | None = typer.Option(None, "--deployment"),
+    work_queue_name: str | None = typer.Option(None, "--work-queue-name"),
+    job_spec_file: Path | None = typer.Option(
+        None,
+        "--spec",
+        "--job-spec-file",
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+    ),
+) -> None:
+    if ctx.invoked_subcommand is not None:
+        return
+    if job_spec_file is None:
+        raise typer.BadParameter("--spec is required when no run alias is used")
+    _run_standard_job_spec(
+        purpose=purpose,
+        deployment=deployment,
+        work_queue_name=work_queue_name,
+        flow_kind="generate",
+        job_spec_file=job_spec_file,
+    )
 
 
 @register_app.command(
@@ -586,12 +560,22 @@ def run_gen(
         help=f"One of: {', '.join(SUPPORTED_DEPLOYMENT_PURPOSES)}.",
     ),
     deployment: str | None = typer.Option(None, "--deployment"),
+    work_queue_name: str | None = typer.Option(None, "--work-queue-name"),
+    job_spec_file: Path = typer.Option(
+        DEFAULT_REGISTER_JOB_SPEC,
+        "--spec",
+        "--job-spec-file",
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+    ),
 ) -> None:
     _run_standard_job_spec(
         purpose=purpose,
         deployment=deployment,
+        work_queue_name=work_queue_name,
         flow_kind="generate",
-        job_spec_file=DEFAULT_REGISTER_JOB_SPEC,
+        job_spec_file=job_spec_file,
     )
 
 
@@ -603,12 +587,22 @@ def run_obj(
         help=f"One of: {', '.join(SUPPORTED_DEPLOYMENT_PURPOSES)}.",
     ),
     deployment: str | None = typer.Option(None, "--deployment"),
+    work_queue_name: str | None = typer.Option(None, "--work-queue-name"),
+    job_spec_file: Path = typer.Option(
+        DEFAULT_REGISTER_JOB_SPEC,
+        "--spec",
+        "--job-spec-file",
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+    ),
 ) -> None:
     _run_standard_job_spec(
         purpose=purpose,
         deployment=deployment,
+        work_queue_name=work_queue_name,
         flow_kind="generate",
-        job_spec_file=DEFAULT_OBJECT_REGISTER_JOB_SPEC,
+        job_spec_file=job_spec_file,
     )
 
 
@@ -630,18 +624,19 @@ def sweep_run(
     ),
 ) -> None:
     deployment, remaining = _extract_option(ctx.args, "--deployment")
-    purpose, remaining = _resolve_purpose(remaining, default=DEFAULT_EXPERIMENT_PURPOSE)
+    _reject_option(remaining, "--purpose")
     submit_args = [str(sweep_spec)]
     if not _contains_any(remaining, ("--output", "--submitted-manifest")):
         submit_args.extend(["--output", str(_default_submitted_manifest_path(sweep_spec))])
+    if not _contains_any(remaining, ("--work-queue-name",)):
+        submit_args.extend(["--work-queue-name", DEFAULT_EXPERIMENT_QUEUE])
     submit_args.extend(
-        ["--deployment", deployment or _experiment_deployment_name(purpose, experiment)]
+        ["--deployment", deployment or deployment_name_for_purpose("batch", flow_kind="generate")]
     )
-    submit_args.extend(["--purpose", purpose])
     submit_args.extend(["--experiment", experiment])
     submit_args.extend(remaining)
     exit_code = _run_infra_script(
-        "infra.ops.object_generation_sweep",
+        "infra.ops.sweep_submit",
         submit_args,
     )
     raise typer.Exit(exit_code)
@@ -670,7 +665,7 @@ def sweep_collect(
         *remaining,
     ]
     exit_code = _run_infra_script(
-        "infra.ops.collect_object_generation_sweep",
+        "infra.ops.collect_sweep",
         collect_args,
     )
     raise typer.Exit(exit_code)

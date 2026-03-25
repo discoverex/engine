@@ -10,7 +10,6 @@ from scripts.cli.prefect import (
     DEFAULT_EXPERIMENT_NAME,
     DEFAULT_EXPERIMENT_QUEUE,
     DEFAULT_NATURALNESS_SWEEP_SPEC,
-    DEFAULT_OBJECT_REGISTER_JOB_SPEC,
     DEFAULT_REGISTER_JOB_SPEC,
     _build_job_spec_json_for_row,
     _build_prefect_log_filter,
@@ -158,6 +157,51 @@ def test_run_gen_uses_standard_generate_job_spec(monkeypatch) -> None:  # type: 
     ]
 
 
+def test_run_without_alias_requires_spec() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["run"])
+
+    assert result.exit_code != 0
+
+
+def test_run_without_alias_uses_explicit_spec(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+    job_spec = tmp_path / "custom.yaml"
+    job_spec.write_text("job_name: custom\ninputs: {}\n", encoding="utf-8")
+
+    def _fake_run(script_name: str, args: list[str]) -> int:
+        captured["script_name"] = script_name
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
+
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--spec",
+            str(job_spec),
+            "--deployment",
+            "custom-deployment",
+            "--work-queue-name",
+            "custom-queue",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["args"] == [
+        "--deployment",
+        "custom-deployment",
+        "--job-spec-file",
+        str(job_spec),
+        "--work-queue-name",
+        "custom-queue",
+    ]
+
+
 def test_run_obj_uses_standard_object_job_spec(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     runner = CliRunner()
     captured: dict[str, object] = {}
@@ -177,7 +221,45 @@ def test_run_obj_uses_standard_object_job_spec(monkeypatch) -> None:  # type: ig
         "--deployment",
         "discoverex-generate-batch",
         "--job-spec-file",
-        str(DEFAULT_OBJECT_REGISTER_JOB_SPEC),
+        str(DEFAULT_REGISTER_JOB_SPEC),
+    ]
+
+
+def test_run_gen_accepts_queue_and_spec_override(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+    job_spec = tmp_path / "custom.yaml"
+    job_spec.write_text("job_name: custom\ninputs: {}\n", encoding="utf-8")
+
+    def _fake_run(script_name: str, args: list[str]) -> int:
+        captured["script_name"] = script_name
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
+
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "gen",
+            "--deployment",
+            "custom-deployment",
+            "--work-queue-name",
+            "custom-queue",
+            "--spec",
+            str(job_spec),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["args"] == [
+        "--deployment",
+        "custom-deployment",
+        "--job-spec-file",
+        str(job_spec),
+        "--work-queue-name",
+        "custom-queue",
     ]
 
 
@@ -195,7 +277,7 @@ def test_sweep_run_invokes_object_generation_sweep(monkeypatch) -> None:  # type
     result = runner.invoke(app, ["sweep", "run"])
 
     assert result.exit_code == 0
-    assert captured["script_name"] == "infra.ops.object_generation_sweep"
+    assert captured["script_name"] == "infra.ops.sweep_submit"
     assert captured["args"] == [
         str(
             Path(__file__).resolve().parents[1]
@@ -214,10 +296,10 @@ def test_sweep_run_invokes_object_generation_sweep(monkeypatch) -> None:  # type
             / "manifests"
             / "object-quality.realvisxl5-lightning.coarse.transparent-three-object.styles-negatives-steps-guidance-size.v1.submitted.json"
         ),
+        "--work-queue-name",
+        "gpu-fixed-batch",
         "--deployment",
-        "discoverex-generate-batch-object-quality",
-        "--purpose",
-        "batch",
+        "discoverex-generate-batch",
         "--experiment",
         "object-quality",
     ]
@@ -241,7 +323,7 @@ def test_sweep_collect_invokes_collector(monkeypatch, tmp_path: Path) -> None:  
     result = runner.invoke(app, ["sweep", "collect", "--sweep-spec", str(sweep_spec)])
 
     assert result.exit_code == 0
-    assert captured["script_name"] == "infra.ops.collect_object_generation_sweep"
+    assert captured["script_name"] == "infra.ops.collect_sweep"
     assert captured["args"] == [
         "--submitted-manifest",
         str(
@@ -430,66 +512,13 @@ def test_inspect_run_renders_tree(monkeypatch) -> None:  # type: ignore[no-untyp
     assert "flow discoverex-generate-pipeline" in result.stdout
 
 
-def test_register_experiment_sweep_invokes_script(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_sweep_run_rejects_purpose_option() -> None:
     runner = CliRunner()
-    captured: dict[str, object] = {}
 
-    def _fake_run(script_name: str, args: list[str]) -> int:
-        captured["script_name"] = script_name
-        captured["args"] = args
-        return 0
+    result = runner.invoke(app, ["sweep", "run", "--purpose", "batch"])
 
-    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
-
-    result = runner.invoke(app, ["register", "experiment-sweep"])
-
-    assert result.exit_code == 0
-    assert captured["script_name"] == "infra.ops.naturalness_sweep"
-    assert captured["args"] == [
-        str(DEFAULT_NATURALNESS_SWEEP_SPEC),
-        "--deployment",
-        "discoverex-generate-batch-naturalness",
-        "--purpose",
-        "batch",
-        "--experiment",
-        DEFAULT_EXPERIMENT_NAME,
-    ]
-
-
-def test_register_experiment_sweep_uses_experiment_deployment(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    runner = CliRunner()
-    captured: dict[str, object] = {}
-
-    def _fake_run(script_name: str, args: list[str]) -> int:
-        captured["script_name"] = script_name
-        captured["args"] = args
-        return 0
-
-    monkeypatch.setattr("scripts.cli.prefect._run_infra_script", _fake_run)
-
-    result = runner.invoke(
-        app,
-        [
-            "register",
-            "experiment-sweep",
-            "--experiment",
-            "naturalness",
-            "--purpose",
-            "batch",
-        ],
-    )
-
-    assert result.exit_code == 0
-    assert captured["script_name"] == "infra.ops.naturalness_sweep"
-    assert captured["args"] == [
-        str(DEFAULT_NATURALNESS_SWEEP_SPEC),
-        "--deployment",
-        "discoverex-generate-batch-naturalness",
-        "--purpose",
-        "batch",
-        "--experiment",
-        "naturalness",
-    ]
+    assert result.exit_code != 0
+    assert isinstance(result.exception, SystemExit)
 
 
 def test_deploy_experiment_uses_batch_queue(monkeypatch) -> None:  # type: ignore[no-untyped-def]

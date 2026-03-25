@@ -281,6 +281,54 @@ variants:
     assert job["inputs"]["args"]["bbox"] == {"x": 10, "y": 20, "w": 30, "h": 40}
 
 
+def test_build_sweep_manifest_supports_replay_fixture_inputs(tmp_path: Path) -> None:
+    base_job_spec = tmp_path / "base.yaml"
+    base_job_spec.write_text(
+        """
+run_mode: repo
+engine: discoverex
+job_name: base
+inputs:
+  contract_version: v2
+  command: generate
+  config_name: generate
+  config_dir: conf
+  args: {}
+  overrides:
+    - profile=generator_pixart_gpu_v2_hidden_object
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    fixture = tmp_path / "replay_fixture.json"
+    fixture.write_text(
+        '{"background_asset_ref":"bg.png","regions":[{"region_id":"r1","coarse_selected_bbox":{"x":1,"y":2,"w":3,"h":4},"coarse_selection_ref":"c.json","coarse_variant_image_ref":"v.png","coarse_variant_config_ref":"vc.json"}]}',
+        encoding="utf-8",
+    )
+    sweep_spec = tmp_path / "sweep.yaml"
+    sweep_spec.write_text(
+        f"""
+sweep_id: replay-fixture
+base_job_spec: {base_job_spec.name}
+experiment_name: discoverex-naturalness-replay-fixture
+scenarios:
+  - scenario_id: s1
+    replay_fixture_ref: {fixture.name}
+variants:
+  - variant_id: baseline
+    overrides:
+      - models.inpaint.overlay_alpha=0.45
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = build_sweep_manifest(sweep_spec)
+
+    job = manifest["jobs"][0]["job_spec"]
+    assert job["inputs"]["args"]["replay_fixture_ref"].endswith("replay_fixture.json")
+
+
 def test_build_sweep_manifest_case_per_run_expands_policy_jobs(tmp_path: Path) -> None:
     base_job_spec = tmp_path / "base.yaml"
     base_job_spec.write_text(

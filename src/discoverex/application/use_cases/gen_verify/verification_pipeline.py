@@ -101,3 +101,52 @@ def verify_scene(
         passed=scene.verification.final.pass_,
         total_score=scene.verification.final.total_score,
     )
+
+
+def verify_scene_regions(
+    *,
+    scene: Scene,
+    context: AppContextLike,
+    perception_handle: ModelHandle,
+    scene_dir,
+) -> None:  # type: ignore[no-untyped-def]
+    from pathlib import Path
+
+    from PIL import Image
+
+    image = Image.open(scene.composite.final_image_ref).convert("RGB")
+    try:
+        for region in scene.regions:
+            bbox = region.geometry.bbox
+            crop = image.crop(
+                (
+                    int(round(bbox.x)),
+                    int(round(bbox.y)),
+                    int(round(bbox.x + bbox.w)),
+                    int(round(bbox.y + bbox.h)),
+                )
+            )
+            crop_path = (
+                Path(scene_dir) / "assets" / "verification" / f"{region.region_id}.png"
+            )
+            crop_path.parent.mkdir(parents=True, exist_ok=True)
+            crop.save(crop_path)
+            pred = context.perception_model.predict(
+                perception_handle,
+                PerceptionRequest(
+                    image_ref=str(crop_path),
+                    region_count=1,
+                    regions=[{"region_id": region.region_id, "role": region.role.value}],
+                    question_context=scene.goal.goal_type.value,
+                ),
+            )
+            result = run_perception_verification(
+                scene=scene,
+                confidence=float(pred["confidence"]),
+                pass_threshold=float(context.thresholds.perception_pass),
+            )
+            region.attributes["verify_score"] = result.score
+            region.attributes["verify_pass"] = result.pass_
+            region.attributes["verify_crop_ref"] = str(crop_path)
+    finally:
+        image.close()

@@ -6,6 +6,10 @@ from typing import Any
 
 from discoverex.execution_snapshot import update_execution_snapshot
 from discoverex.settings import AppSettings
+from discoverex.application.use_cases.gen_verify.verification_pipeline import (
+    verify_scene_regions,
+)
+from discoverex.application.use_cases.gen_verify.model_lifecycle import unload_model
 
 from .artifacts import variant_artifact_entries
 from .config import variant_config
@@ -85,6 +89,18 @@ def execute_variant(
     )
     scene.composite.final_image_ref = composite.image_ref
     scene = verify_scene(context=variant_context, scene=finalize_layers(scene, variant_background, fx_input_ref))
+    perception_handle = variant_context.perception_model.load(
+        variant_context.model_versions.perception
+    )
+    try:
+        verify_scene_regions(
+            scene=scene,
+            context=variant_context,
+            perception_handle=perception_handle,
+            scene_dir=scene_dir,
+        )
+    finally:
+        unload_model(variant_context.perception_model)
     saved_dir = persist_scene_outputs(
         context=variant_context,
         scene_dir=scene_dir,

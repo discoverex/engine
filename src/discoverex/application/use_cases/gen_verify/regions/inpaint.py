@@ -207,6 +207,17 @@ def _generate_single_region(
         "patch_image_ref": patch_ref,
         "selected_variant_ref": details.get("selected_variant_ref")
         or details.get("patch_image_ref"),
+        "fixture_region_id": str(
+            updated.attributes.get("fixture_region_id")
+            or region.attributes.get("fixture_region_id")
+            or region.region_id
+        ),
+        "object_label": str(
+            updated.attributes.get("object_label")
+            or region.attributes.get("object_label")
+            or object_asset.object_prompt
+            or region.region_id
+        ),
         "object_prompt_resolved": object_asset.object_prompt,
         "object_negative_prompt_resolved": object_asset.object_negative_prompt,
         "generation_prompt_resolved": generation_prompt,

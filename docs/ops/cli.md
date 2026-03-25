@@ -114,6 +114,14 @@ Flow-kind deployments follow this naming pattern:
 
 Run submission can still override the queue at submit time when a specific experiment needs isolation.
 
+Worker queue priority defaults:
+
+- primary queue `gpu-fixed`: `1`
+- batch queue `gpu-fixed-batch`: `100`
+
+These values are controlled by `PREFECT_PRIMARY_QUEUE_PRIORITY` and
+`PREFECT_BATCH_QUEUE_PRIORITY`.
+
 ### Deploy flow
 
 Registers a purpose-scoped Prefect deployment.
@@ -137,15 +145,24 @@ Submits a standard job spec to a deployment.
 The shortest path for the current standard specs:
 
 ```bash
+./bin/cli prefect run --spec infra/ops/specs/job/generate_verify.standard.yaml
 ./bin/cli prefect run gen
 ./bin/cli prefect run obj
-./bin/cli prefect run gen --purpose batch
-./bin/cli prefect run obj --deployment discoverex-generate-debug
+./bin/cli prefect run gen --deployment discoverex-generate-debug
+./bin/cli prefect run gen --work-queue-name gpu-fixed-debug --spec infra/ops/specs/job/generate_verify.standard.yaml
 ```
+
+Defaults:
+
+- bare `run` requires `--spec`
+- `run gen` and `run obj` are aliases
+- `run gen` and `run obj` both default to `discoverex-generate-standard`
+- default spec is `infra/ops/specs/job/generate_verify.standard.yaml`
+- both commands accept `--deployment`, `--work-queue-name`, and `--spec`
 
 ### Run object-quality sweeps
 
-Submit and collect object-generation sweeps from the dedicated sweep surface:
+Submit and collect sweeps from the dedicated sweep surface:
 
 ```bash
 ./bin/cli prefect sweep run
@@ -157,7 +174,9 @@ Submit and collect object-generation sweeps from the dedicated sweep surface:
 Rules for the supported sweep surface:
 
 - input is always `--sweep-spec <yaml>`
-- the current supported SSOT sweep family is object-quality
+- `sweep run` does not accept `--purpose`
+- default deployment is `discoverex-generate-batch`
+- default queue is `gpu-fixed-batch`
 - `sweep run` defaults the submitted manifest to `infra/ops/manifests/<sweep-id>.submitted.json`
 - `sweep collect` defaults to the same manifest path when `--submitted-manifest` is omitted
 - `--limit N` preserves manifest job order and selects the first `N` retry-eligible rows

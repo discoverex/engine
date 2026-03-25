@@ -14,13 +14,15 @@ from discoverex.application.use_cases.generate_object_only import (
 from discoverex.application.use_cases.generate_single_object_debug import (
     run as run_generate_single_object_debug,
 )
+from discoverex.application.use_cases.generate_verify_v2 import (
+    run as run_generate_verify_v2,
+)
 from discoverex.bootstrap import build_context
 from discoverex.config import PipelineConfig
 
 from .generate import run_generate_flow
 from .generate_variant_pack import run_generate_inpaint_variant_pack_flow
 from .verify import run_verify_flow
-from discoverex.application.use_cases.generate_verify_v2 import run as run_generate_verify_v2
 
 
 def generate_v1_compat(
