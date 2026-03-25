@@ -1,0 +1,17 @@
+sweep_id: object-quality.realvisxl5-lightning.coarse.transparent-three-object.prompt
+search_stage: coarse
+experiment_name: object-quality.realvisxl5-lightning.coarse.transparent-three-object.prompt
+base_job_spec: ../../job_specs/object_generation.standard.yaml
+fixed_overrides:
+  - adapters/tracker=mlflow_server
+  - runtime.model_runtime.seed=7
+scenario:
+  scenario_id: transparent-three-object-quality
+  object_base_prompt: isolated single object on a transparent background
+  object_prompt: yellow butterfly | antique brass key | green dinosaur
+  object_base_negative_prompt: opaque background, solid background, busy scene, environment, multiple objects, floor, wall, clutter
+  object_negative_prompt: blurry, low quality, artifact
+  object_count: 3
+parameters:
+  inputs.args.object_prompt_style: ["neutral_backdrop", "transparent_only", "studio_cutout"]
+  inputs.args.object_negative_profile: ["default", "anti_white", "anti_white_glow"]
