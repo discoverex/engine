@@ -33,3 +33,6 @@ mlflow.db
 
 *.log
 *.deb
+
+# Old WAN development docs (local reference only)
+docs/wan/OLD/
