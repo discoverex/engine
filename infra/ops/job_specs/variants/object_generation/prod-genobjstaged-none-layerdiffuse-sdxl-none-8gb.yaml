@@ -1,0 +1,42 @@
+run_mode: repo
+engine: discoverex
+entrypoint:
+  - prefect_flow.py:run_generate_job_flow
+config: null
+job_name: prod-genobjstaged-none-layerdiffuse-sdxl-none-8gb
+inputs:
+  contract_version: v2
+  command: generate
+  config_name: generate
+  config_dir: conf
+  args:
+    object_prompt: butterfly | antique brass key | crystal wine glass
+    object_negative_prompt: blurry, low quality, artifact
+    object_count: 3
+    max_vram_gb: 7.5
+  overrides:
+    - profile=generator_pixart_gpu_v2_hidden_object
+    - runtime/model_runtime=gpu
+    - flows/generate=object_only_staged
+    - runtime.model_runtime.batch_size=1
+    - runtime.model_runtime.enable_vae_slicing=true
+    - runtime.model_runtime.enable_vae_tiling=true
+    - models/object_generator=layerdiffuse_standard_sdxl
+    - models.object_generator.dtype=float16
+    - models.object_generator.precision=fp16
+    - models.object_generator.offload_mode=none
+    - models/hidden_region=dummy
+    - models/perception=dummy
+    - models/inpaint=dummy
+    - models/fx=dummy
+    - runtime.model_runtime.offload_mode=none
+  runtime:
+    mode: worker
+    bootstrap_mode: none
+    extras:
+      - tracking
+      - storage
+      - ml-gpu
+    extra_env: {}
+env: {}
+outputs_prefix: null

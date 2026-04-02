@@ -1,3 +1,6 @@
+# Secrets
+.env
+
 # Python bytecode / build
 __pycache__/
 *.py[cod]
@@ -21,8 +24,16 @@ wheels/
 artifacts/
 mlruns/
 mlflow.db
+.prefect-engine-artifacts/
+runtime/
 
 # Tooling / editor
 .DS_Store
 .idea/
 .vscode/
+
+*.log
+*.deb
+
+# Old WAN development docs (local reference only)
+docs/wan/OLD/

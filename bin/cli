@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# bin/cli - Project management CLI wrapper
+# This script delegates to scripts/cli/main.py using uv run.
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${ROOT_DIR}"
+
+# Check for uv
+if ! command -v uv >/dev/null 2>&1; then
+  echo "error: uv is not installed." >&2
+  exit 1
+fi
+
+# Synchronize environment if needed (optional, could be slow if done every time)
+# uv sync --quiet
+
+# Execute the main CLI
+export PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}"
+exec uv run python -m scripts.cli.main "$@"

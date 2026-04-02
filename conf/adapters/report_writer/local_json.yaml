@@ -1,0 +1,3 @@
+# @package adapters.report_writer
+_target_: discoverex.adapters.outbound.io.reports.JsonReportWriterAdapter
+

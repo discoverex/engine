@@ -1,0 +1,7 @@
+# @package runtime.env
+artifact_bucket: discoverex-artifacts
+s3_endpoint_url: ""
+aws_access_key_id: ""
+aws_secret_access_key: ""
+metadata_db_url: ""
+tracking_uri: ""

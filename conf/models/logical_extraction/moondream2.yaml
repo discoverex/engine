@@ -1,0 +1,5 @@
+_target_: discoverex.adapters.outbound.models.hf_moondream2.Moondream2Adapter
+model_id: "vikhyat/moondream2"
+quantization: 4bit
+device: cuda
+dtype: float16

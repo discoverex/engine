@@ -1,0 +1,30 @@
+name: dependency-upgrade
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  upgrade-smoke:
+    runs-on: ubuntu-latest
+    env:
+      UV_CACHE_DIR: ${{ github.workspace }}/.cache/uv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Prepare uv cache dir
+        run: mkdir -p "$UV_CACHE_DIR"
+      - name: Upgrade lockfile
+        run: uv lock --upgrade
+      - name: Install deps
+        run: uv sync --extra dev
+      - name: Ruff
+        run: uv run --extra dev ruff check .
+      - name: MyPy
+        run: uv run --extra dev mypy src tests
+      - name: Pytest
+        run: uv run --extra dev pytest -q

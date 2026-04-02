@@ -1,0 +1,3 @@
+_target_: discoverex.adapters.outbound.models.gemini_post_motion.GeminiPostMotionClassifier
+model: ${oc.env:GEMINI_MODEL,gemini-2.5-flash}
+max_retries: 2

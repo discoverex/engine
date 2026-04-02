@@ -1,0 +1,13 @@
+sweep_id: combined.patch-selection-inpaint.baseline.tenpack
+search_stage: baseline
+experiment_name: combined.patch-selection-inpaint.baseline.tenpack
+base_job_spec: ../job_specs/variants/naturalness/prod-gennat-pixart-layerdiffuse-hfregion-ldho1-8gb.yaml
+scenarios_csv: patch_selection_inpaint.tenpack_scenarios.csv
+fixed_overrides:
+  - adapters/tracker=mlflow_server
+  - runtime.model_runtime.seed=7
+  - models.inpaint.pre_match_scale_ratio=[0.08,0.12]
+  - models.inpaint.pre_match_variant_count=15
+  - +models.inpaint.placement_grid_stride=18
+  - models.inpaint.edge_blend_strength=0.2
+  - models.inpaint.final_polish_strength=0.2

@@ -1,0 +1,3 @@
+_target_: discoverex.adapters.outbound.models.gemini_vision_analyzer.GeminiVisionAnalyzer
+model: ${oc.env:GEMINI_MODEL,gemini-2.5-flash}
+max_retries: 3

@@ -1,0 +1,12 @@
+strategy: patch_similarity_v2
+max_regions: 3
+iou_threshold: 0.12
+stride_ratio: 0.5
+scale_factors:
+  - 1.0
+  - 1.15
+enable_fallback_relaxation: true
+fallback_iou_threshold: 0.35
+fallback_scale_factors:
+  - 0.9
+  - 1.0

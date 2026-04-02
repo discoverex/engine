@@ -1,0 +1,12 @@
+default_count: 3
+obj_bg_ratio: 0.1
+rotation_degrees:
+  - -12.0
+  - 0.0
+  - 12.0
+scale_factors:
+  - 0.9
+  - 1.0
+  - 1.1
+max_variants_per_object: 8
+canvas_padding: 12

@@ -1,0 +1,42 @@
+services:
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/worker/Dockerfile
+    image: discoverex-worker:local
+    container_name: ${WORKER_CONTAINER_NAME:-discoverex-worker-fixed}
+    restart: unless-stopped
+    gpus: all
+    environment:
+      PREFECT_API_URL: ${PREFECT_API_URL}
+      PREFECT_WORK_POOL: ${PREFECT_WORK_POOL:-discoverex-fixed}
+      PREFECT_WORK_QUEUE: ${PREFECT_WORK_QUEUE:-gpu-fixed}
+      PREFECT_BATCH_WORK_QUEUE: ${PREFECT_BATCH_WORK_QUEUE:-gpu-fixed-batch}
+      PREFECT_PRIMARY_QUEUE_PRIORITY: ${PREFECT_PRIMARY_QUEUE_PRIORITY:-1}
+      PREFECT_BATCH_QUEUE_PRIORITY: ${PREFECT_BATCH_QUEUE_PRIORITY:-100}
+      PREFECT_CLIENT_CUSTOM_HEADERS: ${PREFECT_CLIENT_CUSTOM_HEADERS:-}
+      CF_ACCESS_CLIENT_ID: ${CF_ACCESS_CLIENT_ID:-}
+      CF_ACCESS_CLIENT_SECRET: ${CF_ACCESS_CLIENT_SECRET:-}
+      STORAGE_API_URL: ${STORAGE_API_URL:-}
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-}
+      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      ARTIFACT_BUCKET: ${ARTIFACT_BUCKET:-discoverex-artifacts}
+      ORCHESTRATOR_CHECKPOINT_DIR: /var/lib/discoverex/checkpoints
+      DISCOVEREX_WORKER_RUNTIME_DIR: /var/lib/discoverex
+      DISCOVEREX_CACHE_DIR: /var/lib/discoverex/cache
+      MODEL_CACHE_DIR: /var/lib/discoverex/cache/models
+      UV_CACHE_DIR: /var/lib/discoverex/cache/uv
+      HF_HOME: /var/lib/discoverex/cache/models/hf
+      HF_TOKEN: ${HF_TOKEN:-}
+      HUGGINGFACE_HUB_TOKEN: ${HUGGINGFACE_HUB_TOKEN:-}
+      HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:-}
+      PREFECT_WORKER_LIMIT: ${PREFECT_WORKER_LIMIT:-1}
+    volumes:
+      - ${DISCOVEREX_SOURCE_ROOT:-../..}/src:/app/src
+      - ${DISCOVEREX_SOURCE_ROOT:-../..}/infra:/app/infra
+      - ${DISCOVEREX_SOURCE_ROOT:-../..}/conf:/app/conf
+      - ${DISCOVEREX_SOURCE_ROOT:-../..}/prefect_flow.py:/app/prefect_flow.py
+      - ${WORKER_RUNTIME_DIR:-../../runtime/worker}:/var/lib/discoverex
+      - ${WORKER_MODEL_CACHE_DIR:-${HOME}/.cache/discoverex-models}:/var/lib/discoverex/cache/models

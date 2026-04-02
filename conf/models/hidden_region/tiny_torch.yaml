@@ -1,0 +1,7 @@
+# @package models.hidden_region
+_target_: discoverex.adapters.outbound.models.tiny_torch_hidden_region.TinyTorchHiddenRegionModel
+model_id: tiny-torch-hidden
+device: ${runtime.model_runtime.device}
+dtype: ${runtime.model_runtime.dtype}
+seed: ${runtime.model_runtime.seed}
+strict_runtime: true

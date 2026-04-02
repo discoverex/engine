@@ -1,0 +1,16 @@
+lab_weight: 0.35
+lbp_weight: 0.20
+gabor_weight: 0.0
+hog_weight: 0.25
+top_k_candidates: 14
+lbp_points: 16
+lbp_radius: 2
+gabor_frequencies:
+  - 0.12
+  - 0.2
+gabor_thetas:
+  - 0.0
+  - 0.78539816339
+hog_orientations: 9
+hog_pixels_per_cell: 8
+min_patch_side: 48

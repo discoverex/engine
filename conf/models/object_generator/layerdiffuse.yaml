@@ -1,0 +1,25 @@
+# @package models.object_generator
+_target_: discoverex.adapters.outbound.models.layerdiffuse_object_generation.LayerDiffuseObjectGenerationModel
+model_id: SG161222/RealVisXL_V5.0
+revision: main
+device: ${runtime.model_runtime.device}
+dtype: ${runtime.model_runtime.dtype}
+precision: ${runtime.model_runtime.precision}
+batch_size: ${runtime.model_runtime.batch_size}
+seed: ${runtime.model_runtime.seed}
+offload_mode: ${runtime.model_runtime.offload_mode}
+enable_attention_slicing: ${runtime.model_runtime.enable_attention_slicing}
+enable_vae_slicing: ${runtime.model_runtime.enable_vae_slicing}
+enable_vae_tiling: ${runtime.model_runtime.enable_vae_tiling}
+enable_xformers_memory_efficient_attention: ${runtime.model_runtime.enable_xformers_memory_efficient_attention}
+enable_fp8_layerwise_casting: ${runtime.model_runtime.enable_fp8_layerwise_casting}
+enable_channels_last: ${runtime.model_runtime.enable_channels_last}
+sampler: dpmpp_sde_karras
+strict_runtime: true
+default_prompt: "isolated single object on a transparent background"
+default_negative_prompt: "busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact"
+default_num_inference_steps: 30
+default_guidance_scale: 5.0
+weights_cache_dir: .cache/layerdiffuse
+model_cache_dir: ${oc.env:MODEL_CACHE_DIR,""}
+hf_home: ${oc.env:HF_HOME,""}

@@ -1,0 +1,17 @@
+sweep_id: object-generation.realvisxl5.steps-guidance.butterfly
+search_stage: debug
+experiment_name: object-generation.realvisxl5.steps-guidance.butterfly
+base_job_spec: ../job_specs/variants/object_generation/prod-genobjdebug-none-realvisxl5-none-8gb.yaml
+fixed_overrides:
+  - adapters/tracker=mlflow_server
+scenarios:
+  - scenario_id: butterfly-opaque-transparent-bg
+    background_prompt: unused-for-single-object-debug-flow
+    background_negative_prompt: ""
+    object_prompt: butterfly
+    object_negative_prompt: blurry, low quality, artifact
+parameters:
+  models.object_generator.default_num_inference_steps: ["20", "30", "40"]
+  models.object_generator.default_guidance_scale: ["5.0", "6.0", "7.0"]
+  models.object_generator.default_prompt:
+    - "'isolated single opaque object on a transparent background'"

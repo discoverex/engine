@@ -1,0 +1,2 @@
+# @package adapters.scene_io
+_target_: discoverex.adapters.outbound.io.json_scene.JsonSceneIOAdapter

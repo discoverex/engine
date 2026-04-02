@@ -1,0 +1,12 @@
+{
+  "run_mode": "repo",
+  "engine": "my-engine",
+  "repo_url": "https://github.com/example/engine.git",
+  "ref": "main",
+  "entrypoint": ["python", "-m", "engine.main"],
+  "config": null,
+  "job_name": "engine-smoke",
+  "inputs": {},
+  "env": {},
+  "outputs_prefix": null
+}

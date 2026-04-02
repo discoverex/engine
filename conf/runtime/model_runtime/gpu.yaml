@@ -1,0 +1,13 @@
+# @package runtime.model_runtime
+device: cuda
+dtype: float16
+precision: fp16
+batch_size: 1
+seed: null
+offload_mode: model
+enable_attention_slicing: true
+enable_vae_slicing: true
+enable_vae_tiling: true
+enable_xformers_memory_efficient_attention: false
+enable_fp8_layerwise_casting: false
+enable_channels_last: true

@@ -1,0 +1,39 @@
+run_mode: repo
+engine: discoverex
+repo_url: https://github.com/discoverex/engine.git
+ref: codex/discoverex-engine-run-wip
+entrypoint:
+  - prefect_flow.py:run_generate_job_flow
+config: null
+job_name: prod-gen-sdxl-none-hfregion-sdxlinpaint
+inputs:
+  contract_version: v2
+  command: generate
+  config_name: generate
+  config_dir: conf
+  args:
+    background_prompt: stormy harbor at dusk, cinematic hidden object puzzle background
+    background_negative_prompt: blurry, low quality, artifact
+    object_prompt: hidden golden compass
+    object_negative_prompt: blurry, low quality, artifact
+    final_prompt: polished playable hidden object scene
+    final_negative_prompt: blurry, low quality, artifact
+  overrides:
+    - runtime/model_runtime=gpu
+    - runtime.width=512
+    - runtime.height=512
+    - models/background_generator=sdxl_gpu
+    - models/hidden_region=hf
+    - models/inpaint=sdxl_gpu
+    - models/perception=hf
+    - models/fx=copy_image
+  runtime:
+    mode: worker
+    bootstrap_mode: auto
+    extras:
+      - tracking
+      - storage
+      - ml-gpu
+    extra_env: {}
+env: {}
+outputs_prefix: null

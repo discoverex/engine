@@ -1,0 +1,2 @@
+# @package models.object_generator
+_target_: discoverex.adapters.outbound.models.dummy.DummyFxModel

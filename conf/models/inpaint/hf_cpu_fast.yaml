@@ -1,0 +1,16 @@
+# @package models.inpaint
+_target_: discoverex.adapters.outbound.models.hf_inpaint.HFInpaintModel
+model_id: google/mobilenet_v2_1.0_224
+revision: main
+device: ${runtime.model_runtime.device}
+dtype: ${runtime.model_runtime.dtype}
+precision: ${runtime.model_runtime.precision}
+batch_size: ${runtime.model_runtime.batch_size}
+seed: ${runtime.model_runtime.seed}
+strict_runtime: false
+quality_model_id: google/mobilenet_v2_1.0_224
+generation_model_id: hf-internal-testing/tiny-stable-diffusion-pipe
+inpaint_mode: fast_patch
+generation_strength: 0.45
+generation_steps: 6
+generation_guidance_scale: 2.5

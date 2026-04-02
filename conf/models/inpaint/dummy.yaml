@@ -1,0 +1,2 @@
+# @package models.inpaint
+_target_: discoverex.adapters.outbound.models.dummy.DummyInpaintModel

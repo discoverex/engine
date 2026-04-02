@@ -1,0 +1,36 @@
+# @package models.object_generator
+_target_: discoverex.adapters.outbound.models.pixart_object_generation.PixArtObjectGenerationModel
+model_id: PixArt-alpha/PixArt-Sigma-XL-2-1024-MS
+revision: main
+device: ${runtime.model_runtime.device}
+dtype: ${runtime.model_runtime.dtype}
+precision: ${runtime.model_runtime.precision}
+batch_size: ${runtime.model_runtime.batch_size}
+seed: ${runtime.model_runtime.seed}
+strict_runtime: true
+offload_mode: sequential
+enable_attention_slicing: ${runtime.model_runtime.enable_attention_slicing}
+enable_vae_slicing: ${runtime.model_runtime.enable_vae_slicing}
+enable_vae_tiling: ${runtime.model_runtime.enable_vae_tiling}
+enable_xformers_memory_efficient_attention: ${runtime.model_runtime.enable_xformers_memory_efficient_attention}
+enable_fp8_layerwise_casting: ${runtime.model_runtime.enable_fp8_layerwise_casting}
+enable_channels_last: ${runtime.model_runtime.enable_channels_last}
+detail_model_id: stabilityai/stable-diffusion-xl-refiner-1.0
+default_prompt: "isolated single object on a transparent background"
+default_negative_prompt: "busy scene, environment, multiple objects, floor, wall, clutter, blurry, low quality, artifact"
+default_num_inference_steps: 20
+default_guidance_scale: 4.5
+canvas_scale_factor: 2.0
+detail_num_inference_steps: 24
+detail_guidance_scale: 4.0
+detail_strength: 0.35
+tile_size: 512
+tile_overlap: 64
+enable_highres_extension: false
+extension_scale_factor: 1.5
+extension_num_inference_steps: 20
+extension_guidance_scale: 3.8
+extension_strength: 0.30
+text_encoder_8bit: false
+text_encoder_offload: true
+prompt_embedding_cache: true
